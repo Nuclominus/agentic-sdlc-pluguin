@@ -1,0 +1,11 @@
+{
+  "useMarkdownLinks": false,
+  "newLinkFormat": "shortest",
+  "alwaysUpdateLinks": true,
+  "attachmentFolderPath": "_attachments",
+  "userIgnoreFilters": [
+    ".claude/",
+    "build/",
+    ".gradle/"
+  ]
+}

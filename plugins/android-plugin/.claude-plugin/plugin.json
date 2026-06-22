@@ -1,0 +1,23 @@
+{
+  "name": "android-plugin",
+  "version": "0.1.1",
+  "description": "Native Android stack provider (Kotlin + Gradle) for the Agentic SDLC marketplace. Registers the android profile via stack.md (aspect: android, priority 300); provides android-architect (Sonnet/medium) plus convention skills for Jetpack Compose UI, MVVM/MVI architecture, data (Room/Retrofit/DataStore) and Navigation-Compose. Builds are CI-deferred; in-pipeline verification is detekt + unit tests + Kotlin compile-check.",
+  "author": {
+    "name": "Nuclominus",
+    "url": "https://github.com/Nuclominus"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/Nuclominus/Agentic-SDLC-Pluguin",
+  "keywords": [
+    "android",
+    "kotlin",
+    "jetpack-compose",
+    "gradle",
+    "mobile",
+    "sdlc",
+    "stack-provider"
+  ],
+  "dependencies": [
+    "sdlc"
+  ]
+}

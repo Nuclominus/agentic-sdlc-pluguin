@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ROLIQUE/claude-plugins/schemas/stack.schema.json",
+  "title": "Stack Profile Frontmatter",
+  "description": "Schema for the YAML frontmatter of plugins/<name>/stack.md files. The frontmatter is extracted from between the first --- markers and validated as a JSON object.",
+  "type": "object",
+  "required": ["stack", "priority", "detect"],
+  "additionalProperties": false,
+  "properties": {
+    "stack": {
+      "type": "string",
+      "description": "Unique stack name. Lowercase, alphanumeric + hyphens.",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "minLength": 2,
+      "maxLength": 40
+    },
+    "priority": {
+      "type": "integer",
+      "description": "0 = vanilla fallback. 100+ = framework. Higher wins per aspect.",
+      "minimum": 0,
+      "maximum": 1000
+    },
+    "aspects": {
+      "type": "array",
+      "description": "Aspects this profile owns. Determines per-aspect winner resolution.",
+      "items": {
+        "enum": ["android", "ios", "shared", "backend", "frontend", "database", "infra", "testing", "messaging"]
+      },
+      "uniqueItems": true,
+      "minItems": 0,
+      "maxItems": 6
+    },
+    "workflow": {
+      "type": "string",
+      "description": "Optional. Default workflow recipe this profile selects when it is the PRIMARY profile and neither --workflow=NAME nor sdlc.local.yaml active_workflow is given. Names a workflow recipe (e.g. 'android-feature'). Generic — any profile may declare one.",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "minLength": 2,
+      "maxLength": 40
+    },
+    "detect": {
+      "type": "object",
+      "description": "Auto-detect rules. Use `any` for OR, `all` for AND.",
+      "oneOf": [
+        { "required": ["any"] },
+        { "required": ["all"] }
+      ],
+      "properties": {
+        "any": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/detectRule" },
+          "minItems": 1
+        },
+        "all": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/detectRule" },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "detectRule": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Wildcard '*' for vanilla profiles only.",
+          "enum": ["*"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "file_exists": {
+              "type": "string",
+              "description": "Path (relative to project root) that must exist."
+            }
+          },
+          "required": ["file_exists"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "file_contains": {
+              "type": "object",
+              "required": ["path", "pattern"],
+              "properties": {
+                "path": { "type": "string" },
+                "pattern": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": ["file_contains"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "file_glob": {
+              "type": "string",
+              "description": "Glob pattern (relative to project root, e.g. '**/*.kt', '**/*.xcodeproj'). Matches if at least one file matches. Evaluated with the Glob tool — use for variable-named or nested artifacts (iOS Xcode projects, monorepo subtrees)."
+            }
+          },
+          "required": ["file_glob"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Nested OR — matches if any sub-rule matches. Lets a profile compose rules, e.g. '(.kts OR .gradle) AND has Kotlin'.",
+          "properties": {
+            "any": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/detectRule" },
+              "minItems": 1
+            }
+          },
+          "required": ["any"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Nested AND — matches only if every sub-rule matches.",
+          "properties": {
+            "all": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/detectRule" },
+              "minItems": 1
+            }
+          },
+          "required": ["all"],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,12 @@
+name: android-bugfix
+description: >
+  Android bug-fix gate. Run android-debugger first (on-demand, for root cause), then:
+  Developer -> Reviewer (loops back to Developer, max 3) -> [Security || Tester] -> QA.
+phases:
+  - development
+  - name: review
+    loop:
+      return_to: development
+      max_rounds: 3
+  - parallel: [security, test]
+  - qa

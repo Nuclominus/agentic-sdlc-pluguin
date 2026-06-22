@@ -1,0 +1,15 @@
+name: android-feature
+description: >
+  Android native feature pipeline (rich roster):
+  BA -> Developer -> Reviewer (loops back to Developer, max 3) -> [Security || Tester] -> QA -> DocsWriter.
+  Loop + parallel are generic orchestrator control flow; the android profile supplies the agents per phase.
+phases:
+  - business_analysis
+  - development
+  - name: review
+    loop:
+      return_to: development
+      max_rounds: 3
+  - parallel: [security, test]
+  - qa
+  - documentation

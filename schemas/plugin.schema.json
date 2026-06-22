@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ROLIQUE/claude-plugins/schemas/plugin.schema.json",
+  "title": "Claude Code Plugin Manifest",
+  "description": "Schema for plugins/<name>/.claude-plugin/plugin.json files in the SDLC marketplace.",
+  "type": "object",
+  "required": ["name", "version", "description"],
+  "additionalProperties": true,
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Unique plugin name. Lowercase, alphanumeric + hyphens.",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "minLength": 2,
+      "maxLength": 60
+    },
+    "version": {
+      "type": "string",
+      "description": "Semver version of the plugin.",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(-[\\w.]+)?(\\+[\\w.]+)?$"
+    },
+    "description": {
+      "type": "string",
+      "description": "One-paragraph description shown in marketplace listings.",
+      "minLength": 20,
+      "maxLength": 600
+    },
+    "author": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "url": { "type": "string", "format": "uri" }
+      },
+      "required": ["name"]
+    },
+    "license": {
+      "type": "string",
+      "description": "SPDX license identifier."
+    },
+    "homepage": {
+      "type": "string",
+      "format": "uri"
+    },
+    "keywords": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "dependencies": {
+      "type": "array",
+      "description": "Native Claude Code dependencies — array of plugin names from the same marketplace, resolved at install time.",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]*$"
+      },
+      "uniqueItems": true
+    }
+  }
+}

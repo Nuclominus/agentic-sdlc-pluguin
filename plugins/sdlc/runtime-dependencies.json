@@ -1,0 +1,21 @@
+{
+  "_comment": "Runtime plugin dependencies for the SDLC pipeline. Read by pipeline-orchestrator/SKILL.md (Step 0a) at the start of /sdlc:start. This is OUR custom preflight mechanism — separate from Claude Code's native plugin.json/dependencies array, which only handles intra-marketplace install-time resolution. External plugins (other marketplaces) and per-skill availability checks live here.",
+  "dependencies": [
+    {
+      "name": "superpowers",
+      "marketplace": "obra/superpowers",
+      "version": ">=1.0.0",
+      "policy": "warn",
+      "skills_used": [
+        "thinking-deeply",
+        "test-driven-development",
+        "verification-before-completion"
+      ],
+      "fallback_note": "Pipeline runs without these but with reduced rigor in BA, QA, and Security phases.",
+      "install_command": [
+        "/plugin marketplace add obra/superpowers",
+        "/plugin install superpowers@superpowers"
+      ]
+    }
+  ]
+}

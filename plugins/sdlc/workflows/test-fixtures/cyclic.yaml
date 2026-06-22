@@ -1,0 +1,10 @@
+# INVALID TEST FIXTURE — do not use in production.
+# Purpose: verify the orchestrator's acyclic validator fires on duplicate phase names.
+name: cyclic-test-fixture
+description: Contains a deliberate duplicate phase to trigger HALT at VALIDATE.
+
+phases:
+  - business_analysis
+  - development
+  - business_analysis  # duplicate — should cause HALT
+  - qa

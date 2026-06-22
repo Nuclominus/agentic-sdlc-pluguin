@@ -1,0 +1,4 @@
+.DS_Store
+*.log
+docs/plans/_*.json
+docs/plans/_*.log
