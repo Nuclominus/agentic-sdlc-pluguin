@@ -34,6 +34,12 @@ if grep -qE '\.printStackTrace\s*\(' "$file" 2>/dev/null; then
     violations+=("'printStackTrace' forbidden — use Logger.e(throwable) { … }")
 fi
 
+# Inline testTag string literal — must use a TestTag constant.
+# Matches Modifier.testTag("…") and semantics { testTag = "…" }; allows testTag(TestTag.X.Y).
+if grep -qE 'testTag\s*[(=]\s*"' "$file" 2>/dev/null; then
+    violations+=("inline testTag literal forbidden — use TestTag.<Screen>Tags.<ELEMENT> constant")
+fi
+
 if [[ ${#violations[@]} -gt 0 ]]; then
     echo "HOOK BLOCKED: $file" >&2
     printf '  ✗ %s\n' "${violations[@]}" >&2

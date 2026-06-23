@@ -17,6 +17,7 @@ AST-level rules are documented but require Detekt custom rules to enforce automa
 | `println(...)` | `Logger.d { "..." }` (Kermit) |
 | `android.util.Log.d/e/i/w/v(...)` | `Logger.d/e/i { "..." }` (Kermit) |
 | `.printStackTrace()` | `Logger.e(throwable) { "..." }` (Kermit) |
+| `Modifier.testTag("literal")` / `testTag = "literal"` | `Modifier.testTag(TestTag.<Screen>Tags.<ELEMENT>)` — central `TestTag` object |
 
 ## Forbidden patterns (documentation-only, no hook)
 
@@ -30,8 +31,7 @@ AST-level rules are documented but require Detekt custom rules to enforce automa
 | Glide / RevenueCat / Cicerone | Coil 3 / Play Billing 8 / Navigation Compose |
 | `android.util.Log.*` | Kermit `taggedLogger()` |
 | KAPT | KSP |
-| `Modifier.testTag("literal")` | `Modifier.testTag(TestTag.<Screen>Tags.<ELEMENT>)` — central `TestTag` object |
-| Non-decorative Compose component with no `testTag` | add a tag from `TestTag` (exempt: Divider/Spacer/guidelines/decorative Icon-Image) |
+| Non-decorative Compose component with no `testTag` | add a tag from `TestTag` (exempt: Divider/Spacer/guidelines/decorative Icon-Image) — cannot be regex-enforced |
 
 ## Test sources exemption
 
