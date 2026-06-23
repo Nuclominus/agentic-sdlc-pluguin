@@ -79,7 +79,8 @@ and `runtime-dependencies.json` (which the core reads) contain ZERO Android-CLI 
 owns it end-to-end. Setup (optional): download → `android update` → `android init`.
 - **Agent binding — DONE.** Capability menu bound in `rules/skills.md` ("Android CLI Capability
   Bindings (OPTIONAL)" section), advisory affordances gated on the CLI being present:
-  - `create` / `describe` → android-ba / android-developer
+  - `create` → android-developer (android-ba may *plan* it, but does not run `create`)
+  - `describe` → android-ba / android-developer
   - `emulator *`, `run`, `screen capture/resolve`, `layout` → android-qa
   - `sdk *`, `studio version-lookup` → android-devops / android-developer
   - `docs search/fetch` (Android Knowledge Base) → any agent (grounding)
