@@ -116,8 +116,8 @@ non-asserted decorative `Text`. When in doubt, tag it.
 
 The plugin defines the grammar; each consumer project keeps a per-screen index in
 `.obsidian-vault/architecture/ui-patterns.md` so `android-qa` can search tags fast. `android-developer`
-updates the affected row in the **same change** that adds or renames a tag; `android-docs` owns the
-vault as a whole but does not separately maintain this index. Schema:
+updates the affected row in the **same change** that adds or renames a tag; `android-docs` reconciles
+and completes the index during the docs phase (it is the backstop). Schema:
 
 | Screen | Element | Constant | testTag | Component | Interactions | State / Notes |
 |--------|---------|----------|---------|-----------|--------------|---------------|

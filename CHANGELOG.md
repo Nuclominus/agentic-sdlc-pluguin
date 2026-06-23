@@ -27,6 +27,9 @@ Builds out the marketplace from the initial skeleton into a working native-mobil
   `<screen>.<element>`); per-screen index in `ui-patterns.md` for fast QA lookup. Documented in the
   `android-compose-ui` skill (§ Test tags) and enforced via `android-developer`/`android-qa`/
   `android-reviewer` checklists + `non-negotiable.md`.
+- Vault testTag index: seeded `architecture/ui-patterns.md` note (the per-screen testTag table QA
+  searches) + `android-docs` owns reconciling it whenever UI components change; documented in the
+  `documentation.md` canon (structure, triggers) and the docs-agent Definition of Done.
 - Android CLI as an OPTIONAL, plugin-owned advisory hook (core has zero Android-CLI knowledge).
 - `/sdlc:init` command; `/sdlc:doctor` host-capability probe (uname + toolchains).
 - `docs/WORKFLOW.md` (system diagrams) + `docs/WALKTHROUGH.md` (end-to-end Android run); READMEs

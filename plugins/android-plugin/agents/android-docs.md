@@ -24,6 +24,7 @@ Before answering anything, `Read` from the vault:
 - `.obsidian-vault/architecture/dependency-graph.md` (the generated module graph) and
  `.obsidian-vault/architecture/` (for invariants and ADRs)
 - `.obsidian-vault/screens/<Name>.md` and `.obsidian-vault/navigation/routes.md` (when UI is in scope)
+- `.obsidian-vault/architecture/ui-patterns.md` — the testTag index (when UI is in scope)
 
 The full rule: `${CLAUDE_PLUGIN_ROOT}/rules/documentation.md` "Single source of knowledge".
 
@@ -36,6 +37,7 @@ Canon is in `${CLAUDE_PLUGIN_ROOT}/rules/documentation.md`. Quick map:
 | `general/` | overview, prerequisites, onboarding | Project setup changes |
 | `stack/` | tech stack notes (no hardcoded versions) | New library / dependency |
 | `architecture/` | layering, UI patterns, ADRs | Architectural decisions |
+| `architecture/ui-patterns.md` | testTag index (Screen → Element → Constant → testTag) | UI component added / changed / removed |
 | `modules/` | one note per :feature:<name> module | New module → new note from `_templates/module.md` |
 | `navigation/` | `routes.md` registry | New `@Serializable` route → add row |
 | `screens/` | one note per `@Composable` screen | New screen → new note from `_templates/screen.md` |
@@ -62,6 +64,34 @@ Locate stubs:
 grep -rl "<!-- STUB" .obsidian-vault/
 ```
 
+## testTag index — when UI changes
+
+Whenever this cycle adds, renames, or removes a Compose UI component, the
+`.obsidian-vault/architecture/ui-patterns.md` testTag index must stay complete and accurate —
+it is the table `android-qa` searches to pick selectors. `android-developer` adds a row as it
+applies each tag; **you are the backstop** — at the docs phase, reconcile the index against the
+changed UI so nothing is missing or stale.
+
+For every non-decorative component touched this cycle, ensure a row exists with all columns:
+
+| Column | Source |
+|--------|--------|
+| Screen | the screen/route name (the `<screen>` segment of the tag) |
+| Element | human-readable name of the component |
+| Constant | `TestTag.<Screen>Tags.<ELEMENT>` — the Kotlin accessor |
+| testTag | the dot-separated value (e.g. `login.email`) — also the Maestro `id:` |
+| Component | `Button`, `TextField`, `LazyColumn`, … |
+| Interactions | what QA can do: `click`, `input`, `scroll`, `assertVisible` |
+| State / Notes | conditional visibility, enabled/disabled, dynamic `{index}` items |
+
+Rules:
+- Dynamic list items get **one** row with the `{index}` pattern + the `item(i)` accessor.
+- Decorative/layout components (Divider, Spacer, guidelines, decorative Icon/Image) are exempt — do
+  not add rows for them.
+- A removed component → delete its row (or mark it in **Notes** if the screen is `#status/deprecated`).
+- Do not restate the convention here; the grammar and `TestTag` rules are the `android-compose-ui`
+  skill § Test tags. This note is the concrete index only.
+
 ## Definition of Done (before PR)
 
 Verify the full checklist in `${CLAUDE_PLUGIN_ROOT}/rules/documentation.md` "DocsWriter Definition of Done".
@@ -74,6 +104,7 @@ Key items:
 - [ ] `node .claude/scripts/gen-mermaid.mjs` re-run — `architecture/dependency-graph.md` is current.
 - [ ] `node .claude/scripts/validate-docs.mjs` clean, OR every finding escalated (layer violations are NOT rewritten to pass).
 - [ ] `routes.md` updated for any new `@Serializable` route.
+- [ ] `architecture/ui-patterns.md` testTag index has a row for every non-decorative UI component added/changed this cycle (removed components pruned).
 - [ ] `stack/<area>.md` updated if a dependency was added.
 - [ ] Public API changes reflected in `modules/<module>.md` Public API section.
 - [ ] Templates in `_templates/` are unchanged.
@@ -207,6 +238,7 @@ notes; link to the source of truth. Single-test invocation format is canonical p
 - [ ] Typed edges path-qualified + resolving; `depends_on:` ↔ prose mirror in sync.
 - [ ] `gen-mermaid.mjs` re-run; `validate-docs.mjs` clean or findings escalated.
 - [ ] `routes.md` updated for new routes.
+- [ ] `architecture/ui-patterns.md` testTag index reconciled with UI changes this cycle.
 - [ ] Examples match the project's detected stack (see `${CLAUDE_PLUGIN_ROOT}/rules/skills.md`).
 - [ ] No hardcoded versions — link to `libs.versions.toml` and `AppConfig.kt`.
 - [ ] Flavor names match `CLAUDE.md` exactly.

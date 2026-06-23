@@ -44,6 +44,8 @@ no scattered READMEs. The vault is it.
 │   ├── flow.md
 │   └── adr.md
 ├── architecture/             ← layering, DDD, UI patterns, ADRs
+│   ├── ui-patterns.md        ← testTag index (Screen → Element → Constant → testTag)
+│   └── dependency-graph.md   ← generated module graph
 ├── modules/                  ← one note per :feature:<name> module — `<module>.md`
 ├── navigation/               ← `routes.md` registry
 ├── screens/                  ← one note per Composable screen — `<ScreenName>.md`
@@ -116,6 +118,7 @@ graph), lint what's authored (the prose). Never auto-rewrite the prose.
 | New :feature:<name> module | `.obsidian-vault/modules/<module>.md` (from `_templates/module.md`) + entry in `_moc-modules.md` |
 | New `@Composable` screen + `@Serializable` route | `.obsidian-vault/screens/<Name>.md` + entry in `_moc-screens.md` + row in `.obsidian-vault/navigation/routes.md` |
 | New business flow | `.obsidian-vault/business-logic/<flow>.md` (from `_templates/flow.md`) + entry in `_moc-flows.md` |
+| New / changed / removed UI component (testTag) | Add, update, or prune its row in `.obsidian-vault/architecture/ui-patterns.md` (testTag index) |
 | Changed public Repository / ViewModel API | Update `.obsidian-vault/modules/<module>.md` Public API section |
 | New library / dependency | Update relevant `.obsidian-vault/stack/<area>.md` |
 | Architecture decision | New ADR at `.obsidian-vault/architecture/adr-<NNNN>-<slug>.md` (from `_templates/adr.md`) |
