@@ -58,6 +58,7 @@ values and Maestro `id:` are the same string. This is the single source of truth
 `<screen>.<element>[.<variant>][.<index>]`
 
 - All lowercase, dot-separated, no spaces; **stable** identifiers — never localized display text.
+- Multi-word elements stay lowercase with no separator (`username`, not `userName`).
 - `<screen>` = the route/screen name (`login`, `dashboard`, `effects`).
 - Every screen exposes a root: `<screen>.root`.
 - List items are parameterized by index (or a stable key): `effects.item.{index}`.
@@ -75,6 +76,11 @@ object TestTag {
         const val EMAIL = "login.email"
         const val PASSWORD = "login.password"
         const val SUBMIT = "login.submit"
+    }
+    object FeatureTags {
+        const val ROOT = "feature.root"
+        const val USER_NAME = "feature.username"        // multi-word element stays lowercase
+        const val SAVE = "feature.save"
     }
     object EffectsTags {
         const val LIST = "effects.list"
@@ -110,7 +116,8 @@ non-asserted decorative `Text`. When in doubt, tag it.
 
 The plugin defines the grammar; each consumer project keeps a per-screen index in
 `.obsidian-vault/architecture/ui-patterns.md` so `android-qa` can search tags fast. `android-developer`
-updates it whenever tags change. Schema:
+updates the affected row in the **same change** that adds or renames a tag; `android-docs` owns the
+vault as a whole but does not separately maintain this index. Schema:
 
 | Screen | Element | Constant | testTag | Component | Interactions | State / Notes |
 |--------|---------|----------|---------|-----------|--------------|---------------|
