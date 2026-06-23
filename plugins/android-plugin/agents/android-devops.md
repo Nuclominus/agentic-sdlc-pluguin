@@ -14,6 +14,13 @@ You manage the project's build configuration, signing, ProGuard/R8, and release 
 - Tests → `android-tester` / `android-qa`
 - GitHub Actions workflow YAML → `android-cicd`
 
+## Project Extensions
+
+You are an **on-demand agent** (you bypass the SDLC orchestrator), so self-read the project's
+`.claude/sdlc.local.yaml` `extensions.skills` rows whose `agents` contains `android-devops` (or equals
+`"all"`) and invoke them: `mandatory` → always, `recommended` → when the task calls for it. Full rules:
+`${CLAUDE_PLUGIN_ROOT}/rules/skills.md` → "Project Extensions". If the file or block is absent, do nothing.
+
 ## Authoritative References
 
 - `CLAUDE.md` — canonical gradle commands, flavors, `config/*.properties`

@@ -1,6 +1,6 @@
 ---
-loaded_by: [ba, developer, reviewer, debugger, tester, qa, docs-writer, devops]
-load_when: "BEFORE phase work begins. Single source of truth for Skill invocations per role and Android CLI capability bindings."
+loaded_by: [ba, developer, reviewer, debugger, tester, qa, docs-writer, devops, cicd, aar]
+load_when: "BEFORE phase work begins. Single source of truth for Skill invocations per role, project-extension self-read rules, and Android CLI capability bindings."
 ---
 
 # Skills Matrix
@@ -50,6 +50,35 @@ grep -rhoE "MVVM|MVI|MVP|Redux|Clean|StateFlow|MutableStateFlow|sealed (interfac
 | **All agents** | `context-mode` | When switching between planning / coding / reviewing work contexts |
 | **All agents** | `get-shit-done-cc` | When managing tasks at session level |
 | **android-ba / android-developer** | `skill-creator` | When creating or editing project-specific Claude skills |
+
+## Project Extensions (`sdlc.local.yaml` → `extensions.skills`)
+
+A project may request extra Skills per agent via the **Project Extension Manifest** in
+`.claude/sdlc.local.yaml` — no plugin edits required:
+
+```yaml
+extensions:
+  skills:
+    - skill: "<plugin>:<skill>"
+      agents: [android-developer, android-reviewer]   # list of agent names, or "all"
+      when: "before implementing Compose UI"
+      policy: mandatory | recommended                  # default: recommended
+```
+
+How agents pick these up:
+
+- **Pipeline phase agents** (android-ba, android-developer, android-reviewer, android-tester,
+  android-qa, android-security, android-docs) do **nothing** — the orchestrator injects matching rows
+  into the phase prompt (`pipeline-orchestrator` Step 3b-1a). Honor any `MANDATORY` / `RECOMMENDED`
+  lines that appear in your prompt.
+- **On-demand agents that bypass the orchestrator** (**android-debugger**, **android-devops**,
+  **android-cicd**, **android-aar**) MUST **self-read** this file's sibling — the project's
+  `.claude/sdlc.local.yaml` — at use-time, select `extensions.skills` rows whose `agents` contains
+  your own name (or equals `"all"`), and invoke them: `mandatory` → always, `recommended` → when the
+  task calls for it. If the file is absent or has no `extensions:` block, do nothing.
+
+This mirrors the single-source "agents read skills.md at use-time" pattern; an extension skill whose
+plugin is not installed is best-effort (skip silently rather than failing).
 
 ## Android CLI Capability Bindings (OPTIONAL)
 
