@@ -77,8 +77,8 @@ not a marketplace plugin. It is detected and advised **entirely within android-p
 `hooks/android-cli-check.sh` (SessionStart, Android-projects only, non-blocking). The core orchestrator
 and `runtime-dependencies.json` (which the core reads) contain ZERO Android-CLI knowledge — the plugin
 owns it end-to-end. Setup (optional): download → `android update` → `android init`.
-- **Agent binding — DEFERRED (user will define).** Capability menu to map later (add rows to
-  `rules/skills.md` when binding):
+- **Agent binding — DONE.** Capability menu bound in `rules/skills.md` ("Android CLI Capability
+  Bindings (OPTIONAL)" section), advisory affordances gated on the CLI being present:
   - `create` / `describe` → android-ba / android-developer
   - `emulator *`, `run`, `screen capture/resolve`, `layout` → android-qa
   - `sdk *`, `studio version-lookup` → android-devops / android-developer
