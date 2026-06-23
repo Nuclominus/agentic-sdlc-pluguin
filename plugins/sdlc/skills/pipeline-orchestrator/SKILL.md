@@ -690,7 +690,7 @@ Agent({
 **3d-1. Capture per-phase telemetry** — extract from the Agent tool result (when usage data is present in the result envelope, read `input_tokens`, `output_tokens`, `cached_input_tokens`; otherwise estimate from prompt + summary character length / 4). Compute:
 
 - `compact_summary_chars` — `len(CONTEXT.{phase}_output)`. If > 3000 chars (≈ 3K-token target), record `compact_handoff_violation: true` and emit a one-line warning to stderr: `WARN: {phase} compact summary exceeded budget ({chars} chars > 3000)`. Do not abort — the violation is recorded for post-run analysis.
-- `model` — the full model ID declared in the agent's frontmatter (`claude-opus-4-8`, `claude-sonnet-4-6`, or `claude-haiku-4-5-20251001`). This is the authoritative value because the PreToolUse hook enforces it at dispatch time. **Do not** read this from the Agent result envelope (it is not exposed there).
+- `model` — the full model ID, derived from the agent's declared `model:` tier via the tier→full-ID mapping (`opus → claude-opus-4-8`, `sonnet → claude-sonnet-4-6`, `haiku → claude-haiku-4-5-20251001`). The tier is the authoritative value because the PreToolUse hook enforces it at dispatch time; this mapping exists solely so telemetry/cost records the concrete model. **Do not** read this from the Agent result envelope (it is not exposed there).
 - `cost_usd` — derived from per-model pricing table (kept inline for transparency):
   - opus (`claude-opus-4-8`): input $15/MTok, cached input $1.50/MTok, output $75/MTok
   - sonnet (`claude-sonnet-4-6`): input $3/MTok, cached input $0.30/MTok, output $15/MTok
