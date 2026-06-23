@@ -66,6 +66,7 @@ Wrote:
 
 Next:
   /sdlc:doctor                 # verify deps + host capability
+  /sdlc:extension              # (optional) attach per-agent Skills to the pipeline
   /sdlc:start "Add a settings screen with a dark-mode toggle"
 ```
 

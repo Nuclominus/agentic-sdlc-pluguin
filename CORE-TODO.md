@@ -114,3 +114,6 @@ section in the existing `.claude/sdlc.local.yaml` (no new config file).
   hooks load natively and merge with plugin hooks; phase-bound commands reuse the existing
   `post_pipeline_checks` / `phase_command_overrides`. Documented in the root README "Project Extension
   Manifest" subsection + `/sdlc:init` scaffold (commented `extensions:` block).
+- **DONE — authoring helper**: `/sdlc:extension` (`commands/extension.md`) walks the user through adding
+  `extensions.skills` rows step-by-step — discovers installed agents/skills, validates picks, merges
+  idempotently (same skill+agents → update in place), and `--list` reviews current rows.

@@ -131,6 +131,7 @@ For a monorepo with an Android module and an iOS module, both profiles match. `d
 | Command                         | Purpose                                                            |
 | ------------------------------- | ------------------------------------------------------------------ |
 | `/sdlc:init`                    | Detect platform(s), scaffold `.claude/sdlc.local.yaml`, optionally seed `CLAUDE.md` |
+| `/sdlc:extension [--list]`      | Author the Project Extension Manifest step-by-step (per-agent Skill mappings)       |
 | `/sdlc:start "feature"`         | Run the pipeline (auto-selects the profile's workflow)             |
 | `/sdlc:batch "task1" "task2"`   | Run pipelines in parallel for multiple tasks (isolated worktrees)  |
 | `/sdlc:list-stacks`             | Show detected stack profiles and their priorities                  |
@@ -299,8 +300,11 @@ fully-qualified Skill ids (`<plugin>:<skill>`) to the agents that should invoke 
 - `agents: "all"` targets every agent. An extension skill whose plugin is not installed is
   automatically downgraded to best-effort `recommended` — a missing optional skill never blocks a run.
 
-Commands and hooks need no manifest: project `.claude/commands/` and `.claude/settings.json` hooks
-load natively, and `post_pipeline_checks` / `phase_command_overrides` above cover phase-bound commands.
+Run **`/sdlc:extension`** to author these mappings step-by-step (it discovers installed agents/skills,
+validates your picks, and merges idempotently), or **`/sdlc:extension --list`** to review the current
+rows. Commands and hooks need no manifest: project `.claude/commands/` and `.claude/settings.json`
+hooks load natively, and `post_pipeline_checks` / `phase_command_overrides` above cover phase-bound
+commands.
 
 ---
 
