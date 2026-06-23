@@ -2,7 +2,7 @@
 
 All notable changes to the Agentic SDLC Plugin (native mobile) marketplace.
 
-## [0.1.1] — unreleased
+## [0.4.0] — unreleased
 
 Builds out the marketplace from the initial skeleton into a working native-mobile SDLC system.
 

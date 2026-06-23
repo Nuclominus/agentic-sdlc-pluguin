@@ -1,6 +1,6 @@
 {
   "name": "agentic-sdlc",
-  "version": "0.1.1",
+  "version": "0.4.0",
   "description": "AI-assisted SDLC pipelines for NATIVE MOBILE development (Android/Kotlin + iOS/Swift) in Claude Code. Stack Provider Pattern: the core owns the pipeline; platform plugins register themselves via stack.md profiles. Adapted from AratKruglik/claude-sdlc (MIT), stripped to native mobile.",
   "owner": {
     "name": "Nuclominus",
