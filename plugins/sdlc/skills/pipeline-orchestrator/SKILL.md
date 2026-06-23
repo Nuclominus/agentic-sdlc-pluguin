@@ -407,7 +407,7 @@ Parse each row into `EFFECTIVE_PROFILE.extension_skills[]` as
 - `when` absent → treat as empty (no hint).
 - **Availability check:** if `skill`'s plugin is flagged `CONTEXT.{plugin}_unavailable` (from Step 0a) or `skill` is not in `AVAILABLE_SKILLS`, keep the row but force `policy: recommended` and append `(skill not installed — best-effort)` to its `when`, and warn: `WARN: extensions.skills {skill} not installed — downgraded to recommended`. A project must never be blocked because an optional extension skill is absent.
 
-Hold the cleaned list in `EFFECTIVE_PROFILE.extension_skills` for Step 3b-1.
+Hold the cleaned list in `EFFECTIVE_PROFILE.extension_skills` for Step 3b-1a.
 
 **Example `sdlc.local.yaml`:**
 

@@ -75,7 +75,10 @@ How agents pick these up:
   **android-cicd**, **android-aar**) MUST **self-read** this file's sibling — the project's
   `.claude/sdlc.local.yaml` — at use-time, select `extensions.skills` rows whose `agents` contains
   your own name (or equals `"all"`), and invoke them: `mandatory` → always, `recommended` → when the
-  task calls for it. If the file is absent or has no `extensions:` block, do nothing.
+  task calls for it. **Dedupe by skill** — if the same skill id appears under more than one matching
+  row (e.g. an explicit row plus an `agents: "all"` row), treat it as ONE entry with the strictest
+  policy (`mandatory` > `recommended`) and invoke it once. This mirrors the orchestrator's 3b-1a dedupe
+  so both read paths behave identically. If the file is absent or has no `extensions:` block, do nothing.
 
 This mirrors the single-source "agents read skills.md at use-time" pattern; an extension skill whose
 plugin is not installed is best-effort (skip silently rather than failing).
