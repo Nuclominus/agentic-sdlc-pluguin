@@ -77,14 +77,15 @@ not a marketplace plugin. It is detected and advised **entirely within android-p
 `hooks/android-cli-check.sh` (SessionStart, Android-projects only, non-blocking). The core orchestrator
 and `runtime-dependencies.json` (which the core reads) contain ZERO Android-CLI knowledge — the plugin
 owns it end-to-end. Setup (optional): download → `android update` → `android init`.
-- **Agent binding — DEFERRED (user will define).** Capability menu to map later (add rows to
-  `rules/skills.md` when binding):
-  - `create` / `describe` → android-ba / android-developer
+- **Agent binding — DONE.** Capability menu bound in `rules/skills.md` ("Android CLI Capability
+  Bindings (OPTIONAL)" section), advisory affordances gated on the CLI being present:
+  - `create` → android-developer (android-ba may *plan* it, but does not run `create`)
+  - `describe` → android-ba / android-developer
   - `emulator *`, `run`, `screen capture/resolve`, `layout` → android-qa
   - `sdk *`, `studio version-lookup` → android-devops / android-developer
   - `docs search/fetch` (Android Knowledge Base) → any agent (grounding)
-  - `studio analyze-file/find-declaration/find-usages/render-compose-preview` → android-developer / android-reviewer
-  - `skills add/find/list` → setup / android-devops
+  - `studio analyze-file/find-declaration/find-usages/open-file/render-compose-preview/check` → android-developer / android-reviewer
+  - `skills add/find/list/remove`, `init`, `update`, `info` → android-devops
 
 ## 8. Project Extension Manifest — per-project skills / commands / hooks  *(DEFERRED — own step)*
 Let each project optionally extend the SDLC process without editing the plugin. Recommended design:

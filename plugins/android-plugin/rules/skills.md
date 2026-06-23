@@ -1,6 +1,6 @@
 ---
-loaded_by: [ba, developer, reviewer, debugger, tester, qa, docs-writer]
-load_when: "BEFORE phase work begins. Single source of truth for Skill invocations per role."
+loaded_by: [ba, developer, reviewer, debugger, tester, qa, docs-writer, devops]
+load_when: "BEFORE phase work begins. Single source of truth for Skill invocations per role and Android CLI capability bindings."
 ---
 
 # Skills Matrix
@@ -50,6 +50,39 @@ grep -rhoE "MVVM|MVI|MVP|Redux|Clean|StateFlow|MutableStateFlow|sealed (interfac
 | **All agents** | `context-mode` | When switching between planning / coding / reviewing work contexts |
 | **All agents** | `get-shit-done-cc` | When managing tasks at session level |
 | **android-ba / android-developer** | `skill-creator` | When creating or editing project-specific Claude skills |
+
+## Android CLI Capability Bindings (OPTIONAL)
+
+Maps Google's official `android` CLI (https://developer.android.com/tools/agents/android-cli)
+capabilities to the agents that own them. The CLI is **optional** — the pipeline runs without it.
+Presence is advised at SessionStart by `hooks/android-cli-check.sh` (Android projects only).
+When `android` is on PATH, the listed agents MAY use the `android-cli` skill (installed by
+`android init`) for the capabilities below; when it is absent, agents fall back to their normal tools.
+This binding lives **entirely inside android-plugin** — the core orchestrator has zero Android-CLI knowledge.
+
+| Capability (`android …`) | Owner agent(s) | Use when |
+|--------------------------|----------------|----------|
+| `create` (+ `create list`) | **android-developer** only | Scaffolding a new project from a template (or listing templates). **android-ba** may *plan* the scaffold but does not run `create` — actual creation is the developer's responsibility |
+| `describe` | **android-ba** / **android-developer** | Analyzing an existing project to generate descriptive metadata (structure, build targets, output artifacts) during analysis & implementation |
+| `emulator *` (create/list/start/stop), `run`, `screen capture`, `screen resolve`, `layout` | **android-qa** | Managing virtual devices, deploying the APK, capturing/annotating screenshots, resolving annotated labels to `(x, y)` coordinates, and dumping the live UI layout (JSON) for E2E / UI verification |
+| `sdk *` (install/list/remove/update), `studio version-lookup` | **android-devops** / **android-developer** | Managing SDK packages (channels: stable/beta/canary) and looking up the **latest versions of dependencies, Android platforms, and SDK tools** (e.g. Google Maven) during environment setup or build work |
+| `docs search`, `docs fetch` (Android Knowledge Base, via `kb://` URLs) | **any agent** (grounding) | Searching the Android Knowledge Base and fetching docs to ground answers before implementing or reviewing |
+| `studio analyze-file`, `studio find-declaration`, `studio find-usages`, `studio open-file`, `studio render-compose-preview`, `studio check` | **android-developer** / **android-reviewer** | IDE-backed static analysis/inspections, semantic declaration/usage navigation, opening files in the editor, rendering Compose `@Preview` (optionally its semantics tree), and checking running Studio instances during implementation & review |
+| `skills add`, `skills find`, `skills list`, `skills remove`, `init`, `update`, `info` | **android-devops** | Managing the CLI's own agent skills, initializing the environment (`init` installs the `android-cli` skill), updating the CLI, and locating the default SDK path during environment setup |
+
+Notes:
+- Capabilities are **advisory affordances**, not mandatory steps — an agent uses them only when the
+  task calls for native tooling and the CLI is present.
+- Environment-setup capabilities (`init`/`update`/`info`/`skills *`) are owned by **android-devops** —
+  there is no dedicated "setup" agent; setup is an android-devops responsibility.
+- **android-qa** may also drop down to native **`adb`** commands directly (e.g. `adb devices`,
+  `adb install`, `adb shell input`, `adb shell am start`, `adb logcat`, `adb shell screencap`) to
+  control real devices when the `android` CLI is absent or a lower-level operation is needed. `adb`
+  is part of the standard Android SDK platform-tools — no `android-cli` skill required.
+- ⚠️ `studio version-lookup` resolves **dependency / platform / SDK-tool versions** (not the Android
+  Studio app version).
+- Setup (optional): download → `android update` → `android init` (installs the `android-cli` skill).
+- Authoritative command reference: https://developer.android.com/tools/agents/android-cli (verified 2026-06-23).
 
 ## Parallel Phase Execution
 
