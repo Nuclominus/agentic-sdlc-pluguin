@@ -22,6 +22,11 @@ Builds out the marketplace from the initial skeleton into a working native-mobil
   `android-data`, `android-navigation`) — previously Phase-3 stubs. Stack-agnostic principles,
   patterns, and anti-patterns; library choices defer to Architecture Detection and reference
   `rules/snippets/non-negotiable.md` rather than duplicating it.
+- testTag convention + UI-testing requirement: every non-decorative Compose component carries a
+  `testTag` from a centralized `TestTag` object (`TestTag.<Screen>Tags.<ELEMENT>`, grammar
+  `<screen>.<element>`); per-screen index in `ui-patterns.md` for fast QA lookup. Documented in the
+  `android-compose-ui` skill (§ Test tags) and enforced via `android-developer`/`android-qa`/
+  `android-reviewer` checklists + `non-negotiable.md`.
 - Android CLI as an OPTIONAL, plugin-owned advisory hook (core has zero Android-CLI knowledge).
 - `/sdlc:init` command; `/sdlc:doctor` host-capability probe (uname + toolchains).
 - `docs/WORKFLOW.md` (system diagrams) + `docs/WALKTHROUGH.md` (end-to-end Android run); READMEs

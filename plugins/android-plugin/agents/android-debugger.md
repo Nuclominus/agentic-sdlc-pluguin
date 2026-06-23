@@ -82,7 +82,7 @@ You investigate bugs in the project (modular `:feature:<name>`). Detect the proj
 
 Tools:
 - **Layout Inspector** (Android Studio) with Compose tree — inspect semantics, modifiers, recomposition counts.
-- `Modifier.testTag("…")` to target nodes in Layout Inspector and UI tests.
+- `Modifier.testTag(TestTag.…)` (central `TestTag` object) to target nodes in Layout Inspector and UI tests.
 - `@Preview` variants to reproduce a specific screen state in isolation.
 - `snapshotFlow { derived }` to observe derived state from a coroutine.
 

@@ -52,18 +52,18 @@ class FeatureScreenTest {
 
  @Test
  fun content_showsUserName() {
- composeRule.onNodeWithTag("feature.userName")
+ composeRule.onNodeWithTag(TestTag.FeatureTags.USER_NAME)
  .assertIsDisplayed()
  .assertTextEquals("Alice")
  }
 
  @Test
  fun save_click_navigatesBack() {
- composeRule.onNodeWithTag("feature.save")
+ composeRule.onNodeWithTag(TestTag.FeatureTags.SAVE)
  .assertIsEnabled()
  .performClick()
 
- composeRule.onNodeWithTag("feature.save").assertDoesNotExist()
+ composeRule.onNodeWithTag(TestTag.FeatureTags.SAVE).assertDoesNotExist()
  }
 }
 ```
@@ -71,21 +71,21 @@ class FeatureScreenTest {
 ### Lists (LazyColumn)
 
 ```kotlin
-composeRule.onNodeWithTag("effects.list")
+composeRule.onNodeWithTag(TestTag.EffectsTags.LIST)
  .performScrollToIndex(10)
 
 composeRule.onNodeWithText("Effect Name").assertIsDisplayed()
 
-composeRule.onNodeWithTag("effects.list")
+composeRule.onNodeWithTag(TestTag.EffectsTags.LIST)
  .onChildren()
- .filterToOne(hasTestTag("effects.item.0"))
+ .filterToOne(hasTestTag(TestTag.EffectsTags.item(0)))
  .performClick()
 ```
 
 ### Common matchers & actions
 
 ```kotlin
-composeRule.onNodeWithTag("id")
+composeRule.onNodeWithTag(TestTag.FeatureTags.ROOT)
 composeRule.onNodeWithText("Submit")
 composeRule.onNodeWithContentDescription("Close")
 
@@ -101,7 +101,9 @@ composeRule.onNodeWithContentDescription("Close")
 .performTouchInput { swipeUp() }
 ```
 
-Use `Modifier.testTag("screen.element")` on production composables — `testTag`s are the stable selectors both Compose UI Test and Maestro consume.
+Selectors are `testTag`s from the central `TestTag` object (`TestTag.<Screen>Tags.<ELEMENT>`), never inline literals or localized text — they are the stable identifiers both Compose UI Test and Maestro consume. `android-developer` applies them via `Modifier.testTag(...)`; the convention (grammar, required/exempt rules, `TestTag` location) lives in the `android-compose-ui` skill § Test tags.
+
+**Find a tag fast:** read `.obsidian-vault/architecture/ui-patterns.md` first — its per-screen index maps Screen → Element → `Constant` → `testTag` value → Component → Interactions. Copy the `Constant` into a Compose test, or the `testTag` value into a Maestro `id:`. If the screen is missing from the index, derive the tag from the grammar (`<screen>.<element>`) and flag the gap to `android-developer`.
 
 ## Maestro E2E Flows
 
@@ -147,7 +149,7 @@ maestro studio
 maestro --device <device_id> test .maestro/flows/
 ```
 
-Maestro `id:` values resolve to Compose `Modifier.testTag("...")` — coordinate tag names with `android-developer`.
+Maestro `id:` values are the `testTag` **value** column from `.obsidian-vault/architecture/ui-patterns.md` (e.g. `login.email`) — they resolve to Compose `Modifier.testTag(...)`. Coordinate any missing tag with `android-developer`.
 
 ## Accessibility — Compose semantics
 
@@ -167,7 +169,7 @@ Maestro `id:` values resolve to Compose `Modifier.testTag("...")` — coordinate
 
 @Test
 fun feature_passesA11y() {
- composeRule.onNodeWithTag("feature.root").assertIsDisplayed()
+ composeRule.onNodeWithTag(TestTag.FeatureTags.ROOT).assertIsDisplayed()
  // AccessibilityChecks runs on every Espresso/Compose interaction
 }
 ```
@@ -196,7 +198,8 @@ maestro test .maestro/flows/
 
 - [ ] Every critical journey from `.obsidian-vault/business-logic/` has a Maestro flow
 - [ ] Instrumented tests wire DI correctly (e.g. `HiltAndroidRule` order 0 + `createAndroidComposeRule` order 1, if the project uses Hilt + Compose)
-- [ ] Selectors are `testTag`s, not text strings where text is localised
+- [ ] Selectors are `testTag` constants from `TestTag` (resolved via `ui-patterns.md`), not inline literals or localised text
+- [ ] Every non-decorative component under test carries a `testTag`; gaps flagged to `android-developer`
 - [ ] Accessibility audit passes (content descriptions, 48dp targets, TalkBack)
 - [ ] Tests run against the project's debug variant (from `the project's build variants`)
 - [ ] No `Thread.sleep` — use Compose `waitUntil { … }` / Maestro `waitForAnimationToEnd`
