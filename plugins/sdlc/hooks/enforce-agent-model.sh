@@ -9,13 +9,14 @@
 # Fails open (allow) if neither is available.
 set -uo pipefail
 
-# Tier → full model ID
-tier_to_model() {
+# The Agent tool's `model` field accepts the SHORT tier name only
+# (sonnet|opus|haiku|fable) — NOT the full model ID. Validate the declared
+# tier and enforce it verbatim. Full model IDs (claude-opus-4-8, …) are used
+# only for telemetry/cost accounting in the orchestrator, never for dispatch.
+is_valid_tier() {
     case "$1" in
-        opus)   echo "claude-opus-4-8" ;;
-        sonnet) echo "claude-sonnet-4-6" ;;
-        haiku)  echo "claude-haiku-4-5-20251001" ;;
-        *)      echo "" ;;
+        opus|sonnet|haiku|fable) return 0 ;;
+        *)                       return 1 ;;
     esac
 }
 
@@ -84,12 +85,13 @@ if [ -z "$tier" ]; then
     exit 0
 fi
 
-declared_model=$(tier_to_model "$tier")
-
-if [ -z "$declared_model" ]; then
+if ! is_valid_tier "$tier"; then
     allow_warn "[model-enforcement] unknown tier '${tier}' for agent '${agent_name}' — skipping"
     exit 0
 fi
+
+# Enforce the short tier name verbatim — the Agent tool rejects full model IDs.
+declared_model="$tier"
 
 # ── already correct → passthrough ──────────────────────────────────────────
 [ "$requested_model" = "$declared_model" ] && { allow; exit 0; }

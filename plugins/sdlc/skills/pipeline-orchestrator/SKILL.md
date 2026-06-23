@@ -640,7 +640,7 @@ Examples:
 
 This is a contract with the user. Do not skip.
 
-**3b-3. Resolve model from agent frontmatter** — before spawning, resolve `{model_tier}` by reading the `model:` YAML field from the agent's `.md` file (`plugins/**/agents/{agent_name}.md`). This resolved tier is what you print in 3b-2 and pass to `Agent()` in 3c. Tier-to-ID mapping: `opus → claude-opus-4-8`, `sonnet → claude-sonnet-4-6`, `haiku → claude-haiku-4-5-20251001`. If the file is missing or the field is absent, warn inline and fall back to `sonnet`.
+**3b-3. Resolve model from agent frontmatter** — before spawning, resolve `{model_tier}` by reading the `model:` YAML field from the agent's `.md` file (`plugins/**/agents/{agent_name}.md`). This resolved tier (the SHORT name: `opus` / `sonnet` / `haiku` / `fable`) is what you print in 3b-2 AND pass verbatim to `Agent()` in 3c. The `Agent` tool's `model` parameter accepts the short tier ONLY — passing a full model ID raises `InputValidationError`. The tier→full-ID mapping (`opus → claude-opus-4-8`, `sonnet → claude-sonnet-4-6`, `haiku → claude-haiku-4-5-20251001`) is used ONLY for telemetry/cost accounting in 3d-1, never for dispatch. If the file is missing or the field is absent, warn inline and fall back to `sonnet`.
 
 **3b-special. Development phase two-pass execution**
 
@@ -674,12 +674,12 @@ The development phase runs in TWO passes with a user approval gate between them.
 
 For aspect-aware fan-out, the canonical order remains: `database → backend → frontend → testing`. Each aspect completes both passes before the next aspect begins (the plan for backend may depend on what database-aspect implemented).
 
-**3c. Spawn the agent** via the `Agent` tool with `subagent_type` and the model resolved in 3b-3:
+**3c. Spawn the agent** via the `Agent` tool with `subagent_type` and the short tier resolved in 3b-3:
 
 ```
 Agent({
   subagent_type: "{agent_from_profile}",
-  model: "{model_id_resolved_in_3b-3}",
+  model: "{model_tier_resolved_in_3b-3}",   // SHORT tier: opus|sonnet|haiku|fable — NOT a full model ID
   description: "Phase {N}/{total}: {phase_name}",
   prompt: <the prompt built in 3b>
 })
