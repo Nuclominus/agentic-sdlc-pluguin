@@ -185,10 +185,12 @@ Every agent declares its `model:` tier in frontmatter; the pipeline guarantees t
 
 **Two enforcement layers:**
 
-1. **Orchestrator (Layer 1)** — Step 3b reads the agent's frontmatter, resolves the tier to a model ID, and passes it in the `Agent()` dispatch.
+1. **Orchestrator (Layer 1)** — Step 3b reads the agent's frontmatter and passes the declared tier verbatim in the `Agent()` dispatch.
 2. **PreToolUse hook (Layer 2)** — `plugins/sdlc/hooks/enforce-agent-model.sh` intercepts every `Agent` call, compares the requested model with the agent's declared `model:`, and corrects it via `updatedInput` if they differ.
 
-**Tier → model ID:**
+> The `Agent` tool's `model` parameter accepts the **short tier name only** (`opus` / `sonnet` / `haiku` / `fable`). Passing a full model ID raises `InputValidationError`, so both layers enforce the tier verbatim. The tier → model-ID table below is used **only** for telemetry/cost accounting (orchestrator Step 3d-1), never for dispatch.
+
+**Tier → model ID (telemetry/cost only):**
 
 | Tier     | Model ID                    |
 | -------- | --------------------------- |
