@@ -11,7 +11,7 @@ Automated guardrails that run outside the agents themselves.
 
 | Hook | Script | Purpose | Behaviour |
 |------|--------|---------|-----------|
-| validate-kotlin | `${CLAUDE_PLUGIN_ROOT}/hooks/validate-kotlin.sh` | Blocks `!!`, `runBlocking`, `println`, `android.util.Log.*`, `.printStackTrace()` in production Kotlin | **Blocking** — file write/edit fails on violation |
+| validate-kotlin | `${CLAUDE_PLUGIN_ROOT}/hooks/validate-kotlin.sh` (via `kotlin-guard.sh`) | Blocks `!!`, `runBlocking`, `println`, `android.util.Log.*`, `.printStackTrace()`, and inline `testTag("…")` literals in production Kotlin | **Blocking** — `kotlin-guard.sh` propagates exit 2, surfacing the violation to the agent |
 | check-docs-sync | `.claude/scripts/check-docs-sync.sh` | When production Kotlin is edited and matching `.obsidian-vault/` note is absent, **auto-creates a stub** from `.obsidian-vault/_templates/`. android-docs fills the stub before PR. | **Non-blocking** — emits `INFO` and creates the stub file |
 
 Both fire on `Write|Edit`. Test sources (`src/test/**`, `src/androidTest/**`, `*Test.kt`, `*Spec.kt`) are exempt from validate-kotlin (see `snippets/non-negotiable.md`).

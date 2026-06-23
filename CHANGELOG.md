@@ -27,6 +27,10 @@ Builds out the marketplace from the initial skeleton into a working native-mobil
   `<screen>.<element>`); per-screen index in `ui-patterns.md` for fast QA lookup. Documented in the
   `android-compose-ui` skill (§ Test tags) and enforced via `android-developer`/`android-qa`/
   `android-reviewer` checklists + `non-negotiable.md`.
+- `validate-kotlin.sh` now also blocks inline `testTag("…")` / `testTag = "…"` literals in production
+  Kotlin (steers to the central `TestTag` object). Fixed `kotlin-guard.sh` to propagate the
+  validator's exit code — previously it swallowed exit 2, so **all** non-negotiable checks were silent
+  no-ops; the regex rules now actually surface to the agent as documented.
 - Vault testTag index: seeded `architecture/ui-patterns.md` note (the per-screen testTag table QA
   searches) + `android-docs` owns reconciling it whenever UI components change; documented in the
   `documentation.md` canon (structure, triggers) and the docs-agent Definition of Done.
