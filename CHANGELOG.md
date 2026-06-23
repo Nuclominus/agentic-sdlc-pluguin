@@ -31,6 +31,9 @@ Builds out the marketplace from the initial skeleton into a working native-mobil
   Kotlin (steers to the central `TestTag` object). Fixed `kotlin-guard.sh` to propagate the
   validator's exit code — previously it swallowed exit 2, so **all** non-negotiable checks were silent
   no-ops; the regex rules now actually surface to the agent as documented.
+- Vault testTag index: seeded `architecture/ui-patterns.md` note (the per-screen testTag table QA
+  searches) + `android-docs` owns reconciling it whenever UI components change; documented in the
+  `documentation.md` canon (structure, triggers) and the docs-agent Definition of Done.
 - Android CLI as an OPTIONAL, plugin-owned advisory hook (core has zero Android-CLI knowledge).
 - `/sdlc:init` command; `/sdlc:doctor` host-capability probe (uname + toolchains).
 - `docs/WORKFLOW.md` (system diagrams) + `docs/WALKTHROUGH.md` (end-to-end Android run); READMEs
