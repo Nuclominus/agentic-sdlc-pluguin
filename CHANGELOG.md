@@ -11,6 +11,12 @@ All notable changes to the Agentic SDLC Plugin (native mobile) marketplace.
 ### Changed
 
 ### Fixed
+- `sdlc` **0.2.1** — model-tier dispatch broke every agent call (`InputValidationError:
+  expected one of "sonnet"|"opus"|"haiku"|"fable"`). The `Agent` tool's `model` parameter now
+  accepts the short tier name only; both enforcement layers were converting it to a full model ID
+  (`opus → claude-opus-4-8`). `enforce-agent-model.sh` now enforces the short tier verbatim (and
+  recognizes the new `fable` tier); `pipeline-orchestrator` §3b-3/§3c pass the tier to `Agent()`,
+  with the tier→full-ID mapping confined to telemetry/cost (§3d-1).
 
 ## [0.4.0] — 2026-06-23
 
