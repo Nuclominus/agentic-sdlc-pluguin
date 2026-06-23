@@ -36,6 +36,13 @@ One-time project setup. Detects the platform(s), writes a starter local-override
 
    # skip_phases:
    #   - security
+
+   # extensions:                           # per-agent Skill mapping — no plugin edits needed
+   #   skills:
+   #     - skill: "superpowers:test-driven-development"
+   #       agents: [android-developer]     # list of agent names, or "all"
+   #       when: "before writing production code"
+   #       policy: mandatory               # mandatory | recommended (default)
    ```
 
    Pre-fill the `active_workflow` comment with the PRIMARY profile's default workflow name so it is discoverable.
@@ -59,6 +66,7 @@ Wrote:
 
 Next:
   /sdlc:doctor                 # verify deps + host capability
+  /sdlc:extension              # (optional) attach per-agent Skills to the pipeline
   /sdlc:start "Add a settings screen with a dark-mode toggle"
 ```
 

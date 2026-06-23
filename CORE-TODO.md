@@ -87,10 +87,10 @@ owns it end-to-end. Setup (optional): download → `android update` → `android
   - `studio analyze-file/find-declaration/find-usages/open-file/render-compose-preview/check` → android-developer / android-reviewer
   - `skills add/find/list/remove`, `init`, `update`, `info` → android-devops
 
-## 8. Project Extension Manifest — per-project skills / commands / hooks  *(DEFERRED — own step)*
-Let each project optionally extend the SDLC process without editing the plugin. Recommended design:
-- **One file**: extend the existing `.claude/sdlc.local.yaml` with an `extensions:` section (no new config file).
-- **Skills** (the genuinely new capability):
+## 8. Project Extension Manifest — per-project skills / commands / hooks  *(DONE)*
+Each project can optionally extend the SDLC process without editing the plugin, via an `extensions:`
+section in the existing `.claude/sdlc.local.yaml` (no new config file).
+- **DONE — Skills** (the genuinely new capability):
   ```yaml
   extensions:
     skills:
@@ -99,13 +99,21 @@ Let each project optionally extend the SDLC process without editing the plugin. 
         when: "before implementing Compose UI"
         policy: recommended | mandatory
   ```
-  Read-level (hybrid): the ORCHESTRATOR merges skills.md + extensions and injects per-agent skill
-  instructions when building each pipeline phase's prompt; ON-DEMAND agents (debugger/devops/cicd/aar)
-  self-read `extensions.skills` rows naming them (they bypass the orchestrator). Mirrors the existing
-  "agents read skills.md at use-time" single-source pattern.
-- **Commands / hooks**: lean on Claude Code's NATIVE project mechanisms — project `.claude/commands/`
-  and project `.claude/settings.json` hooks already load automatically and merge with plugin hooks.
-  For phase-bound execution, the existing sdlc.local.yaml `post_pipeline_checks` / `phase_command_overrides`
-  already cover it. So extensions only need to ADD the per-agent SKILL mapping; commands/hooks reuse what exists.
-- **Why deferred**: depends on the orchestrator surgery (§6) being done first (it's the injector), and is
-  orthogonal to agent adaptation. Best as a focused step once §6 lands.
+  Read-level (hybrid), implemented:
+  - **Orchestrator (core injector)**: Step 1b recognizes `extensions` and §1b-ext parses/validates
+    `extensions.skills` into `EFFECTIVE_PROFILE.extension_skills` (graceful: malformed rows dropped,
+    uninstalled skills downgraded to best-effort recommended — never blocks). Step 3b-1a builds a
+    deterministic, cache-safe `project_extension_skills_block` (mandatory-first, alphabetical; omitted
+    when no row targets the agent) injected into each PIPELINE phase agent's stable prefix. Step 1b
+    print + caching-discipline rule updated.
+  - **On-demand agents** (android-debugger/devops/cicd/aar) self-read `extensions.skills` rows naming
+    them at use-time — documented in `android-plugin/rules/skills.md` ("Project Extensions"); devops &
+    cicd got an explicit self-read pointer in their agent `.md` (debugger & aar already read skills.md).
+    `loaded_by`/INDEX updated. Mirrors the "agents read skills.md at use-time" single-source pattern.
+- **DONE — Commands / hooks**: no manifest needed — project `.claude/commands/` + `.claude/settings.json`
+  hooks load natively and merge with plugin hooks; phase-bound commands reuse the existing
+  `post_pipeline_checks` / `phase_command_overrides`. Documented in the root README "Project Extension
+  Manifest" subsection + `/sdlc:init` scaffold (commented `extensions:` block).
+- **DONE — authoring helper**: `/sdlc:extension` (`commands/extension.md`) walks the user through adding
+  `extensions.skills` rows step-by-step — discovers installed agents/skills, validates picks, merges
+  idempotently (same skill+agents → update in place), and `--list` reviews current rows.

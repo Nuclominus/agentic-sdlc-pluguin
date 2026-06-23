@@ -62,4 +62,4 @@ Declares `obra/superpowers` with `policy: warn`: if absent, the pipeline still r
 
 ## Project overrides
 
-The orchestrator honors a project-level `.claude/sdlc.local.yaml` (post-pipeline checks, phase command overrides, extra phase prompts, skipped phases, extra convention skills) — see [Local Overrides](../../README.md#local-overrides) in the root README.
+The orchestrator honors a project-level `.claude/sdlc.local.yaml` (post-pipeline checks, phase command overrides, extra phase prompts, skipped phases, extra convention skills, and the `extensions.skills` Project Extension Manifest) — see [Local Overrides](../../README.md#local-overrides) in the root README.
