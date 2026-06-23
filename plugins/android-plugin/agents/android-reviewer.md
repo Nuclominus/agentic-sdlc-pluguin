@@ -66,6 +66,7 @@ Loop cap: after 3 rounds without LGTM, set `blockers: ["Review loop exceeded 3 r
 - `remember` / `rememberSaveable` / `derivedStateOf` used correctly.
 - Stable / `@Immutable` composable params.
 - `DisposableEffect` cleans up subscriptions.
+- **testTags**: every non-decorative component (interactive, asserted, scrollable + items, screen root, dialogs) has a `testTag` from the central `TestTag` object — no inline `testTag("literal")`, no localized text as a selector. Exemptions limited to decoration (Divider, Spacer, guidelines, decorative Icon/Image). New/changed tags reflected in `.obsidian-vault/architecture/ui-patterns.md`. Convention: `android-compose-ui` skill § Test tags.
 
 For a non-Compose UI, review against the project's UI conventions instead.
 
@@ -138,6 +139,7 @@ For a non-Compose UI, review against the project's UI conventions instead.
 - [ ] No suspend calls in composables (if Compose)
 - [ ] `collectAsStateWithLifecycle()` used (if Compose)
 - [ ] Stable / `@Immutable` composable params (if Compose)
+- [ ] Non-decorative Compose components carry a `testTag` from `TestTag` (no inline literals); `ui-patterns.md` updated (if Compose)
 - [ ] Navigation routes follow the project's convention (e.g. `@Serializable`)
 - [ ] Theme tokens from design system
 - [ ] Image loader with placeholder / error / contentDescription

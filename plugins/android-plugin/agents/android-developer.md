@@ -59,6 +59,8 @@ After 3 rounds without LGTM, escalate per the orchestrator (it passes phase cont
 ## Quality Checklist
 
 - [ ] UI screen follows the project's pattern (e.g. Compose stateful wrapper → stateless Content)
+- [ ] Every non-decorative Compose component has a `testTag` from the central `TestTag` object — no inline string literals (see the `android-compose-ui` skill § Test tags)
+- [ ] `.obsidian-vault/architecture/ui-patterns.md` index updated for any added/changed tag
 - [ ] Repository interface + impl co-located in owning module; impl `internal`
 - [ ] Navigation route follows the project's convention (e.g. type-safe `@Serializable`)
 - [ ] The project's secure persistence used (not raw SharedPreferences for sensitive data)
