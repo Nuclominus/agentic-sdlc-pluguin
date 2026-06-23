@@ -41,7 +41,8 @@ internal class FeatureRepositoryImpl(         // internal impl, co-located in th
 ) : FeatureRepository {
     override fun observeItems(): Flow<List<Item>> = dao.observe().map { it.toDomain() }
     override suspend fun refresh(): Result<Unit> = withContext(io) {
-        runCatching { dao.upsert(api.fetch().toEntity()) }
+        // .map { } discards the DAO return value (e.g. Room @Insert row ids) → Result<Unit>.
+        runCatching { dao.upsert(api.fetch().toEntity()) }.map { }
     }
 }
 ```

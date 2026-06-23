@@ -7,6 +7,8 @@ description: Navigation conventions — type-safe @Serializable routes over stri
 
 House-style conventions for navigation. **Principles, not a library mandate** — detect the project's
 navigation framework and follow it; the patterns below apply regardless of the specific library.
+**Exception:** where `non-negotiable.md` pins a library (e.g. navigation → Navigation Compose), that
+rule wins — "detect" only applies where the rule is silent.
 
 ## Principles
 
@@ -29,9 +31,21 @@ navigation framework and follow it; the patterns below apply regardless of the s
 @Serializable data object FeatureList                      // no-arg destination
 @Serializable data class FeatureDetail(val id: String)     // typed argument, not a string route
 
+// Nav events originate in the ViewModel (single source); the host collects and applies them.
+sealed interface FeatureNav { data class ToDetail(val id: String) : FeatureNav }
+
 // Feature module contributes its routes to the graph:
 fun NavGraphBuilder.featureGraph(navController: NavController) {
-    composable<FeatureList> { FeatureListScreen(onOpen = { navController.navigate(FeatureDetail(it)) }) }
+    composable<FeatureList> {
+        val vm: FeatureListViewModel = /* injected */ TODO()
+        // One screen-level boundary consumes ViewModel nav events — composables don't call navigate().
+        LaunchedEffect(vm) {
+            vm.navEvents.collect { event ->
+                when (event) { is FeatureNav.ToDetail -> navController.navigate(FeatureDetail(event.id)) }
+            }
+        }
+        FeatureListScreen(state = /* collected */ TODO(), onIntent = vm::onIntent)
+    }
     composable<FeatureDetail> { /* read typed args; re-fetch by id */ }
 }
 ```

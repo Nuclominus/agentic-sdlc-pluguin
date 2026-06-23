@@ -90,7 +90,7 @@ Agentic-SDLC-Plugin/
 │   ├── android-plugin/           ← Android (Kotlin) provider — aspect android, priority 300
 │   │   ├── .claude-plugin/plugin.json
 │   │   ├── stack.md
-│   │   ├── agents/android-architect.md       ← sonnet / medium
+│   │   ├── agents/                ← 11 specialized agents (android-ba, android-developer, …)
 │   │   ├── skills/
 │   │   │   ├── android-compose-ui/SKILL.md    ← convention skill
 │   │   │   ├── android-architecture/SKILL.md  ← convention skill

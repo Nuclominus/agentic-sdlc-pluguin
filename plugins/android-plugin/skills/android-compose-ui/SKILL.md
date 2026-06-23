@@ -25,8 +25,10 @@ aesthetic decisions (typography, color, layout polish), defer to the
   values and `key` in lists; hoist lambdas to avoid re-allocation where it matters.
 - **Previews.** Provide `@Preview` for the stateless `Content` (and key states: loading, empty,
   error) — previews drive review and catch layout regressions.
-- **Theming & images — detect.** Use the project's existing Material theme (M2/M3) and its
-  image-loading library; don't introduce a new one.
+- **Theming & images — detect, but honor pinned libraries.** Use the project's existing Material
+  theme (M2/M3) and image-loading library; don't introduce a new one. **Exception:** where
+  `non-negotiable.md` pins a library (e.g. image loading → Coil 3), that rule wins — "detect" only
+  applies where the rule is silent.
 
 ## Patterns
 
