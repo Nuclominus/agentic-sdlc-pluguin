@@ -377,7 +377,7 @@ If present — `Read` and parse it. Recognized top-level keys:
 | `extra_phase_prompts` | object (phase → string) | **APPENDS** to `phase_prompts_injection` for that phase (additive — don't lose plugin guidance). |
 | `skip_phases` | array of strings | Phase names to remove from the canonical order in 1c. |
 | `convention_skills_extra` | array of strings | APPENDS to `convention_skills`. |
-| `extensions` | object with a `skills` array | Per-agent skill mapping injected into phase prompts in Step 3b-1. Parsed into `EFFECTIVE_PROFILE.extension_skills` (see 1b-ext). Additive — never replaces plugin behavior. |
+| `extensions` | object with a `skills` array | Per-agent skill mapping injected into phase prompts in Step 3b-1a. Parsed into `EFFECTIVE_PROFILE.extension_skills` (see 1b-ext). Additive — never replaces plugin behavior. |
 
 ##### 1b-ext. Parse `extensions.skills` (Project Extension Manifest)
 
@@ -600,10 +600,16 @@ The two `===` delimiters are part of the prompt — agents are instructed (via t
 Select rows from `EFFECTIVE_PROFILE.extension_skills` (built in 1b-ext) that target the agent being
 spawned: a row matches when its `agents` list contains the agent's name OR equals the string `"all"`.
 
+**Dedupe by skill.** Multiple matching rows can name the same `skill` (e.g. an explicit
+`agents: [android-developer]` row plus an `agents: "all"` row). Collapse them to ONE entry per `skill`
+id — keep the **strictest policy** (`mandatory` > `recommended`) and the `when` hint from the row that
+supplied that strictest policy (if several mandatory rows collide, the alphabetically-first `when`
+wins, to stay deterministic). This guarantees one line per skill with no policy contradiction.
+
 - If **no row matches** → the block is the empty string and is OMITTED entirely (no blank header), so
   the stable prefix stays byte-identical for phases/agents that have no extensions.
-- If rows match, render them deterministically — **mandatory first, then recommended; within each group
-  sorted alphabetically by `skill`** (so the block is stable across runs and cache-friendly):
+- After dedupe, render the entries deterministically — **mandatory first, then recommended; within each
+  group sorted alphabetically by `skill`** (so the block is stable across runs and cache-friendly):
 
 ```
 Project extension skills (from this project's .claude/sdlc.local.yaml `extensions.skills`):
@@ -612,8 +618,9 @@ Project extension skills (from this project's .claude/sdlc.local.yaml `extension
 ```
 
 This block lives in the **stable prefix** (not the per-call trailer): for a given (phase, aspect) the
-agent is deterministic, so its matched rows are identical across runs. Editing `sdlc.local.yaml`
-legitimately invalidates the cache — that is the expected and only trigger. Do NOT splice any per-call
+agent is deterministic, so its matched rows are identical across runs. It is invalidated only by
+legitimate, infrequent changes — editing `sdlc.local.yaml`, or installing/uninstalling a referenced
+extension skill's plugin (which flips the 1b-ext availability downgrade). Do NOT splice any per-call
 value (task_slug, timestamps) into this block.
 
 Note: this injection covers the **pipeline phase agents** the orchestrator dispatches. ON-DEMAND
@@ -1056,7 +1063,7 @@ Hard rules:
 
 - The stable prefix MUST contain ZERO references to `task_slug`, ISO timestamps, run UUIDs, or any per-call value. All such values live in the trailer.
 - The stable prefix's `convention_skills` list MUST be sorted deterministically — never insertion-ordered.
-- The `project_extension_skills_block` (3b-1a) MUST be ordered deterministically (mandatory-first, then alphabetical by skill) and OMITTED entirely when no row targets the agent — never emit an empty header. It is invalidated only by edits to `sdlc.local.yaml`, which is acceptable.
+- The `project_extension_skills_block` (3b-1a) MUST be deduped by skill (strictest policy wins), ordered deterministically (mandatory-first, then alphabetical by skill), and OMITTED entirely when no row targets the agent — never emit an empty header. It is invalidated only by edits to `sdlc.local.yaml` or install/uninstall of a referenced skill's plugin, which is acceptable.
 - The stable prefix's `phase_prompts_injection` MUST be concatenated in a deterministic order (alphabetical by source plugin name) to keep multi-plugin merges byte-stable.
 - Do NOT splice user-supplied free text (e.g. raw `$ARGUMENTS`) into the stable prefix. `$ARGUMENTS` belongs in `_brief.md`, which the agent reads via the inputs list.
 - When adding new phase guidance, prefer extending the agent's `.md` body (truly stable system prompt) over enriching the orchestrator's prefix.

@@ -48,6 +48,10 @@ runs the pipeline.
      top-level `extensions:` → `skills:` list (create it if missing). **Append** each new row. If a row
      with the same `skill` AND the same `agents` set already exists, **update it in place** (refresh
      `when`/`policy`) instead of adding a duplicate. Never reorder or drop unrelated content.
+   - **Overlap guard:** if the new row names a `skill` that an existing row ALSO targets for one or
+     more of the same agents (e.g. existing `agents: "all"` vs. new `agents: [android-developer]`),
+     warn the user — at runtime the orchestrator dedupes such overlaps to one line per skill (strictest
+     policy wins, 3b-1a), so the extra row only adds noise. Offer to merge into the existing row instead.
    - If the file did not exist, create it with a one-line header comment and just the `extensions:` block.
 
 7. **Report.** Print the final `extensions.skills` table and the next step.
