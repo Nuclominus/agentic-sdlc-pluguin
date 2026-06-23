@@ -85,7 +85,7 @@ owns it end-to-end. Setup (optional): download → `android update` → `android
   - `sdk *`, `studio version-lookup` → android-devops / android-developer
   - `docs search/fetch` (Android Knowledge Base) → any agent (grounding)
   - `studio analyze-file/find-declaration/find-usages/open-file/render-compose-preview/check` → android-developer / android-reviewer
-  - `skills add/find/list/remove`, `init`, `update`, `info` → setup / android-devops
+  - `skills add/find/list/remove`, `init`, `update`, `info` → android-devops
 
 ## 8. Project Extension Manifest — per-project skills / commands / hooks  *(DEFERRED — own step)*
 Let each project optionally extend the SDLC process without editing the plugin. Recommended design:

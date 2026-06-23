@@ -68,13 +68,13 @@ This binding lives **entirely inside android-plugin** — the core orchestrator 
 | `sdk *` (install/list/remove/update), `studio version-lookup` | **android-devops** / **android-developer** | Managing SDK packages (channels: stable/beta/canary) and looking up the **latest versions of dependencies, Android platforms, and SDK tools** (e.g. Google Maven) during environment setup or build work |
 | `docs search`, `docs fetch` (Android Knowledge Base, via `kb://` URLs) | **any agent** (grounding) | Searching the Android Knowledge Base and fetching docs to ground answers before implementing or reviewing |
 | `studio analyze-file`, `studio find-declaration`, `studio find-usages`, `studio open-file`, `studio render-compose-preview`, `studio check` | **android-developer** / **android-reviewer** | IDE-backed static analysis/inspections, semantic declaration/usage navigation, opening files in the editor, rendering Compose `@Preview` (optionally its semantics tree), and checking running Studio instances during implementation & review |
-| `skills add`, `skills find`, `skills list`, `skills remove`, `init`, `update`, `info` | **setup** (onboarding) / **android-devops** | Managing the CLI's own agent skills, initializing the environment (`init` installs the `android-cli` skill), updating the CLI, and locating the default SDK path during environment setup |
+| `skills add`, `skills find`, `skills list`, `skills remove`, `init`, `update`, `info` | **android-devops** | Managing the CLI's own agent skills, initializing the environment (`init` installs the `android-cli` skill), updating the CLI, and locating the default SDK path during environment setup |
 
 Notes:
 - Capabilities are **advisory affordances**, not mandatory steps — an agent uses them only when the
   task calls for native tooling and the CLI is present.
-- "setup" refers to the onboarding/environment-setup context (typically driven by **android-devops**),
-  not a pipeline phase agent.
+- Environment-setup capabilities (`init`/`update`/`info`/`skills *`) are owned by **android-devops** —
+  there is no dedicated "setup" agent; setup is an android-devops responsibility.
 - **android-qa** may also drop down to native **`adb`** commands directly (e.g. `adb devices`,
   `adb install`, `adb shell input`, `adb shell am start`, `adb logcat`, `adb shell screencap`) to
   control real devices when the `android` CLI is absent or a lower-level operation is needed. `adb`
