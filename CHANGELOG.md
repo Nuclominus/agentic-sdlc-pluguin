@@ -18,6 +18,10 @@ Builds out the marketplace from the initial skeleton into a working native-mobil
   iOS = `*.xcodeproj` / `*.xcworkspace` / `Package.swift` (app-target + monorepo).
 - MASVS/MASTG security in `android-security`; core `security-analyst` made platform-neutral.
 - `manage-vault` skill — Obsidian vault lifecycle (scaffold → repair → STUB-aware (re)populate → archive).
+- Authored the four Android convention skills (`android-architecture`, `android-compose-ui`,
+  `android-data`, `android-navigation`) — previously Phase-3 stubs. Stack-agnostic principles,
+  patterns, and anti-patterns; library choices defer to Architecture Detection and reference
+  `rules/snippets/non-negotiable.md` rather than duplicating it.
 - Android CLI as an OPTIONAL, plugin-owned advisory hook (core has zero Android-CLI knowledge).
 - `/sdlc:init` command; `/sdlc:doctor` host-capability probe (uname + toolchains).
 - `docs/WORKFLOW.md` (system diagrams) + `docs/WALKTHROUGH.md` (end-to-end Android run); READMEs

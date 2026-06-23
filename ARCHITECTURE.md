@@ -92,10 +92,10 @@ Agentic-SDLC-Plugin/
 │   │   ├── stack.md
 │   │   ├── agents/android-architect.md       ← sonnet / medium
 │   │   ├── skills/
-│   │   │   ├── android-compose-ui/SKILL.md    ← (stub, Phase 3)
-│   │   │   ├── android-architecture/SKILL.md  ← (stub, Phase 3)
-│   │   │   ├── android-data/SKILL.md          ← (stub, Phase 3)
-│   │   │   └── android-navigation/SKILL.md    ← (stub, Phase 3)
+│   │   │   ├── android-compose-ui/SKILL.md    ← convention skill
+│   │   │   ├── android-architecture/SKILL.md  ← convention skill
+│   │   │   ├── android-data/SKILL.md          ← convention skill
+│   │   │   └── android-navigation/SKILL.md    ← convention skill
 │   │   └── hooks/                ← format-on-stop (ktlint/detekt), guard-paths (build/, .gradle/)
 │   │
 │   └── ios-plugin/               ← iOS (Swift) provider — aspect ios, priority 300
@@ -304,7 +304,10 @@ On the next `/sdlc:start`, the orchestrator finds the new `stack.md` via Glob, e
 ## 11. Status & Next Steps
 
 - **Core (`sdlc`)** — copied and functional; mobile retune pending (`CORE-TODO.md`).
-- **android-plugin / ios-plugin** — `stack.md`, hooks, and agent frontmatter complete; convention skills and architect procedures are Phase 3/4 stubs.
+- **android-plugin** — `stack.md`, hooks, agent frontmatter, and the four convention skills
+  (`android-architecture`, `android-compose-ui`, `android-data`, `android-navigation`) complete.
+  **ios-plugin** — `stack.md`, hooks, and agent frontmatter complete; convention skills and
+  architect procedures are Phase 3/4 stubs.
 - **Top priority:** add `file_glob` to the schema + orchestrator Step 0b (unblocks iOS app-target and monorepo detection).
 
 The full staged development plan (Phases 0–7) accompanies this repo.
