@@ -11,6 +11,12 @@ All notable changes to the Agentic SDLC Plugin (native mobile) marketplace.
 ### Changed
 
 ### Fixed
+- `sdlc` **0.2.2** — `enforce-agent-model.sh` never matched plugin-namespaced agents. Agents are
+  dispatched as `<plugin>:<agent>` (e.g. `android-plugin:android-developer`) but the frontmatter
+  file on disk is `<agent>.md`, so the hook searched `*/agents/android-plugin:android-developer.md`,
+  found nothing, fell into fail-open, and emitted `[model-enforcement] … .md not found — skipping
+  model check (non-SDLC agent?)` instead of enforcing the declared tier. The hook now strips the
+  `<plugin>:` prefix (`bare_name="${agent_name##*:}"`) before building the search path.
 - `sdlc` **0.2.1** — model-tier dispatch broke every agent call (`InputValidationError:
   expected one of "sonnet"|"opus"|"haiku"|"fable"`). The `Agent` tool's `model` parameter now
   accepts the short tier name only; both enforcement layers were converting it to a full model ID
