@@ -1,9 +1,10 @@
 # room-plugin
 
 Additive **framework provider** for Room persistence — the second Framework-Provider-Pattern plugin
-(after `retrofit-plugin`). It enriches the [Android Foundation](../android-foundation/README.md) pipeline
-without owning any phase: it ships **no agents**, only guidance that the foundation's existing
-`android-developer` and `android-security` agents consume.
+(after `retrofit-plugin`). It enriches the `persistence` aspect (`enriches_aspect: persistence`) without
+owning any phase or depending on any sibling plugin: it ships **no agents**, only guidance that any
+foundation hosting `persistence` — [Android Foundation](../android-foundation/README.md) today — consumes
+through its existing development and security phase agents.
 
 For the pattern itself, see the root [`ARCHITECTURE.md`](../../ARCHITECTURE.md).
 
@@ -49,10 +50,11 @@ frameworks:
   disable: [room]   # suppress
 ```
 
-## Boundary with the foundation
+## Boundary with the hosting foundation
 
 - **Layer principles** (repository ownership, DTO↔domain mapping, dispatcher discipline, suspend/Flow
-  contract) stay in `android-foundation:android-data` — this plugin **cross-links**, never restates.
+  contract) stay with the hosting foundation's data-layer conventions — this plugin **defers**, never
+  restates, and never hard-references another plugin's skill id.
 - **Room keep rules** were extracted out of the foundation's `rules/snippets/proguard-keep.md` into this
   plugin, so each keep rule lives in exactly one place, gated by detection.
 

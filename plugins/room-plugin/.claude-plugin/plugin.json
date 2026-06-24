@@ -1,7 +1,7 @@
 {
   "name": "room-plugin",
   "version": "1.0.0",
-  "description": "Additive framework provider for Room (androidx.room) persistence. Auto-detected by the orchestrator from the Gradle version catalog / build files; enriches the Android Foundation flow via framework.md (additive: true) with the room-conventions skill, development + security phase-prompt injections, and R8/ProGuard keep rules. Ships NO agents — it specializes the existing android-developer / android-security prompts.",
+  "description": "Additive framework provider for Room (androidx.room) persistence. Auto-detected by the orchestrator from the Gradle version catalog / build files; enriches the `persistence` aspect (enriches_aspect: persistence) via framework.md (additive: true) with the room-conventions skill, development + security phase-prompt injections, and R8/ProGuard keep rules. Ships NO agents — it specializes the existing development / security phase prompts.",
   "author": {
     "name": "Nuclominus",
     "url": "https://github.com/Nuclominus"
@@ -17,7 +17,6 @@
     "framework-provider"
   ],
   "dependencies": [
-    "sdlc",
-    "android-foundation"
+    "sdlc"
   ]
 }

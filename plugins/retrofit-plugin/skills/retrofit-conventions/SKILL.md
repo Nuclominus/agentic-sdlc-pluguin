@@ -1,6 +1,6 @@
 ---
 name: retrofit-conventions
-description: Retrofit/OkHttp-specific networking idioms — suspend/Flow service signatures, single OkHttpClient with ordered interceptors, converter setup, and transport-error mapping to domain Results. Invoke before adding or changing Retrofit service interfaces, OkHttp client config, or API DTO mapping. Layer principles (repository ownership, DTO↔domain, dispatcher discipline) stay in android-foundation:android-data.
+description: Retrofit/OkHttp-specific networking idioms — suspend/Flow service signatures, single OkHttpClient with ordered interceptors, converter setup, and transport-error mapping to domain Results. Invoke before adding or changing Retrofit service interfaces, OkHttp client config, or API DTO mapping. Layer principles (repository ownership, DTO↔domain, dispatcher discipline) stay with the hosting foundation's data-layer conventions.
 ---
 
 # retrofit-conventions

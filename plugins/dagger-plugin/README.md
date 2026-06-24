@@ -1,10 +1,11 @@
 # dagger-plugin
 
 Additive **framework provider** for Dagger / Hilt dependency injection — a Framework-Provider-Pattern
-plugin alongside `retrofit-plugin` and `room-plugin`. It enriches the
-[Android Foundation](../android-foundation/README.md) pipeline without owning any phase: it ships **no
-agents**, only guidance that the foundation's existing `android-developer` and `android-security` agents
-consume.
+plugin alongside `retrofit-plugin` and `room-plugin`. It enriches the `di` aspect
+(`enriches_aspect: di`) without owning any phase or depending on any sibling plugin: it ships **no
+agents**, only guidance that any foundation hosting `di` —
+[Android Foundation](../android-foundation/README.md) today — consumes through its existing development
+and security phase agents.
 
 For the pattern itself, see the root [`ARCHITECTURE.md`](../../ARCHITECTURE.md).
 
@@ -50,10 +51,10 @@ injection, deliberate scoping). The **Hilt/Dagger-specific** guidance lives here
 activate this plugin — a future `koin-plugin` would mirror this shape. This is how the marketplace avoids
 imposing a single DI framework.
 
-## Boundary with the foundation
+## Boundary with the hosting foundation
 
-- **Dispatcher qualifiers & layer principles** stay in `android-foundation:android-data` — this plugin
-  cross-links, never restates.
+- **Dispatcher qualifiers & layer principles** stay with the hosting foundation's data-layer conventions —
+  this plugin **defers**, never restates, and never hard-references another plugin's skill id.
 - **Hilt/Dagger keep rules** were extracted out of the foundation's `rules/snippets/proguard-keep.md`
   into this plugin.
 

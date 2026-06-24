@@ -3,9 +3,12 @@ stack: dagger
 additive: true
 priority: 150
 aspects: []
-# Just name the library. The orchestrator owns where/how to look for it
-# (version catalog first, then module build files) — see the Framework
-# dependency detection strategy in the pipeline-orchestrator skill.
+# The FUNCTIONAL category this framework decorates. It attaches under any foundation whose
+# `hosts_aspects` includes `di`. Replaces any plugin→plugin dependency.
+enriches_aspect: di
+# Just name the library. The hosting FOUNDATION declares WHERE to look (via its `framework_detection`:
+# version catalog first, then module build files); the orchestrator executes that search on the
+# foundation's behalf — see 0b-frameworks in the pipeline-orchestrator skill.
 # `com.google.dagger` covers both plain Dagger and Hilt (hilt-android, hilt-compiler).
 dependency: com.google.dagger
 ---
@@ -22,9 +25,10 @@ injection, deliberate scoping). This plugin adds the **Hilt/Dagger-specific** gu
 `com.google.dagger` is detected. A project on a different DI framework (e.g. Koin) simply does not
 activate this plugin — that is the "detect, don't impose" resolution.
 
-This profile only **names** the dependency (`com.google.dagger`); the orchestrator decides where to look
-for it (version catalog first, then module build files). Toggle explicitly from a project's
-`.claude/sdlc.local.yaml`:
+This profile only **names** the dependency (`com.google.dagger`) and the functional category it enriches
+(`di`); the hosting **foundation** (whose `hosts_aspects` includes `di`) declares where to look (version
+catalog first, then module build files) and the orchestrator executes that search. Toggle explicitly from
+a project's `.claude/sdlc.local.yaml`:
 
 ```yaml
 frameworks:
@@ -48,8 +52,8 @@ For development phase, inject:
    Application). ViewModels use `@HiltViewModel` + an `@Inject constructor`. Bindings live in `@Module`
    + `@InstallIn(<component>)`; prefer `@Binds` for interface→impl, `@Provides` only for types you do not
    own. Scope deliberately (`@Singleton`, `@ActivityRetainedScoped`, `@ViewModelScoped`) — do not make
-   everything `@Singleton`. Expose dispatchers via qualifiers (e.g. `@IoDispatcher`) per
-   android-foundation:android-data. Generate hilt-compiler with KSP, not KAPT. See the
+   everything `@Singleton`. Expose dispatchers via qualifiers (e.g. `@IoDispatcher`) per the hosting
+   foundation's data-layer conventions. Generate hilt-compiler with KSP, not KAPT. See the
    dagger-plugin:hilt-conventions skill."
 
 For security phase, inject:
