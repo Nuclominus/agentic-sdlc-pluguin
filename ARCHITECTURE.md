@@ -148,14 +148,13 @@ id stays `android` (config stability); only the plugin name is `android-foundati
 stack: retrofit
 additive: true
 aspects: []
-detect:
-  any:
-    - file_contains: { path: gradle/libs.versions.toml, pattern: "(?i)retrofit" }
+dependency: com.squareup.retrofit2     # just name it; the orchestrator owns the search
 ---
 ```
 Additive: contributes the `retrofit-conventions` skill plus development/security injections and a
 ProGuard snippet. Declares no agents and no workflow (the schema and the orchestrator both reject those
-for additive profiles).
+for additive profiles). It ships **no detection rules** — it only names the dependency; the orchestrator
+looks for it version-catalog-first, then module build files (see §4.1).
 
 ### 3.4. Frontmatter spec
 
@@ -166,7 +165,8 @@ for additive profiles).
 | `additive` | bool | — | `true` marks a framework provider: excluded from winner/PRIMARY resolution; must not declare `workflow` or agents. |
 | `aspects` | array | — | Aspects the profile owns. `android` for the foundation; `[]` for additive frameworks. |
 | `workflow` | string | — | Default recipe when this is the PRIMARY profile. Forbidden when `additive: true`. |
-| `detect.any` / `detect.all` | array | ✅ | Detection rules. `["*"]` for vanilla. `file_exists` / `file_contains` / `file_glob`, nestable via `any`/`all`. |
+| `detect.any` / `detect.all` | array | ✳️ | Detection rules. `["*"]` for vanilla. `file_exists` / `file_contains` / `file_glob`, nestable via `any`/`all`. Required for stack providers; optional for framework providers that use `dependency`. |
+| `dependency` | string \| array | ✳️ | Framework providers only. The library coordinate(s) to detect (e.g. `com.squareup.retrofit2`). The plugin only names it; the orchestrator owns the search (§4.1). One of `detect` / `dependency` is required. |
 
 ---
 
@@ -184,6 +184,21 @@ new piece is the **additive set**:
   a union of `convention_skills`, `phase_prompts_injection` (per-phase concat), `extra_phases`, and
   `post_pipeline_checks` — additive profiles simply join it. This is the whole mechanism: ~one new
   collection bucket fed into an existing union.
+
+### 4.1. Framework dependency detection — the orchestrator owns the search
+
+A framework plugin does **not** ship detection rules. It only names the library via `dependency:`; the
+orchestrator (which already owns stack detection) decides where and in what order to look. For each
+coordinate, short-circuiting at the first match:
+
+1. **Version catalog (authoritative)** — `gradle/libs.versions.toml`. If it names the coordinate → match;
+   build files are never scanned.
+2. **Module build files (fallback)** — `**/build.gradle.kts` / `**/build.gradle` (gitignore-aware) — for
+   projects without a catalog or that declare the dependency directly in a module build file.
+
+This keeps every framework plugin trivial (one line) and the "where/how to look" knowledge in one place.
+A hand-written `detect:` block stays available as an escape hatch for frameworks not identified by a
+single Maven coordinate.
 
 ---
 

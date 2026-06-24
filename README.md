@@ -83,7 +83,7 @@ A profile's `detect` block supports four rule types, freely nestable via `any` /
 | Rule | Matches when |
 | ---- | ------------ |
 | `file_exists: <path>` | the file exists |
-| `file_contains: { path, pattern }` | the file matches the regex |
+| `file_contains: { path, pattern }` | the file at `path` matches the regex (`path` may be a glob like `**/build.gradle` — matches if any globbed file contains the pattern) |
 | `file_glob: <pattern>` | ≥1 file matches the glob (variable-named / nested artifacts — module-level build files, monorepo subtrees) |
 | `any: [...]` / `all: [...]` | nested OR / AND (recursive) |
 
@@ -382,7 +382,7 @@ A framework plugin is **additive** — it enriches the foundation's phases and s
 plugins/your-framework-plugin/
 ├── .claude-plugin/
 │   └── plugin.json          # { "name": "...", "dependencies": ["sdlc", "android-foundation"] }
-├── framework.md             # frontmatter: stack, additive: true, aspects: [], detect (on the library)
+├── framework.md             # frontmatter: stack, additive: true, aspects: [], dependency (the library name)
 ├── skills/
 │   └── your-conventions/SKILL.md   # library-specific idioms; cross-link foundation skills, don't restate
 ├── rules/snippets/          # optional: ProGuard/R8 keep rules for the library
@@ -396,9 +396,7 @@ plugins/your-framework-plugin/
 stack: room
 additive: true
 aspects: []
-detect:
-  any:
-    - file_contains: { path: gradle/libs.versions.toml, pattern: "(?i)androidx\\.room" }
+dependency: androidx.room        # just name the library — the orchestrator finds it
 ---
 
 ## Convention skills to apply
@@ -408,6 +406,14 @@ detect:
 For development phase, inject: "Room present: @Dao methods are suspend/Flow; …"
 For security phase, inject: "Room: parameterize all @Query; no string concatenation; …"
 ```
+
+> **The plugin only names the dependency; the orchestrator owns the search.** A framework provider
+> declares `dependency: <coordinate>` (e.g. `androidx.room` or `com.squareup.retrofit2`) and ships **no**
+> detection rules. The orchestrator looks for it **version-catalog first** (`gradle/libs.versions.toml`),
+> then falls back to module build files (`**/build.gradle*`, gitignore-aware) — so each plugin stays
+> trivial and the "where/how to look" logic lives once, in the orchestrator. `dependency` may be a list
+> (matches if any coordinate is found). A hand-written `detect:` block remains available as an escape
+> hatch for frameworks not identified by a single Maven coordinate.
 
 > Additive profiles **must not** declare `## Agents per phase` or a `workflow` — the schema and the orchestrator both reject it. `retrofit-plugin` is the reference implementation.
 

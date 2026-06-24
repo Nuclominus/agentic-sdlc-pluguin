@@ -203,31 +203,44 @@ Framework (additive) providers ship the same profile format in a `framework.md` 
 
 For each profile file:
 1. `Read` the file.
-2. Parse the YAML frontmatter (`stack`, `priority`, `aspects`, `detect`, optional `workflow`, and optional `additive`).
-3. Evaluate `detect` rules against the project root:
-   - `detect.any: ["*"]` → always matches.
-   - `detect.all: [...]` → all sub-rules must match.
-   - `file_exists: <path>` → check via `Glob` whether the file exists.
-   - `file_contains: { path, pattern }` → `Read` the file, run regex.
-   - `file_glob: <pattern>` → `Glob <pattern>` against the project root; matches if ≥1 file matches. Use for variable-named / nested artifacts (module-level `**/build.gradle*`, monorepo subtrees).
-   - nested `any: [...]` / `all: [...]` → evaluate the sub-rules recursively (OR / AND); rules may nest to any depth, e.g. `all: [ any:[…], file_glob:… ]`.
+2. Parse the YAML frontmatter (`stack`, `priority`, `aspects`, `detect`, optional `workflow`, `additive`, and — for framework providers — `dependency`).
+3. Determine whether the profile matches the project root:
+   - **`dependency` present** (framework providers): the orchestrator owns the search — see *Framework dependency detection* below. The plugin only names the library; it ships no `detect` rules.
+   - **`detect` present** (stack providers, and the framework escape hatch): evaluate the rules:
+     - `detect.any: ["*"]` → always matches.
+     - `detect.all: [...]` → all sub-rules must match.
+     - `file_exists: <path>` → check via `Glob` whether the file exists.
+     - `file_contains: { path, pattern }` → run the regex against the file at `path`. If `path` contains glob characters (`*`, `**`, `?`), `Glob` it first and match if **any** matching file contains the pattern. Glob honors `.gitignore`, so generated `build/` artifacts are skipped.
+     - `file_glob: <pattern>` → `Glob <pattern>` against the project root; matches if ≥1 file matches.
+     - nested `any: [...]` / `all: [...]` → evaluate the sub-rules recursively (OR / AND); rules may nest to any depth.
+     - **Evaluation order — short-circuit.** Evaluate the sub-rules of an `any:` block **in listed order** and **stop at the first match** (`all:` likewise stops at the first failure). Respect author order rather than reordering or evaluating everything.
 4. Score by `priority` (higher wins).
+
+##### Framework dependency detection (built-in strategy)
+
+When a profile declares `dependency: <coordinate>` (string, or a list — matches if ANY coordinate is found), the orchestrator decides **where and in what order to look** — this knowledge lives here, once, not in each plugin. For each coordinate, in this order (short-circuit at the first match):
+
+1. **Version catalog (authoritative).** `Read` `gradle/libs.versions.toml`; if it contains the coordinate → MATCH. Stop — do not scan build files.
+2. **Module build files (fallback).** `Glob` `**/build.gradle.kts` and `**/build.gradle` (gitignore-aware, so generated `build/` is skipped) and grep each; MATCH if any contains the coordinate. This covers projects with no version catalog, or that declare the dependency directly in a module build file.
+
+The coordinate is matched as a literal substring (case-insensitive), so `com.squareup.retrofit2` matches both a `module = "com.squareup.retrofit2:retrofit"` line in the catalog and an `implementation "com.squareup.retrofit2:retrofit:…"` line in a build file. If a project references the library only through a catalog alias (`libs.retrofit`), step 1 already matched it in the catalog.
 
 **Additive (framework) profiles** (`additive: true`) are handled separately from platform stack profiles:
 - They are **excluded** from per-aspect winner resolution (0b-aspects) and from `PRIMARY_PROFILE` selection — they never compete for or win an aspect, and never drive aspect-agnostic phases.
-- Every additive profile whose `detect` rules match (subject to the `frameworks.enable/disable` override below) is collected into **`ADDITIVE_PROFILES`**, a flat list merged into `EFFECTIVE_PROFILE` in Step 1a.
+- They normally declare a `dependency:` (the orchestrator detects it via the built-in strategy above) rather than ship their own `detect` rules. Every additive profile that matches (subject to the `frameworks.enable/disable` override below) is collected into **`ADDITIVE_PROFILES`**, a flat list merged into `EFFECTIVE_PROFILE` in Step 1a.
 - An additive profile that declares a `## Agents per phase` section (i.e. supplies `agents_per_phase`) is malformed — **HALT** with: `Additive profile '{stack}' must not declare agents per phase. Frameworks enrich existing agents; they do not own phases.`
 
 #### 0b-frameworks — Resolve the active additive (framework) set
 
 ```
 ADDITIVE_PROFILES = [ p for p in matching_profiles if p.additive == true ]
+# "matching" = dependency found via the built-in strategy, or (escape hatch) the profile's detect rules pass
 ```
 
 Then apply the optional `frameworks` override from `<project>/.claude/sdlc.local.yaml` (the same file fully parsed in Step 1b — reading the single `frameworks` key here is cheap):
 
-- `frameworks.disable: [<stack>, …]` → remove any additive profile whose `stack` is listed (even if its `detect` matched).
-- `frameworks.enable: [<stack>, …]` → force-activate the named additive profile even if its `detect` did **not** match (locate it among the globbed `framework.md` profiles; if no such profile is installed, warn `WARN: frameworks.enable '{name}' — no installed framework profile with that stack id` and continue).
+- `frameworks.disable: [<stack>, …]` → remove any additive profile whose `stack` is listed (even if its dependency was found).
+- `frameworks.enable: [<stack>, …]` → force-activate the named additive profile even if its dependency was **not** found (locate it among the globbed `framework.md` profiles; if no such profile is installed, warn `WARN: frameworks.enable '{name}' — no installed framework profile with that stack id` and continue).
 
 Unknown names in either list produce a one-line warning and are otherwise ignored.
 

@@ -4,14 +4,29 @@
   "title": "Stack Profile Frontmatter",
   "description": "Schema for the YAML frontmatter of plugins/<name>/stack.md files. The frontmatter is extracted from between the first --- markers and validated as a JSON object.",
   "type": "object",
-  "required": ["stack", "priority", "detect"],
+  "required": ["stack", "priority"],
   "additionalProperties": false,
   "allOf": [
+    {
+      "description": "Every profile must say how it is detected: stack providers use `detect` (project structure); additive framework providers normally use `dependency` (the orchestrator owns where/how to search) but may use `detect` as an escape hatch.",
+      "anyOf": [
+        { "required": ["detect"] },
+        { "required": ["dependency"] }
+      ]
+    },
     {
       "if": { "properties": { "additive": { "const": true } }, "required": ["additive"] },
       "then": {
         "not": { "required": ["workflow"] },
         "description": "Additive (framework) profiles must not declare a workflow. They enrich existing phases; they do not own the pipeline."
+      }
+    },
+    {
+      "if": { "required": ["dependency"] },
+      "then": {
+        "properties": { "additive": { "const": true } },
+        "required": ["additive"],
+        "description": "The `dependency` shorthand is only for additive framework providers — a stack provider detects by project structure via `detect`."
       }
     }
   ],
@@ -33,6 +48,13 @@
       "type": "boolean",
       "description": "When true, this is an ADDITIVE (framework) profile: it contributes convention_skills, phase_prompts_injection, extra_phases, and post_pipeline_checks to the merge but is EXCLUDED from per-aspect winner resolution and from PRIMARY_PROFILE selection. Additive profiles MUST NOT declare agents_per_phase or a workflow — they enrich existing agents, they do not own phases. Defaults to false.",
       "default": false
+    },
+    "dependency": {
+      "description": "Framework providers ONLY: the library coordinate(s) that signal this framework is in use — e.g. 'com.squareup.retrofit2' (group) or 'com.squareup.retrofit2:retrofit' (group:artifact). The plugin just NAMES the dependency; the ORCHESTRATOR owns where and in what order to look for it (version catalog first, then module build files). Prefer this over a hand-written `detect` block. A list matches if ANY coordinate is found.",
+      "oneOf": [
+        { "type": "string", "minLength": 2 },
+        { "type": "array", "items": { "type": "string", "minLength": 2 }, "minItems": 1, "uniqueItems": true }
+      ]
     },
     "aspects": {
       "type": "array",
@@ -99,8 +121,8 @@
               "type": "object",
               "required": ["path", "pattern"],
               "properties": {
-                "path": { "type": "string" },
-                "pattern": { "type": "string" }
+                "path": { "type": "string", "description": "Path relative to project root. May be a glob (e.g. '**/build.gradle') — if it contains glob characters, the rule matches when ANY globbed file contains the pattern. Glob honors .gitignore." },
+                "pattern": { "type": "string", "description": "Regex evaluated against the file contents." }
               },
               "additionalProperties": false
             }

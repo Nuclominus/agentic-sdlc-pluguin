@@ -3,17 +3,10 @@ stack: retrofit
 additive: true
 priority: 150
 aspects: []
-detect:
-  any:
-    - file_contains:
-        path: gradle/libs.versions.toml
-        pattern: "(?i)retrofit"
-    - file_contains:
-        path: build.gradle.kts
-        pattern: "(?i)com\\.squareup\\.retrofit2"
-    - file_contains:
-        path: build.gradle
-        pattern: "(?i)com\\.squareup\\.retrofit2"
+# Just name the library. The orchestrator owns where/how to look for it
+# (version catalog first, then module build files) — see the Framework
+# dependency detection strategy in the pipeline-orchestrator skill.
+dependency: com.squareup.retrofit2
 ---
 
 # Retrofit / OkHttp — Framework Provider (additive)
@@ -23,8 +16,9 @@ to **existing** phases and ships **no agents** — it specializes the foundation
 and `android-security` prompts. `priority` here is documentational only; additive profiles never
 compete for or win an aspect.
 
-Activation is automatic when Retrofit is found in the Gradle version catalog or a build script.
-Toggle explicitly from a project's `.claude/sdlc.local.yaml`:
+This profile only **names** the dependency (`com.squareup.retrofit2`); the orchestrator decides where to
+look for it (version catalog first, then module build files). Activation is therefore automatic when
+Retrofit is found. Toggle explicitly from a project's `.claude/sdlc.local.yaml`:
 
 ```yaml
 frameworks:

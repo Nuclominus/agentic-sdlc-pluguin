@@ -26,13 +26,20 @@ that try to.
 
 ## Detection
 
+The plugin only **names** the library — it ships no search rules:
+
 ```yaml
-detect:
-  any:
-    - file_contains: { path: gradle/libs.versions.toml, pattern: "(?i)retrofit" }
-    - file_contains: { path: build.gradle.kts,          pattern: "(?i)com\\.squareup\\.retrofit2" }
-    - file_contains: { path: build.gradle,              pattern: "(?i)com\\.squareup\\.retrofit2" }
+dependency: com.squareup.retrofit2
 ```
+
+The **orchestrator** owns where and in what order to look (this logic lives once, in the
+pipeline-orchestrator skill, not in each plugin):
+
+1. **Version catalog first** — `gradle/libs.versions.toml`. When the catalog declares Retrofit,
+   detection resolves from that one authoritative file and build files are never scanned.
+2. **Module build files (fallback)** — `**/build.gradle.kts` / `**/build.gradle` (gitignore-aware), so a
+   dependency declared in a module build file (e.g. `app/build.gradle`) is still detected on projects
+   without a version catalog.
 
 Override per project in `.claude/sdlc.local.yaml`:
 
