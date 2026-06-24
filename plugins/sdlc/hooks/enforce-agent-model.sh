@@ -53,6 +53,11 @@ project_root="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 log_path="${project_root}/docs/plans/_model-enforcement.log"
 
 # ── find agent .md ──────────────────────────────────────────────────────────
+# Agent names dispatched from plugins are namespaced as "<plugin>:<agent>"
+# (e.g. android-plugin:android-developer), but the file on disk is just
+# "<agent>.md". Strip the plugin prefix before building the search path.
+bare_name="${agent_name##*:}"
+
 # Search order: installed plugin root → sibling plugins (marketplace layout) → dev checkout fallback
 search_roots=()
 if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
@@ -67,7 +72,7 @@ search_roots+=( "${project_root}/plugins" )
 md_path=""
 for root in "${search_roots[@]}"; do
     [ -d "$root" ] || continue
-    md_path=$(find "$root" -path "*/agents/${agent_name}.md" 2>/dev/null | head -1)
+    md_path=$(find "$root" -path "*/agents/${bare_name}.md" 2>/dev/null | head -1)
     [ -n "$md_path" ] && break
 done
 
