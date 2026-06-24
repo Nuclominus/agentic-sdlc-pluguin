@@ -17,7 +17,7 @@ Snapshot of the pipeline's runtime environment. Reuses the same Step 0a prefligh
 
 2. **Run the same preflight algorithm as Step 0a in `pipeline-orchestrator/SKILL.md`** (Step 0a-2 through 0a-3 — enumerate available skills via `mcp__skills__list_skills` with FS fallback to `~/.claude/plugins/cache/{plugin}/skills/{skill}/SKILL.md`, then compute per-dependency status). DO NOT enforce policy in `/sdlc:doctor` — `block` does NOT exit here. Just collect status.
 
-3. **Locate active stack profiles.** Reuse Step 0b logic from the orchestrator: `Glob ~/.claude/plugins/cache/**/stack.md`, parse frontmatter, evaluate detect rules against the current project. Identify the primary profile that would be selected.
+3. **Locate active stack profiles.** Reuse Step 0b logic from the orchestrator: `Glob ~/.claude/plugins/cache/**/manifest.yaml`, parse each, split by `kind`, evaluate `kind: foundation` detect rules against the current project. Identify the primary profile that would be selected.
 
 3b. **Probe host capability.** Run `uname -s -m` for the OS/arch, then best-effort probe the host toolchains relevant to installed stack plugins — never fail, just report version or `not found`. Suggested probes (skip any that don't apply to the installed plugins): `node --version`, `java -version`, `./gradlew --version` (if a wrapper exists), `swift --version`, `xcodebuild -version`, `android --version`. This surfaces capability-gated checks up front (e.g. iOS lint/build needs macOS + Xcode; those post-pipeline checks SKIP rather than fail off-host).
 
@@ -43,7 +43,7 @@ Dependencies (from runtime-dependencies.json):
       /plugin install acme-internal@acme-internal-tools
 
 Stack profiles:
-  🎯 active: android (priority=300, from android-foundation/stack.md)
+  🎯 active: android (priority=300, from android-foundation/manifest.yaml)
   ➕ frameworks: retrofit (additive)
   also installed: vanilla (priority=0)
 

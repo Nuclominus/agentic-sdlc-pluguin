@@ -11,7 +11,7 @@ One-time project setup. Detects the platform(s), writes a starter local-override
 
 1. **Repo root check.** `git rev-parse --show-toplevel` should match CWD; otherwise tell the user to `cd` there. Create `.claude/` if absent.
 
-2. **Detect stack profiles.** Reuse Step 0b from `pipeline-orchestrator/SKILL.md`: `Glob ~/.claude/plugins/cache/**/stack.md`, evaluate each profile's `detect` rules against the project, resolve the winner per aspect + the PRIMARY profile. Print them and the PRIMARY profile's declared default `workflow:` (if any).
+2. **Detect stack profiles.** Reuse Step 0b from `pipeline-orchestrator/SKILL.md`: `Glob ~/.claude/plugins/cache/**/manifest.yaml`, split by `kind`, evaluate each `kind: foundation` profile's `detect` rules against the project, resolve the winner per aspect + the PRIMARY profile. Print them and the PRIMARY profile's declared default `workflow:` (if any).
 
 3. **Scaffold `.claude/sdlc.local.yaml` — IF ABSENT.** Never overwrite an existing file (print `exists — left untouched` and skip). When creating, write a commented starter template with the generic override fields and the detected default workflow noted:
 

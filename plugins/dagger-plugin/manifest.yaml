@@ -1,0 +1,33 @@
+# Dagger / Hilt — SDLC manifest (kind: framework, additive).
+# Machine-read source the orchestrator consumes. Human docs live in README.md.
+
+kind: framework
+stack: dagger
+priority: 150                       # documentational for frameworks — they never win an aspect
+enriches_aspect: di                # functional category; a foundation hosting `di` resolves me
+dependency: com.google.dagger      # covers plain Dagger and Hilt; the foundation declares WHERE to look
+
+convention_skills:
+  - dagger-plugin:hilt-conventions
+
+extra_phases: []
+pre_phase_commands: []
+
+phase_injections:
+  development: |
+    Dagger/Hilt is present. Prefer constructor injection with `@Inject`; reserve field injection for
+    framework entry points (`@AndroidEntryPoint` Activities/Fragments/Services, `@HiltAndroidApp`
+    Application). ViewModels use `@HiltViewModel` + an `@Inject constructor`. Bindings live in `@Module`
+    + `@InstallIn(<component>)`; prefer `@Binds` for interface→impl, `@Provides` only for types you do not
+    own. Scope deliberately (`@Singleton`, `@ActivityRetainedScoped`, `@ViewModelScoped`) — do not make
+    everything `@Singleton`. Expose dispatchers via qualifiers (e.g. `@IoDispatcher`) per the hosting
+    foundation's data-layer conventions. Generate hilt-compiler with KSP, not KAPT. See the
+    dagger-plugin:hilt-conventions skill.
+  security: |
+    Dagger/Hilt: do not keep security-sensitive material (decrypted keys, tokens, plaintext credentials)
+    in long-lived `@Singleton` graphs longer than needed — scope it to the narrowest lifetime and clear it.
+    Be deliberate with `@EntryPoint` / `EntryPointAccessors`: they bypass normal injection and can expose
+    internal bindings — only expose what is required. Apply the R8/ProGuard keep rules in
+    dagger-plugin/rules/snippets/hilt-proguard.md when the project ships R8.
+
+post_pipeline_checks: []

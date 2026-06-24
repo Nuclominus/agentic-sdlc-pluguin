@@ -1,7 +1,7 @@
 {
   "name": "agentic-sdlc",
   "version": "1.0.0",
-  "description": "AI-assisted SDLC pipelines for ANDROID development (Kotlin + Gradle) in Claude Code. Android Foundation is the centerpiece stack provider; framework plugins (Retrofit, Room, Dagger/Hilt, …) attach additively to the orchestrator-managed flow via the Stack Provider Pattern. The generic sdlc core owns the pipeline; providers register themselves via stack.md / framework.md profiles. Adapted from AratKruglik/claude-sdlc (MIT).",
+  "description": "AI-assisted SDLC pipelines for ANDROID development (Kotlin + Gradle) in Claude Code. Android Foundation is the centerpiece stack provider; framework plugins (Retrofit, Room, Dagger/Hilt, …) attach additively to the orchestrator-managed flow via the Stack Provider Pattern. The generic sdlc core owns the pipeline; providers register themselves via manifest.yaml profiles (kind: foundation | framework). Adapted from AratKruglik/claude-sdlc (MIT).",
   "owner": {
     "name": "Nuclominus",
     "url": "https://github.com/Nuclominus"
@@ -37,17 +37,17 @@
     {
       "name": "retrofit-plugin",
       "source": "./plugins/retrofit-plugin",
-      "description": "Additive framework provider for Retrofit/OkHttp networking. Auto-detected from the Gradle version catalog / build files; enriches the Android Foundation flow via framework.md (additive: true) with the retrofit-conventions skill, development + security phase-prompt injections, and R8/ProGuard keep rules. Ships NO agents — it specializes the existing android-developer / android-security prompts. Reference implementation of the Framework Provider Pattern."
+      "description": "Additive framework provider for Retrofit/OkHttp networking. Auto-detected from the Gradle version catalog / build files; enriches the `network` aspect (enriches_aspect: network) via manifest.yaml (kind: framework) with the retrofit-conventions skill, development + security phase-prompt injections, and R8/ProGuard keep rules. Ships NO agents — it specializes the existing development / security phase prompts. Reference implementation of the Framework Provider Pattern."
     },
     {
       "name": "room-plugin",
       "source": "./plugins/room-plugin",
-      "description": "Additive framework provider for Room (androidx.room) persistence. Auto-detected by the orchestrator from the Gradle version catalog / build files; enriches the Android Foundation flow via framework.md (additive: true) with the room-conventions skill, development + security phase-prompt injections (suspend/Flow DAOs, @Transaction, parameterized queries, migrations, KSP), and R8/ProGuard keep rules. Ships NO agents — it specializes the existing android-developer / android-security prompts."
+      "description": "Additive framework provider for Room (androidx.room) persistence. Auto-detected by the orchestrator from the Gradle version catalog / build files; enriches the `persistence` aspect (enriches_aspect: persistence) via manifest.yaml (kind: framework) with the room-conventions skill, development + security phase-prompt injections (suspend/Flow DAOs, @Transaction, parameterized queries, migrations, KSP), and R8/ProGuard keep rules. Ships NO agents — it specializes the existing development / security phase prompts."
     },
     {
       "name": "dagger-plugin",
       "source": "./plugins/dagger-plugin",
-      "description": "Additive framework provider for Dagger / Hilt dependency injection (com.google.dagger). Auto-detected by the orchestrator from the Gradle version catalog / build files; enriches the Android Foundation flow via framework.md (additive: true) with the hilt-conventions skill, development + security phase-prompt injections (constructor injection, @Module/@InstallIn, @Binds over @Provides, deliberate scoping, KSP), and R8/ProGuard keep rules. Realizes the 'detect, don't impose' DI resolution: the foundation states the generic DI principle, this plugin adds Hilt/Dagger specifics only when detected. Ships NO agents."
+      "description": "Additive framework provider for Dagger / Hilt dependency injection (com.google.dagger). Auto-detected by the orchestrator from the Gradle version catalog / build files; enriches the `di` aspect (enriches_aspect: di) via manifest.yaml (kind: framework) with the hilt-conventions skill, development + security phase-prompt injections (constructor injection, @Module/@InstallIn, @Binds over @Provides, deliberate scoping, KSP), and R8/ProGuard keep rules. Realizes the 'detect, don't impose' DI resolution: the foundation states the generic DI principle, this plugin adds Hilt/Dagger specifics only when detected. Ships NO agents."
     }
   ]
 }

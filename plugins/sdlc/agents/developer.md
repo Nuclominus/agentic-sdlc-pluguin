@@ -1,7 +1,7 @@
 ---
 name: developer
 description: |
-  Vanilla implementer. Used as the development-phase agent when no platform provider is registered. Platform plugins (android-foundation) override this slot via their stack.md.
+  Vanilla implementer. Used as the development-phase agent when no platform provider is registered. Platform plugins (android-foundation) override this slot via their manifest.yaml.
 
   <example>
   vanilla project (no framework profile matches), orchestrator runs /sdlc:start.

@@ -1,0 +1,31 @@
+# Aspect vocabulary — the SINGLE SOURCE OF TRUTH for valid aspect names.
+#
+# Two distinct axes (never mix them):
+#   platform   — what a STACK PROVIDER (foundation) OWNS and competes to win.
+#                Used by a manifest's `aspects:` field and per-aspect winner resolution.
+#   functional — the library category a FRAMEWORK addresses (cross-cutting concern).
+#                Used by a framework manifest's `enriches_aspect:` (one) and a
+#                foundation manifest's `hosts_aspects:` (a set, or the sugar `all`).
+#
+# To add/rename a category, edit it HERE. The orchestrator reads this file at
+# resolution time. The JSON Schema ($defs.platformAspect / functionalAspect in
+# manifest.schema.json) MIRRORS these lists for editor/CI validation — keep them
+# in sync (variant i).
+
+platform:
+  - android
+  - backend
+  - frontend
+  - database
+  - infra
+  - testing
+  - messaging
+
+functional:
+  - network
+  - persistence
+  - di
+  - ui
+  - background
+  - analytics
+  - architecture

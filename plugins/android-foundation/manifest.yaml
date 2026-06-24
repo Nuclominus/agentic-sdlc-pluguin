@@ -1,0 +1,78 @@
+# Android Foundation — SDLC manifest (kind: foundation).
+# This is the machine-read source of truth the orchestrator consumes. Human docs live in README.md.
+
+kind: foundation
+stack: android
+priority: 300
+aspects: [android]                 # platform / winner axis
+workflow: android-feature
+
+detect:
+  all:
+    - any:
+        - file_exists: settings.gradle.kts
+        - file_exists: settings.gradle
+    - file_glob: "**/*.kt"         # a Gradle project that actually has Kotlin (not pure-Java/Groovy)
+
+# Frameworks this foundation accepts (the WHICH) — `all` = every functional category in
+# plugins/sdlc/config/aspects.yaml. A framework attaches when its `enriches_aspect` is hosted here
+# AND its coordinate is found via framework_detection. Restrict by listing a subset instead of `all`.
+hosts_aspects: all
+
+# WHERE to look for a framework's `dependency` coordinate (the orchestrator executes this on our behalf,
+# 0b-frameworks). Order matters — version catalog is authoritative, module build files are the fallback.
+framework_detection:
+  - gradle/libs.versions.toml
+  - "**/build.gradle.kts"
+  - "**/build.gradle"
+
+agents_per_phase:
+  business_analysis: android-ba      # Opus/high — BA + embedded DDD (module placement)
+  development: android-developer     # Sonnet/medium — implementer (Architecture Detection)
+  review: android-reviewer           # Sonnet/medium — read-only review; ⇄developer loop (max 3)
+  security: android-security         # Opus/high — MASVS/MASTG; runs ‖ test
+  test: android-tester               # Sonnet/medium — unit/integration (MockK/Turbine/Kover)
+  qa: android-qa                     # Sonnet/medium — E2E/UI (Compose UI Test, Maestro, a11y)
+  documentation: android-docs        # Haiku/low — docs + (optional) Obsidian vault
+
+# Invoked directly, NOT by the pipeline (informational).
+on_demand_agents:
+  - android-debugger   # root-cause analysis (Logcat, coroutines/Flow, recomposition, leaks)
+  - android-devops     # Gradle/signing/variants/R8/Play Store
+  - android-cicd       # GitHub Actions, Gradle CI, lint/test pipelines
+  - android-aar        # read-only After Action Review of a workflow run
+
+convention_skills:
+  - android-foundation:android-compose-ui
+  - android-foundation:android-architecture
+  - android-foundation:android-data
+  - android-foundation:android-navigation
+
+extra_phases: []
+pre_phase_commands: []
+
+phase_injections:
+  development: |
+    Native Android (Kotlin) project. Compose-first UI with Material 3.
+    Unidirectional data flow; state hoisting; UI state as StateFlow from a ViewModel.
+    DI: use the project's existing DI framework via constructor injection; scope bindings deliberately.
+    Framework-specific guidance (Hilt/Dagger, Koin) is added by the matching framework plugin when detected.
+    Concurrency: coroutines + Flow; never block the main thread; use viewModelScope.
+    New dependencies via the Gradle version catalog (libs.versions.toml), pinned ^x.y.z.
+    Respect the existing module structure. Secrets via BuildConfig/local.properties, never source.
+    Apply skills: android-foundation:android-compose-ui, android-foundation:android-architecture,
+    android-foundation:android-data, android-foundation:android-navigation.
+  qa: |
+    Android testing: JUnit5 (or JUnit4 if that's the project baseline), MockK, Turbine for Flow,
+    kotlinx-coroutines-test for dispatchers. Unit tests run on the JVM (testDebugUnitTest).
+    Instrumentation/UI tests (Espresso/Compose UI test) are CI-only — do NOT run in pipeline.
+  security: |
+    Android-specific (MASVS/MASTG): secrets in Keystore not SharedPreferences; no cleartext traffic;
+    certificate pinning where required; validate incoming Intents/deep links; biometric (BiometricPrompt)
+    as step-up not primary; R8/ProGuard enabled for release; no secrets in source/VCS.
+
+# NO assembleDebug (full SDK), NO connectedAndroidTest (emulator). detekt + JVM unit tests + compile-check.
+post_pipeline_checks:
+  - sh -c './gradlew detekt 2>/dev/null || ./gradlew ktlintCheck 2>/dev/null || true'
+  - sh -c './gradlew testDebugUnitTest'
+  - sh -c './gradlew compileDebugKotlin'

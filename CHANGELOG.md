@@ -2,6 +2,22 @@
 
 All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
+## [Unreleased]
+
+### Changed — BREAKING (plugin profile format)
+
+- **Single `manifest.yaml` per plugin replaces `stack.md` / `framework.md`.** All declarative profile
+  data (previously split between YAML frontmatter and markdown body sections) now lives in one
+  machine-read `manifest.yaml` with a `kind:` field (`foundation` | `framework`); `kind: framework`
+  replaces the old `additive: true`. Plugin `.md` / `README.md` files are now human docs only — the
+  orchestrator no longer parses them. The orchestrator globs `**/manifest.yaml` and splits by `kind`.
+- **Aspect vocabulary extracted to `plugins/sdlc/config/aspects.yaml`** (single source of truth:
+  `platform` + `functional` lists). Foundations may declare `hosts_aspects: all` (sugar = every
+  functional category) instead of enumerating them.
+- **Schema renamed + expanded:** `schemas/stack.schema.json` → `schemas/manifest.schema.json`; validates
+  the full manifest (incl. `agents_per_phase`, `phase_injections`, `convention_skills`, …) and the
+  `kind`-based guards. The aspect enums mirror `aspects.yaml`.
+
 ## [1.0.0] — 2026-06-24
 
 First stable release. **All plugins are versioned together at `1.0.0`** from this release

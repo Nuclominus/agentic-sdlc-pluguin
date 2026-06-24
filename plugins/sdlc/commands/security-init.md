@@ -22,7 +22,7 @@ Run this command after installing security-guidance, when changing stack plugins
 
 ### 1. Detect active stack plugins
 
-Same detection logic as `/sdlc:list-stacks` — find all installed `stack.md` and `framework.md` files and evaluate their `detect` rules against the current working directory. Collect the winning plugin(s). Always include:
+Same detection logic as `/sdlc:list-stacks` — find all installed `manifest.yaml` files (split by `kind`) and evaluate their `detect` rules against the current working directory. Collect the winning plugin(s). Always include:
 
 - `sdlc` core (base patterns apply to every project)
 - the active platform plugin: `android-foundation`
@@ -78,7 +78,7 @@ patterns:
 
 ### 4. Materialize `.claude/claude-security-guidance.md`
 
-Derive stack-specific security guidance from the `security phase` `phase_prompts_injection` section of each active stack's `stack.md`. This gives the model-backed review layer context it would otherwise lack.
+Derive stack-specific security guidance from the `phase_injections.security` field of each active stack's `manifest.yaml`. This gives the model-backed review layer context it would otherwise lack.
 
 Same managed-block pattern:
 
@@ -98,14 +98,14 @@ Content inside the block:
 ## Platform-specific security guidance
 
 ### Android
-{content of the security phase_prompts_injection from android-foundation/stack.md}
+{content of phase_injections.security from android-foundation/manifest.yaml}
 
 ### Frameworks
-{concatenated security phase_prompts_injection from each active framework.md, e.g. retrofit-plugin}
+{concatenated phase_injections.security from each active framework manifest.yaml, e.g. retrofit-plugin}
 <!-- <<< sdlc-marketplace managed <<< -->
 ```
 
-If a stack's `stack.md` has no `security` injection block, skip that stack silently.
+If a stack's `manifest.yaml` has no `phase_injections.security` block, skip that stack silently.
 
 ### 5. Check security-guidance plugin presence
 
