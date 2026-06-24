@@ -2,7 +2,10 @@
 
 All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
-## [Unreleased]
+## [1.1.0] — 2026-06-24
+
+All plugins bumped together to `1.1.0`. Reshapes the foundation↔framework relationship into a clean
+three-level tree and moves every plugin profile to a single machine-read `manifest.yaml`.
 
 ### Changed — BREAKING (plugin profile format)
 
@@ -13,10 +16,30 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
   orchestrator no longer parses them. The orchestrator globs `**/manifest.yaml` and splits by `kind`.
 - **Aspect vocabulary extracted to `plugins/sdlc/config/aspects.yaml`** (single source of truth:
   `platform` + `functional` lists). Foundations may declare `hosts_aspects: all` (sugar = every
-  functional category) instead of enumerating them.
+  functional category) instead of enumerating them; `framework_detection` and `hosts_aspects` are
+  co-required.
 - **Schema renamed + expanded:** `schemas/stack.schema.json` → `schemas/manifest.schema.json`; validates
   the full manifest (incl. `agents_per_phase`, `phase_injections`, `convention_skills`, …) and the
   `kind`-based guards. The aspect enums mirror `aspects.yaml`.
+
+### Changed — foundation→framework aspect tree
+
+- **Framework detection delegated from core to the foundation.** The core globs only foundations, picks
+  the winner, and delegates framework discovery to it: the foundation declares `framework_detection`
+  (where to look) and `hosts_aspects` (which functional categories it accepts); the orchestrator executes
+  the search on its behalf and stays platform-agnostic.
+- **Functional aspects replace the tautological `enriches_aspect: android`.** Frameworks now point *up* to
+  a library category — `retrofit → network`, `room → persistence`, `dagger → di` — and attach under any
+  foundation hosting that category. Two distinct aspect axes: `platform` (winner resolution) and
+  `functional` (framework taxonomy).
+- **Zero plugin→plugin dependencies.** Framework plugins declare `dependencies: ["sdlc"]` only and never
+  reference another plugin's skill id; the foundation contract is the aspect, not a named plugin.
+
+### Added
+
+- **`sdlc:create-pluguin` skill** — a step-by-step wizard that scaffolds a schema-valid plugin (framework
+  or foundation): identity, functional-aspect pick from the taxonomy, `manifest.yaml`, drafted phase
+  injections + a conventions skill (asks auto vs. manual), marketplace registration, and validation.
 
 ## [1.0.0] — 2026-06-24
 

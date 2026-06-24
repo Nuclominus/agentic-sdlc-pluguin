@@ -1,6 +1,6 @@
 {
   "name": "retrofit-plugin",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Additive framework provider for Retrofit/OkHttp networking. Auto-detected from the Gradle version catalog / build files; enriches the `network` aspect (enriches_aspect: network) via manifest.yaml (kind: framework) with the retrofit-conventions skill, development + security phase-prompt injections, and R8/ProGuard keep rules. Ships NO agents — it specializes the existing development / security phase prompts. Reference implementation of the Framework Provider Pattern.",
   "author": {
     "name": "Nuclominus",
