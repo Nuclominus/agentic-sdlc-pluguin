@@ -286,9 +286,9 @@ WINNING_FOUNDATIONS = unique( [ACTIVE_PROFILES[a] for a in ACTIVE_PROFILES if AC
 
 for F in WINNING_FOUNDATIONS:                     # each parent foundation resolves ITS frameworks
     SEARCH = F.framework_detection               # ordered locations the FOUNDATION declares
-    if SEARCH is empty/absent:                    # this foundation hosts no frameworks
-        continue
-    HOSTED = (TAXONOMY.functional if F.hosts_aspects == "all" else F.hosts_aspects)   # expand the `all` sugar
+    HOSTED = (TAXONOMY.functional if F.hosts_aspects == "all" else (F.hosts_aspects or []))   # expand `all`; default none
+    if not SEARCH or not HOSTED:                  # no search locations OR no accepted categories ⇒ hosts nothing
+        continue                                  # (schema co-requires the two, but stay defensive)
     for p in FRAMEWORK_MANIFESTS:
         if p.enriches_aspect not in HOSTED:       # F must ACCEPT this framework's functional category
             continue                              # else it belongs under a different foundation

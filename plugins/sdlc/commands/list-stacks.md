@@ -32,7 +32,7 @@ Stack profiles found:
   🎯 android       priority=300   matches: settings.gradle.kts
 
 Additive framework providers:
-  ➕ retrofit      additive       matches: libs.versions.toml contains retrofit
+  ➕ retrofit      framework      enriches: network · matches: libs.versions.toml contains retrofit
 
 Active profile for this project: android (from android-foundation/manifest.yaml)
 Active frameworks: retrofit

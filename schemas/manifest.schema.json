@@ -6,6 +6,10 @@
   "type": "object",
   "required": ["kind", "stack", "priority"],
   "additionalProperties": false,
+  "dependentRequired": {
+    "framework_detection": ["hosts_aspects"],
+    "hosts_aspects": ["framework_detection"]
+  },
   "allOf": [
     {
       "description": "A framework names its library via `dependency` (or, as an escape hatch, ships `detect`); a foundation detects by project structure via `detect`.",
@@ -76,7 +80,7 @@
       "$ref": "#/$defs/functionalAspect"
     },
     "hosts_aspects": {
-      "description": "Foundation only: the FUNCTIONAL categories this foundation accepts frameworks for. Either the literal `all` (every category in aspects.yaml) or an explicit subset. A framework attaches when its `enriches_aspect` is hosted here AND its `dependency` is found via `framework_detection`.",
+      "description": "Foundation only: the FUNCTIONAL categories this foundation accepts frameworks for. Either the literal `all` (every category in aspects.yaml) or an explicit subset. A framework attaches when its `enriches_aspect` is hosted here AND its `dependency` is found via `framework_detection`. MUST be declared together with `framework_detection` (a foundation that accepts categories must also say where to look, and vice versa).",
       "oneOf": [
         { "const": "all" },
         { "type": "array", "items": { "$ref": "#/$defs/functionalAspect" }, "uniqueItems": true, "minItems": 1 }
