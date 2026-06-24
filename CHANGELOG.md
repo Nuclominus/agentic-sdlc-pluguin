@@ -2,9 +2,11 @@
 
 All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
-## [0.5.0] — unreleased
+## [1.0.0] — 2026-06-24
 
-<!-- Add entries here as work lands. Rename the version + date the heading when cutting the release. -->
+First stable release. **All plugins are versioned together at `1.0.0`** from this release
+(`sdlc`, `android-foundation`, `retrofit-plugin`, `room-plugin`, `dagger-plugin`, and the
+`agentic-sdlc` marketplace).
 
 Android-only restructure: the marketplace drops iOS and reorganizes the Android stack into a
 **foundation + additive framework plugins** model (the Framework Provider Pattern).
@@ -22,20 +24,35 @@ Android-only restructure: the marketplace drops iOS and reorganizes the Android 
   `PRIMARY_PROFILE` selection (additive profiles never become the primary stack).
 - `frameworks.enable` / `frameworks.disable` override in `.claude/sdlc.local.yaml` — force a framework
   profile on or off, overriding auto-detection.
-- **`retrofit-plugin`** (`plugins/retrofit-plugin/`) — the first reference framework plugin
-  (Retrofit / OkHttp). Ships `framework.md` (`additive: true`), a convention skill, phase-prompt
-  injections, and `rules/snippets/retrofit-proguard.md`.
+- **`dependency`-based framework detection** — a framework plugin only **names** its library
+  (`dependency: <coordinate>`); the orchestrator owns the search strategy: version catalog
+  (`gradle/libs.versions.toml`) first with short-circuit, then module build files (`**/build.gradle*`,
+  gitignore-aware). `file_contains` detect rules also gained glob-path support. A hand-written `detect`
+  block remains as an escape hatch. Schema requires one of `detect`/`dependency`; `dependency` implies
+  `additive: true`.
+- **`retrofit-plugin`** — reference framework plugin (Retrofit / OkHttp): `framework.md`
+  (`dependency: com.squareup.retrofit2`), `retrofit-conventions` skill, dev/security injections,
+  `retrofit-proguard.md`.
+- **`room-plugin`** — framework plugin for Room (`dependency: androidx.room`): `room-conventions` skill
+  (suspend/Flow DAOs, `@Transaction`, parameterized queries, migrations + `exportSchema`, KSP),
+  dev/security (MASVS-STORAGE) injections, `room-proguard.md`.
+- **`dagger-plugin`** — framework plugin for Dagger/Hilt (`dependency: com.google.dagger`):
+  `hilt-conventions` skill (constructor injection, `@Module`/`@InstallIn`, `@Binds` over `@Provides`,
+  deliberate scoping, KSP), dev/security injections, `hilt-proguard.md`.
 
 ### Changed
 - **`android-plugin` → `android-foundation`** — the Android stack provider was renamed to the
-  "Android Foundation", the centerpiece stack provider, and bumped to **0.5.0**. Its internal stack
-  id stays `android` (aspect: android, priority 300); only the plugin name changed.
+  "Android Foundation", the centerpiece stack provider. Its internal stack id stays `android`
+  (aspect: android, priority 300); only the plugin name changed.
 - Marketplace scope is now **Android-only**; the top-level marketplace description was rebranded to
   Android-centric (name stays `agentic-sdlc`).
-- Retrofit / OkHttp ProGuard keep rules were **extracted out of** the foundation's
-  `rules/snippets/proguard-keep.md` into `retrofit-plugin/rules/snippets/retrofit-proguard.md`. The
-  pinned house rules (Coil3, Kermit, KSP, `@Serializable` routes, DataStore, Play Billing) stay in the
-  foundation; only detect-don't-impose libraries (Retrofit, Room, Dagger/Hilt) move to framework plugins.
+- **DI "detect, don't impose" resolved** — the foundation now states only the generic DI principle;
+  Hilt/Dagger specifics live in `dagger-plugin` and activate only when detected (a Koin project simply
+  does not activate it). The long-standing `stack.md` DI TODO is removed.
+- Retrofit/OkHttp, Room, and Dagger/Hilt ProGuard keep rules were **extracted out of** the foundation's
+  `rules/snippets/proguard-keep.md` into each framework plugin. The pinned house rules (Coil3, Kermit,
+  KSP, `@Serializable` routes, DataStore, Play Billing) stay in the foundation; only detect-don't-impose
+  libraries (Retrofit, Room, Dagger/Hilt) move to framework plugins.
 
 ### Removed
 - **`ios-plugin`** removed entirely — iOS is no longer in scope.
