@@ -2,7 +2,7 @@
 
 AI-assisted SDLC pipelines for **Android** development, built on the **Stack Provider Pattern**: a single platform-agnostic core orchestrator runs the pipeline; **Android Foundation** registers itself via a declarative `stack.md` profile and drives the flow; **framework plugins** (Retrofit, Room, Dagger/Hilt, …) attach **additively** via `framework.md` profiles. No core overrides, no slot registries, no copy-paste.
 
-**v0.5.0** — flat plugin set: 1 platform-agnostic core (`sdlc`) + the **Android Foundation** centerpiece (`android-foundation`) + additive **framework plugins** (`retrofit-plugin`, with more to follow). Cost-optimized: model tiering + `effort` per-subagent. Generic control flow (review-loops, parallel groups), workflow discovery across plugins, auto-detected framework enrichment, and guaranteed per-agent model enforcement.
+**v0.5.0** — flat plugin set: 1 platform-agnostic core (`sdlc`) + the **Android Foundation** centerpiece (`android-foundation`) + additive **framework plugins** (`retrofit-plugin`, `room-plugin`, `dagger-plugin`). Cost-optimized: model tiering + `effort` per-subagent. Generic control flow (review-loops, parallel groups), workflow discovery across plugins, auto-detected framework enrichment, and guaranteed per-agent model enforcement.
 
 > Adapted from [AratKruglik/claude-sdlc](https://github.com/AratKruglik/claude-sdlc) (MIT) — re-oriented around an Android Foundation with a Framework Provider Pattern. See `NOTICE`.
 
@@ -70,11 +70,15 @@ See [`docs/WORKFLOW.md`](docs/WORKFLOW.md) for system diagrams and [`docs/WALKTH
 
 ### Stack Priority Table
 
-| Priority | Plugin              | Aspects | Detect                                                              |
+Stack providers detect by project structure (`detect`); framework providers just name a `dependency` and the orchestrator searches for it (catalog first, then build files).
+
+| Priority | Plugin              | Aspects | Detect / dependency                                                 |
 | -------- | ------------------- | ------- | ------------------------------------------------------------------- |
 | 0        | `vanilla` (sdlc)    | —       | `*` (always matches)                                                |
 | 300      | `android-foundation`| android | `(settings.gradle.kts OR settings.gradle)` **AND** `**/*.kt`        |
-| additive | `retrofit-plugin`   | —       | `libs.versions.toml` / `build.gradle*` contains `retrofit`          |
+| additive | `retrofit-plugin`   | —       | `dependency: com.squareup.retrofit2`                                |
+| additive | `room-plugin`       | —       | `dependency: androidx.room`                                         |
+| additive | `dagger-plugin`     | —       | `dependency: com.google.dagger` (Dagger + Hilt)                     |
 
 ### Detection rules
 
@@ -228,7 +232,7 @@ Cost is controlled exclusively through `model` + `effort` (Claude Code does not 
 
 - core fallback agents → [`plugins/sdlc/README.md`](plugins/sdlc/README.md)
 - Android roster → [`plugins/android-foundation/README.md`](plugins/android-foundation/README.md)
-- framework providers ship no agents → [`plugins/retrofit-plugin/README.md`](plugins/retrofit-plugin/README.md)
+- framework providers ship no agents → [`retrofit-plugin`](plugins/retrofit-plugin/README.md) · [`room-plugin`](plugins/room-plugin/README.md) · [`dagger-plugin`](plugins/dagger-plugin/README.md)
 
 > `effort: high` on Opus is the costliest combination — reserved for leverage agents (BA, Security) where reasoning quality affects every downstream phase.
 
@@ -243,6 +247,8 @@ Cost is controlled exclusively through `model` + `effort` (Claude Code does not 
 | `sdlc`               | Core               | Platform-agnostic orchestrator + 5 fallback agents                    |
 | `android-foundation` | Stack provider     | Android (Kotlin + Gradle) — 11-agent roster, MASVS, vault, house rules |
 | `retrofit-plugin`    | Framework provider | Retrofit/OkHttp — additive (skill + injections + ProGuard), no agents  |
+| `room-plugin`        | Framework provider | Room persistence — additive (skill + injections + ProGuard), no agents |
+| `dagger-plugin`      | Framework provider | Dagger/Hilt DI — additive (skill + injections + ProGuard), no agents   |
 
 ### Optional external dependencies
 
@@ -261,12 +267,12 @@ Cost is controlled exclusively through `model` + `effort` (Claude Code does not 
 
 ## Stack Composition Examples
 
-| Project                      | Profile(s)                       | Development dispatch                          |
-| ---------------------------- | -------------------------------- | --------------------------------------------- |
-| Android app repo             | android (300)                    | android-developer                             |
-| Android app + Retrofit       | android (300) + retrofit (add.)  | android-developer, enriched by retrofit       |
-| Android app + Retrofit + Room| android (300) + retrofit + room  | android-developer, enriched by both           |
-| Unknown stack                | vanilla (0)                      | developer (fallback)                          |
+| Project                           | Profile(s)                              | Development dispatch                       |
+| --------------------------------- | --------------------------------------- | ------------------------------------------ |
+| Android app repo                  | android (300)                           | android-developer                          |
+| Android app + Retrofit            | android (300) + retrofit (add.)         | android-developer, enriched by retrofit    |
+| Android app + Retrofit/Room/Hilt  | android (300) + retrofit + room + dagger| android-developer, enriched by all three   |
+| Unknown stack                     | vanilla (0)                             | developer (fallback)                       |
 
 ---
 

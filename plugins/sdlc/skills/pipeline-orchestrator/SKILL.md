@@ -235,6 +235,12 @@ The coordinate is matched as a literal substring (case-insensitive), so `com.squ
 ```
 ADDITIVE_PROFILES = [ p for p in matching_profiles if p.additive == true ]
 # "matching" = dependency found via the built-in strategy, or (escape hatch) the profile's detect rules pass
+
+for p in ADDITIVE_PROFILES:
+    if p.agents_per_phase exists:          # additive profiles must enrich, never own phases
+        HALT "Additive profile '{p.stack}' must not declare agents per phase. Frameworks enrich existing agents; they do not own phases."
+    if p.workflow exists:                  # schema also rejects this; belt-and-suspenders
+        HALT "Additive profile '{p.stack}' must not declare a workflow."
 ```
 
 Then apply the optional `frameworks` override from `<project>/.claude/sdlc.local.yaml` (the same file fully parsed in Step 1b — reading the single `frameworks` key here is cheap):
