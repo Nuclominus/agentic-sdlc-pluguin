@@ -1,6 +1,6 @@
 # android-foundation
 
-Android Foundation — the centerpiece Android (Kotlin + Gradle) stack provider for the Agentic SDLC marketplace. Registers the `android` profile (aspect `android`, priority 300) and contributes a full specialized agent roster adapted from the Nuclominus `android-workflow` system. It carries the pinned house rules; detect-don't-impose libraries (Retrofit, Room, Dagger/Hilt) attach as **additive framework plugins**. For the Stack Provider Pattern, the Framework Provider Pattern, and shared mechanisms, see the [root README](../../README.md).
+Android Foundation — the centerpiece Android (Kotlin + Gradle) stack provider for the Agentic SDLC marketplace. Its `manifest.yaml` (`kind: foundation`) registers the `android` profile (platform aspect `android`, priority 300) and contributes a full specialized agent roster adapted from the Nuclominus `android-workflow` system. It carries the pinned house rules and **hosts** detect-don't-impose libraries (Retrofit→`network`, Room→`persistence`, Dagger/Hilt→`di`) via `hosts_aspects: all` + `framework_detection`; those attach as **additive framework plugins**. For the Stack Provider Pattern, the Framework Provider Pattern, and shared mechanisms, see the [root README](../../README.md).
 
 ---
 
@@ -67,7 +67,7 @@ Plugin-resident, referenced by agents via `${CLAUDE_PLUGIN_ROOT}/rules/`:
 
 ## Security — MASVS / MASTG
 
-`android-security` audits against **MASVS** control groups (STORAGE / CRYPTO / AUTH / NETWORK / PLATFORM / CODE / RESILIENCE / PRIVACY) using **MASTG** test procedures. Each audit section is tagged with its MASVS group(s); every finding cites the MASVS control + MASTG test ID. OWASP Mobile Top 10 is kept only as a secondary risk cross-map. The `android` security injection in `stack.md` makes MASVS/MASTG authoritative over the core's platform-neutral baseline.
+`android-security` audits against **MASVS** control groups (STORAGE / CRYPTO / AUTH / NETWORK / PLATFORM / CODE / RESILIENCE / PRIVACY) using **MASTG** test procedures. Each audit section is tagged with its MASVS group(s); every finding cites the MASVS control + MASTG test ID. OWASP Mobile Top 10 is kept only as a secondary risk cross-map. The `android` security injection in `manifest.yaml` (`phase_injections.security`) makes MASVS/MASTG authoritative over the core's platform-neutral baseline.
 
 ---
 

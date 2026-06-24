@@ -5,19 +5,18 @@ argument-hint: ""
 
 # /sdlc:list-stacks
 
-List every `stack.md` and `framework.md` profile registered in installed plugins. Shows which platform profile would match the current project, plus which additive framework providers activate.
+List every `manifest.yaml` profile registered in installed plugins. Shows which foundation (`kind: foundation`) would match the current project, plus which frameworks (`kind: framework`) activate.
 
 ## What this command does
 
 1. Use `Glob` to find all profiles:
    ```
-   ~/.claude/plugins/cache/**/stack.md
-   ~/.claude/plugins/cache/**/framework.md
+   ~/.claude/plugins/cache/**/manifest.yaml
    ```
-2. For each profile found:
-   - `Read` the file.
-   - Parse the YAML frontmatter (`stack`, `priority`, `detect`, optional `additive`).
-   - Evaluate `detect` rules against the current working directory:
+2. For each manifest found:
+   - `Read` / parse the YAML.
+   - Read the fields (`kind`, `stack`, `priority`, `detect`, `enriches_aspect`, `hosts_aspects`).
+   - For `kind: foundation`, evaluate `detect` rules against the current working directory:
      - `detect.any: ["*"]` → always matches.
      - `detect.all: [...]` → all sub-rules must match.
      - `file_exists: <path>` → check via `Glob` if file exists in project root.
@@ -33,9 +32,9 @@ Stack profiles found:
   🎯 android       priority=300   matches: settings.gradle.kts
 
 Additive framework providers:
-  ➕ retrofit      additive       matches: libs.versions.toml contains retrofit
+  ➕ retrofit      framework      enriches: network · matches: libs.versions.toml contains retrofit
 
-Active profile for this project: android (from android-foundation/stack.md)
+Active profile for this project: android (from android-foundation/manifest.yaml)
 Active frameworks: retrofit
 Override with: /sdlc:start --stack=NAME "<feature>"  ·  toggle frameworks via .claude/sdlc.local.yaml
 ```

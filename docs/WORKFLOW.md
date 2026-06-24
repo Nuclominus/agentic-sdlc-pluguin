@@ -10,7 +10,7 @@ What happens when you run `/sdlc:start "<feature>"`.
 ```mermaid
 flowchart TD
     U["/sdlc:start &quot;feature&quot;"] --> P0a["Step 0a — dependency preflight<br/>aggregate runtime-dependencies.json across all plugins (cached)"]
-    P0a --> P0b["Step 0b — detect stack<br/>glob **/stack.md, evaluate detect rules<br/>(file_exists / file_contains / file_glob / nested any-all)"]
+    P0a --> P0b["Step 0b — detect stack<br/>glob **/manifest.yaml (split by kind), evaluate detect rules<br/>(file_exists / file_contains / file_glob / nested any-all)"]
     P0b --> RES["resolve winner per aspect + PRIMARY profile"]
     RES --> P1["Step 1 — resolve workflow<br/>--workflow= &gt; sdlc.local.yaml &gt; profile.workflow &gt; default"]
     P1 --> P2["Step 2 — task slug + docs/plans/&lt;slug&gt;/ workspace"]
@@ -21,7 +21,7 @@ flowchart TD
 ```
 
 The core is **platform-agnostic**: it never hardcodes the phase set, the agents, or any platform standard.
-Platform plugins supply all of that through their `stack.md` profile and `workflows/`.
+Platform plugins supply all of that through their `manifest.yaml` (`kind: foundation`) and `workflows/`.
 
 ## 2. Stack Provider Pattern
 
@@ -33,12 +33,12 @@ flowchart LR
       FB["fallback agents (vanilla)"]
     end
     subgraph AND["android-foundation (stack provider, aspect: android)"]
-      AST["stack.md<br/>workflow: android-feature"]
+      AST["manifest.yaml<br/>kind: foundation<br/>workflow: android-feature"]
       AAG["11 android-* agents"]
       AWF["android-feature / android-bugfix workflows"]
     end
     subgraph RET["retrofit-plugin (additive framework provider)"]
-      RFM["framework.md<br/>additive: true"]
+      RFM["manifest.yaml<br/>kind: framework"]
       RSK["convention skill + phase injections<br/>+ ProGuard keep rules (no agents, no phases)"]
     end
     AST -. registers .-> ORC
@@ -48,11 +48,11 @@ flowchart LR
     RSK -. enrich-only .-> ORC
 ```
 
-A **stack provider** **registers** itself by shipping a `stack.md` (detection + phase→agent map + default
-workflow) and, optionally, its own `workflows/`. The core discovers everything by globbing `**/stack.md`
-and `**/workflows/*.yaml` — it is never edited to add a stack.
+A **stack provider** **registers** itself by shipping a `manifest.yaml` (`kind: foundation` — detection +
+phase→agent map + default workflow) and, optionally, its own `workflows/`. The core discovers everything by
+globbing `**/manifest.yaml` and `**/workflows/*.yaml` — it is never edited to add a stack.
 
-**Additive framework providers** (e.g. `retrofit-plugin`) ship a `framework.md` with `additive: true`
+**Additive framework providers** (e.g. `retrofit-plugin`) ship a `manifest.yaml` with `kind: framework`
 instead. They are auto-detected from the Gradle version catalog / build files, collected into the
 orchestrator's `ADDITIVE_PROFILES` set, and feed their convention-skills + phase injections into the
 profile merge. They are **enrich-only** — they ship no agents and own no phases, and are excluded from

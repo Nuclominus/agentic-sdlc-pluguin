@@ -1,0 +1,34 @@
+# Room — SDLC manifest (kind: framework, additive).
+# Machine-read source the orchestrator consumes. Human docs live in README.md.
+
+kind: framework
+stack: room
+priority: 150                       # documentational for frameworks — they never win an aspect
+enriches_aspect: persistence       # functional category; a foundation hosting `persistence` resolves me
+dependency: androidx.room          # the foundation declares WHERE to look; the orchestrator executes
+
+convention_skills:
+  - room-plugin:room-conventions
+
+extra_phases: []
+pre_phase_commands: []
+
+phase_injections:
+  development: |
+    Room is present. `@Dao` methods are `suspend` for one-shot reads/writes and return `Flow<T>` for
+    observable queries — never blocking calls on the main thread. Use `@Transaction` for multi-statement
+    atomic operations and for `@Relation` reads. Generate the compiler with KSP (not KAPT). Provide
+    explicit `Migration` objects and keep `exportSchema = true`; do NOT ship
+    `fallbackToDestructiveMigration()` in release. Keep Room `@Entity` types in the data layer and map
+    them to domain models at the repository boundary — never expose entities upward. See the
+    room-plugin:room-conventions skill; layer principles stay with the hosting foundation's data-layer
+    conventions (do not restate them).
+  security: |
+    Room (MASVS-STORAGE): every query MUST be parameterized — use `@Query` bind parameters (`:arg`) or
+    `SupportSQLiteQuery` bind args for `@RawQuery`; never concatenate untrusted input into SQL. Sensitive
+    data at rest (tokens, credentials, PII) must not sit in a plaintext database — use an encrypted store
+    (e.g. SQLCipher) or field-level encryption and coordinate the trust boundary with android-security.
+    Keep `exportSchema = true` for auditable migrations; never log query contents containing PII. Apply
+    the R8/ProGuard keep rules in room-plugin/rules/snippets/room-proguard.md when the project ships R8.
+
+post_pipeline_checks: []

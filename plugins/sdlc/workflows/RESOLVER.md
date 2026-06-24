@@ -9,13 +9,13 @@ Step 1c.
 1. If `$ARGUMENTS` contains `--workflow=NAME`, use `NAME` as `WORKFLOW_NAME`.
 2. Else if `EFFECTIVE_PROFILE` (from sdlc.local.yaml) specifies `active_workflow`,
    use that as `WORKFLOW_NAME`. *(Iteration 4+)*
-3. Else if the PRIMARY profile declared a `workflow:` in its `stack.md` frontmatter
+3. Else if the PRIMARY profile declared a `workflow:` in its `manifest.yaml`
    (`CONTEXT.profile_default_workflow`), use that. *(Generic — any profile may set it;
    e.g. a platform profile sets `workflow: <its-recipe>`.)*
 4. Otherwise: `WORKFLOW_NAME = "default"`.
 
 Search path — workflow recipes are discovered across **all installed plugins**, not just core
-(the same aggregation pattern used for `stack.md` and `runtime-dependencies.json`). Glob:
+(the same aggregation pattern used for `manifest.yaml` and `runtime-dependencies.json`). Glob:
 
 ```text
 ~/.claude/plugins/cache/**/workflows/{WORKFLOW_NAME}.yaml

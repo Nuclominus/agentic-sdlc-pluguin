@@ -1,6 +1,6 @@
 # SDLC Marketplace for Claude Code — Android
 
-AI-assisted SDLC pipelines for **Android** development, built on the **Stack Provider Pattern**: a single platform-agnostic core orchestrator runs the pipeline; **Android Foundation** registers itself via a declarative `stack.md` profile and drives the flow; **framework plugins** (Retrofit, Room, Dagger/Hilt, …) attach **additively** via `framework.md` profiles. No core overrides, no slot registries, no copy-paste.
+AI-assisted SDLC pipelines for **Android** development, built on the **Stack Provider Pattern**: a single platform-agnostic core orchestrator runs the pipeline; **Android Foundation** registers itself via a declarative `manifest.yaml` (`kind: foundation`) and drives the flow; **framework plugins** (Retrofit, Room, Dagger/Hilt, …) attach **additively** via `manifest.yaml` (`kind: framework`). No core overrides, no slot registries, no copy-paste.
 
 **v0.5.0** — flat plugin set: 1 platform-agnostic core (`sdlc`) + the **Android Foundation** centerpiece (`android-foundation`) + additive **framework plugins** (`retrofit-plugin`, `room-plugin`, `dagger-plugin`). Cost-optimized: model tiering + `effort` per-subagent. Generic control flow (review-loops, parallel groups), workflow discovery across plugins, auto-detected framework enrichment, and guaranteed per-agent model enforcement.
 
@@ -40,7 +40,7 @@ See [`docs/WORKFLOW.md`](docs/WORKFLOW.md) for system diagrams and [`docs/WALKTH
 │  ┌────────────────────────────────────────────────────────┐ │
 │  │  pipeline-orchestrator (skill) — NEVER CHANGES          │ │
 │  │                                                         │ │
-│  │  • pick the FOUNDATION     (stack.md winner per aspect)  │ │
+│  │  • pick the FOUNDATION     (kind: foundation winner)    │ │
 │  │  • DELEGATE framework discovery → to the foundation     │ │
 │  │  • resolve workflow recipe (discovered across plugins)  │ │
 │  │  • merge active profiles   (foundation + ADDITIVE set)  │ │
@@ -48,17 +48,17 @@ See [`docs/WORKFLOW.md`](docs/WORKFLOW.md) for system diagrams and [`docs/WALKTH
 │  │  • dispatch agents_per_phase[phase] (from the winner)   │ │
 │  └────────────────────────────────────────────────────────┘ │
 │                            ▲                                  │
-│            reads stack.md (foundations) + workflows/         │
+│         reads manifest.yaml (split by kind) + workflows/     │
 └────────────────────────────┼─────────────────────────────────┘
                              │
                              │ core picks the foundation
                              ▼
               ┌──────────────────────────────────┐
-              │ android-foundation  (stack.md)    │  FOUNDATION
+              │ android-foundation (manifest.yaml)│  FOUNDATION (kind: foundation)
               │ owns aspect:android · 11 agents   │  hosts_aspects: [network, persistence,
               │ → RESOLVES its own frameworks     │    di, ui, background, analytics, …]
               └────────────────┬─────────────────┘  + framework_detection (where to look)
-                               │ collects framework.md where
+                               │ collects manifest.yaml (kind: framework) where
                                │ enriches_aspect ∈ hosts_aspects (by category, never by name)
               ┌────────────────┼─────────────────┐
        ┌──────▼─────┐   ┌──────▼─────┐   ┌────────▼───┐    FRAMEWORKS (additive)
@@ -72,10 +72,10 @@ See [`docs/WORKFLOW.md`](docs/WORKFLOW.md) for system diagrams and [`docs/WALKTH
 **Key principles:**
 
 1. **Core never changes.** Pipeline logic lives exclusively in `pipeline-orchestrator/SKILL.md`. It has zero knowledge of any platform, library, security standard, or workflow recipe.
-2. **The foundation registers itself** via `stack.md` frontmatter — it declares auto-detection rules, priority, agents per phase, an optional default workflow, and convention skills.
-3. **Framework plugins attach additively** via `framework.md` (`additive: true`). They enrich existing phases (convention skill + dev/security injections + ProGuard) and ship **no agents** — they never win an aspect or own a phase. The core picks the foundation, then **delegates** framework discovery to it: the foundation collects every `framework.md` whose `enriches_aspect` (a functional category like `network`/`persistence`/`di`) is in its `hosts_aspects`, and detects them via its own `framework_detection`. Frameworks point *up* to a category, never sideways at a plugin.
-4. **Priority wins.** When multiple stack profiles match, the highest priority takes over. Additive profiles do not compete.
-5. **Everything is discovered, not hardcoded.** Profiles (`**/stack.md`, `**/framework.md`), workflows (`**/workflows/*.yaml`), and runtime dependencies (`**/runtime-dependencies.json`) are globbed across all installed plugins.
+2. **The foundation registers itself** via `manifest.yaml` (`kind: foundation`) — it declares auto-detection rules, priority, agents per phase, an optional default workflow, and convention skills.
+3. **Framework plugins attach additively** via `manifest.yaml` (`kind: framework`). They enrich existing phases (convention skill + dev/security injections + ProGuard) and ship **no agents** — they never win an aspect or own a phase. The core picks the foundation, then **delegates** framework discovery to it: the foundation collects every `kind: framework` manifest whose `enriches_aspect` (a functional category like `network`/`persistence`/`di`) is in its `hosts_aspects`, and detects them via its own `framework_detection`. Frameworks point *up* to a category, never sideways at a plugin.
+4. **Priority wins.** When multiple foundations match, the highest priority takes over. Framework manifests do not compete.
+5. **Everything is discovered, not hardcoded.** Manifests (`**/manifest.yaml`, split by `kind`), workflows (`**/workflows/*.yaml`), and runtime dependencies (`**/runtime-dependencies.json`) are globbed across all installed plugins.
 
 ### Stack Priority Table
 
@@ -104,7 +104,7 @@ This is why projects auto-detect with **no `--stack=` flag** — and why framewo
 
 ### Framework Provider Pattern (additive profiles)
 
-A **framework plugin** ships a `framework.md` profile (same schema as `stack.md`, plus `additive: true`). Unlike a stack provider, it:
+A **framework plugin** ships a `manifest.yaml` with `kind: framework`. Unlike a foundation, it:
 
 - **Owns no aspect and no agents.** It is excluded from per-aspect winner resolution and from PRIMARY_PROFILE selection — it cannot drive a phase.
 - **Decorates a functional category, not a plugin.** It declares `enriches_aspect: <network|persistence|di|ui|background|analytics|architecture>` and depends on **no** sibling plugin (its `plugin.json → dependencies` lists only `sdlc`). It is never considered unless a winning foundation's `hosts_aspects` includes that category — so any foundation hosting it satisfies the contract, and frameworks stay true peers, never referencing another plugin's skill id directly.
@@ -356,7 +356,7 @@ Contract for a new platform provider:
 plugins/your-platform-plugin/
 ├── .claude-plugin/
 │   └── plugin.json          # { "name": "...", "dependencies": ["sdlc"] }
-├── stack.md                 # frontmatter: stack, priority, aspects, detect, workflow
+├── manifest.yaml            # kind: foundation — stack, priority, aspects, detect, workflow, …
 ├── agents/
 │   └── your-agent.md        # frontmatter: name, model, effort, color, tools
 ├── workflows/               # optional: platform-specific recipes
@@ -366,10 +366,10 @@ plugins/your-platform-plugin/
 └── README.md
 ```
 
-### `stack.md` example
+### `manifest.yaml` example (`kind: foundation`)
 
-```markdown
----
+```yaml
+kind: foundation
 stack: kmp
 priority: 350
 aspects: [android]
@@ -378,16 +378,16 @@ detect:
   all:
     - file_exists: settings.gradle.kts
     - file_glob: "**/commonMain/**/*.kt"
----
-
-## Agents per phase
-- business_analysis: android-ba
-- development: android-developer
-- review: android-reviewer
-- security: android-security
-- test: android-tester
-- qa: android-qa
-- documentation: android-docs
+hosts_aspects: all
+framework_detection: [gradle/libs.versions.toml, "**/build.gradle.kts", "**/build.gradle"]
+agents_per_phase:
+  business_analysis: android-ba
+  development: android-developer
+  review: android-reviewer
+  security: android-security
+  test: android-tester
+  qa: android-qa
+  documentation: android-docs
 ```
 
 ## Adding a Framework Plugin
@@ -398,30 +398,29 @@ A framework plugin is **additive** — it enriches an aspect's phases and ships 
 plugins/your-framework-plugin/
 ├── .claude-plugin/
 │   └── plugin.json          # { "name": "...", "dependencies": ["sdlc"] }  ← no sibling-plugin dep
-├── framework.md             # frontmatter: stack, additive: true, aspects: [], enriches_aspect, dependency
+├── manifest.yaml            # kind: framework — stack, enriches_aspect, dependency, phase_injections
 ├── skills/
 │   └── your-conventions/SKILL.md   # library-specific idioms; defer to the aspect's conventions, don't restate
 ├── rules/snippets/          # optional: ProGuard/R8 keep rules for the library
 └── README.md
 ```
 
-### `framework.md` example
+### `manifest.yaml` example (`kind: framework`)
 
-```markdown
----
+```yaml
+kind: framework
 stack: room
-additive: true
-aspects: []                      # owns no platform aspect
+priority: 150
 enriches_aspect: persistence     # functional category — a foundation hosting `persistence` resolves me
 dependency: androidx.room        # just name the library — the foundation declares WHERE to look
----
-
-## Convention skills to apply
-- room-plugin:room-conventions
-
-## Phase prompts injection
-For development phase, inject: "Room present: @Dao methods are suspend/Flow; …"
-For security phase, inject: "Room: parameterize all @Query; no string concatenation; …"
+convention_skills:
+  - room-plugin:room-conventions
+phase_injections:
+  development: |
+    Room present: @Dao methods are suspend/Flow; …
+  security: |
+    Room: parameterize all @Query; no string concatenation; …
+post_pipeline_checks: []
 ```
 
 > **The plugin only names the dependency; the FOUNDATION owns where to look.** A framework provider
@@ -434,13 +433,13 @@ For security phase, inject: "Room: parameterize all @Query; no string concatenat
 > coordinate is found). A hand-written `detect:` block remains available as an escape hatch for frameworks
 > not identified by a single Maven coordinate.
 
-> Additive profiles **must not** declare `## Agents per phase` or a `workflow` — the schema and the orchestrator both reject it. `retrofit-plugin` is the reference implementation.
+> Framework manifests (`kind: framework`) **must not** declare `agents_per_phase`, `workflow`, `hosts_aspects`, or `framework_detection` — the schema and the orchestrator both reject it. `retrofit-plugin` is the reference implementation.
 
 ### Schema validation
 
 ```bash
-# stack.md / framework.md frontmatter (same schema)
-npx check-jsonschema --schemafile schemas/stack.schema.json <(yq '.' <(sed -n '/^---$/,/^---$/p' stack.md | sed '1d;$d'))
+# manifest.yaml (foundation + framework — same schema)
+npx check-jsonschema --schemafile schemas/manifest.schema.json plugins/*/manifest.yaml
 # workflow recipe
 npx check-jsonschema --schemafile schemas/workflow.schema.json workflows/your-feature.yaml
 ```

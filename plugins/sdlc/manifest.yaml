@@ -1,0 +1,24 @@
+# Vanilla — SDLC manifest (kind: foundation). The always-matching fallback profile.
+# Loses to any foundation with higher priority. Claims all aspects when no other foundation matches.
+
+kind: foundation
+stack: vanilla
+priority: 0
+
+detect:
+  any: ["*"]                       # always matches
+
+agents_per_phase:
+  business_analysis: business-analyst
+  development: developer
+  qa: qa-engineer
+  security: security-analyst
+  documentation: document-writer
+
+convention_skills: []
+extra_phases: []
+pre_phase_commands: []
+phase_injections: {}               # base prompts in pipeline-orchestrator are used as-is
+
+# vanilla pipeline assumes the project has its own test/lint scripts the user invokes manually
+post_pipeline_checks: []

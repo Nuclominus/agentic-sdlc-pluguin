@@ -9,7 +9,8 @@ The orchestration layer for the marketplace. It owns the pipeline machinery and 
 ```
 sdlc/
 ├── .claude-plugin/plugin.json               # name: sdlc
-├── stack.md                                 # vanilla profile (priority 0, detect *)
+├── manifest.yaml                            # vanilla profile (kind: foundation, priority 0, detect *)
+├── config/aspects.yaml                       # aspect vocabulary (platform + functional)
 ├── commands/{init,start,doctor,list-stacks,batch,security-init}.md
 ├── skills/pipeline-orchestrator/SKILL.md    # the orchestrator + RESOLVER reference
 ├── workflows/{default,bugfix,hotfix,refactor,docs-only}.yaml + RESOLVER.md
@@ -39,7 +40,7 @@ Used only when no platform plugin provides an agent for a phase (the vanilla pat
 A single skill (`pipeline-orchestrator`) runs every pipeline:
 
 1. **Dependency preflight** — aggregate `runtime-dependencies.json` across all plugins (cached).
-2. **Detect** — glob `**/stack.md`, evaluate each profile's `detect` rules, resolve a winner per aspect + a PRIMARY profile.
+2. **Detect** — glob `**/manifest.yaml`, split by `kind`, evaluate each foundation's `detect` rules, resolve a winner per aspect + a PRIMARY profile.
 3. **Resolve workflow** — discover recipes via `**/workflows/*.yaml`; precedence `--workflow=` > `sdlc.local.yaml` > profile `workflow:` > `default`.
 4. **Execute phases** — in order, dispatching `agents_per_phase[phase]`; aspect-aware phases fan out per aspect; supports review-loops and parallel groups. Each phase returns a compact summary; detail goes to `docs/plans/{slug}/0X-<phase>.md`.
 5. **Finish** — run `post_pipeline_checks`; write `_telemetry.json`.

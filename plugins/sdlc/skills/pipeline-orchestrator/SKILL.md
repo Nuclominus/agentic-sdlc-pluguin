@@ -2,7 +2,7 @@
 name: pipeline-orchestrator
 description: |
   Universal SDLC pipeline orchestrator with stack provider auto-discovery.
-  Reads stack.md profiles from installed plugins, picks the highest-priority match,
+  Reads manifest.yaml profiles from installed plugins, picks the highest-priority match,
   executes a workflow-defined pipeline (default: BA → Dev → QA → Sec → Docs). Workflows may add
   phases, parallel groups (e.g. [security ‖ test]), and review loops — all generic control flow.
 
@@ -186,24 +186,33 @@ If `HEADLESS == true`, suppress this print (warnings already went to stderr; suc
 
 `CONTEXT.{plugin}_unavailable` flags propagate into agent prompts via Step 3b-1's `availability_flags:` line in the per-call CONTEXT trailer — do not duplicate that wiring here.
 
-### Step 0b — Detect the FOUNDATION (stack profile)
+### Step 0b — Detect the FOUNDATION (manifest.yaml, kind: foundation)
 
 The orchestrator's job here is narrow: **pick the foundation, then delegate framework resolution to it.**
-The core scans only `stack.md` (foundations / platform providers) — it is deliberately **blind to
-`framework.md`**. Frameworks are resolved later, *under* the foundation that won their aspect
-(0b-frameworks), using search locations the foundation itself declares. This is what keeps the core
-platform-agnostic: it knows about foundations, never about a specific library or its build system.
+All declarative profile data lives in one **`manifest.yaml` per plugin** (the plugin `.md`/`README.md`
+files are human docs the orchestrator does NOT parse). Each manifest declares `kind: foundation` (a stack
+provider) or `kind: framework` (an additive library provider). The core keeps the foundation→framework
+tree honest by handling the two kinds in separate steps.
 
-Use `Glob` to find all foundation profiles (stack providers only):
+**0b-0. Load the shared aspect vocabulary** (once, used for `hosts_aspects: all` expansion and validation):
 
 ```
-~/.claude/plugins/cache/**/stack.md
+TAXONOMY = parse(Glob("~/.claude/plugins/cache/**/sdlc/config/aspects.yaml"))   # { platform: [...], functional: [...] }
 ```
 
-For each profile file:
-1. `Read` the file.
-2. Parse the YAML frontmatter (`stack`, `priority`, `aspects`, `detect`, optional `workflow`, and — for a foundation that hosts frameworks — `hosts_aspects`: the functional categories it accepts, and `framework_detection`: the ordered search locations it delegates to the core to execute in 0b-frameworks).
-3. Determine whether the profile matches the project root by evaluating its `detect` rules:
+**0b-1. Glob every manifest and split by `kind`:**
+
+```
+manifests = [ parse(f) for f in Glob("~/.claude/plugins/cache/**/manifest.yaml") ]
+FOUNDATIONS         = [ m for m in manifests if m.kind == "foundation" ]
+FRAMEWORK_MANIFESTS = [ m for m in manifests if m.kind == "framework" ]   # set aside; resolved in 0b-frameworks
+```
+
+Winner resolution below sees **FOUNDATIONS only** — frameworks cannot leak into it by construction.
+
+**0b-2. For each foundation manifest:**
+1. Read the parsed YAML fields: `kind`, `stack`, `priority`, `aspects`, `detect`, optional `workflow`, `hosts_aspects`, `framework_detection`, `agents_per_phase`, `convention_skills`, `phase_injections`, `extra_phases`, `pre_phase_commands`, `post_pipeline_checks`, `on_demand_agents`.
+2. Determine whether it matches the project root by evaluating its `detect` rules:
    - `detect.any: ["*"]` → always matches.
    - `detect.all: [...]` → all sub-rules must match.
    - `file_exists: <path>` → check via `Glob` whether the file exists.
@@ -211,13 +220,13 @@ For each profile file:
    - `file_glob: <pattern>` → `Glob <pattern>` against the project root; matches if ≥1 file matches.
    - nested `any: [...]` / `all: [...]` → evaluate the sub-rules recursively (OR / AND); rules may nest to any depth.
    - **Evaluation order — short-circuit.** Evaluate the sub-rules of an `any:` block **in listed order** and **stop at the first match** (`all:` likewise stops at the first failure). Respect author order rather than reordering or evaluating everything.
-4. Score by `priority` (higher wins).
+3. Score by `priority` (higher wins).
 
-If `$ARGUMENTS` includes `--stack=NAME`, restrict foundation candidates to profiles whose `stack` matches `NAME` and skip auto-detect.
+If `$ARGUMENTS` includes `--stack=NAME`, restrict foundation candidates to manifests whose `stack` matches `NAME` and skip auto-detect.
 
 #### 0b-aspects — Per-aspect foundation winner resolution
 
-Profiles declare which **aspects** of the stack they cover via the `aspects:` field in their frontmatter. Canonical aspects (v1):
+Foundations declare which **platform aspects** they own via the `aspects:` field in their manifest. Canonical platform aspects (v1):
 
 - `backend` — server-side application logic (controllers, models, business rules)
 - `frontend` — UI / client-side rendering
@@ -226,10 +235,10 @@ Profiles declare which **aspects** of the stack they cover via the `aspects:` fi
 - `testing` — test infrastructure (when distinct from backend/frontend conventions)
 - `messaging` — queues, events, async (rare; opt-in)
 
-Resolution algorithm (run AFTER finding all matching foundations in 0b above). Only foundations are in play here — `framework.md` was never globbed, so additive profiles cannot leak into winner resolution by construction:
+Resolution algorithm (run AFTER finding all matching foundations in 0b above). Only foundations are in play here — `FRAMEWORK_MANIFESTS` were set aside in 0b-1, so frameworks cannot leak into winner resolution by construction:
 
 ```
-STACK_PROFILES = matching_profiles   # all foundations (stack.md); framework.md is resolved later, in 0b-frameworks
+STACK_PROFILES = matching FOUNDATIONS   # kind: foundation only; FRAMEWORK_MANIFESTS resolved later, in 0b-frameworks
 ACTIVE_PROFILES = {}              # aspect → winning foundation
 
 for each canonical_aspect in [backend, frontend, database, infra, testing, messaging]:
@@ -261,12 +270,12 @@ If `--stack=NAME` was used, all aspect winners come from that single profile (co
 Framework resolution is **owned by the foundation**, not the core — this is the whole point of the
 foundation→framework tree. The core supplies only the *matching mechanics*; the **foundation declares
 WHERE to look** (its `framework_detection` block) and WHICH functional categories it accepts (its
-`hosts_aspects` block — `network`, `persistence`, `di`, …). A framework attaches when its
-`enriches_aspect` is in the foundation's `hosts_aspects` AND its coordinate is found. The core holds no
-Gradle paths and no framework names, so a non-Gradle foundation needs zero core changes.
+`hosts_aspects` block — an explicit subset, or the sugar `all` = every functional category in
+`aspects.yaml`). A framework attaches when its `enriches_aspect` is hosted AND its coordinate is found.
+The core holds no Gradle paths and no framework names, so a non-Gradle foundation needs zero core changes.
 
-Run this only after the foundation winners are known. The core touches `framework.md` **only here**, and
-always on a foundation's behalf:
+Run this only after the foundation winners are known. The core inspects `FRAMEWORK_MANIFESTS` (set aside
+in 0b-1) **only here**, and always on a foundation's behalf:
 
 ```
 ADDITIVE_PROFILES = []
@@ -274,19 +283,19 @@ ADDITIVE_PROFILES = []
 # plus PRIMARY_PROFILE (which owns the aspect-agnostic phases — in an Android-only marketplace this is
 # android-foundation, owning aspect `android`). Dedupe — one foundation may win several aspects.
 WINNING_FOUNDATIONS = unique( [ACTIVE_PROFILES[a] for a in ACTIVE_PROFILES if ACTIVE_PROFILES[a]] + [PRIMARY_PROFILE] )
-frameworks = Glob("~/.claude/plugins/cache/**/framework.md")
 
 for F in WINNING_FOUNDATIONS:                     # each parent foundation resolves ITS frameworks
     SEARCH = F.framework_detection               # ordered locations the FOUNDATION declares
-    if SEARCH is empty/absent:                    # this foundation hosts no frameworks
-        continue
-    for p in frameworks:
-        if p.enriches_aspect not in F.hosts_aspects:  # F must ACCEPT this framework's functional category
-            continue                                  # else it belongs under a different foundation
+    HOSTED = (TAXONOMY.functional if F.hosts_aspects == "all" else (F.hosts_aspects or []))   # expand `all`; default none
+    if not SEARCH or not HOSTED:                  # no search locations OR no accepted categories ⇒ hosts nothing
+        continue                                  # (schema co-requires the two, but stay defensive)
+    for p in FRAMEWORK_MANIFESTS:
+        if p.enriches_aspect not in HOSTED:       # F must ACCEPT this framework's functional category
+            continue                              # else it belongs under a different foundation
         # malformed-framework guards (belt-and-suspenders; schema also rejects these)
-        if p.additive != true:        HALT "framework '{p.stack}' must declare additive: true"
-        if p.agents_per_phase exists: HALT "Additive profile '{p.stack}' must not declare agents per phase. Frameworks enrich existing agents; they do not own phases."
-        if p.workflow exists:         HALT "Additive profile '{p.stack}' must not declare a workflow."
+        if p.kind != "framework":     HALT "manifest '{p.stack}' reached framework resolution but kind != framework"
+        if p.agents_per_phase exists: HALT "Framework '{p.stack}' must not declare agents_per_phase. Frameworks enrich existing agents; they do not own phases."
+        if p.workflow exists:         HALT "Framework '{p.stack}' must not declare a workflow."
         # detect the library using the FOUNDATION-declared search (mechanics below)
         if dependency_found(p.dependency, SEARCH):
             ADDITIVE_PROFILES.append(p)           # attached UNDER foundation F
@@ -324,7 +333,7 @@ both a `module = "com.squareup.retrofit2:retrofit"` line in a catalog and an `im
 Then apply the optional `frameworks` override from `<project>/.claude/sdlc.local.yaml` (the same file fully parsed in Step 1b — reading the single `frameworks` key here is cheap):
 
 - `frameworks.disable: [<stack>, …]` → remove any framework whose `stack` is listed (even if its dependency was found).
-- `frameworks.enable: [<stack>, …]` → force-activate the named framework even if its dependency was **not** found — locate it among the globbed `framework.md` profiles. Its `enriches_aspect` must still be hosted by some winning foundation's `hosts_aspects` (else warn `WARN: frameworks.enable '{name}' — no winning foundation hosts aspect '{enriches_aspect}' — skipped` and continue). If no such profile is installed, warn `WARN: frameworks.enable '{name}' — no installed framework profile with that stack id` and continue.
+- `frameworks.enable: [<stack>, …]` → force-activate the named framework even if its dependency was **not** found — locate it among the `FRAMEWORK_MANIFESTS`. Its `enriches_aspect` must still be hosted by some winning foundation's `hosts_aspects` (else warn `WARN: frameworks.enable '{name}' — no winning foundation hosts aspect '{enriches_aspect}' — skipped` and continue). If no such profile is installed, warn `WARN: frameworks.enable '{name}' — no installed framework profile with that stack id` and continue.
 
 Unknown names in either list produce a one-line warning and are otherwise ignored.
 
@@ -421,10 +430,10 @@ Report any matches in your compact summary under a `SECRET-LEAK CHECK:` line
 
 #### 1a. Parse all active profiles
 
-The merge input is **`ACTIVE_PROFILES.values()` plus `PRIMARY_PROFILE` plus `ADDITIVE_PROFILES`** (the framework providers resolved in 0b-frameworks). For each profile, extract:
-- `agents_per_phase`: phase → agent name OR phase → {aspect: agent name}. **(Additive profiles never supply this — guarded in 0b.)**
+The merge input is **`ACTIVE_PROFILES.values()` plus `PRIMARY_PROFILE` plus `ADDITIVE_PROFILES`** (the framework providers resolved in 0b-frameworks). Each profile is an already-parsed `manifest.yaml`, so these are direct field reads (no markdown parsing) — extract:
+- `agents_per_phase`: phase → agent name OR phase → {aspect: agent name}. **(Frameworks never supply this — guarded in 0b.)**
 - `convention_skills`: skill identifiers to apply during development.
-- `phase_prompts_injection`: per-phase additional instructions.
+- `phase_injections` (manifest field) → held internally as `phase_prompts_injection`: per-phase additional instructions.
 - `extra_phases`: list of `{name, after, agent, description}` to insert.
 - `post_pipeline_checks`: shell commands to run at the end.
 
@@ -830,7 +839,7 @@ Write `docs/plans/{task_slug}/_telemetry.json`:
     "android": "android"
   },
   "additive_profiles": ["retrofit"],
-  "profile_source": "android-foundation/stack.md",
+  "profile_source": "android-foundation/manifest.yaml",
   "narrative_language": "uk",
   "headless_mode": false,
   "started_at": "<ISO timestamp>",
@@ -1157,7 +1166,7 @@ Hard rules:
 
 | Failure | Behavior |
 |---|---|
-| `stack.md` parse error | Skip that profile, log warning, continue with others. |
+| `manifest.yaml` parse error | Skip that profile, log warning, continue with others. |
 | No matching profile | Fall back to vanilla. |
 | Agent does not exist (referenced in profile) | Halt. Print error: `Agent '{name}' referenced by {profile} not installed`. |
 | Agent fails (exception in subagent) | Mark phase as failed in telemetry. Ask user: retry / skip / abort. |
