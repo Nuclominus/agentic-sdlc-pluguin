@@ -1,0 +1,4 @@
+{
+  "_comment": "Runtime plugin dependencies for dagger-plugin, aggregated by pipeline-orchestrator Step 0a. dagger-plugin is an additive framework provider with no external marketplace dependencies, so this stays empty.",
+  "dependencies": []
+}

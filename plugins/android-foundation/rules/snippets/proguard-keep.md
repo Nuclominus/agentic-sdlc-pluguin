@@ -15,7 +15,7 @@ phase injection **only when that library is detected**:
 |---------|--------------------|
 | Retrofit / OkHttp | `retrofit-plugin/rules/snippets/retrofit-proguard.md` |
 | Room | `room-plugin/rules/snippets/room-proguard.md` |
-| Dagger / Hilt | `dagger-plugin` (Phase 3) |
+| Dagger / Hilt | `dagger-plugin/rules/snippets/hilt-proguard.md` |
 
 ```proguard
 # kotlinx.serialization
@@ -34,6 +34,3 @@ phase injection **only when that library is detected**:
 # Firebase
 -keep class com.google.firebase.** { *; }
 ```
-
-> Hilt keep rules currently remain implicit in the foundation until `dagger-plugin` extracts them
-> (Phase 3). If your project uses Hilt and ships R8, add the standard `dagger.hilt.**` keeps until then.

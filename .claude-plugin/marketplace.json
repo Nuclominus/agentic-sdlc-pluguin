@@ -43,6 +43,11 @@
       "name": "room-plugin",
       "source": "./plugins/room-plugin",
       "description": "Additive framework provider for Room (androidx.room) persistence. Auto-detected by the orchestrator from the Gradle version catalog / build files; enriches the Android Foundation flow via framework.md (additive: true) with the room-conventions skill, development + security phase-prompt injections (suspend/Flow DAOs, @Transaction, parameterized queries, migrations, KSP), and R8/ProGuard keep rules. Ships NO agents — it specializes the existing android-developer / android-security prompts."
+    },
+    {
+      "name": "dagger-plugin",
+      "source": "./plugins/dagger-plugin",
+      "description": "Additive framework provider for Dagger / Hilt dependency injection (com.google.dagger). Auto-detected by the orchestrator from the Gradle version catalog / build files; enriches the Android Foundation flow via framework.md (additive: true) with the hilt-conventions skill, development + security phase-prompt injections (constructor injection, @Module/@InstallIn, @Binds over @Provides, deliberate scoping, KSP), and R8/ProGuard keep rules. Realizes the 'detect, don't impose' DI resolution: the foundation states the generic DI principle, this plugin adds Hilt/Dagger specifics only when detected. Ships NO agents."
     }
   ]
 }

@@ -65,7 +65,8 @@ for the `android` aspect). Pipeline DAG:
 For development phase, inject:
   "Native Android (Kotlin) project. Compose-first UI with Material 3.
    Unidirectional data flow; state hoisting; UI state as StateFlow from a ViewModel.
-   DI: match the project's existing framework (Hilt or Koin — DETECT, do not impose).   # TODO: pin house style
+   DI: use the project's existing DI framework via constructor injection; scope bindings deliberately.
+   Framework-specific guidance (Hilt/Dagger, Koin) is added by the matching framework plugin when detected.
    Concurrency: coroutines + Flow; never block the main thread; use viewModelScope.
    New dependencies via the Gradle version catalog (libs.versions.toml), pinned ^x.y.z.
    Respect the existing module structure. Secrets via BuildConfig/local.properties, never source.
