@@ -186,73 +186,36 @@ If `HEADLESS == true`, suppress this print (warnings already went to stderr; suc
 
 `CONTEXT.{plugin}_unavailable` flags propagate into agent prompts via Step 3b-1's `availability_flags:` line in the per-call CONTEXT trailer — do not duplicate that wiring here.
 
-### Step 0b — Detect stack profile
+### Step 0b — Detect the FOUNDATION (stack profile)
 
-Use `Glob` to find all stack profiles:
+The orchestrator's job here is narrow: **pick the foundation, then delegate framework resolution to it.**
+The core scans only `stack.md` (foundations / platform providers) — it is deliberately **blind to
+`framework.md`**. Frameworks are resolved later, *under* the foundation that won their aspect
+(0b-frameworks), using search locations the foundation itself declares. This is what keeps the core
+platform-agnostic: it knows about foundations, never about a specific library or its build system.
+
+Use `Glob` to find all foundation profiles (stack providers only):
 
 ```
 ~/.claude/plugins/cache/**/stack.md
-```
-
-Framework (additive) providers ship the same profile format in a `framework.md` file instead of `stack.md`. Glob for both:
-
-```
-~/.claude/plugins/cache/**/stack.md
-~/.claude/plugins/cache/**/framework.md
 ```
 
 For each profile file:
 1. `Read` the file.
-2. Parse the YAML frontmatter (`stack`, `priority`, `aspects`, `detect`, optional `workflow`, `additive`, and — for framework providers — `dependency`).
-3. Determine whether the profile matches the project root:
-   - **`dependency` present** (framework providers): the orchestrator owns the search — see *Framework dependency detection* below. The plugin only names the library; it ships no `detect` rules.
-   - **`detect` present** (stack providers, and the framework escape hatch): evaluate the rules:
-     - `detect.any: ["*"]` → always matches.
-     - `detect.all: [...]` → all sub-rules must match.
-     - `file_exists: <path>` → check via `Glob` whether the file exists.
-     - `file_contains: { path, pattern }` → run the regex against the file at `path`. If `path` contains glob characters (`*`, `**`, `?`), `Glob` it first and match if **any** matching file contains the pattern. Glob honors `.gitignore`, so generated `build/` artifacts are skipped.
-     - `file_glob: <pattern>` → `Glob <pattern>` against the project root; matches if ≥1 file matches.
-     - nested `any: [...]` / `all: [...]` → evaluate the sub-rules recursively (OR / AND); rules may nest to any depth.
-     - **Evaluation order — short-circuit.** Evaluate the sub-rules of an `any:` block **in listed order** and **stop at the first match** (`all:` likewise stops at the first failure). Respect author order rather than reordering or evaluating everything.
+2. Parse the YAML frontmatter (`stack`, `priority`, `aspects`, `detect`, optional `workflow`, and — for a foundation that hosts frameworks — `hosts_aspects`: the functional categories it accepts, and `framework_detection`: the ordered search locations it delegates to the core to execute in 0b-frameworks).
+3. Determine whether the profile matches the project root by evaluating its `detect` rules:
+   - `detect.any: ["*"]` → always matches.
+   - `detect.all: [...]` → all sub-rules must match.
+   - `file_exists: <path>` → check via `Glob` whether the file exists.
+   - `file_contains: { path, pattern }` → run the regex against the file at `path`. If `path` contains glob characters (`*`, `**`, `?`), `Glob` it first and match if **any** matching file contains the pattern. Glob honors `.gitignore`, so generated `build/` artifacts are skipped.
+   - `file_glob: <pattern>` → `Glob <pattern>` against the project root; matches if ≥1 file matches.
+   - nested `any: [...]` / `all: [...]` → evaluate the sub-rules recursively (OR / AND); rules may nest to any depth.
+   - **Evaluation order — short-circuit.** Evaluate the sub-rules of an `any:` block **in listed order** and **stop at the first match** (`all:` likewise stops at the first failure). Respect author order rather than reordering or evaluating everything.
 4. Score by `priority` (higher wins).
 
-##### Framework dependency detection (built-in strategy)
+If `$ARGUMENTS` includes `--stack=NAME`, restrict foundation candidates to profiles whose `stack` matches `NAME` and skip auto-detect.
 
-When a profile declares `dependency: <coordinate>` (string, or a list — matches if ANY coordinate is found), the orchestrator decides **where and in what order to look** — this knowledge lives here, once, not in each plugin. For each coordinate, in this order (short-circuit at the first match):
-
-1. **Version catalog (authoritative).** `Read` `gradle/libs.versions.toml`; if it contains the coordinate → MATCH. Stop — do not scan build files.
-2. **Module build files (fallback).** `Glob` `**/build.gradle.kts` and `**/build.gradle` (gitignore-aware, so generated `build/` is skipped) and grep each; MATCH if any contains the coordinate. This covers projects with no version catalog, or that declare the dependency directly in a module build file.
-
-The coordinate is matched as a literal substring (case-insensitive), so `com.squareup.retrofit2` matches both a `module = "com.squareup.retrofit2:retrofit"` line in the catalog and an `implementation "com.squareup.retrofit2:retrofit:…"` line in a build file. If a project references the library only through a catalog alias (`libs.retrofit`), step 1 already matched it in the catalog.
-
-**Additive (framework) profiles** (`additive: true`) are handled separately from platform stack profiles:
-- They are **excluded** from per-aspect winner resolution (0b-aspects) and from `PRIMARY_PROFILE` selection — they never compete for or win an aspect, and never drive aspect-agnostic phases.
-- They normally declare a `dependency:` (the orchestrator detects it via the built-in strategy above) rather than ship their own `detect` rules. Every additive profile that matches (subject to the `frameworks.enable/disable` override below) is collected into **`ADDITIVE_PROFILES`**, a flat list merged into `EFFECTIVE_PROFILE` in Step 1a.
-- An additive profile that declares a `## Agents per phase` section (i.e. supplies `agents_per_phase`) is malformed — **HALT** with: `Additive profile '{stack}' must not declare agents per phase. Frameworks enrich existing agents; they do not own phases.`
-
-#### 0b-frameworks — Resolve the active additive (framework) set
-
-```
-ADDITIVE_PROFILES = [ p for p in matching_profiles if p.additive == true ]
-# "matching" = dependency found via the built-in strategy, or (escape hatch) the profile's detect rules pass
-
-for p in ADDITIVE_PROFILES:
-    if p.agents_per_phase exists:          # additive profiles must enrich, never own phases
-        HALT "Additive profile '{p.stack}' must not declare agents per phase. Frameworks enrich existing agents; they do not own phases."
-    if p.workflow exists:                  # schema also rejects this; belt-and-suspenders
-        HALT "Additive profile '{p.stack}' must not declare a workflow."
-```
-
-Then apply the optional `frameworks` override from `<project>/.claude/sdlc.local.yaml` (the same file fully parsed in Step 1b — reading the single `frameworks` key here is cheap):
-
-- `frameworks.disable: [<stack>, …]` → remove any additive profile whose `stack` is listed (even if its dependency was found).
-- `frameworks.enable: [<stack>, …]` → force-activate the named additive profile even if its dependency was **not** found (locate it among the globbed `framework.md` profiles; if no such profile is installed, warn `WARN: frameworks.enable '{name}' — no installed framework profile with that stack id` and continue).
-
-Unknown names in either list produce a one-line warning and are otherwise ignored.
-
-If `$ARGUMENTS` includes `--stack=NAME`, restrict candidates to profiles whose `stack` matches `NAME` and skip auto-detect.
-
-#### 0b-aspects — Per-aspect winner resolution
+#### 0b-aspects — Per-aspect foundation winner resolution
 
 Profiles declare which **aspects** of the stack they cover via the `aspects:` field in their frontmatter. Canonical aspects (v1):
 
@@ -263,11 +226,11 @@ Profiles declare which **aspects** of the stack they cover via the `aspects:` fi
 - `testing` — test infrastructure (when distinct from backend/frontend conventions)
 - `messaging` — queues, events, async (rare; opt-in)
 
-Resolution algorithm (run AFTER finding all matching profiles in 0b above). **Additive (framework) profiles are excluded here** — they own no aspect and never become primary:
+Resolution algorithm (run AFTER finding all matching foundations in 0b above). Only foundations are in play here — `framework.md` was never globbed, so additive profiles cannot leak into winner resolution by construction:
 
 ```
-STACK_PROFILES = [ p for p in matching_profiles if not p.additive ]   # additive ones go to ADDITIVE_PROFILES (0b-frameworks)
-ACTIVE_PROFILES = {}              # aspect → winning profile
+STACK_PROFILES = matching_profiles   # all foundations (stack.md); framework.md is resolved later, in 0b-frameworks
+ACTIVE_PROFILES = {}              # aspect → winning foundation
 
 for each canonical_aspect in [backend, frontend, database, infra, testing, messaging]:
   candidates = STACK_PROFILES where `aspects` array contains canonical_aspect
@@ -292,6 +255,78 @@ if no profiles match at all:
 ```
 
 If `--stack=NAME` was used, all aspect winners come from that single profile (compatibility mode).
+
+#### 0b-frameworks — Resolve each foundation's frameworks (delegated to the foundation)
+
+Framework resolution is **owned by the foundation**, not the core — this is the whole point of the
+foundation→framework tree. The core supplies only the *matching mechanics*; the **foundation declares
+WHERE to look** (its `framework_detection` block) and WHICH functional categories it accepts (its
+`hosts_aspects` block — `network`, `persistence`, `di`, …). A framework attaches when its
+`enriches_aspect` is in the foundation's `hosts_aspects` AND its coordinate is found. The core holds no
+Gradle paths and no framework names, so a non-Gradle foundation needs zero core changes.
+
+Run this only after the foundation winners are known. The core touches `framework.md` **only here**, and
+always on a foundation's behalf:
+
+```
+ADDITIVE_PROFILES = []
+# The winning foundations are the tree's parent nodes: every distinct foundation that won an aspect,
+# plus PRIMARY_PROFILE (which owns the aspect-agnostic phases — in an Android-only marketplace this is
+# android-foundation, owning aspect `android`). Dedupe — one foundation may win several aspects.
+WINNING_FOUNDATIONS = unique( [ACTIVE_PROFILES[a] for a in ACTIVE_PROFILES if ACTIVE_PROFILES[a]] + [PRIMARY_PROFILE] )
+frameworks = Glob("~/.claude/plugins/cache/**/framework.md")
+
+for F in WINNING_FOUNDATIONS:                     # each parent foundation resolves ITS frameworks
+    SEARCH = F.framework_detection               # ordered locations the FOUNDATION declares
+    if SEARCH is empty/absent:                    # this foundation hosts no frameworks
+        continue
+    for p in frameworks:
+        if p.enriches_aspect not in F.hosts_aspects:  # F must ACCEPT this framework's functional category
+            continue                                  # else it belongs under a different foundation
+        # malformed-framework guards (belt-and-suspenders; schema also rejects these)
+        if p.additive != true:        HALT "framework '{p.stack}' must declare additive: true"
+        if p.agents_per_phase exists: HALT "Additive profile '{p.stack}' must not declare agents per phase. Frameworks enrich existing agents; they do not own phases."
+        if p.workflow exists:         HALT "Additive profile '{p.stack}' must not declare a workflow."
+        # detect the library using the FOUNDATION-declared search (mechanics below)
+        if dependency_found(p.dependency, SEARCH):
+            ADDITIVE_PROFILES.append(p)           # attached UNDER foundation F
+```
+
+A framework whose `enriches_aspect` is in **no** winning foundation's `hosts_aspects` is never even
+considered — the tree has no branch for it. This is the *structural* form of the old runtime gate: **no
+hosting foundation ⇒ no frameworks**, by construction rather than by post-filter. `ADDITIVE_PROFILES` is
+the flat union across all winning foundations, merged into `EFFECTIVE_PROFILE` in Step 1a.
+
+**Framework authoring contract** (enforced socially + by the guards above): a framework declares a single
+functional `enriches_aspect:` (its library category — `network`/`persistence`/`di`/…), depends on **no**
+sibling plugin (its `plugin.json → dependencies` lists only `sdlc`), ships **no** agents/workflow/
+`hosts_aspects`, and must **never** hard-reference another plugin's skill by `plugin:skill` id — it defers
+to the hosting foundation's convention skills, which that foundation already injects into the shared phase
+prompt.
+
+##### Executing the foundation-declared search (`dependency_found`)
+
+`F.framework_detection` is an **ordered list of files/globs**. For each of the framework's `dependency:`
+coordinate(s) (a string, or a list — match if ANY is found), walk the list in order and **short-circuit at
+the first location that contains the coordinate**:
+
+- a plain file path (e.g. `gradle/libs.versions.toml`) → `Read` it; match if it contains the coordinate.
+- a glob (e.g. `**/build.gradle.kts`) → `Glob` it (gitignore-aware, so generated `build/` is skipped) and grep each match.
+
+The coordinate is matched as a case-insensitive **literal substring**, so `com.squareup.retrofit2` matches
+both a `module = "com.squareup.retrofit2:retrofit"` line in a catalog and an `implementation
+"com.squareup.retrofit2:retrofit:…"` line in a build file. The **core owns these mechanics once**; the
+**foundation owns the locations**. A foundation for another platform (npm, CocoaPods, …) declares different
+`framework_detection` entries and the same mechanics apply unchanged.
+
+##### Project-local framework override
+
+Then apply the optional `frameworks` override from `<project>/.claude/sdlc.local.yaml` (the same file fully parsed in Step 1b — reading the single `frameworks` key here is cheap):
+
+- `frameworks.disable: [<stack>, …]` → remove any framework whose `stack` is listed (even if its dependency was found).
+- `frameworks.enable: [<stack>, …]` → force-activate the named framework even if its dependency was **not** found — locate it among the globbed `framework.md` profiles. Its `enriches_aspect` must still be hosted by some winning foundation's `hosts_aspects` (else warn `WARN: frameworks.enable '{name}' — no winning foundation hosts aspect '{enriches_aspect}' — skipped` and continue). If no such profile is installed, warn `WARN: frameworks.enable '{name}' — no installed framework profile with that stack id` and continue.
+
+Unknown names in either list produce a one-line warning and are otherwise ignored.
 
 🚨 **MUST PRINT VERBATIM** (do not paraphrase, do not skip):
 

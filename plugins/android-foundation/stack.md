@@ -9,6 +9,16 @@ detect:
         - file_exists: settings.gradle.kts
         - file_exists: settings.gradle
     - file_glob: "**/*.kt"            # Gradle project that actually has Kotlin (not pure-Java/Groovy)
+# Functional categories of frameworks this foundation accepts (the WHICH). A framework attaches when
+# its `enriches_aspect` is in this list AND its coordinate is found via framework_detection below.
+# Adding a plugin in an already-listed category (e.g. koin → di) needs ZERO edits here.
+hosts_aspects: [network, persistence, di, ui, background, analytics, architecture]
+# WHERE to look for a framework's `dependency` coordinate; the core only executes this search
+# (orchestrator 0b-frameworks). Order matters — version catalog is authoritative, build files fallback.
+framework_detection:
+  - gradle/libs.versions.toml
+  - "**/build.gradle.kts"
+  - "**/build.gradle"
 ---
 
 # Android Foundation — Stack Profile
@@ -18,6 +28,22 @@ Aspect: `android`. This profile wins the `android` aspect and drives the pipelin
 Detect-don't-impose libraries (Retrofit, Room, Dagger/Hilt, …) attach as **additive
 framework plugins** that enrich the development/security phases without owning them
 (see the Framework Provider Pattern in `ARCHITECTURE.md`).
+
+## Framework resolution (this foundation owns it)
+
+The core picks this foundation, then **delegates** framework discovery to it — the core never knows
+Retrofit/Room/Dagger by name, nor that Android uses Gradle. This profile owns both halves of the contract:
+
+- **Which** frameworks may attach: any `framework.md` whose `enriches_aspect` is one of this foundation's
+  `hosts_aspects` (`network`, `persistence`, `di`, `ui`, `background`, `analytics`, `architecture`).
+  Frameworks point *up* to a functional category; this foundation never lists them by name.
+- **Where** to detect them: the `framework_detection` locations in the frontmatter — version catalog first,
+  then module build files. The orchestrator (0b-frameworks) executes that search on this profile's behalf
+  and merges every matched framework's guidance into this profile's `development` / `security` phases.
+
+A new Android library plugin joins the tree by shipping `framework.md` with an `enriches_aspect` already
+in `hosts_aspects` (e.g. `koin-plugin` → `di`, an image loader → `ui`) — nothing in this file changes.
+Only a brand-new category would add one entry to `hosts_aspects` here.
 
 > **Builds are CI-deferred.** `assembleDebug` is slow and needs the full SDK;
 > `connectedAndroidTest` needs an emulator/device. In-pipeline verification is

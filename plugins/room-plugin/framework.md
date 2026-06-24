@@ -3,9 +3,12 @@ stack: room
 additive: true
 priority: 150
 aspects: []
-# Just name the library. The orchestrator owns where/how to look for it
-# (version catalog first, then module build files) — see the Framework
-# dependency detection strategy in the pipeline-orchestrator skill.
+# The FUNCTIONAL category this framework decorates. It attaches under any foundation whose
+# `hosts_aspects` includes `persistence`. Replaces any plugin→plugin dependency.
+enriches_aspect: persistence
+# Just name the library. The hosting FOUNDATION declares WHERE to look (via its `framework_detection`:
+# version catalog first, then module build files); the orchestrator executes that search on the
+# foundation's behalf — see 0b-frameworks in the pipeline-orchestrator skill.
 dependency: androidx.room
 ---
 
@@ -16,9 +19,10 @@ Additive framework provider for Room persistence. Detect-activated: it contribut
 `android-security` prompts. `priority` here is documentational only; additive profiles never compete for
 or win an aspect.
 
-This profile only **names** the dependency (`androidx.room`); the orchestrator decides where to look for
-it (version catalog first, then module build files). Activation is therefore automatic when Room is
-found. Toggle explicitly from a project's `.claude/sdlc.local.yaml`:
+This profile only **names** the dependency (`androidx.room`) and the functional category it enriches
+(`persistence`); the hosting **foundation** (whose `hosts_aspects` includes `persistence`) declares where
+to look (version catalog first, then module build files) and the orchestrator executes that search.
+Activation is therefore automatic when Room is found. Toggle explicitly from a project's `.claude/sdlc.local.yaml`:
 
 ```yaml
 frameworks:
@@ -43,8 +47,8 @@ For development phase, inject:
    explicit `Migration` objects and keep `exportSchema = true`; do NOT ship
    `fallbackToDestructiveMigration()` in release. Keep Room `@Entity` types in the data layer and map
    them to domain models at the repository boundary — never expose entities upward. See the
-   room-plugin:room-conventions skill; layer principles stay in android-foundation:android-data (do not
-   restate them)."
+   room-plugin:room-conventions skill; layer principles stay with the hosting foundation's data-layer
+   conventions (do not restate them)."
 
 For security phase, inject:
   "Room (MASVS-STORAGE): every query MUST be parameterized — use `@Query` bind parameters (`:arg`) or

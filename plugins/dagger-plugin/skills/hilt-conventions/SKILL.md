@@ -1,6 +1,6 @@
 ---
 name: hilt-conventions
-description: Dagger/Hilt-specific DI idioms — constructor injection, @HiltAndroidApp/@AndroidEntryPoint entry points, @HiltViewModel, @Module + @InstallIn with @Binds over @Provides, deliberate scoping, dispatcher qualifiers, and KSP compiler. Invoke before adding or changing Hilt modules, components, scopes, or injected constructors. Generic DI principles (use the project's framework, constructor injection) stay in the android-foundation development guidance; layer/dispatcher principles stay in android-foundation:android-data.
+description: Dagger/Hilt-specific DI idioms — constructor injection, @HiltAndroidApp/@AndroidEntryPoint entry points, @HiltViewModel, @Module + @InstallIn with @Binds over @Provides, deliberate scoping, dispatcher qualifiers, and KSP compiler. Invoke before adding or changing Hilt modules, components, scopes, or injected constructors. Generic DI principles (use the project's framework, constructor injection) stay with the hosting foundation's development guidance; layer/dispatcher principles stay with the hosting foundation's data-layer conventions.
 ---
 
 # hilt-conventions

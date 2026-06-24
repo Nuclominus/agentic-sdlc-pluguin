@@ -8,7 +8,7 @@
   "additionalProperties": false,
   "allOf": [
     {
-      "description": "Every profile must say how it is detected: stack providers use `detect` (project structure); additive framework providers normally use `dependency` (the orchestrator owns where/how to search) but may use `detect` as an escape hatch.",
+      "description": "Every profile must say how it is detected: stack providers (foundations) use `detect` (project structure); additive framework providers normally use `dependency` (the FOUNDATION that owns their aspect declares WHERE to search via its `framework_detection`; the orchestrator executes it) but may use `detect` as an escape hatch.",
       "anyOf": [
         { "required": ["detect"] },
         { "required": ["dependency"] }
@@ -19,6 +19,20 @@
       "then": {
         "not": { "required": ["workflow"] },
         "description": "Additive (framework) profiles must not declare a workflow. They enrich existing phases; they do not own the pipeline."
+      }
+    },
+    {
+      "if": { "properties": { "additive": { "const": true } }, "required": ["additive"] },
+      "then": {
+        "not": { "required": ["framework_detection"] },
+        "description": "Additive (framework) profiles must not declare `framework_detection` — hosting frameworks is a foundation's job. A framework is a leaf in the foundation→framework tree; it does not host other frameworks."
+      }
+    },
+    {
+      "if": { "properties": { "additive": { "const": true } }, "required": ["additive"] },
+      "then": {
+        "not": { "required": ["hosts_aspects"] },
+        "description": "Additive (framework) profiles must not declare `hosts_aspects` — accepting frameworks is a foundation's job. A framework declares the single `enriches_aspect` it belongs to; it does not host categories."
       }
     },
     {
@@ -50,7 +64,7 @@
       "default": false
     },
     "dependency": {
-      "description": "Framework providers ONLY: the library coordinate(s) that signal this framework is in use — e.g. 'com.squareup.retrofit2' (group) or 'com.squareup.retrofit2:retrofit' (group:artifact). The plugin just NAMES the dependency; the ORCHESTRATOR owns where and in what order to look for it (version catalog first, then module build files). Prefer this over a hand-written `detect` block. A list matches if ANY coordinate is found.",
+      "description": "Framework providers ONLY: the library coordinate(s) that signal this framework is in use — e.g. 'com.squareup.retrofit2' (group) or 'com.squareup.retrofit2:retrofit' (group:artifact). The plugin just NAMES the dependency; the FOUNDATION that owns this framework's `enriches_aspect` declares WHERE to look (its `framework_detection`), and the orchestrator executes that search (version catalog first, then module build files). Prefer this over a hand-written `detect` block. A list matches if ANY coordinate is found.",
       "oneOf": [
         { "type": "string", "minLength": 2 },
         { "type": "array", "items": { "type": "string", "minLength": 2 }, "minItems": 1, "uniqueItems": true }
@@ -58,13 +72,33 @@
     },
     "aspects": {
       "type": "array",
-      "description": "Aspects this profile owns. Determines per-aspect winner resolution. Additive (framework) profiles use [] — they own no aspect.",
+      "description": "PLATFORM / WINNER aspects this profile OWNS — the axis used for per-aspect winner resolution (which stack drives a part of the app: `android` for the foundation; `backend`/`frontend`/… for web stacks). This is NOT the functional library taxonomy (see `enriches_aspect` / `hosts_aspects`). Additive (framework) profiles use [] — they own no platform aspect.",
       "items": {
-        "enum": ["android", "backend", "frontend", "database", "infra", "testing", "messaging"]
+        "$ref": "#/$defs/platformAspect"
       },
       "uniqueItems": true,
       "minItems": 0,
-      "maxItems": 6
+      "maxItems": 7
+    },
+    "enriches_aspect": {
+      "description": "Additive (framework) profiles ONLY: the FUNCTIONAL aspect this framework decorates — its library category (network, persistence, di, ui, background, analytics, architecture), NOT a platform. It is the contract that replaces any plugin→plugin install dependency: the framework attaches under whichever FOUNDATION declares it HOSTS this functional aspect (`hosts_aspects`), no specific plugin named. Frameworks own no platform aspect (`aspects: []`) but enrich one functional aspect. Omit on stack providers.",
+      "$ref": "#/$defs/functionalAspect"
+    },
+    "hosts_aspects": {
+      "type": "array",
+      "description": "Stack providers (foundations) ONLY: the FUNCTIONAL aspects this foundation accepts frameworks for. A framework attaches here when its `enriches_aspect` is in this list AND its `dependency` is found via `framework_detection`. This is the foundation's explicit vouch ('I can mount a network/persistence/di/… framework into my phases') — adding a framework whose category is already listed needs zero edits here. Omit on additive profiles.",
+      "items": {
+        "$ref": "#/$defs/functionalAspect"
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "framework_detection": {
+      "type": "array",
+      "description": "Stack providers (foundations) ONLY: the ordered list of files/globs where the orchestrator searches for a framework's `dependency` coordinate, ON THIS FOUNDATION'S BEHALF (0b-frameworks). The foundation owns WHERE to look (e.g. ['gradle/libs.versions.toml','**/build.gradle.kts','**/build.gradle']); the core owns only the substring-matching mechanics. Pairs with `hosts_aspects` (which functional categories) to define what this foundation hosts. A non-Gradle foundation lists entirely different locations and needs no core change. Omit on additive profiles.",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1,
+      "uniqueItems": true
     },
     "workflow": {
       "type": "string",
@@ -96,6 +130,14 @@
     }
   },
   "$defs": {
+    "platformAspect": {
+      "description": "PLATFORM / WINNER aspect — what a STACK PROVIDER owns and competes to win (which stack drives a part of the app). Used by `aspects`.",
+      "enum": ["android", "backend", "frontend", "database", "infra", "testing", "messaging"]
+    },
+    "functionalAspect": {
+      "description": "FUNCTIONAL / LIBRARY aspect — the cross-cutting category a FRAMEWORK addresses. Used by `enriches_aspect` (one per framework) and `hosts_aspects` (a foundation's accepted set).",
+      "enum": ["network", "persistence", "di", "ui", "background", "analytics", "architecture"]
+    },
     "detectRule": {
       "oneOf": [
         {

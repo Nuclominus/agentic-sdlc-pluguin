@@ -21,38 +21,55 @@
 │  ┌────────────────────────────────────────────────────────┐ │
 │  │  pipeline-orchestrator (skill) — DOES NOT CHANGE        │ │
 │  │                                                         │ │
-│  │  • detect profiles  (stack.md winner + framework.md set)│ │
+│  │  • pick the FOUNDATION  (stack.md winner per aspect)    │ │
+│  │  • DELEGATE framework discovery → to the foundation     │ │
 │  │  • merge profiles   (winner agents + ADDITIVE injects)  │ │
 │  │  • execute phases   (loops + parallel groups)           │ │
 │  │  • dispatch agents_per_phase[phase] (from the winner)   │ │
 │  └────────────────────────────────────────────────────────┘ │
 │                            ▲                                  │
-│              reads stack.md / framework.md + workflows/      │
+│           reads stack.md (foundations) + workflows/          │
 └────────────────────────────┼─────────────────────────────────┘
-                             │
-          ┌──────────────────┴───────────────────┐
-   ┌──────▼────────────┐               ┌──────────▼───────────┐
-   │ android-foundation │  enriched by  │ retrofit-plugin      │
-   │ STACK PROVIDER     │  ◀──────────  │ FRAMEWORK PROVIDER   │
-   │ stack.md           │  (additive)   │ framework.md         │
-   │ aspect: android    │               │ additive: true       │
-   │ priority: 300      │               │ aspects: []          │
-   │ 11 agents (winner) │               │ skill + injections   │
-   │ pinned house rules │               │ ProGuard · NO agents │
-   └────────────────────┘               └──────────────────────┘
+                             │ picks a foundation
+                             ▼
+              ┌──────────────────────────────────┐
+              │ android-foundation               │   LEVEL 2: FOUNDATION
+              │ STACK PROVIDER · stack.md         │   owns aspect:android (platform)
+              │ priority 300 · 11 agents (winner) │   hosts_aspects: [network,persistence,
+              │ pinned house rules                │     di,ui,background,analytics,architecture]
+              └────────────────┬─────────────────┘   framework_detection → RESOLVES frameworks
+                               │ collects framework.md where
+                               │ enriches_aspect ∈ hosts_aspects (by category, never by name)
+              ┌────────────────┼─────────────────┐         LEVEL 3: FRAMEWORKS
+       ┌──────▼─────┐   ┌──────▼─────┐   ┌────────▼───┐     additive · NO agents
+       │ retrofit-  │   │   room-    │   │  dagger-   │     enriches_aspect:
+       │ plugin     │   │  plugin    │   │  plugin    │       network│persistence│di
+       │ framework.md│  │ framework.md│  │ framework.md│    dependency · skill · injections
+       └────────────┘   └────────────┘   └────────────┘
+        no deps between them · none depends on the foundation by name
 ```
 
 **Stack Provider (the foundation).** Places a `stack.md` at its root; declares `detect` rules,
-`priority`, `aspects`, agents per phase, an optional default workflow, and convention skills. The
-orchestrator picks the highest-priority profile **per aspect** whose `detect` succeeds and dispatches its
-agents. Android Foundation is the only stack provider here; it wins the `android` aspect and drives every
-phase.
+`priority`, `aspects`, agents per phase, an optional default workflow, convention skills, and — if it
+hosts libraries — a `framework_detection` block (where to look for framework coordinates). The
+orchestrator picks the highest-priority profile **per aspect** whose `detect` succeeds, dispatches its
+agents, **and then delegates framework discovery to it** (the core executes the foundation's declared
+search; it never knows a library name or build system itself). Android Foundation is the only stack
+provider here; it wins the `android` aspect, drives every phase, and resolves its own frameworks.
 
 **Framework Provider (additive).** Places a `framework.md` (same schema + `additive: true`) at its root.
 It is **excluded** from per-aspect winner resolution and from PRIMARY_PROFILE selection, declares **no**
 `agents_per_phase` and **no** `workflow`, and contributes only to the merge: convention skills,
-`development`/`security` phase-prompt injections, ProGuard keep rules, and post-checks. It activates by
-`detect` (the library on the classpath) and enriches the foundation's existing agents.
+`development`/`security` phase-prompt injections, ProGuard keep rules, and post-checks. It names its
+library via `dependency:` and points *up* at a functional category via `enriches_aspect:` (`network`,
+`persistence`, `di`, …). The **foundation** whose `hosts_aspects` includes that category resolves it
+(LEVEL 3 of the tree above): the foundation's `framework_detection` says where to look, the orchestrator
+executes the search, and a match attaches the framework under that foundation. That category — not a named
+sibling plugin — is its only contract: a framework declares **no** dependency on `android-foundation` (its
+`plugin.json → dependencies` lists only `sdlc`), and is simply never considered if no winning foundation
+hosts its category. So frameworks are true peers, swappable under
+any provider of the aspect, with **no dependencies between them** and none on the foundation by name —
+they never reference another plugin's skill id directly.
 
 **What this marketplace explicitly does NOT do:**
 
@@ -135,11 +152,18 @@ detect:
         - file_exists: settings.gradle.kts
         - file_exists: settings.gradle
     - file_glob: "**/*.kt"        # a Gradle project that actually has Kotlin
+hosts_aspects: [network, persistence, di, ui, background, analytics, architecture]   # categories I accept
+framework_detection:             # WHERE to look for a framework's coordinate — in order
+  - gradle/libs.versions.toml
+  - "**/build.gradle.kts"
+  - "**/build.gradle"
 ---
 ```
-Wins the `android` aspect, declares the agents-per-phase roster, the convention skills, and the
-`development` / `qa` / `security` phase injections (Compose-first, JVM-only tests, MASVS/MASTG). The stack
-id stays `android` (config stability); only the plugin name is `android-foundation`.
+Wins the `android` aspect (platform/winner axis), declares the agents-per-phase roster, the convention
+skills, the `development` / `qa` / `security` phase injections (Compose-first, JVM-only tests, MASVS/MASTG),
+and — via `hosts_aspects` + `framework_detection` — owns discovery of its frameworks (Retrofit→`network`,
+Room→`persistence`, Dagger→`di`). The stack id stays `android` (config stability); only the plugin name is
+`android-foundation`.
 
 ### 3.3. Framework profile (`plugins/retrofit-plugin/framework.md`)
 
@@ -148,13 +172,15 @@ id stays `android` (config stability); only the plugin name is `android-foundati
 stack: retrofit
 additive: true
 aspects: []
-dependency: com.squareup.retrofit2     # just name it; the orchestrator owns the search
+enriches_aspect: network               # functional category; the foundation hosting it resolves me
+dependency: com.squareup.retrofit2     # just name it; the foundation declares WHERE to look
 ---
 ```
 Additive: contributes the `retrofit-conventions` skill plus development/security injections and a
 ProGuard snippet. Declares no agents and no workflow (the schema and the orchestrator both reject those
-for additive profiles). It ships **no detection rules** — it only names the dependency; the orchestrator
-looks for it version-catalog-first, then module build files (see §4.1).
+for additive profiles). It ships **no detection rules** — it only names the dependency and the aspect it
+enriches; the **foundation** that owns `android` declares where to look (version catalog first, then
+module build files) and the orchestrator executes that search (see §4.1).
 
 ### 3.4. Frontmatter spec
 
@@ -163,40 +189,51 @@ looks for it version-catalog-first, then module build files (see §4.1).
 | `stack` | string | ✅ | Unique id (`android`, `retrofit`, `vanilla`). |
 | `priority` | int | ✅ | 0 = always-match fallback; 300 = stack provider. Higher wins per aspect. Documentational for additive profiles. |
 | `additive` | bool | — | `true` marks a framework provider: excluded from winner/PRIMARY resolution; must not declare `workflow` or agents. |
-| `aspects` | array | — | Aspects the profile owns. `android` for the foundation; `[]` for additive frameworks. |
+| `aspects` | array | — | **Platform/winner** aspects the profile owns (`[android]` for the foundation; `[]` for additive frameworks). The axis for per-aspect winner resolution — NOT the library taxonomy. |
+| `enriches_aspect` | string | — | Additive frameworks only. The **functional** category this framework decorates (`network`, `persistence`, `di`, `ui`, `background`, `analytics`, `architecture`) — points *up*, never names a plugin. Resolved by a foundation whose `hosts_aspects` includes it (§4.1). |
+| `hosts_aspects` | array | — | Foundations only. The **functional** categories this foundation accepts frameworks for. A framework attaches when its `enriches_aspect` ∈ this list AND its `dependency` is found. Forbidden when `additive: true`. |
+| `framework_detection` | array | — | Foundations only. Ordered files/globs where the orchestrator searches for a framework's `dependency`, on this foundation's behalf. Pairs with `hosts_aspects`. Forbidden when `additive: true`. |
 | `workflow` | string | — | Default recipe when this is the PRIMARY profile. Forbidden when `additive: true`. |
 | `detect.any` / `detect.all` | array | ✳️ | Detection rules. `["*"]` for vanilla. `file_exists` / `file_contains` / `file_glob`, nestable via `any`/`all`. Required for stack providers; optional for framework providers that use `dependency`. |
-| `dependency` | string \| array | ✳️ | Framework providers only. The library coordinate(s) to detect (e.g. `com.squareup.retrofit2`). The plugin only names it; the orchestrator owns the search (§4.1). One of `detect` / `dependency` is required. |
+| `dependency` | string \| array | ✳️ | Framework providers only. The library coordinate(s) to detect (e.g. `com.squareup.retrofit2`). The plugin only names it; the foundation owning its aspect declares where to look and the orchestrator executes the search (§4.1). One of `detect` / `dependency` is required. |
 
 ---
 
 ## 4. Aspect resolution & the additive set
 
-The upstream per-aspect winner resolution is kept (Step 0b). In this Android-only marketplace the
-foundation simply wins the `android` aspect and becomes PRIMARY_PROFILE, so it drives every phase. The
-new piece is the **additive set**:
+Per-aspect winner resolution runs first (Step 0b → 0b-aspects) over **foundations only** — the core globs
+`stack.md`, never `framework.md`. In this Android-only marketplace the foundation wins the `android` aspect
+and becomes PRIMARY_PROFILE, so it drives every phase. The **additive set** is then resolved *under* the
+winning foundation:
 
-- All matched profiles with `additive: true` are collected into `ADDITIVE_PROFILES` (Step 0b-frameworks),
-  subject to the `frameworks.enable/disable` override in `.claude/sdlc.local.yaml`.
-- They are excluded from aspect-winner and PRIMARY selection, and an additive profile that tries to
-  declare agents-per-phase is a **HALT** error.
+- After the foundation winners are known, Step **0b-frameworks** asks each winning foundation to resolve
+  its own libraries: it globs `framework.md`, keeps those whose `enriches_aspect` is in that foundation's
+  `hosts_aspects`, and detects each via the foundation's `framework_detection` search. Matches go into
+  `ADDITIVE_PROFILES`, subject to the `frameworks.enable/disable` override in `.claude/sdlc.local.yaml`.
+- A framework whose functional category no winning foundation hosts is never considered — **no hosting
+  foundation ⇒ no frameworks**, structurally. An additive profile that declares agents-per-phase (or a
+  workflow, or `hosts_aspects`) is a **HALT** error.
 - Step 1a merges `ACTIVE_PROFILES.values() + PRIMARY_PROFILE + ADDITIVE_PROFILES`. The merge was already
   a union of `convention_skills`, `phase_prompts_injection` (per-phase concat), `extra_phases`, and
-  `post_pipeline_checks` — additive profiles simply join it. This is the whole mechanism: ~one new
-  collection bucket fed into an existing union.
+  `post_pipeline_checks` — additive profiles simply join it.
 
-### 4.1. Framework dependency detection — the orchestrator owns the search
+### 4.1. Framework dependency detection — the foundation owns the search
 
-A framework plugin does **not** ship detection rules. It only names the library via `dependency:`; the
-orchestrator (which already owns stack detection) decides where and in what order to look. For each
-coordinate, short-circuiting at the first match:
+A framework plugin does **not** ship detection rules. It only names the library via `dependency:` and the
+functional category via `enriches_aspect:`. The **foundation** whose `hosts_aspects` includes that category
+declares **where** to look (its `framework_detection` list); the orchestrator owns only the **matching
+mechanics** and executes the search on the foundation's behalf. For each coordinate, walking the
+foundation-declared locations in order and short-circuiting at the first match — for Android Foundation
+that list is:
 
 1. **Version catalog (authoritative)** — `gradle/libs.versions.toml`. If it names the coordinate → match;
    build files are never scanned.
 2. **Module build files (fallback)** — `**/build.gradle.kts` / `**/build.gradle` (gitignore-aware) — for
    projects without a catalog or that declare the dependency directly in a module build file.
 
-This keeps every framework plugin trivial (one line) and the "where/how to look" knowledge in one place.
+This keeps every framework plugin trivial (one line), the platform-specific "where to look" knowledge in
+the **foundation** (so the core stays agnostic), and the matching mechanics in the core (so each foundation
+stays declarative — no mini-orchestrator). A non-Gradle foundation just lists different locations.
 A hand-written `detect:` block stays available as an escape hatch for frameworks not identified by a
 single Maven coordinate.
 

@@ -40,37 +40,46 @@ See [`docs/WORKFLOW.md`](docs/WORKFLOW.md) for system diagrams and [`docs/WALKTH
 │  ┌────────────────────────────────────────────────────────┐ │
 │  │  pipeline-orchestrator (skill) — NEVER CHANGES          │ │
 │  │                                                         │ │
-│  │  • detect profiles         (stack.md + framework.md)    │ │
+│  │  • pick the FOUNDATION     (stack.md winner per aspect)  │ │
+│  │  • DELEGATE framework discovery → to the foundation     │ │
 │  │  • resolve workflow recipe (discovered across plugins)  │ │
-│  │  • merge active profiles   (stack winner + ADDITIVE set)│ │
+│  │  • merge active profiles   (foundation + ADDITIVE set)  │ │
 │  │  • execute phases          (loops + parallel groups)    │ │
 │  │  • dispatch agents_per_phase[phase] (from the winner)   │ │
 │  └────────────────────────────────────────────────────────┘ │
 │                            ▲                                  │
-│                  reads stack.md / framework.md + workflows/  │
+│            reads stack.md (foundations) + workflows/         │
 └────────────────────────────┼─────────────────────────────────┘
                              │
-            ┌────────────────┴───────────────────┐
-       ┌────▼──────────┐                  ┌───────▼────────────┐
-       │ android-      │   enriched by →  │ retrofit-plugin    │
-       │ foundation    │                  │ framework.md       │
-       │ stack.md      │   (additive)     │ additive: true     │
-       │ 11 agents     │ ◀─────────────── │ skill + injections │
-       │ (the winner)  │                  │ NO agents          │
-       └───────────────┘                  └────────────────────┘
+                             │ core picks the foundation
+                             ▼
+              ┌──────────────────────────────────┐
+              │ android-foundation  (stack.md)    │  FOUNDATION
+              │ owns aspect:android · 11 agents   │  hosts_aspects: [network, persistence,
+              │ → RESOLVES its own frameworks     │    di, ui, background, analytics, …]
+              └────────────────┬─────────────────┘  + framework_detection (where to look)
+                               │ collects framework.md where
+                               │ enriches_aspect ∈ hosts_aspects (by category, never by name)
+              ┌────────────────┼─────────────────┐
+       ┌──────▼─────┐   ┌──────▼─────┐   ┌────────▼───┐    FRAMEWORKS (additive)
+       │ retrofit-  │   │   room-    │   │  dagger-   │    enriches_aspect:
+       │ plugin     │   │  plugin    │   │  plugin    │      network│persistence│di
+       │ network    │   │ persistence│   │    di      │    NO agents · skill+inject
+       └────────────┘   └────────────┘   └────────────┘
+        no deps between them · none depends on the foundation by name
 ```
 
 **Key principles:**
 
 1. **Core never changes.** Pipeline logic lives exclusively in `pipeline-orchestrator/SKILL.md`. It has zero knowledge of any platform, library, security standard, or workflow recipe.
 2. **The foundation registers itself** via `stack.md` frontmatter — it declares auto-detection rules, priority, agents per phase, an optional default workflow, and convention skills.
-3. **Framework plugins attach additively** via `framework.md` (`additive: true`). They enrich existing phases (convention skill + dev/security injections + ProGuard) and ship **no agents** — they never win an aspect or own a phase. The orchestrator already merged matched profiles; additive ones join that merge.
+3. **Framework plugins attach additively** via `framework.md` (`additive: true`). They enrich existing phases (convention skill + dev/security injections + ProGuard) and ship **no agents** — they never win an aspect or own a phase. The core picks the foundation, then **delegates** framework discovery to it: the foundation collects every `framework.md` whose `enriches_aspect` (a functional category like `network`/`persistence`/`di`) is in its `hosts_aspects`, and detects them via its own `framework_detection`. Frameworks point *up* to a category, never sideways at a plugin.
 4. **Priority wins.** When multiple stack profiles match, the highest priority takes over. Additive profiles do not compete.
 5. **Everything is discovered, not hardcoded.** Profiles (`**/stack.md`, `**/framework.md`), workflows (`**/workflows/*.yaml`), and runtime dependencies (`**/runtime-dependencies.json`) are globbed across all installed plugins.
 
 ### Stack Priority Table
 
-Stack providers detect by project structure (`detect`); framework providers just name a `dependency` and the orchestrator searches for it (catalog first, then build files).
+Stack providers (foundations) detect by project structure (`detect`); framework providers just name a `dependency` and point at a functional category via `enriches_aspect`. The foundation hosting that category (`hosts_aspects`) declares where to search (`framework_detection`: catalog first, then build files) and the orchestrator executes it.
 
 | Priority | Plugin              | Aspects | Detect / dependency                                                 |
 | -------- | ------------------- | ------- | ------------------------------------------------------------------- |
@@ -98,8 +107,9 @@ This is why projects auto-detect with **no `--stack=` flag** — and why framewo
 A **framework plugin** ships a `framework.md` profile (same schema as `stack.md`, plus `additive: true`). Unlike a stack provider, it:
 
 - **Owns no aspect and no agents.** It is excluded from per-aspect winner resolution and from PRIMARY_PROFILE selection — it cannot drive a phase.
+- **Decorates a functional category, not a plugin.** It declares `enriches_aspect: <network|persistence|di|ui|background|analytics|architecture>` and depends on **no** sibling plugin (its `plugin.json → dependencies` lists only `sdlc`). It is never considered unless a winning foundation's `hosts_aspects` includes that category — so any foundation hosting it satisfies the contract, and frameworks stay true peers, never referencing another plugin's skill id directly.
 - **Enriches existing phases.** It contributes a convention skill, `development` + `security` phase-prompt injections, ProGuard/R8 keep rules, and (optionally) post-checks — all merged into the run by the orchestrator's existing profile-merge.
-- **Auto-detects** from the Gradle version catalog / build files; the foundation's `android-developer` and `android-security` consume its guidance only when the library is present.
+- **Auto-detects** from the Gradle version catalog / build files; the foundation hosting its category consumes its guidance through that phase's existing agents — only when the library is present.
 
 Toggle frameworks per project in `.claude/sdlc.local.yaml`:
 
@@ -382,15 +392,15 @@ detect:
 
 ## Adding a Framework Plugin
 
-A framework plugin is **additive** — it enriches the foundation's phases and ships **no agents**:
+A framework plugin is **additive** — it enriches an aspect's phases and ships **no agents**:
 
 ```
 plugins/your-framework-plugin/
 ├── .claude-plugin/
-│   └── plugin.json          # { "name": "...", "dependencies": ["sdlc", "android-foundation"] }
-├── framework.md             # frontmatter: stack, additive: true, aspects: [], dependency (the library name)
+│   └── plugin.json          # { "name": "...", "dependencies": ["sdlc"] }  ← no sibling-plugin dep
+├── framework.md             # frontmatter: stack, additive: true, aspects: [], enriches_aspect, dependency
 ├── skills/
-│   └── your-conventions/SKILL.md   # library-specific idioms; cross-link foundation skills, don't restate
+│   └── your-conventions/SKILL.md   # library-specific idioms; defer to the aspect's conventions, don't restate
 ├── rules/snippets/          # optional: ProGuard/R8 keep rules for the library
 └── README.md
 ```
@@ -401,8 +411,9 @@ plugins/your-framework-plugin/
 ---
 stack: room
 additive: true
-aspects: []
-dependency: androidx.room        # just name the library — the orchestrator finds it
+aspects: []                      # owns no platform aspect
+enriches_aspect: persistence     # functional category — a foundation hosting `persistence` resolves me
+dependency: androidx.room        # just name the library — the foundation declares WHERE to look
 ---
 
 ## Convention skills to apply
@@ -413,13 +424,15 @@ For development phase, inject: "Room present: @Dao methods are suspend/Flow; …
 For security phase, inject: "Room: parameterize all @Query; no string concatenation; …"
 ```
 
-> **The plugin only names the dependency; the orchestrator owns the search.** A framework provider
+> **The plugin only names the dependency; the FOUNDATION owns where to look.** A framework provider
 > declares `dependency: <coordinate>` (e.g. `androidx.room` or `com.squareup.retrofit2`) and ships **no**
-> detection rules. The orchestrator looks for it **version-catalog first** (`gradle/libs.versions.toml`),
-> then falls back to module build files (`**/build.gradle*`, gitignore-aware) — so each plugin stays
-> trivial and the "where/how to look" logic lives once, in the orchestrator. `dependency` may be a list
-> (matches if any coordinate is found). A hand-written `detect:` block remains available as an escape
-> hatch for frameworks not identified by a single Maven coordinate.
+> detection rules. The foundation that hosts its `enriches_aspect` category declares the search order via
+> `framework_detection` — for Android Foundation: **version-catalog first** (`gradle/libs.versions.toml`),
+> then module build files (`**/build.gradle*`, gitignore-aware). The orchestrator executes that search,
+> so each plugin stays trivial, the platform-specific "where to look" lives in the foundation (core stays
+> agnostic), and the matching mechanics live once in the core. `dependency` may be a list (matches if any
+> coordinate is found). A hand-written `detect:` block remains available as an escape hatch for frameworks
+> not identified by a single Maven coordinate.
 
 > Additive profiles **must not** declare `## Agents per phase` or a `workflow` — the schema and the orchestrator both reject it. `retrofit-plugin` is the reference implementation.
 

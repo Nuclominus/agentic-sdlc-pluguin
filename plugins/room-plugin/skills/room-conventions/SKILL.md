@@ -1,6 +1,6 @@
 ---
 name: room-conventions
-description: Room-specific persistence idioms — @Entity/@Dao/@Database structure, suspend/Flow DAO signatures, @Transaction atomicity, parameterized queries, migrations with exportSchema, KSP compiler, and entity↔domain mapping at the boundary. Invoke before adding or changing Room entities, DAOs, the database class, type converters, or migrations. Layer principles (repository ownership, DTO↔domain, dispatcher discipline) stay in android-foundation:android-data.
+description: Room-specific persistence idioms — @Entity/@Dao/@Database structure, suspend/Flow DAO signatures, @Transaction atomicity, parameterized queries, migrations with exportSchema, KSP compiler, and entity↔domain mapping at the boundary. Invoke before adding or changing Room entities, DAOs, the database class, type converters, or migrations. Layer principles (repository ownership, DTO↔domain, dispatcher discipline) stay with the hosting foundation's data-layer conventions.
 ---
 
 # room-conventions

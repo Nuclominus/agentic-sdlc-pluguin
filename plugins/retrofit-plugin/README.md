@@ -1,9 +1,10 @@
 # retrofit-plugin
 
 Additive **framework provider** for Retrofit/OkHttp networking — the reference implementation of the
-**Framework Provider Pattern**. It enriches the [Android Foundation](../android-foundation/README.md)
-pipeline without owning any phase: it ships **no agents**, only guidance that the foundation's existing
-`android-developer` and `android-security` agents consume.
+**Framework Provider Pattern**. It enriches the `network` aspect (`enriches_aspect: network`) without
+owning any phase or depending on any sibling plugin: it ships **no agents**, only guidance that any
+foundation hosting `network` — [Android Foundation](../android-foundation/README.md) today — consumes
+through its existing development and security phase agents.
 
 For the pattern itself, see the root [`ARCHITECTURE.md`](../../ARCHITECTURE.md).
 
@@ -49,10 +50,11 @@ frameworks:
   disable: [retrofit]   # suppress
 ```
 
-## Boundary with the foundation
+## Boundary with the hosting foundation
 
 - **Layer principles** (repository ownership, DTO↔domain mapping, dispatcher discipline, suspend/Flow
-  contract) stay in `android-foundation:android-data` — this plugin **cross-links**, never restates.
+  contract) stay with the hosting foundation's data-layer conventions — this plugin **defers**, never
+  restates, and never hard-references another plugin's skill id.
 - **Retrofit/OkHttp keep rules** were extracted out of the foundation's
   `rules/snippets/proguard-keep.md` into this plugin, so each keep rule lives in exactly one place,
   gated by detection.
