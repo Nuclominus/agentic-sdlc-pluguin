@@ -1,10 +1,10 @@
-# SDLC Marketplace for Claude Code — Native Mobile
+# SDLC Marketplace for Claude Code — Android
 
-AI-assisted SDLC pipelines for **native mobile** development, built on the **Stack Provider Pattern**: a single platform-agnostic core orchestrator runs the pipeline; platform plugins register themselves via declarative `stack.md` profiles. No core overrides, no slot registries, no copy-paste between platforms.
+AI-assisted SDLC pipelines for **Android** development, built on the **Stack Provider Pattern**: a single platform-agnostic core orchestrator runs the pipeline; **Android Foundation** registers itself via a declarative `stack.md` profile and drives the flow; **framework plugins** (Retrofit, Room, Dagger/Hilt, …) attach **additively** via `framework.md` profiles. No core overrides, no slot registries, no copy-paste.
 
-**v0.1.1** — 3 plugins: 1 platform-agnostic core + a full **Android (Kotlin)** stack provider + an **iOS (Swift)** skeleton. Cost-optimized: model tiering + `effort` per-subagent. Generic control flow (review-loops, parallel groups), workflow discovery across plugins, precise `file_glob` detection, and guaranteed per-agent model enforcement.
+**v0.5.0** — flat plugin set: 1 platform-agnostic core (`sdlc`) + the **Android Foundation** centerpiece (`android-foundation`) + additive **framework plugins** (`retrofit-plugin`, with more to follow). Cost-optimized: model tiering + `effort` per-subagent. Generic control flow (review-loops, parallel groups), workflow discovery across plugins, auto-detected framework enrichment, and guaranteed per-agent model enforcement.
 
-> Adapted from [AratKruglik/claude-sdlc](https://github.com/AratKruglik/claude-sdlc) (MIT) — stripped to native mobile and re-oriented around the `android` / `ios` aspect axis. See `NOTICE`.
+> Adapted from [AratKruglik/claude-sdlc](https://github.com/AratKruglik/claude-sdlc) (MIT) — re-oriented around an Android Foundation with a Framework Provider Pattern. See `NOTICE`.
 
 ---
 
@@ -14,15 +14,17 @@ AI-assisted SDLC pipelines for **native mobile** development, built on the **Sta
 # 1. Add the marketplace
 /plugin marketplace add Nuclominus/Agentic-SDLC-Pluguin
 
-# 2. Install the stack plugin you need (sdlc core is installed automatically as a dependency)
-/plugin install android-plugin@agentic-sdlc      # Android (Kotlin + Gradle)
-/plugin install ios-plugin@agentic-sdlc          # iOS (Swift/SwiftUI) — skeleton
+# 2. Install Android Foundation (sdlc core installs automatically as a dependency)
+/plugin install android-foundation@agentic-sdlc   # Android (Kotlin + Gradle) — the centerpiece
 
-# 3. Verify
+# 3. (Optional) Install framework plugins — they auto-activate when their library is detected
+/plugin install retrofit-plugin@agentic-sdlc      # Retrofit/OkHttp networking enrichment
+
+# 4. Verify
 /sdlc:doctor
 /sdlc:list-stacks
 
-# 4. Run
+# 5. Run
 /sdlc:start "Add a settings screen with a dark-mode toggle"
 ```
 
@@ -38,39 +40,41 @@ See [`docs/WORKFLOW.md`](docs/WORKFLOW.md) for system diagrams and [`docs/WALKTH
 │  ┌────────────────────────────────────────────────────────┐ │
 │  │  pipeline-orchestrator (skill) — NEVER CHANGES          │ │
 │  │                                                         │ │
-│  │  • detect stack profiles   (file_glob / nested any-all) │ │
+│  │  • detect profiles         (stack.md + framework.md)    │ │
 │  │  • resolve workflow recipe (discovered across plugins)  │ │
+│  │  • merge active profiles   (stack winner + ADDITIVE set)│ │
 │  │  • execute phases          (loops + parallel groups)    │ │
-│  │  • dispatch agents_per_phase[phase] (per aspect)        │ │
+│  │  • dispatch agents_per_phase[phase] (from the winner)   │ │
 │  └────────────────────────────────────────────────────────┘ │
 │                            ▲                                  │
-│                            │ reads stack.md + workflows/      │
+│                  reads stack.md / framework.md + workflows/  │
 └────────────────────────────┼─────────────────────────────────┘
                              │
-            ┌────────────────┴────────────────┐
-       ┌────▼─────┐                       ┌────▼─────┐
-       │ android  │                       │   ios    │
-       │ plugin   │                       │  plugin  │
-       │ stack.md │                       │ stack.md │
-       │ 11 agents│                       │ skeleton │
-       └──────────┘                       └──────────┘
+            ┌────────────────┴───────────────────┐
+       ┌────▼──────────┐                  ┌───────▼────────────┐
+       │ android-      │   enriched by →  │ retrofit-plugin    │
+       │ foundation    │                  │ framework.md       │
+       │ stack.md      │   (additive)     │ additive: true     │
+       │ 11 agents     │ ◀─────────────── │ skill + injections │
+       │ (the winner)  │                  │ NO agents          │
+       └───────────────┘                  └────────────────────┘
 ```
 
 **Key principles:**
 
-1. **Core never changes.** Pipeline logic lives exclusively in `pipeline-orchestrator/SKILL.md`. It has zero knowledge of any platform, security standard, or workflow recipe.
-2. **Plugins register themselves** via `stack.md` frontmatter — they declare auto-detection rules, priority, agents per phase, an optional default workflow, and convention skills.
-3. **Per-aspect dispatch.** A project can have multiple aspects (`android` + `ios`). Each aspect gets its own specialist; `development` and `qa` fan out per aspect.
-4. **Priority wins.** When multiple profiles match, the highest priority takes over.
-5. **Everything is discovered, not hardcoded.** Profiles (`**/stack.md`), workflows (`**/workflows/*.yaml`), and runtime dependencies (`**/runtime-dependencies.json`) are globbed across all installed plugins.
+1. **Core never changes.** Pipeline logic lives exclusively in `pipeline-orchestrator/SKILL.md`. It has zero knowledge of any platform, library, security standard, or workflow recipe.
+2. **The foundation registers itself** via `stack.md` frontmatter — it declares auto-detection rules, priority, agents per phase, an optional default workflow, and convention skills.
+3. **Framework plugins attach additively** via `framework.md` (`additive: true`). They enrich existing phases (convention skill + dev/security injections + ProGuard) and ship **no agents** — they never win an aspect or own a phase. The orchestrator already merged matched profiles; additive ones join that merge.
+4. **Priority wins.** When multiple stack profiles match, the highest priority takes over. Additive profiles do not compete.
+5. **Everything is discovered, not hardcoded.** Profiles (`**/stack.md`, `**/framework.md`), workflows (`**/workflows/*.yaml`), and runtime dependencies (`**/runtime-dependencies.json`) are globbed across all installed plugins.
 
 ### Stack Priority Table
 
-| Priority | Plugin           | Aspects | Detect                                                              |
-| -------- | ---------------- | ------- | ------------------------------------------------------------------- |
-| 0        | `vanilla` (sdlc) | —       | `*` (always matches)                                                |
-| 300      | `android-plugin` | android | `(settings.gradle.kts OR settings.gradle)` **AND** `**/*.kt`        |
-| 300      | `ios-plugin`     | ios     | `**/*.xcodeproj` OR `**/*.xcworkspace` OR `Package.swift`            |
+| Priority | Plugin              | Aspects | Detect                                                              |
+| -------- | ------------------- | ------- | ------------------------------------------------------------------- |
+| 0        | `vanilla` (sdlc)    | —       | `*` (always matches)                                                |
+| 300      | `android-foundation`| android | `(settings.gradle.kts OR settings.gradle)` **AND** `**/*.kt`        |
+| additive | `retrofit-plugin`   | —       | `libs.versions.toml` / `build.gradle*` contains `retrofit`          |
 
 ### Detection rules
 
@@ -80,10 +84,28 @@ A profile's `detect` block supports four rule types, freely nestable via `any` /
 | ---- | ------------ |
 | `file_exists: <path>` | the file exists |
 | `file_contains: { path, pattern }` | the file matches the regex |
-| `file_glob: <pattern>` | ≥1 file matches the glob (variable-named / nested artifacts — iOS Xcode projects, monorepo subtrees) |
+| `file_glob: <pattern>` | ≥1 file matches the glob (variable-named / nested artifacts — module-level build files, monorepo subtrees) |
 | `any: [...]` / `all: [...]` | nested OR / AND (recursive) |
 
-This is why app-only and monorepo layouts auto-detect with **no `--stack=` flag**.
+This is why projects auto-detect with **no `--stack=` flag** — and why framework plugins activate automatically when their library appears in the build.
+
+### Framework Provider Pattern (additive profiles)
+
+A **framework plugin** ships a `framework.md` profile (same schema as `stack.md`, plus `additive: true`). Unlike a stack provider, it:
+
+- **Owns no aspect and no agents.** It is excluded from per-aspect winner resolution and from PRIMARY_PROFILE selection — it cannot drive a phase.
+- **Enriches existing phases.** It contributes a convention skill, `development` + `security` phase-prompt injections, ProGuard/R8 keep rules, and (optionally) post-checks — all merged into the run by the orchestrator's existing profile-merge.
+- **Auto-detects** from the Gradle version catalog / build files; the foundation's `android-developer` and `android-security` consume its guidance only when the library is present.
+
+Toggle frameworks per project in `.claude/sdlc.local.yaml`:
+
+```yaml
+frameworks:
+  enable: [retrofit]    # force-on even if detection missed it
+  disable: [dagger]     # suppress even if detected
+```
+
+The boundary: **pinned house rules** (Coil3, Kermit, KSP, `@Serializable` routes, DataStore, Play Billing) stay in the foundation as non-negotiables; **detect-don't-impose libraries** (Retrofit, Room, Dagger/Hilt) become framework plugins. `retrofit-plugin` is the reference implementation.
 
 ---
 
@@ -118,11 +140,11 @@ business_analysis → development → review ──approved──→ [ security 
 - **[security ‖ test]** is a *parallel group*: both phases dispatched in one message; both must return before `qa`.
 - The `android` profile declares `workflow: android-feature`, so this DAG auto-selects — `/sdlc:start "<feature>"` (no `--workflow=`).
 
-The agent assigned to each phase (and the on-demand agents) is documented in [`plugins/android-plugin/README.md`](plugins/android-plugin/README.md#agent-roster).
+The agent assigned to each phase (and the on-demand agents) is documented in [`plugins/android-foundation/README.md`](plugins/android-foundation/README.md#agent-roster).
 
-### Per-aspect dispatch (monorepo)
+### Framework enrichment (additive)
 
-For a monorepo with an Android module and an iOS module, both profiles match. `development` and `qa` fan out per aspect (Android → the Android development agent, iOS → the iOS one). One BA spec, one PR. Aspects dispatch in canonical order: `android → ios`.
+When a framework plugin's library is detected, its guidance joins the run without changing the pipeline shape. Example: on a project using Retrofit, `retrofit-plugin` adds its `retrofit-conventions` skill to the development phase and injects networking + TLS guidance into the `android-developer` and `android-security` prompts. No extra agent, no extra phase — the existing agents simply receive richer, library-specific instructions. Multiple frameworks compose: their injections concatenate deterministically.
 
 ---
 
@@ -153,8 +175,8 @@ A **workflow recipe** is a YAML file declaring which phases to run and in what s
 | `hotfix`        | sdlc (core)    | Dev → QA → Security → Docs                                        |
 | `refactor`      | sdlc (core)    | Dev → QA → Security → Docs                                        |
 | `docs-only`     | sdlc (core)    | Docs                                                              |
-| `android-feature` | android-plugin | BA → Dev → Review(⇄Dev ×3) → [Security ‖ Test] → QA → Docs       |
-| `android-bugfix`  | android-plugin | Dev → Review(⇄Dev ×3) → [Security ‖ Test] → QA                  |
+| `android-feature` | android-foundation | BA → Dev → Review(⇄Dev ×3) → [Security ‖ Test] → QA → Docs   |
+| `android-bugfix`  | android-foundation | Dev → Review(⇄Dev ×3) → [Security ‖ Test] → QA              |
 
 ### Control-flow shapes (generic)
 
@@ -205,8 +227,8 @@ Every agent declares its `model:` tier in frontmatter; the pipeline guarantees t
 Cost is controlled exclusively through `model` + `effort` (Claude Code does not expose per-subagent `temperature`). The tier → model mapping is in [Model Enforcement](#model-enforcement) above; the **per-agent `model`/`effort` roster lives in each plugin's README** so it stays next to the agents it describes:
 
 - core fallback agents → [`plugins/sdlc/README.md`](plugins/sdlc/README.md)
-- Android roster → [`plugins/android-plugin/README.md`](plugins/android-plugin/README.md)
-- iOS → [`plugins/ios-plugin/README.md`](plugins/ios-plugin/README.md)
+- Android roster → [`plugins/android-foundation/README.md`](plugins/android-foundation/README.md)
+- framework providers ship no agents → [`plugins/retrofit-plugin/README.md`](plugins/retrofit-plugin/README.md)
 
 > `effort: high` on Opus is the costliest combination — reserved for leverage agents (BA, Security) where reasoning quality affects every downstream phase.
 
@@ -216,11 +238,11 @@ Cost is controlled exclusively through `model` + `effort` (Claude Code does not 
 
 ## Available Plugins
 
-| Plugin           | Type           | Stack / Technology                                                        |
-| ---------------- | -------------- | ------------------------------------------------------------------------- |
-| `sdlc`           | Core           | Platform-agnostic orchestrator + 5 fallback agents                        |
-| `android-plugin` | Stack provider | Native Android (Kotlin + Gradle) — 11-agent roster, MASVS, vault          |
-| `ios-plugin`     | Stack provider | Native iOS (Swift/SwiftUI) — `ios-architect` + skeleton (Phase 4 TODOs)   |
+| Plugin               | Type               | Stack / Technology                                                    |
+| -------------------- | ------------------ | --------------------------------------------------------------------- |
+| `sdlc`               | Core               | Platform-agnostic orchestrator + 5 fallback agents                    |
+| `android-foundation` | Stack provider     | Android (Kotlin + Gradle) — 11-agent roster, MASVS, vault, house rules |
+| `retrofit-plugin`    | Framework provider | Retrofit/OkHttp — additive (skill + injections + ProGuard), no agents  |
 
 ### Optional external dependencies
 
@@ -233,30 +255,30 @@ Cost is controlled exclusively through `model` + `effort` (Claude Code does not 
 
 | Tool | Role |
 | ---- | ---- |
-| **Android CLI** (Google's `android` binary) | Project scaffolding, emulator/device, SDK, docs, Studio bridge. `android-plugin` advises (non-blocking) if absent; no agent requires it. |
+| **Android CLI** (Google's `android` binary) | Project scaffolding, emulator/device, SDK, docs, Studio bridge. `android-foundation` advises (non-blocking) if absent; no agent requires it. |
 
 ---
 
 ## Stack Composition Examples
 
-| Project              | Profile(s)                | Development dispatch                              |
-| -------------------- | ------------------------- | ------------------------------------------------- |
-| Android app repo     | android (300)             | android-developer                                 |
-| iOS app repo         | ios (300)                 | ios-architect                                     |
-| Mobile monorepo      | android (300) + ios (300) | android-developer (android) + ios-architect (ios) |
-| Unknown stack        | vanilla (0)               | developer (fallback)                              |
+| Project                      | Profile(s)                       | Development dispatch                          |
+| ---------------------------- | -------------------------------- | --------------------------------------------- |
+| Android app repo             | android (300)                    | android-developer                             |
+| Android app + Retrofit       | android (300) + retrofit (add.)  | android-developer, enriched by retrofit       |
+| Android app + Retrofit + Room| android (300) + retrofit + room  | android-developer, enriched by both           |
+| Unknown stack                | vanilla (0)                      | developer (fallback)                          |
 
 ---
 
 ## Security: MASVS / MASTG
 
-The core security phase is **platform-neutral** (secrets, auth, injection/input validation, data protection, access control, misconfiguration, vulnerable deps, logging) and applies the standard injected by the active profile as authoritative. On Android, `android-security` runs a full **MASVS/MASTG** audit — see [`plugins/android-plugin/README.md`](plugins/android-plugin/README.md#security--masvs--mastg).
+The core security phase is **platform-neutral** (secrets, auth, injection/input validation, data protection, access control, misconfiguration, vulnerable deps, logging) and applies the standard injected by the active profile as authoritative. On Android, `android-security` runs a full **MASVS/MASTG** audit — see [`plugins/android-foundation/README.md`](plugins/android-foundation/README.md#security--masvs--mastg). Active framework plugins concatenate their own security guidance (e.g. `retrofit-plugin` adds MASVS-NETWORK TLS/pinning checks).
 
 ---
 
 ## Optional Obsidian Vault
 
-Agents use a project's `.obsidian-vault/` as the single source of knowledge **when present**, falling back to the codebase + `docs/plans/` when absent. The Android `manage-vault` skill owns the vault lifecycle (scaffold → repair → STUB-aware (re)populate → archive) — see [`plugins/android-plugin/README.md`](plugins/android-plugin/README.md#optional-obsidian-vault--manage-vault).
+Agents use a project's `.obsidian-vault/` as the single source of knowledge **when present**, falling back to the codebase + `docs/plans/` when absent. The Android `manage-vault` skill owns the vault lifecycle (scaffold → repair → STUB-aware (re)populate → archive) — see [`plugins/android-foundation/README.md`](plugins/android-foundation/README.md#optional-obsidian-vault--manage-vault).
 
 ---
 
@@ -334,7 +356,7 @@ plugins/your-platform-plugin/
 ---
 stack: kmp
 priority: 350
-aspects: [android, shared]
+aspects: [android]
 workflow: android-feature
 detect:
   all:
@@ -352,10 +374,47 @@ detect:
 - documentation: android-docs
 ```
 
+## Adding a Framework Plugin
+
+A framework plugin is **additive** — it enriches the foundation's phases and ships **no agents**:
+
+```
+plugins/your-framework-plugin/
+├── .claude-plugin/
+│   └── plugin.json          # { "name": "...", "dependencies": ["sdlc", "android-foundation"] }
+├── framework.md             # frontmatter: stack, additive: true, aspects: [], detect (on the library)
+├── skills/
+│   └── your-conventions/SKILL.md   # library-specific idioms; cross-link foundation skills, don't restate
+├── rules/snippets/          # optional: ProGuard/R8 keep rules for the library
+└── README.md
+```
+
+### `framework.md` example
+
+```markdown
+---
+stack: room
+additive: true
+aspects: []
+detect:
+  any:
+    - file_contains: { path: gradle/libs.versions.toml, pattern: "(?i)androidx\\.room" }
+---
+
+## Convention skills to apply
+- room-plugin:room-conventions
+
+## Phase prompts injection
+For development phase, inject: "Room present: @Dao methods are suspend/Flow; …"
+For security phase, inject: "Room: parameterize all @Query; no string concatenation; …"
+```
+
+> Additive profiles **must not** declare `## Agents per phase` or a `workflow` — the schema and the orchestrator both reject it. `retrofit-plugin` is the reference implementation.
+
 ### Schema validation
 
 ```bash
-# stack.md frontmatter
+# stack.md / framework.md frontmatter (same schema)
 npx check-jsonschema --schemafile schemas/stack.schema.json <(yq '.' <(sed -n '/^---$/,/^---$/p' stack.md | sed '1d;$d'))
 # workflow recipe
 npx check-jsonschema --schemafile schemas/workflow.schema.json workflows/your-feature.yaml
@@ -373,11 +432,13 @@ npx check-jsonschema --schemafile schemas/workflow.schema.json workflows/your-fe
 /plugin marketplace add /path/to/Agentic-SDLC-Plugin
 ```
 
-### 2. Install core + platform plugin
+### 2. Install Android Foundation (+ optional frameworks)
 
 ```bash
 # Core (sdlc) installs automatically as a dependency
-/plugin install android-plugin@agentic-sdlc
+/plugin install android-foundation@agentic-sdlc
+# Optional: framework plugins auto-activate when their library is detected
+/plugin install retrofit-plugin@agentic-sdlc
 ```
 
 ### 3. Optional dependencies
@@ -415,7 +476,7 @@ npx check-jsonschema --schemafile schemas/workflow.schema.json workflows/your-fe
 - Claude Code (latest).
 - API Tier 2+ or Claude Max — a medium feature uses a large token volume; lower tiers may be throttled.
 - A Git repository for `android-docs` / `document-writer` (PR creation).
-- **Android:** JDK + Gradle wrapper. **iOS:** macOS + Xcode for lint/build (otherwise verification is review-only, builds CI-deferred).
+- **Android:** JDK + Gradle wrapper. Builds (`assembleDebug`) and instrumented tests are CI-deferred; in-pipeline verification is detekt + JVM unit tests + Kotlin compile-check.
 
 ---
 

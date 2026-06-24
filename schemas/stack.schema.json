@@ -6,6 +6,15 @@
   "type": "object",
   "required": ["stack", "priority", "detect"],
   "additionalProperties": false,
+  "allOf": [
+    {
+      "if": { "properties": { "additive": { "const": true } }, "required": ["additive"] },
+      "then": {
+        "not": { "required": ["workflow"] },
+        "description": "Additive (framework) profiles must not declare a workflow. They enrich existing phases; they do not own the pipeline."
+      }
+    }
+  ],
   "properties": {
     "stack": {
       "type": "string",
@@ -16,15 +25,20 @@
     },
     "priority": {
       "type": "integer",
-      "description": "0 = vanilla fallback. 100+ = framework. Higher wins per aspect.",
+      "description": "0 = vanilla fallback. 100+ = stack provider. Higher wins per aspect. For additive (framework) profiles this is documentational only — additive profiles never compete for an aspect.",
       "minimum": 0,
       "maximum": 1000
     },
+    "additive": {
+      "type": "boolean",
+      "description": "When true, this is an ADDITIVE (framework) profile: it contributes convention_skills, phase_prompts_injection, extra_phases, and post_pipeline_checks to the merge but is EXCLUDED from per-aspect winner resolution and from PRIMARY_PROFILE selection. Additive profiles MUST NOT declare agents_per_phase or a workflow — they enrich existing agents, they do not own phases. Defaults to false.",
+      "default": false
+    },
     "aspects": {
       "type": "array",
-      "description": "Aspects this profile owns. Determines per-aspect winner resolution.",
+      "description": "Aspects this profile owns. Determines per-aspect winner resolution. Additive (framework) profiles use [] — they own no aspect.",
       "items": {
-        "enum": ["android", "ios", "shared", "backend", "frontend", "database", "infra", "testing", "messaging"]
+        "enum": ["android", "backend", "frontend", "database", "infra", "testing", "messaging"]
       },
       "uniqueItems": true,
       "minItems": 0,
@@ -99,7 +113,7 @@
           "properties": {
             "file_glob": {
               "type": "string",
-              "description": "Glob pattern (relative to project root, e.g. '**/*.kt', '**/*.xcodeproj'). Matches if at least one file matches. Evaluated with the Glob tool — use for variable-named or nested artifacts (iOS Xcode projects, monorepo subtrees)."
+              "description": "Glob pattern (relative to project root, e.g. '**/*.kt', '**/build.gradle*'). Matches if at least one file matches. Evaluated with the Glob tool — use for variable-named or nested artifacts (monorepo subtrees, module-level build files)."
             }
           },
           "required": ["file_glob"],

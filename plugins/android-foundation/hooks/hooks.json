@@ -41,7 +41,7 @@
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/android-cli-check.sh\"",
-            "description": "Optional Android CLI advisory (Android projects only; non-blocking). Self-contained in android-plugin."
+            "description": "Optional Android CLI advisory (Android projects only; non-blocking). Self-contained in android-foundation."
           }
         ]
       }

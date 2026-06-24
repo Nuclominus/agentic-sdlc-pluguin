@@ -53,7 +53,7 @@ This single rule replaces the per-agent bilingual trigger keywords that were use
 
 Aggregate runtime dependencies from **every installed plugin's `runtime-dependencies.json`**, not just core. This allows framework plugins to declare their own external skill needs.
 
-> Note: Claude Code's native `plugin.json → dependencies` field is a simple array of plugin names used only for intra-marketplace install-time resolution (e.g., `android-plugin` declaring it needs `sdlc`). Our runtime preflight — for external plugins like `superpowers` from another marketplace, with per-skill granularity and policies — lives in a separate `runtime-dependencies.json` file to avoid conflicting with the native schema.
+> Note: Claude Code's native `plugin.json → dependencies` field is a simple array of plugin names used only for intra-marketplace install-time resolution (e.g., `android-foundation` declaring it needs `sdlc`). Our runtime preflight — for external plugins like `superpowers` from another marketplace, with per-skill granularity and policies — lives in a separate `runtime-dependencies.json` file to avoid conflicting with the native schema.
 
 **Algorithm (with cache fast-path):**
 
@@ -194,17 +194,42 @@ Use `Glob` to find all stack profiles:
 ~/.claude/plugins/cache/**/stack.md
 ```
 
-For each `stack.md`:
+Framework (additive) providers ship the same profile format in a `framework.md` file instead of `stack.md`. Glob for both:
+
+```
+~/.claude/plugins/cache/**/stack.md
+~/.claude/plugins/cache/**/framework.md
+```
+
+For each profile file:
 1. `Read` the file.
-2. Parse the YAML frontmatter (`stack`, `priority`, `aspects`, `detect`, and optional `workflow`).
+2. Parse the YAML frontmatter (`stack`, `priority`, `aspects`, `detect`, optional `workflow`, and optional `additive`).
 3. Evaluate `detect` rules against the project root:
    - `detect.any: ["*"]` → always matches.
    - `detect.all: [...]` → all sub-rules must match.
    - `file_exists: <path>` → check via `Glob` whether the file exists.
    - `file_contains: { path, pattern }` → `Read` the file, run regex.
-   - `file_glob: <pattern>` → `Glob <pattern>` against the project root; matches if ≥1 file matches. Use for variable-named / nested artifacts (iOS `**/*.xcodeproj`, monorepo subtrees).
+   - `file_glob: <pattern>` → `Glob <pattern>` against the project root; matches if ≥1 file matches. Use for variable-named / nested artifacts (module-level `**/build.gradle*`, monorepo subtrees).
    - nested `any: [...]` / `all: [...]` → evaluate the sub-rules recursively (OR / AND); rules may nest to any depth, e.g. `all: [ any:[…], file_glob:… ]`.
 4. Score by `priority` (higher wins).
+
+**Additive (framework) profiles** (`additive: true`) are handled separately from platform stack profiles:
+- They are **excluded** from per-aspect winner resolution (0b-aspects) and from `PRIMARY_PROFILE` selection — they never compete for or win an aspect, and never drive aspect-agnostic phases.
+- Every additive profile whose `detect` rules match (subject to the `frameworks.enable/disable` override below) is collected into **`ADDITIVE_PROFILES`**, a flat list merged into `EFFECTIVE_PROFILE` in Step 1a.
+- An additive profile that declares a `## Agents per phase` section (i.e. supplies `agents_per_phase`) is malformed — **HALT** with: `Additive profile '{stack}' must not declare agents per phase. Frameworks enrich existing agents; they do not own phases.`
+
+#### 0b-frameworks — Resolve the active additive (framework) set
+
+```
+ADDITIVE_PROFILES = [ p for p in matching_profiles if p.additive == true ]
+```
+
+Then apply the optional `frameworks` override from `<project>/.claude/sdlc.local.yaml` (the same file fully parsed in Step 1b — reading the single `frameworks` key here is cheap):
+
+- `frameworks.disable: [<stack>, …]` → remove any additive profile whose `stack` is listed (even if its `detect` matched).
+- `frameworks.enable: [<stack>, …]` → force-activate the named additive profile even if its `detect` did **not** match (locate it among the globbed `framework.md` profiles; if no such profile is installed, warn `WARN: frameworks.enable '{name}' — no installed framework profile with that stack id` and continue).
+
+Unknown names in either list produce a one-line warning and are otherwise ignored.
 
 If `$ARGUMENTS` includes `--stack=NAME`, restrict candidates to profiles whose `stack` matches `NAME` and skip auto-detect.
 
@@ -219,13 +244,14 @@ Profiles declare which **aspects** of the stack they cover via the `aspects:` fi
 - `testing` — test infrastructure (when distinct from backend/frontend conventions)
 - `messaging` — queues, events, async (rare; opt-in)
 
-Resolution algorithm (run AFTER finding all matching profiles in 0b above):
+Resolution algorithm (run AFTER finding all matching profiles in 0b above). **Additive (framework) profiles are excluded here** — they own no aspect and never become primary:
 
 ```
+STACK_PROFILES = [ p for p in matching_profiles if not p.additive ]   # additive ones go to ADDITIVE_PROFILES (0b-frameworks)
 ACTIVE_PROFILES = {}              # aspect → winning profile
 
 for each canonical_aspect in [backend, frontend, database, infra, testing, messaging]:
-  candidates = matching_profiles where `aspects` array contains canonical_aspect
+  candidates = STACK_PROFILES where `aspects` array contains canonical_aspect
   if candidates is empty:
     ACTIVE_PROFILES[canonical_aspect] = None
     continue
@@ -236,8 +262,8 @@ for each canonical_aspect in [backend, frontend, database, infra, testing, messa
 
 # Aspect-agnostic fallback
 # Phases like business_analysis, security, documentation are aspect-agnostic.
-# For these, pick a single "primary profile" from any matching profile (highest priority overall).
-PRIMARY_PROFILE = matching_profile with highest priority overall (tiebreaker: alphabetical).
+# For these, pick a single "primary profile" from any matching STACK profile (highest priority overall).
+PRIMARY_PROFILE = STACK_PROFILE with highest priority overall (tiebreaker: alphabetical).
 # Profile-declared default workflow (generic): the primary profile MAY name its default recipe.
 PRIMARY_PROFILE.workflow  →  CONTEXT.profile_default_workflow  (or None if the profile omits it)
 
@@ -258,6 +284,7 @@ If `--stack=NAME` was used, all aspect winners come from that single profile (co
    database: {profile or "—"}
    infra:    {profile or "—"}
    testing:  {profile or "—"}
+   additive: {comma-separated stacks of ADDITIVE_PROFILES, or "—"}
    forced via --stack: {yes|no}
 ```
 
@@ -340,8 +367,8 @@ Report any matches in your compact summary under a `SECRET-LEAK CHECK:` line
 
 #### 1a. Parse all active profiles
 
-For each profile in `ACTIVE_PROFILES.values()` plus `PRIMARY_PROFILE`, extract:
-- `agents_per_phase`: phase → agent name OR phase → {aspect: agent name}.
+The merge input is **`ACTIVE_PROFILES.values()` plus `PRIMARY_PROFILE` plus `ADDITIVE_PROFILES`** (the framework providers resolved in 0b-frameworks). For each profile, extract:
+- `agents_per_phase`: phase → agent name OR phase → {aspect: agent name}. **(Additive profiles never supply this — guarded in 0b.)**
 - `convention_skills`: skill identifiers to apply during development.
 - `phase_prompts_injection`: per-phase additional instructions.
 - `extra_phases`: list of `{name, after, agent, description}` to insert.
@@ -349,14 +376,14 @@ For each profile in `ACTIVE_PROFILES.values()` plus `PRIMARY_PROFILE`, extract:
 
 Merge across profiles to build `EFFECTIVE_PROFILE`:
 
-- For aspect-agnostic phases (`business_analysis`, `security`, `documentation`): use `PRIMARY_PROFILE`'s agent. If absent in primary, fall back to vanilla (core) agent.
+- For aspect-agnostic phases (`business_analysis`, `security`, `documentation`): use `PRIMARY_PROFILE`'s agent. If absent in primary, fall back to vanilla (core) agent. **Additive profiles are never consulted for agent selection.**
 - For aspect-aware phases (`development`, plus `qa` if a profile declares per-aspect agents): build `EFFECTIVE_PROFILE.agents_per_phase[phase] = {aspect: agent}` by collecting from each `ACTIVE_PROFILES[aspect].agents_per_phase[phase][aspect]`.
-- `convention_skills`: union of all active profiles' arrays (de-duplicated).
-- `phase_prompts_injection`: per-phase concat of all active profiles' injections (each plugin contributes its part).
+- `convention_skills`: union of all active profiles' arrays — stack profiles **and** additive profiles (de-duplicated). A framework's convention skill (e.g. `retrofit-plugin:retrofit-conventions`) lands here.
+- `phase_prompts_injection`: per-phase concat of all active profiles' injections — stack profiles first, then `ADDITIVE_PROFILES` in deterministic order (alphabetical by `stack`). Each framework contributes its `development` / `security` guidance.
 - `extra_phases`: union (later check for name conflicts; if any, halt with error).
-- `post_pipeline_checks`: union (de-duplicated, preserving order: PRIMARY first, others appended).
+- `post_pipeline_checks`: union (de-duplicated, preserving order: PRIMARY first, stack profiles next, additive profiles last).
 
-Hold these merged values as `PROFILE` (mutable in 1b).
+Hold these merged values as `PROFILE` (mutable in 1b — `frameworks.enable/disable` from 0b-frameworks has already shaped which additive profiles are present here).
 
 #### 1b. Apply project-local overrides from `<project>/.claude/sdlc.local.yaml`
 
@@ -377,6 +404,7 @@ If present — `Read` and parse it. Recognized top-level keys:
 | `extra_phase_prompts` | object (phase → string) | **APPENDS** to `phase_prompts_injection` for that phase (additive — don't lose plugin guidance). |
 | `skip_phases` | array of strings | Phase names to remove from the canonical order in 1c. |
 | `convention_skills_extra` | array of strings | APPENDS to `convention_skills`. |
+| `frameworks` | object with optional `enable` / `disable` string arrays | Overrides additive framework activation (see 0b-frameworks). `enable` force-activates a framework whose `detect` did not match; `disable` suppresses an auto-detected one. Already applied when shaping `ADDITIVE_PROFILES`; listed here for completeness. |
 | `extensions` | object with a `skills` array | Per-agent skill mapping injected into phase prompts in Step 3b-1a. Parsed into `EFFECTIVE_PROFILE.extension_skills` (see 1b-ext). Additive — never replaces plugin behavior. |
 
 ##### 1b-ext. Parse `extensions.skills` (Project Extension Manifest)
@@ -421,9 +449,10 @@ post_pipeline_checks:
 phase_command_overrides:
   development:
     gradle_runner: ./gradlew           # NOT a globally-installed gradle
-  # iOS example:
-  #   lint_runner: swiftlint
-  #   test_runner: swift test
+
+frameworks:
+  disable: [dagger]                    # suppress an auto-detected framework provider
+  # enable: [retrofit]                 # force-activate one whose detect didn't match
 
 extra_phase_prompts:
   qa: |
@@ -636,7 +665,7 @@ agents that bypass the orchestrator (e.g. debugger / devops / cicd / aar) self-r
 Examples:
 - Aspect-agnostic: `▶ Phase 1/6: business_analysis → business-analyst (opus)`
 - Aspect-aware: `▶ Phase 2/6: development — android → android-developer (sonnet)`
-- Aspect-aware: `▶ Phase 2/6: development — ios → ios-architect (sonnet)`
+- Single-stack (Android Foundation): `▶ Phase 2/6: development → android-developer (sonnet)`
 
 This is a contract with the user. Do not skip.
 
@@ -744,10 +773,10 @@ Write `docs/plans/{task_slug}/_telemetry.json`:
   "stack": "android",
   "primary_profile": "android",
   "active_profiles": {
-    "android": "android",
-    "ios": "ios"
+    "android": "android"
   },
-  "profile_source": "android-plugin/stack.md",
+  "additive_profiles": ["retrofit"],
+  "profile_source": "android-foundation/stack.md",
   "narrative_language": "uk",
   "headless_mode": false,
   "started_at": "<ISO timestamp>",

@@ -11,11 +11,13 @@ detect:
     - file_glob: "**/*.kt"            # Gradle project that actually has Kotlin (not pure-Java/Groovy)
 ---
 
-# Android (Kotlin) Stack Profile
+# Android Foundation — Stack Profile
 
-Native Android stack provider. Triggers on a Gradle project containing Kotlin.
-Aspect: `android` (in a mobile monorepo with an iOS module, both platform
-profiles win their aspect and the development/qa phases fan out per platform).
+The centerpiece Android stack provider. Triggers on a Gradle project containing Kotlin.
+Aspect: `android`. This profile wins the `android` aspect and drives the pipeline.
+Detect-don't-impose libraries (Retrofit, Room, Dagger/Hilt, …) attach as **additive
+framework plugins** that enrich the development/security phases without owning them
+(see the Framework Provider Pattern in `ARCHITECTURE.md`).
 
 > **Builds are CI-deferred.** `assembleDebug` is slow and needs the full SDK;
 > `connectedAndroidTest` needs an emulator/device. In-pipeline verification is
@@ -23,7 +25,7 @@ profiles win their aspect and the development/qa phases fan out per platform).
 
 ## Agents per phase
 
-All phases use android-plugin's specialized agents (they override the core defaults
+All phases use android-foundation's specialized agents (they override the core defaults
 for the `android` aspect). Pipeline DAG:
 `business_analysis → development → review (⇄development ×3) → [security ‖ test] → qa → documentation`
 
@@ -49,10 +51,10 @@ for the `android` aspect). Pipeline DAG:
 
 ## Convention skills to apply
 
-- android-plugin:android-compose-ui
-- android-plugin:android-architecture
-- android-plugin:android-data
-- android-plugin:android-navigation
+- android-foundation:android-compose-ui
+- android-foundation:android-architecture
+- android-foundation:android-data
+- android-foundation:android-navigation
 
 ## Extra phases
 
@@ -67,8 +69,8 @@ For development phase, inject:
    Concurrency: coroutines + Flow; never block the main thread; use viewModelScope.
    New dependencies via the Gradle version catalog (libs.versions.toml), pinned ^x.y.z.
    Respect the existing module structure. Secrets via BuildConfig/local.properties, never source.
-   Apply skills: android-plugin:android-compose-ui, android-plugin:android-architecture,
-   android-plugin:android-data, android-plugin:android-navigation."
+   Apply skills: android-foundation:android-compose-ui, android-foundation:android-architecture,
+   android-foundation:android-data, android-foundation:android-navigation."
 
 For qa phase, inject:
   "Android testing: JUnit5 (or JUnit4 if that's the project baseline), MockK, Turbine for Flow,

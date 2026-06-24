@@ -6,7 +6,7 @@ load_when: "BEFORE phase work begins. Single source of truth for Skill invocatio
 # Skills Matrix
 
 Maps each pipeline phase to mandatory and recommended skill invocations.
-Bundled with android-plugin (agents read this at phase start). See `workflow.md` for the full DAG.
+Bundled with android-foundation (agents read this at phase start). See `workflow.md` for the full DAG.
 
 ## Mandatory Skills (invoke BEFORE phase work — no exceptions)
 
@@ -90,7 +90,7 @@ capabilities to the agents that own them. The CLI is **optional** — the pipeli
 Presence is advised at SessionStart by `hooks/android-cli-check.sh` (Android projects only).
 When `android` is on PATH, the listed agents MAY use the `android-cli` skill (installed by
 `android init`) for the capabilities below; when it is absent, agents fall back to their normal tools.
-This binding lives **entirely inside android-plugin** — the core orchestrator has zero Android-CLI knowledge.
+This binding lives **entirely inside android-foundation** — the core orchestrator has zero Android-CLI knowledge.
 
 | Capability (`android …`) | Owner agent(s) | Use when |
 |--------------------------|----------------|----------|

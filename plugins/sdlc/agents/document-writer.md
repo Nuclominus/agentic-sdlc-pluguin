@@ -74,7 +74,7 @@ Final phase of the pipeline. You take the structured outputs from prior phases a
 
 ## Testing
 
-- Test framework: {JUnit5 + MockK | XCTest | swift-testing}
+- Test framework: {JUnit5 + MockK | JUnit4 + MockK}
 - Tests added: N
 - Coverage: ~N% on changed code
 - All tests passing? {yes | no — see "Open issues"}

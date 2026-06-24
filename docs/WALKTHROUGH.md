@@ -16,8 +16,9 @@ $ /sdlc:start "Add a Settings screen with a dark-mode toggle that persists acros
 
 🔧 Dependency preflight: cached (all satisfied)
 🔎 Stack detection:
-   🎯 android  (priority=300, from android-plugin/stack.md)
+   🎯 android  (priority=300, from android-foundation/stack.md)
       matched: all[ any[settings.gradle.kts], file_glob **/*.kt ]
+   ➕ additive: retrofit  (libs.versions.toml contains retrofit)
    workflow: android-feature  (declared by profile; 6 phases)
 📁 Workspace: docs/plans/add-settings-dark-mode-toggle/
 ```

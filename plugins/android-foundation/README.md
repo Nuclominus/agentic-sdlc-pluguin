@@ -1,6 +1,6 @@
-# android-plugin
+# android-foundation
 
-Native Android (Kotlin + Gradle) stack provider for the Agentic SDLC marketplace. Registers the `android` profile (aspect `android`, priority 300) and contributes a full specialized agent roster adapted from the Nuclominus `android-workflow` system. For the Stack Provider Pattern and shared mechanisms, see the [root README](../../README.md).
+Android Foundation — the centerpiece Android (Kotlin + Gradle) stack provider for the Agentic SDLC marketplace. Registers the `android` profile (aspect `android`, priority 300) and contributes a full specialized agent roster adapted from the Nuclominus `android-workflow` system. It carries the pinned house rules; detect-don't-impose libraries (Retrofit, Room, Dagger/Hilt) attach as **additive framework plugins**. For the Stack Provider Pattern, the Framework Provider Pattern, and shared mechanisms, see the [root README](../../README.md).
 
 ---
 
@@ -13,7 +13,7 @@ detect:
     - file_glob: "**/*.kt"            # a Gradle project that actually has Kotlin
 ```
 
-Matches a Gradle project that genuinely contains Kotlin (not a pure-Java/Groovy build). In a monorepo with an iOS module, both profiles win their aspect.
+Matches a Gradle project that genuinely contains Kotlin (not a pure-Java/Groovy build).
 
 ---
 

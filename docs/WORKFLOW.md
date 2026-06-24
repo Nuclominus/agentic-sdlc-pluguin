@@ -32,25 +32,31 @@ flowchart LR
       WF["generic workflows<br/>default / bugfix / hotfix / refactor / docs-only"]
       FB["fallback agents (vanilla)"]
     end
-    subgraph AND["android-plugin (aspect: android)"]
+    subgraph AND["android-foundation (stack provider, aspect: android)"]
       AST["stack.md<br/>workflow: android-feature"]
       AAG["11 android-* agents"]
       AWF["android-feature / android-bugfix workflows"]
     end
-    subgraph IOS["ios-plugin (aspect: ios)"]
-      IST["stack.md"]
-      IAG["ios-architect (+ skeleton)"]
+    subgraph RET["retrofit-plugin (additive framework provider)"]
+      RFM["framework.md<br/>additive: true"]
+      RSK["convention skill + phase injections<br/>+ ProGuard keep rules (no agents, no phases)"]
     end
     AST -. registers .-> ORC
-    IST -. registers .-> ORC
     AWF -. discovered by glob .-> ORC
     ORC -. dispatches .-> AAG
-    ORC -. dispatches .-> IAG
+    RFM -. auto-detected, merged into ADDITIVE_PROFILES .-> ORC
+    RSK -. enrich-only .-> ORC
 ```
 
-A platform plugin **registers** itself by shipping a `stack.md` (detection + phase→agent map + default workflow)
-and, optionally, its own `workflows/`. The core discovers everything by globbing `**/stack.md` and
-`**/workflows/*.yaml` — it is never edited to add a platform.
+A **stack provider** **registers** itself by shipping a `stack.md` (detection + phase→agent map + default
+workflow) and, optionally, its own `workflows/`. The core discovers everything by globbing `**/stack.md`
+and `**/workflows/*.yaml` — it is never edited to add a stack.
+
+**Additive framework providers** (e.g. `retrofit-plugin`) ship a `framework.md` with `additive: true`
+instead. They are auto-detected from the Gradle version catalog / build files, collected into the
+orchestrator's `ADDITIVE_PROFILES` set, and feed their convention-skills + phase injections into the
+profile merge. They are **enrich-only** — they ship no agents and own no phases, and are excluded from
+per-aspect winner resolution and `PRIMARY_PROFILE` selection.
 
 ## 3. The Android pipeline (workflow `android-feature`)
 

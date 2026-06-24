@@ -5,17 +5,18 @@ argument-hint: ""
 
 # /sdlc:list-stacks
 
-List every `stack.md` profile registered in installed plugins. Shows which one would match the current project.
+List every `stack.md` and `framework.md` profile registered in installed plugins. Shows which platform profile would match the current project, plus which additive framework providers activate.
 
 ## What this command does
 
-1. Use `Glob` to find all stack profiles:
+1. Use `Glob` to find all profiles:
    ```
    ~/.claude/plugins/cache/**/stack.md
+   ~/.claude/plugins/cache/**/framework.md
    ```
 2. For each profile found:
    - `Read` the file.
-   - Parse the YAML frontmatter (`stack`, `priority`, `detect`).
+   - Parse the YAML frontmatter (`stack`, `priority`, `detect`, optional `additive`).
    - Evaluate `detect` rules against the current working directory:
      - `detect.any: ["*"]` → always matches.
      - `detect.all: [...]` → all sub-rules must match.
@@ -30,16 +31,19 @@ Stack profiles found:
 
   🎯 vanilla       priority=0     (always matches)              ← active fallback
   🎯 android       priority=300   matches: settings.gradle.kts
-  🎯 ios           priority=300   no match: Package.swift not present
 
-Active profile for this project: android (from android-plugin/stack.md)
-Override with: /sdlc:start --stack=NAME "<feature>"
+Additive framework providers:
+  ➕ retrofit      additive       matches: libs.versions.toml contains retrofit
+
+Active profile for this project: android (from android-foundation/stack.md)
+Active frameworks: retrofit
+Override with: /sdlc:start --stack=NAME "<feature>"  ·  toggle frameworks via .claude/sdlc.local.yaml
 ```
 
 If no profiles found except vanilla:
 ```
-Only the vanilla profile is registered. Install a framework plugin
-(e.g. /plugin install ios-plugin@agentic-sdlc) to add platform-specific agents.
+Only the vanilla profile is registered. Install the Android Foundation plugin
+(/plugin install android-foundation@agentic-sdlc) to add platform-specific agents.
 ```
 
 ## When to use

@@ -59,7 +59,7 @@ You review code changes for security issues. You fix the dangerous ones, documen
 
 ## Special cases (stack-specific guidance)
 
-The orchestrator may inject platform-specific instructions via `phase_prompts_injection`. For example, android-plugin adds: "secrets in Keystore not SharedPreferences; no cleartext traffic; validate Intents/deep links." Follow injected instructions — the injected standard is authoritative over the generic baseline above.
+The orchestrator may inject platform-specific instructions via `phase_prompts_injection`. For example, android-foundation adds: "secrets in Keystore not SharedPreferences; no cleartext traffic; validate Intents/deep links." Additive framework providers (e.g. retrofit-plugin) concatenate their own guidance into the same injection. Follow injected instructions — the injected standard is authoritative over the generic baseline above.
 
 ## Deliverable
 
