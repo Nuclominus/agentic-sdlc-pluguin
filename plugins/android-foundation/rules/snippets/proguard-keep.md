@@ -14,7 +14,7 @@ phase injection **only when that library is detected**:
 | Library | Keep rules live in |
 |---------|--------------------|
 | Retrofit / OkHttp | `retrofit-plugin/rules/snippets/retrofit-proguard.md` |
-| Room | `room-plugin` (Phase 3) |
+| Room | `room-plugin/rules/snippets/room-proguard.md` |
 | Dagger / Hilt | `dagger-plugin` (Phase 3) |
 
 ```proguard
