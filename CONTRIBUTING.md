@@ -3,6 +3,11 @@
 This marketplace is **Android-centric** (Android/Kotlin). Please keep contributions within that
 scope — no web/server stack providers.
 
+> **Fastest path:** run the **`sdlc:create-pluguin`** skill — a step-by-step wizard that scaffolds a
+> schema-valid plugin (framework or foundation): identity, functional aspect from the taxonomy,
+> `manifest.yaml`, drafted phase injections + a conventions skill, marketplace registration, and
+> validation. The sections below document the same structure for hand-authoring.
+
 There are now two kinds of plugin:
 
 - **Stack providers** (like `android-foundation`) — register a stack via `manifest.yaml`
