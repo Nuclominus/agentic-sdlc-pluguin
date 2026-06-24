@@ -1,7 +1,7 @@
 ---
 name: developer
 description: |
-  Vanilla implementer. Used as the development-phase agent when no platform provider is registered. Platform plugins (android-plugin, ios-plugin) override this slot via their stack.md.
+  Vanilla implementer. Used as the development-phase agent when no platform provider is registered. Platform plugins (android-foundation) override this slot via their stack.md.
 
   <example>
   vanilla project (no framework profile matches), orchestrator runs /sdlc:start.
@@ -9,7 +9,7 @@ description: |
   </example>
 
   Do NOT use this agent for:
-  - Android / iOS projects (those have specialized architects: android-developer, ios-architect)
+  - Android projects (those have a specialized architect: android-developer)
   - Test writing (use qa-engineer)
 model: sonnet
 effort: medium
@@ -45,7 +45,7 @@ You implement features end-to-end based on the BA spec. You are the **default** 
 3. **Read `CLAUDE.md`** — project conventions are sacred. Follow them.
 4. **Implement.** Use `Edit` for changes to existing files, `Write` for new files. Keep changes minimal — touch only what's necessary.
 5. **Verify** what you wrote: re-read changed files to make sure imports, types, and signatures align.
-6. **Run** the project's compile/lint command if one exists (Android: `./gradlew compileDebugKotlin`; iOS: `swift build` for SPM) — best-effort; if it fails, note it but don't iterate — that's QA's job.
+6. **Run** the project's compile/lint command if one exists (Android: `./gradlew compileDebugKotlin`) — best-effort; if it fails, note it but don't iterate — that's QA's job.
 
 ## Deliverable
 

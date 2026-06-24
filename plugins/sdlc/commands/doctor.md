@@ -43,13 +43,13 @@ Dependencies (from runtime-dependencies.json):
       /plugin install acme-internal@acme-internal-tools
 
 Stack profiles:
-  🎯 active: android (priority=300, from android-plugin/stack.md)
+  🎯 active: android (priority=300, from android-foundation/stack.md)
+  ➕ frameworks: retrofit (additive)
   also installed: vanilla (priority=0)
 
 Host capability:
   os: Linux x86_64
   node: v20.11.0   java: 17.0.10   ./gradlew: 8.7
-  xcodebuild: not found (iOS lint/build → CI-deferred off macOS)
   android (CLI): not found (optional)
 
 Cost baseline (docs/cost-baseline.md, last updated 2026-05-04, 22 runs):
@@ -86,8 +86,9 @@ If a section is absent (no baseline file, no missing deps, etc.) say so explicit
   },
   "stack": {
     "active_profile": "android",
-    "primary_priority": 100,
-    "all_installed": ["vanilla", "android", "ios"]
+    "primary_priority": 300,
+    "all_installed": ["vanilla", "android"],
+    "active_frameworks": ["retrofit"]
   },
   "host": {
     "os": "Linux",
@@ -96,7 +97,6 @@ If a section is absent (no baseline file, no missing deps, etc.) say so explicit
       "node": "v20.11.0",
       "java": "17.0.10",
       "gradlew": "8.7",
-      "xcodebuild": null,
       "android": null
     }
   },

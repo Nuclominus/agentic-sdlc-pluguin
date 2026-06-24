@@ -1,0 +1,4 @@
+{
+  "_comment": "Runtime plugin dependencies for android-foundation, aggregated by pipeline-orchestrator Step 0a. Only marketplace-plugin deps the core understands belong here. Android CLI is a SYSTEM tool, not a plugin — it is checked entirely inside android-foundation (hooks/android-cli-check.sh), never by the core. So this stays empty.",
+  "dependencies": []
+}

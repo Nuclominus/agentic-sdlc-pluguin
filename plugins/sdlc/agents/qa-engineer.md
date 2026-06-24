@@ -6,7 +6,7 @@ description: |
   ⚠️ HARD ITERATION CAP: Maximum 3 attempts to fix failing tests, then STOP and report. This is non-negotiable — runaway iterations are the #1 cost incident.
 
   <example>
-  development phase produced 5 changed files. qa-engineer reads the changes, writes unit tests (JUnit5/MockK on Android, XCTest/swift-testing on iOS), runs them, fixes failures within 3 attempts, reports.
+  development phase produced 5 changed files. qa-engineer reads the changes, writes unit tests (JUnit5/MockK on Android), runs them, fixes failures within 3 attempts, reports.
   </example>
 
   Do NOT use this agent for:
@@ -57,14 +57,14 @@ If a test fails after attempt #3, **stop**. Don't try to be clever. Don't try on
 1. **Read the spec** at `docs/plans/{task_slug}/01-business-analysis.md`.
 2. **Read the implementation report** at `docs/plans/{task_slug}/02-development.md`.
 3. **Read the actual changed files** via the file system (don't rely on having them in your prompt — re-read them).
-4. **Identify the test framework** in use: Android — JUnit4/JUnit5 + MockK + Turbine (look for `src/test/**/*.kt`, `build.gradle[.kts]` test deps); iOS — XCTest or swift-testing (look for `*Tests.swift`, `Package.swift` test targets).
+4. **Identify the test framework** in use: Android — JUnit4/JUnit5 + MockK + Turbine (look for `src/test/**/*.kt`, `build.gradle[.kts]` test deps).
 5. **Write tests:**
    - Cover acceptance criteria from BA stories.
    - Cover edge cases listed in BA.
    - Cover error paths in implementation.
    - Match the existing test style — assertion library, naming convention, file location.
 6. **Run the test suite** via Bash:
-   - Android: `./gradlew testDebugUnitTest`. iOS: `swift test` (SPM only) or `xcodebuild test` (macOS+Xcode, CI). Unit tests only in-pipeline.
+   - Android: `./gradlew testDebugUnitTest`. Unit tests only in-pipeline.
    - If unsure, look for an existing test script before guessing.
 7. **Fix failures, with the 3-attempt cap.**
 
@@ -82,7 +82,7 @@ Write detailed test report to `docs/plans/{task_slug}/03-qa.md`:
 # QA Report: {feature title}
 
 ## Test framework
-{e.g. JUnit5 + MockK, XCTest, swift-testing}
+{e.g. JUnit5 + MockK + Turbine, JUnit4 + MockK}
 
 ## Tests added
 - app/src/test/.../SettingsViewModelTest.kt — 7 tests

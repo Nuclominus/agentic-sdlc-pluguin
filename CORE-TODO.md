@@ -1,17 +1,24 @@
-# CORE-TODO — Mobile Retune of the `sdlc` Core
+# CORE-TODO — Android Retune of the `sdlc` Core
 
 The core `sdlc` plugin was copied verbatim from claude-sdlc. Its orchestrator algorithm,
 aspect resolution, skip-rules, model tiering, and cost model are platform-agnostic and kept as-is.
-The following deltas adapt the web-flavored defaults to native mobile.
+The following deltas adapt the web-flavored defaults to Android.
+
+> **Scope note.** The marketplace is now Android-only (iOS was dropped). The Framework Provider
+> Pattern is established: the `android-foundation` stack provider carries the pinned house rules,
+> while detect-don't-impose libraries attach as additive framework plugins (`framework.md` with
+> `additive: true`, enrich-only, no agents). `retrofit-plugin` is the first reference framework
+> plugin. **Phase 3 — additional framework plugins** (`room-plugin`, `dagger-plugin`) is upcoming
+> work, following the same additive pattern.
 
 ## 1. `file_glob` detection rule  *(DONE)*
 - **Schema:** `schemas/stack.schema.json` `$defs/detectRule` gained a `file_glob` variant **and** nested
   `any`/`all` (recursive) so a profile can express "(.kts OR .gradle) AND has Kotlin".
 - **Orchestrator:** Step 0b evaluates `file_glob` via the `Glob` tool (≥1 match) and recurses into nested
   `any`/`all`, alongside `file_exists`/`file_contains`.
-- **Profiles restored:** `android` → `all: [ any:[settings.gradle(.kts)], file_glob:"**/*.kt" ]`;
-  `ios` → `any: [ file_glob:"**/*.xcodeproj", file_glob:"**/*.xcworkspace", file_exists:Package.swift ]`
-  (app-target + monorepo now auto-detected; the old --stack=ios workaround comment removed).
+- **Profile:** `android` → `all: [ any:[settings.gradle(.kts)], file_glob:"**/*.kt" ]` (Gradle **and**
+  Kotlin). Additive framework plugins reuse the same `file_glob` machinery to auto-detect from the
+  Gradle version catalog / build files.
 
 ## 1b. validate-kotlin reference cleanup  *(DONE)*
 Rules pointed at `.claude/scripts/validate-kotlin.sh`, but validate-kotlin is now a plugin hook
@@ -27,20 +34,21 @@ Rules pointed at `.claude/scripts/validate-kotlin.sh`, but validate-kotlin is no
 - **`android-security`** re-anchored to **MASVS** control groups (STORAGE/CRYPTO/AUTH/NETWORK/PLATFORM/
   CODE/RESILIENCE/PRIVACY) with **MASTG** test procedures; each audit section tagged with its MASVS
   group; findings cite MASVS control + MASTG test ID. OWASP Mobile Top 10 kept only as a secondary
-  risk cross-map. android/ios stack.md security injections already say MASVS/MASTG.
+  risk cross-map. The android stack.md security injection already says MASVS/MASTG.
 
 ## 3. QA phase + post-pipeline → builds are CI-deferred  *(DONE)*
-- `qa` base prompt: in-pipeline = lint + unit (JVM/SPM) + compile-check only; instrumentation/UI tests
-  (Espresso/XCUITest) and full builds are CI-only.
-- Confirm the orchestrator's post-pipeline runner tolerates capability-gated no-ops (iOS off macOS).
+- `qa` base prompt: in-pipeline = detekt + unit (JVM) + compile-check only; instrumentation/UI tests
+  (Compose UI Test / Espresso) and full builds are CI-only.
+- The orchestrator's post-pipeline runner tolerates capability-gated no-ops (SKIP, not fail, when a
+  tool is absent off-host).
 
 ## 4. Model IDs  *(DONE — verified)*
 - `enforce-agent-model.sh` tier→model-ID: opus→claude-opus-4-8, sonnet→claude-sonnet-4-6, haiku→claude-haiku-4-5-20251001. Matches the current target models.
 
 ## 5. Commands  *(DONE)*
-- DONE: `/sdlc:init` added (`commands/init.md`) — detect platform(s), scaffold `.claude/sdlc.local.yaml`
+- DONE: `/sdlc:init` added (`commands/init.md`) — detect the stack, scaffold `.claude/sdlc.local.yaml`
   (idempotent, never overwrite), optionally seed `CLAUDE.md` (managed block).
-- DONE: `/sdlc:doctor` extended with a host-capability probe (uname + node/java/gradlew/swift/xcodebuild/android), human + JSON.
+- DONE: `/sdlc:doctor` extended with a host-capability probe (uname + node/java/gradlew/android), human + JSON.
 
 ## 6. Orchestrator support for the rich Android pipeline  *(PARTLY DONE)*
 Generic, platform-agnostic control flow added to the core so the android-feature DAG runs:
@@ -55,12 +63,12 @@ Generic, platform-agnostic control flow added to the core so the android-feature
   shapes and validates loop back-edges. Workflows `android-feature` / `android-bugfix` use them.
 - **DONE — workflow discovery across plugins**: recipes are globbed from `**/workflows/` (core + every
   plugin), so platform workflows live in their own plugin. `android-feature`/`android-bugfix` moved to
-  `android-plugin/workflows/`. Core ships only generic recipes (default/bugfix/hotfix/refactor/docs-only).
+  `android-foundation/workflows/`. Core ships only generic recipes (default/bugfix/hotfix/refactor/docs-only).
 - **DONE — profile default workflow**: generic `workflow:` field in stack.schema.json; orchestrator
   reads `PRIMARY_PROFILE.workflow → CONTEXT.profile_default_workflow` with precedence
   `--workflow=NAME` → sdlc.local.yaml `active_workflow` → profile `workflow:` → `"default"`.
   android/stack.md declares `workflow: android-feature` → auto-selected on Android projects.
-- **DONE — vault lifecycle** (plugin-owned, NOT core): `android-plugin/skills/manage-vault/` — a single
+- **DONE — vault lifecycle** (plugin-owned, NOT core): `android-foundation/skills/manage-vault/` — a single
   phased, idempotent skill merging the old setup + fill-vault + update flows. Phase 0 detect → 1 scaffold
   (`${CLAUDE_PLUGIN_ROOT}/vault/` → project `.obsidian-vault/` + `.claude/scripts/`) → 2 classify
   plugin-owned (MISSING/IDENTICAL/DIVERGED) → 3 add MISSING (DIVERGED never blind-overwritten; content
@@ -71,9 +79,9 @@ Generic, platform-agnostic control flow added to the core so the android-feature
   Instead, android agents detect project specifics at runtime (Architecture Detection) and projects
   use the existing GENERIC `sdlc.local.yaml` overrides. Core stays platform-agnostic.
 
-## 7. Android CLI — OPTIONAL, fully inside android-plugin  *(DONE — no core change)*
+## 7. Android CLI — OPTIONAL, fully inside android-foundation  *(DONE — no core change)*
 Android CLI is Google's official `android` BINARY (https://developer.android.com/tools/agents/android-cli),
-not a marketplace plugin. It is detected and advised **entirely within android-plugin** by
+not a marketplace plugin. It is detected and advised **entirely within android-foundation** by
 `hooks/android-cli-check.sh` (SessionStart, Android-projects only, non-blocking). The core orchestrator
 and `runtime-dependencies.json` (which the core reads) contain ZERO Android-CLI knowledge — the plugin
 owns it end-to-end. Setup (optional): download → `android update` → `android init`.
@@ -107,7 +115,7 @@ section in the existing `.claude/sdlc.local.yaml` (no new config file).
     when no row targets the agent) injected into each PIPELINE phase agent's stable prefix. Step 1b
     print + caching-discipline rule updated.
   - **On-demand agents** (android-debugger/devops/cicd/aar) self-read `extensions.skills` rows naming
-    them at use-time — documented in `android-plugin/rules/skills.md` ("Project Extensions"); devops &
+    them at use-time — documented in `android-foundation/rules/skills.md` ("Project Extensions"); devops &
     cicd got an explicit self-read pointer in their agent `.md` (debugger & aar already read skills.md).
     `loaded_by`/INDEX updated. Mirrors the "agents read skills.md at use-time" single-source pattern.
 - **DONE — Commands / hooks**: no manifest needed — project `.claude/commands/` + `.claude/settings.json`

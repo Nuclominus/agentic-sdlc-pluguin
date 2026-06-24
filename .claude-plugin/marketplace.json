@@ -1,7 +1,7 @@
 {
   "name": "agentic-sdlc",
-  "version": "0.4.0",
-  "description": "AI-assisted SDLC pipelines for NATIVE MOBILE development (Android/Kotlin + iOS/Swift) in Claude Code. Stack Provider Pattern: the core owns the pipeline; platform plugins register themselves via stack.md profiles. Adapted from AratKruglik/claude-sdlc (MIT), stripped to native mobile.",
+  "version": "1.0.0",
+  "description": "AI-assisted SDLC pipelines for ANDROID development (Kotlin + Gradle) in Claude Code. Android Foundation is the centerpiece stack provider; framework plugins (Retrofit, Room, Dagger/Hilt, …) attach additively to the orchestrator-managed flow via the Stack Provider Pattern. The generic sdlc core owns the pipeline; providers register themselves via stack.md / framework.md profiles. Adapted from AratKruglik/claude-sdlc (MIT).",
   "owner": {
     "name": "Nuclominus",
     "url": "https://github.com/Nuclominus"
@@ -30,14 +30,24 @@
       "description": "Platform-agnostic SDLC orchestrator with stack-provider auto-discovery. Provides the pipeline-orchestrator skill (generic phases, review-loops, parallel groups, workflow discovery across plugins, file_glob/nested detection) plus 5 cost-tiered fallback agents (BA Opus/high, Dev Sonnet/medium, QA Sonnet/medium with iteration cap, Sec Opus/high platform-neutral baseline, Docs Haiku/low). Commands: /sdlc:start, /sdlc:doctor, /sdlc:list-stacks, /sdlc:batch, /sdlc:security-init."
     },
     {
-      "name": "android-plugin",
-      "source": "./plugins/android-plugin",
-      "description": "Native Android stack provider (Kotlin + Gradle, aspect android, priority 300, auto-detected via Gradle-AND-Kotlin). Full specialized roster: android-ba (Opus), android-developer, android-reviewer, android-security (Opus, MASVS/MASTG), android-tester, android-qa, android-docs (Haiku), plus on-demand android-debugger/devops/cicd/aar. Plugin-resident rules, optional Obsidian vault (manage-vault skill), optional Android CLI advisory, ktlint/detekt + non-negotiable hooks. Workflow android-feature: BA->Dev->Review(<->Dev x3)->[Security||Test]->QA->Docs, auto-selected on Android projects."
+      "name": "android-foundation",
+      "source": "./plugins/android-foundation",
+      "description": "Android Foundation — the centerpiece stack provider (Kotlin + Gradle, aspect android, priority 300, auto-detected via Gradle-AND-Kotlin). Full specialized roster: android-ba (Opus), android-developer, android-reviewer, android-security (Opus, MASVS/MASTG), android-tester, android-qa, android-docs (Haiku), plus on-demand android-debugger/devops/cicd/aar. Plugin-resident rules, optional Obsidian vault (manage-vault skill), optional Android CLI advisory, ktlint/detekt + non-negotiable hooks. Carries pinned house rules (Coil3, Kermit, KSP, @Serializable routes, DataStore, Play Billing). Workflow android-feature: BA->Dev->Review(<->Dev x3)->[Security||Test]->QA->Docs, auto-selected on Android projects."
     },
     {
-      "name": "ios-plugin",
-      "source": "./plugins/ios-plugin",
-      "description": "Native iOS stack provider (Swift/SwiftUI, priority 300, aspect ios; auto-detected via *.xcodeproj/*.xcworkspace/Package.swift). ios-architect (Sonnet/medium) + SwiftUI/architecture/data/navigation convention skills; agnostic phases delegate to core agents (iOS MASVS/MASTG injected). Host-capability aware (lint/build macOS-only); builds CI-deferred. STATUS: skeleton (Phase 4 TODOs)."
+      "name": "retrofit-plugin",
+      "source": "./plugins/retrofit-plugin",
+      "description": "Additive framework provider for Retrofit/OkHttp networking. Auto-detected from the Gradle version catalog / build files; enriches the Android Foundation flow via framework.md (additive: true) with the retrofit-conventions skill, development + security phase-prompt injections, and R8/ProGuard keep rules. Ships NO agents — it specializes the existing android-developer / android-security prompts. Reference implementation of the Framework Provider Pattern."
+    },
+    {
+      "name": "room-plugin",
+      "source": "./plugins/room-plugin",
+      "description": "Additive framework provider for Room (androidx.room) persistence. Auto-detected by the orchestrator from the Gradle version catalog / build files; enriches the Android Foundation flow via framework.md (additive: true) with the room-conventions skill, development + security phase-prompt injections (suspend/Flow DAOs, @Transaction, parameterized queries, migrations, KSP), and R8/ProGuard keep rules. Ships NO agents — it specializes the existing android-developer / android-security prompts."
+    },
+    {
+      "name": "dagger-plugin",
+      "source": "./plugins/dagger-plugin",
+      "description": "Additive framework provider for Dagger / Hilt dependency injection (com.google.dagger). Auto-detected by the orchestrator from the Gradle version catalog / build files; enriches the Android Foundation flow via framework.md (additive: true) with the hilt-conventions skill, development + security phase-prompt injections (constructor injection, @Module/@InstallIn, @Binds over @Provides, deliberate scoping, KSP), and R8/ProGuard keep rules. Realizes the 'detect, don't impose' DI resolution: the foundation states the generic DI principle, this plugin adds Hilt/Dagger specifics only when detected. Ships NO agents."
     }
   ]
 }
