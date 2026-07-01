@@ -732,7 +732,7 @@ Examples:
 
 This is a contract with the user. Do not skip.
 
-**3b-3. Resolve model from agent frontmatter** — before spawning, resolve `{model_tier}` by reading the `model:` YAML field from the agent's `.md` file (`plugins/**/agents/{agent_name}.md`). This resolved tier (the SHORT name: `opus` / `sonnet` / `haiku` / `fable`) is what you print in 3b-2 AND pass verbatim to `Agent()` in 3c. The `Agent` tool's `model` parameter accepts the short tier ONLY — passing a full model ID raises `InputValidationError`. The tier→full-ID mapping (`opus → claude-opus-4-8`, `sonnet → claude-sonnet-4-6`, `haiku → claude-haiku-4-5-20251001`) is used ONLY for telemetry/cost accounting in 3d-1, never for dispatch. If the file is missing or the field is absent, warn inline and fall back to `sonnet`.
+**3b-3. Resolve model from agent frontmatter** — before spawning, resolve `{model_tier}` by reading the `model:` YAML field from the agent's `.md` file (`plugins/**/agents/{agent_name}.md`). This resolved tier (the SHORT name: `opus` / `sonnet` / `haiku` / `fable`) is what you print in 3b-2 AND pass verbatim to `Agent()` in 3c. The `Agent` tool's `model` parameter accepts the short tier ONLY — passing a full model ID raises `InputValidationError`. The tier→model-ID mapping is resolved from the model registry (`plugins/sdlc/config/models.json`) and is used ONLY for telemetry/cost accounting in 3d-1, never for dispatch. If the file is missing or the field is absent, warn inline and fall back to `sonnet`.
 
 **3b-special. Development phase two-pass execution**
 
@@ -779,13 +779,21 @@ Agent({
 
 **3d. Save the COMPACT summary** returned by the agent to `CONTEXT.{phase}_output`. Verify the agent also wrote the detailed file to `docs/plans/{task_slug}/0X-{phase}.md` (use `Glob` to check). If the file is missing, ask the agent again to write it before proceeding.
 
+**3d-0. Load the model registry** (once per run) — read the tag→model-ID map from the single source of truth:
+
+```
+MODELS = parse(Glob("~/.claude/plugins/cache/**/sdlc/config/models.json"))   # { pipeline_tiers: [...], models: [ { tag, model_id }, ... ] }
+```
+
+Resolve a tier to its concrete model ID via the `models[]` entry whose `tag` equals the declared tier. This registry is the single source of truth for model IDs — never hardcode them here.
+
 **3d-1. Capture per-phase telemetry** — extract from the Agent tool result (when usage data is present in the result envelope, read `input_tokens`, `output_tokens`, `cached_input_tokens`; otherwise estimate from prompt + summary character length / 4). Compute:
 
 - `compact_summary_chars` — `len(CONTEXT.{phase}_output)`. If > 3000 chars (≈ 3K-token target), record `compact_handoff_violation: true` and emit a one-line warning to stderr: `WARN: {phase} compact summary exceeded budget ({chars} chars > 3000)`. Do not abort — the violation is recorded for post-run analysis.
-- `model` — the full model ID, derived from the agent's declared `model:` tier via the tier→full-ID mapping (`opus → claude-opus-4-8`, `sonnet → claude-sonnet-4-6`, `haiku → claude-haiku-4-5-20251001`). The tier is the authoritative value because the PreToolUse hook enforces it at dispatch time; this mapping exists solely so telemetry/cost records the concrete model. **Do not** read this from the Agent result envelope (it is not exposed there).
+- `model` — the full model ID, derived from the agent's declared `model:` tier by resolving it against the model registry loaded in 3d-0 (`MODELS.models[].model_id` where `tag` == the tier). The tier is the authoritative value because the PreToolUse hook enforces it at dispatch time; this mapping exists solely so telemetry/cost records the concrete model. **Do not** read this from the Agent result envelope (it is not exposed there).
 - `cost_usd` — derived from per-model pricing table (kept inline for transparency):
   - opus (`claude-opus-4-8`): input $15/MTok, cached input $1.50/MTok, output $75/MTok
-  - sonnet (`claude-sonnet-4-6`): input $3/MTok, cached input $0.30/MTok, output $15/MTok
+  - sonnet (`claude-sonnet-5`): input $3/MTok, cached input $0.30/MTok, output $15/MTok
   - haiku (`claude-haiku-4-5-20251001`): input $1/MTok, cached input $0.10/MTok, output $5/MTok
 - For aspect-aware phase fan-out, push one entry **per aspect** into `phases[]` with `phase: "{phase_name}"` and `aspect: "{aspect}"` set; aspect-agnostic phases omit `aspect`.
 
@@ -864,7 +872,7 @@ Write `docs/plans/{task_slug}/_telemetry.json`:
       "phase": "qa",
       "aspect": null,
       "agent": "qa-engineer",
-      "model": "claude-sonnet-4-6",
+      "model": "claude-sonnet-5",
       "status": "completed",
       "qa_iterations_used": 2,
       "qa_status": "completed",

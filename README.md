@@ -224,15 +224,9 @@ Every agent declares its `model:` tier in frontmatter; the pipeline guarantees t
 1. **Orchestrator (Layer 1)** — Step 3b reads the agent's frontmatter and passes the declared tier verbatim in the `Agent()` dispatch.
 2. **PreToolUse hook (Layer 2)** — `plugins/sdlc/hooks/enforce-agent-model.sh` intercepts every `Agent` call, compares the requested model with the agent's declared `model:`, and corrects it via `updatedInput` if they differ.
 
-> The `Agent` tool's `model` parameter accepts the **short tier name only** (`opus` / `sonnet` / `haiku` / `fable`). Passing a full model ID raises `InputValidationError`, so both layers enforce the tier verbatim. The tier → model-ID table below is used **only** for telemetry/cost accounting (orchestrator Step 3d-1), never for dispatch.
+> The `Agent` tool's `model` parameter accepts the **short tier name only** (`opus` / `sonnet` / `haiku` / `fable`). Passing a full model ID raises `InputValidationError`, so both layers enforce the tier verbatim. The tier → model-ID resolution is used **only** for telemetry/cost accounting (orchestrator Step 3d-1), never for dispatch.
 
-**Tier → model ID (telemetry/cost only):**
-
-| Tier     | Model ID                    |
-| -------- | --------------------------- |
-| `opus`   | `claude-opus-4-8`           |
-| `sonnet` | `claude-sonnet-4-6`         |
-| `haiku`  | `claude-haiku-4-5-20251001` |
+**Tier → model ID (telemetry/cost only):** concrete model IDs are defined once in the model registry [`plugins/sdlc/config/models.json`](plugins/sdlc/config/models.json) — the single source of truth. Bump a model there, not here.
 
 ---
 
