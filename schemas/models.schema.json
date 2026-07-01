@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Nuclominus/Agentic-SDLC-Pluguin/schemas/models.schema.json",
   "title": "SDLC Model Registry",
-  "description": "Schema for plugins/sdlc/config/models.json — the machine-read single source of truth mapping a short `tag` (used in agent .md frontmatter `model: <tag>` and other local/plugin files) to the concrete Claude `model_id`. `pipeline_tiers` MIRRORS the is_valid_tier list in plugins/sdlc/hooks/enforce-agent-model.sh — keep them in sync. Per-model pricing is a planned addition; an optional `pricing` object is permitted per model so it can be added without a schema change.",
+  "description": "Schema for plugins/sdlc/config/models.json — the machine-read single source of truth mapping a short `tag` (used in agent .md frontmatter `model: <tag>` and other local/plugin files) to the concrete Claude `model_id`, and each model's `pricing` (USD per MTok, used for telemetry cost accounting). `pipeline_tiers` MIRRORS the is_valid_tier list in plugins/sdlc/hooks/enforce-agent-model.sh — keep them in sync.",
   "type": "object",
   "required": ["pipeline_tiers", "models"],
   "additionalProperties": false,
@@ -41,12 +41,13 @@
         },
         "pricing": {
           "type": "object",
-          "description": "Optional, reserved for the pricing step. USD per million tokens.",
+          "description": "USD per million tokens. Read by the pipeline for telemetry cost accounting. Optional per model — a model with no pricing yields cost_usd: null in telemetry (excluded from the total).",
           "additionalProperties": false,
           "properties": {
             "input": { "type": "number", "minimum": 0 },
             "cached_input": { "type": "number", "minimum": 0 },
-            "output": { "type": "number", "minimum": 0 }
+            "output": { "type": "number", "minimum": 0 },
+            "note": { "type": "string", "description": "Optional annotation, e.g. a time-limited intro price and its expiry." }
           }
         }
       }
