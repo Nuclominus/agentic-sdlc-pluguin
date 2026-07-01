@@ -43,7 +43,7 @@ Rules pointed at `.claude/scripts/validate-kotlin.sh`, but validate-kotlin is no
   tool is absent off-host).
 
 ## 4. Model IDs  *(DONE — verified)*
-- `enforce-agent-model.sh` tier→model-ID: opus→claude-opus-4-8, sonnet→claude-sonnet-4-6, haiku→claude-haiku-4-5-20251001. Matches the current target models.
+- Tier→model-ID resolution is defined once in the model registry `plugins/sdlc/config/models.json` (single source of truth). `enforce-agent-model.sh` enforces the short tier only; the orchestrator resolves the concrete model ID from the registry for telemetry (Step 3d-1).
 
 ## 5. Commands  *(DONE)*
 - DONE: `/sdlc:init` added (`commands/init.md`) — detect the stack, scaffold `.claude/sdlc.local.yaml`

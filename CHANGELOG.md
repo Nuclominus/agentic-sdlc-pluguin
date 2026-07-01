@@ -2,6 +2,22 @@
 
 All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
+## [Unreleased]
+
+### Added
+
+- **Model registry `plugins/sdlc/config/models.json`** — single source of truth mapping each short tag
+  (`opus` / `sonnet` / `haiku` / `fable`, plus current-generation reference entries) to its concrete
+  model ID. `pipeline_tiers` mirrors the `enforce-agent-model.sh` valid-tier list; `schemas/models.schema.json`
+  validates the file. README, CORE-TODO, and the orchestrator (Step 3d-0/3d-1) now link to / resolve from
+  the registry instead of restating model IDs. Per-model pricing is a planned follow-up, intentionally not
+  yet in the registry.
+
+### Changed
+
+- **`sonnet` tier now resolves to `claude-sonnet-5`** (was `claude-sonnet-4-6`) for telemetry/cost,
+  following the Sonnet 5 release. The enforcement hook is unchanged — it enforces the short tier verbatim.
+
 ## [1.1.0] — 2026-06-24
 
 All plugins bumped together to `1.1.0`. Reshapes the foundation↔framework relationship into a clean

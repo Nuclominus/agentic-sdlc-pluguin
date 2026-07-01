@@ -1,0 +1,15 @@
+{
+  "$schema": "../../../schemas/models.schema.json",
+  "description": "Model registry — the SINGLE SOURCE OF TRUTH for tag -> model_id. A `tag` is the short alias used across local files and the plugin (agent `.md` frontmatter `model: <tag>`); `model_id` is the real Claude model string, used both to invoke the model and for telemetry. To bump a model, edit it HERE — do not restate model IDs elsewhere (README/CORE-TODO/SKILL link here). `pipeline_tiers` lists the tags the pipeline actually dispatches and that hooks/enforce-agent-model.sh enforces (mirror of its is_valid_tier list — keep in sync); the remaining `models` entries are reference/pin-only. Pricing (input/output per MTok, for telemetry cost) is a planned next step and intentionally omitted for now.",
+  "pipeline_tiers": ["opus", "sonnet", "haiku", "fable"],
+  "models": [
+    { "tag": "opus",       "model_id": "claude-opus-4-8" },
+    { "tag": "sonnet",     "model_id": "claude-sonnet-5" },
+    { "tag": "haiku",      "model_id": "claude-haiku-4-5-20251001" },
+    { "tag": "fable",      "model_id": "claude-fable-5" },
+    { "tag": "opus-4-7",   "model_id": "claude-opus-4-7" },
+    { "tag": "opus-4-6",   "model_id": "claude-opus-4-6" },
+    { "tag": "sonnet-4-6", "model_id": "claude-sonnet-4-6" },
+    { "tag": "mythos",     "model_id": "claude-mythos-5" }
+  ]
+}

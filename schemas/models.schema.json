@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Nuclominus/Agentic-SDLC-Pluguin/schemas/models.schema.json",
+  "title": "SDLC Model Registry",
+  "description": "Schema for plugins/sdlc/config/models.json — the machine-read single source of truth mapping a short `tag` (used in agent .md frontmatter `model: <tag>` and other local/plugin files) to the concrete Claude `model_id`. `pipeline_tiers` MIRRORS the is_valid_tier list in plugins/sdlc/hooks/enforce-agent-model.sh — keep them in sync. Per-model pricing is a planned addition; an optional `pricing` object is permitted per model so it can be added without a schema change.",
+  "type": "object",
+  "required": ["pipeline_tiers", "models"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "description": { "type": "string" },
+    "pipeline_tiers": {
+      "type": "array",
+      "description": "Tags the pipeline dispatches and the enforcement hook validates. Every entry MUST also appear as a `tag` in `models`.",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "models": {
+      "type": "array",
+      "description": "Every available model, keyed by a unique `tag`.",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/model" }
+    }
+  },
+  "$defs": {
+    "model": {
+      "type": "object",
+      "required": ["tag", "model_id"],
+      "additionalProperties": false,
+      "properties": {
+        "tag": {
+          "type": "string",
+          "description": "Short alias used in local/plugin files (e.g. opus, sonnet, sonnet-4-6). Unique across the registry.",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "model_id": {
+          "type": "string",
+          "description": "The real Claude model string used to invoke the model and for telemetry (e.g. claude-sonnet-5).",
+          "pattern": "^claude-[a-z0-9-]+$"
+        },
+        "pricing": {
+          "type": "object",
+          "description": "Optional, reserved for the pricing step. USD per million tokens.",
+          "additionalProperties": false,
+          "properties": {
+            "input": { "type": "number", "minimum": 0 },
+            "cached_input": { "type": "number", "minimum": 0 },
+            "output": { "type": "number", "minimum": 0 }
+          }
+        }
+      }
+    }
+  }
+}

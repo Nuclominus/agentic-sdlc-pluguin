@@ -13,6 +13,11 @@ set -uo pipefail
 # (sonnet|opus|haiku|fable) — NOT the full model ID. Validate the declared
 # tier and enforce it verbatim. Full model IDs (claude-opus-4-8, …) are used
 # only for telemetry/cost accounting in the orchestrator, never for dispatch.
+#
+# This list MIRRORS `pipeline_tiers` in plugins/sdlc/config/models.json (the
+# model registry / single source of truth) — keep the two in sync. The hook
+# keeps its own inline copy on purpose: a PreToolUse hook must fail-open fast
+# and must not depend on parsing a config file.
 is_valid_tier() {
     case "$1" in
         opus|sonnet|haiku|fable) return 0 ;;
