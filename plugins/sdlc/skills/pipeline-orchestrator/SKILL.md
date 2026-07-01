@@ -782,19 +782,18 @@ Agent({
 **3d-0. Load the model registry** (once per run) — read the tag→model-ID map from the single source of truth:
 
 ```
-MODELS = parse(Glob("~/.claude/plugins/cache/**/sdlc/config/models.json"))   # { pipeline_tiers: [...], models: [ { tag, model_id }, ... ] }
+MODELS = parse(Glob("~/.claude/plugins/cache/**/sdlc/config/models.json"))   # { pipeline_tiers: [...], models: [ { tag, model_id, pricing: { input, cached_input, output } }, ... ] }
 ```
 
-Resolve a tier to its concrete model ID via the `models[]` entry whose `tag` equals the declared tier. This registry is the single source of truth for model IDs — never hardcode them here.
+Resolve a tier to its concrete model ID via the `models[]` entry whose `tag` equals the declared tier. This registry is the single source of truth for model IDs **and pricing** — never hardcode either here.
 
 **3d-1. Capture per-phase telemetry** — extract from the Agent tool result (when usage data is present in the result envelope, read `input_tokens`, `output_tokens`, `cached_input_tokens`; otherwise estimate from prompt + summary character length / 4). Compute:
 
 - `compact_summary_chars` — `len(CONTEXT.{phase}_output)`. If > 3000 chars (≈ 3K-token target), record `compact_handoff_violation: true` and emit a one-line warning to stderr: `WARN: {phase} compact summary exceeded budget ({chars} chars > 3000)`. Do not abort — the violation is recorded for post-run analysis.
 - `model` — the full model ID, derived from the agent's declared `model:` tier by resolving it against the model registry loaded in 3d-0 (`MODELS.models[].model_id` where `tag` == the tier). The tier is the authoritative value because the PreToolUse hook enforces it at dispatch time; this mapping exists solely so telemetry/cost records the concrete model. **Do not** read this from the Agent result envelope (it is not exposed there).
-- `cost_usd` — derived from per-model pricing table (kept inline for transparency):
-  - opus (`claude-opus-4-8`): input $15/MTok, cached input $1.50/MTok, output $75/MTok
-  - sonnet (`claude-sonnet-5`): input $3/MTok, cached input $0.30/MTok, output $15/MTok
-  - haiku (`claude-haiku-4-5-20251001`): input $1/MTok, cached input $0.10/MTok, output $5/MTok
+- `cost_usd` — computed from the **registry** pricing (SSOT), never a hardcoded rate table. Let `P = MODELS.models[].pricing` where `tag` == the phase tier (the registry is already loaded in 3d-0). Treat `input_tokens` as total input and `cached_input_tokens` as its cached subset (consistent with the `cache_hit_ratio` definition in Step 5). Then (raw token counts, `P.*` in USD per MTok):
+  - `cost_usd = (input_tokens - cached_input_tokens)/1e6 * P.input + cached_input_tokens/1e6 * P.cached_input + output_tokens/1e6 * P.output`
+  - **If the matched model has no `pricing` block:** set `cost_usd: null`, emit `WARN: no pricing for {model_id} — cost omitted` to stderr, and exclude the phase from `total_cost_usd` (Step 5). Do not abort.
 - For aspect-aware phase fan-out, push one entry **per aspect** into `phases[]` with `phase: "{phase_name}"` and `aspect: "{aspect}"` set; aspect-agnostic phases omit `aspect`.
 
 **3d-2. QA-specific telemetry** — when running the `qa` phase, parse the agent's compact summary for the lines `ITERATIONS_USED: N` (max 3, hard cap from the agent prompt) and `STATUS: complete | incomplete-blocked`. Record:
@@ -864,7 +863,7 @@ Write `docs/plans/{task_slug}/_telemetry.json`:
       "input_tokens": 35000,
       "output_tokens": 3000,
       "cached_input_tokens": 21000,
-      "cost_usd": 0.18,
+      "cost_usd": 0.16,
       "compact_summary_chars": 1840,
       "compact_handoff_violation": false
     },
@@ -879,7 +878,7 @@ Write `docs/plans/{task_slug}/_telemetry.json`:
       "input_tokens": 28000,
       "output_tokens": 2100,
       "cached_input_tokens": 18000,
-      "cost_usd": 0.12,
+      "cost_usd": 0.04,
       "compact_summary_chars": 1450,
       "compact_handoff_violation": false
     }
@@ -893,7 +892,7 @@ Write `docs/plans/{task_slug}/_telemetry.json`:
   "total_input_tokens": 152000,
   "total_output_tokens": 9800,
   "total_cached_input_tokens": 88000,
-  "total_cost_usd": 1.42,
+  "total_cost_usd": 0.52,
   "cache_hit_ratio": 0.58,
   "deps_preflight": {
     "superpowers": { "status": "available", "missing_skills": [] }
@@ -906,7 +905,7 @@ Compute aggregates from `phases[]`:
 - `total_input_tokens` = sum of phase `input_tokens`.
 - `total_output_tokens` = sum of phase `output_tokens`.
 - `total_cached_input_tokens` = sum of phase `cached_input_tokens`.
-- `total_cost_usd` = sum of phase `cost_usd`.
+- `total_cost_usd` = sum of phase `cost_usd`, **skipping `null` entries** (phases whose model had no registry pricing). If any phase was null-priced, append `(partial — {n} phase(s) unpriced)` to the printed Cost line so the omission is visible.
 - `cache_hit_ratio` = `total_cached_input_tokens / max(total_input_tokens, 1)` rounded to 2 decimals.
 
 > Token counts come from the Agent tool's usage envelope when present. If a phase's result lacks usage data, fall back to char-length / 4 estimation and set `phases[N].usage_source: "estimated"` (default `"reported"`).

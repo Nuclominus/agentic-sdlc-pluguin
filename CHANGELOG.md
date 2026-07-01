@@ -4,19 +4,35 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-07-01
+
+Only the `sdlc` plugin changed; other plugins remain at `1.1.0`.
+
 ### Added
 
 - **Model registry `plugins/sdlc/config/models.json`** — single source of truth mapping each short tag
   (`opus` / `sonnet` / `haiku` / `fable`, plus current-generation reference entries) to its concrete
   model ID. `pipeline_tiers` mirrors the `enforce-agent-model.sh` valid-tier list; `schemas/models.schema.json`
   validates the file. README, CORE-TODO, and the orchestrator (Step 3d-0/3d-1) now link to / resolve from
-  the registry instead of restating model IDs. Per-model pricing is a planned follow-up, intentionally not
-  yet in the registry.
+  the registry instead of restating model IDs.
+- **Per-model pricing in the registry (SSOT for telemetry cost).** Each model carries
+  `pricing: { input, cached_input, output }` (USD per MTok; `cached_input` = 0.1× input), plus an optional
+  `pricing.note`. The orchestrator (Step 3d-1) now computes each phase's `cost_usd` from the registry —
+  `(input−cached)/1e6·input + cached/1e6·cached_input + output/1e6·output` — instead of a hardcoded rate
+  table; a model with no `pricing` yields `cost_usd: null` (stderr warning, excluded from `total_cost_usd`,
+  which then prints a `partial` marker). `sonnet` uses intro pricing (`$2/$0.20/$10`, flagged via
+  `pricing.note`, reverts to `$3/$0.30/$15` after 2026-08-31).
 
 ### Changed
 
 - **`sonnet` tier now resolves to `claude-sonnet-5`** (was `claude-sonnet-4-6`) for telemetry/cost,
   following the Sonnet 5 release. The enforcement hook is unchanged — it enforces the short tier verbatim.
+
+### Fixed
+
+- **Stale Opus telemetry rate.** The old inline cost table billed Opus at `$15/$75` per MTok
+  (Opus 4.0/4.1-era); Opus 4.8 is `$5/$25`, so telemetry over-reported Opus cost ~3×. Now sourced from
+  the registry.
 
 ## [1.1.0] — 2026-06-24
 
