@@ -64,3 +64,34 @@ Declares `obra/superpowers` with `policy: warn`: if absent, the pipeline still r
 ## Project overrides
 
 The orchestrator honors a project-level `.claude/sdlc.local.yaml` (post-pipeline checks, phase command overrides, extra phase prompts, skipped phases, extra convention skills, and the `extensions.skills` Project Extension Manifest) — see [Local Overrides](../../README.md#local-overrides) in the root README.
+
+---
+
+## Project-local model tiers (`.claude/model.local.json`)
+
+Each project can override which model **tier** its SDLC agents run on, without editing any plugin.
+Create `<repo_root>/.claude/model.local.json` (or run `/sdlc:model-config`):
+
+```json
+{
+  "$schema": "https://github.com/Nuclominus/Agentic-SDLC-Pluguin/schemas/model-local.schema.json",
+  "default": "haiku",
+  "agents": {
+    "business-analyst": "sonnet",
+    "security-analyst": "opus"
+  }
+}
+```
+
+- `default` — tier applied to every agent unless overridden.
+- `agents` — per-agent override, keyed by bare agent name.
+- Valid tiers: `opus | sonnet | haiku | fable` (the registry `pipeline_tiers`).
+
+**Resolution (per agent):** `agents[<bare-name>]` → `default` → the agent's `.md` frontmatter `model:`
+→ `sonnet`. Both the `enforce-agent-model.sh` hook and the orchestrator apply this same chain, so an
+override is honored at dispatch and not reverted. A missing or malformed file, or an invalid tier, falls
+back to the built-in tiers (fail-open). This changes only which tag an agent uses — the model registry
+(`config/models.json`) remains the single source of truth for tag→model_id and pricing.
+
+Author it interactively with `/sdlc:model-config` (default tier first, then optional per-agent), or
+`/sdlc:model-config --list` to review the current mapping.

@@ -550,6 +550,35 @@ If `sdlc.local.yaml` exists but parsing fails (invalid YAML, unknown top-level k
 
 Do not abort — local override is optional, plugin profile is always usable as fallback.
 
+#### 1b-models. Load project-local model tier overrides from `<project>/.claude/model.local.json`
+
+Check whether `<project_root>/.claude/model.local.json` exists.
+
+If absent — set `CONTEXT.model_overrides = {}` and skip this sub-step silently.
+
+If present — `Read` and parse it as JSON. Recognized top-level keys:
+
+| Key | Type | Meaning |
+|---|---|---|
+| `default` | tier string | Tier applied to EVERY agent unless overridden in `agents`. |
+| `agents` | object (bare agent name → tier string) | Per-agent tier override; highest precedence. |
+
+Valid tiers are the registry `pipeline_tiers`: `opus | sonnet | haiku | fable`. Hold the parsed result as `CONTEXT.model_overrides = { default?, agents{} }`.
+
+If parsing fails (invalid JSON, or a value that is not a valid tier), warn and treat the whole file as empty — the plugin/frontmatter tiers remain fully usable (fail-open):
+
+```
+⚠️ Failed to parse .claude/model.local.json: <error>. Continuing with agent frontmatter tiers.
+```
+
+🚨 **MUST PRINT VERBATIM** if any override is present (otherwise stay silent on this sub-step):
+
+```
+🔧 Model tier overrides loaded from .claude/model.local.json:
+   default: <tier or "(none)">
+   <agent>: <tier>        (one line per agents[] entry)
+```
+
 #### 1c. Build the canonical phase order
 
 Load the workflow definition file and derive the ordered phase list by following the
@@ -732,7 +761,7 @@ Examples:
 
 This is a contract with the user. Do not skip.
 
-**3b-3. Resolve model from agent frontmatter** — before spawning, resolve `{model_tier}` by reading the `model:` YAML field from the agent's `.md` file (`plugins/**/agents/{agent_name}.md`). This resolved tier (the SHORT name: `opus` / `sonnet` / `haiku` / `fable`) is what you print in 3b-2 AND pass verbatim to `Agent()` in 3c. The `Agent` tool's `model` parameter accepts the short tier ONLY — passing a full model ID raises `InputValidationError`. The tier→model-ID mapping is resolved from the model registry (`plugins/sdlc/config/models.json`) and is used ONLY for telemetry/cost accounting in 3d-1, never for dispatch. If the file is missing or the field is absent, warn inline and fall back to `sonnet`.
+**3b-3. Resolve model (project override → frontmatter)** — before spawning, resolve `{model_tier}` by precedence (first hit wins): `CONTEXT.model_overrides.agents[<bare>]` where `<bare>` is the agent name after the last `:` (e.g. `android-foundation:android-developer` → `android-developer`) → `CONTEXT.model_overrides.default` → the `model:` YAML field from the agent's `.md` file (`plugins/**/agents/{agent_name}.md`) → `sonnet`. An override value that is not a valid tier (`opus|sonnet|haiku|fable`) is skipped with an inline warning and resolution falls through to the next source. The `enforce-agent-model.sh` hook applies this SAME override, so the resolved tier is not reverted at dispatch. This resolved tier (the SHORT name: `opus` / `sonnet` / `haiku` / `fable`) is what you print in 3b-2 AND pass verbatim to `Agent()` in 3c. The `Agent` tool's `model` parameter accepts the short tier ONLY — passing a full model ID raises `InputValidationError`. The tier→model-ID mapping is resolved from the model registry (`plugins/sdlc/config/models.json`) and is used ONLY for telemetry/cost accounting in 3d-1, never for dispatch. If the file is missing or the field is absent, warn inline and fall back to `sonnet`.
 
 **3b-special. Development phase two-pass execution**
 

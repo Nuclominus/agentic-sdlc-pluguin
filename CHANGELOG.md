@@ -4,6 +4,24 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-07-02
+
+Only the `sdlc` plugin changed; other plugins remain at `1.1.0`.
+
+### Added
+
+- **Project-local model tier overrides `<project>/.claude/model.local.json`.** A project can reassign
+  which tier each SDLC agent dispatches on — a `default` for all agents plus a per-agent `agents{}` map
+  (`opus | sonnet | haiku | fable`). Resolution is `agents[<bare-name>] → default → agent .md
+  frontmatter → sonnet`, applied identically by the `enforce-agent-model.sh` hook (so overrides are not
+  reverted) and the orchestrator (new Step 1b-models; Step 3b-3). Validated by
+  `schemas/model-local.schema.json`. Fail-open: a missing/malformed file or invalid tier falls back to
+  the built-in frontmatter tiers. The registry stays the SSOT for tag→model_id+pricing — this only
+  changes which tag an agent uses.
+- **`/sdlc:model-config` command.** Interactive authoring of `.claude/model.local.json`: sources valid
+  tiers from the registry, sets a project-wide default first, then optional per-agent overrides; merges
+  idempotently and never clobbers existing config.
+
 ## [1.2.0] — 2026-07-01
 
 Only the `sdlc` plugin changed; other plugins remain at `1.1.0`.
