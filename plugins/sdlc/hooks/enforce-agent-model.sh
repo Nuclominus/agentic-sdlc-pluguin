@@ -16,13 +16,36 @@ set -uo pipefail
 #
 # This list MIRRORS `pipeline_tiers` in plugins/sdlc/config/models.json (the
 # model registry / single source of truth) — keep the two in sync. The hook
-# keeps its own inline copy on purpose: a PreToolUse hook must fail-open fast
-# and must not depend on parsing a config file.
+# keeps its own inline copy on purpose: a PreToolUse hook must fail-open fast.
+# It ALSO reads an OPTIONAL per-project override, <project>/.claude/model.local.json
+# (agents[<name>] > default), which takes precedence over the frontmatter tier —
+# but MUST still fail open (fall back to frontmatter) if that file is absent,
+# unparseable, or names an invalid tier.
 is_valid_tier() {
     case "$1" in
         opus|sonnet|haiku|fable) return 0 ;;
         *)                       return 1 ;;
     esac
+}
+
+# Resolve a project-local per-agent tier override from
+# <project_root>/.claude/model.local.json, if that OPTIONAL file exists and parses.
+# Echoes a tier string (agents[<name>] preferred, else default) or nothing.
+# Fails open (echoes nothing) on any error: missing file, bad JSON, or no parser.
+resolve_override_tier() {
+    # $1 = project_root, $2 = bare agent name
+    local file="$1/.claude/model.local.json"
+    [ -f "$file" ] || return 0
+    if command -v jq >/dev/null 2>&1; then
+        jq -r --arg a "$2" '.agents[$a] // .default // empty' "$file" 2>/dev/null
+    elif command -v python3 >/dev/null 2>&1; then
+        python3 -c "import json,sys
+try:
+    d=json.load(open(sys.argv[1]))
+    print(d.get('agents',{}).get(sys.argv[2]) or d.get('default') or '')
+except Exception:
+    pass" "$file" "$2" 2>/dev/null
+    fi
 }
 
 allow() {
@@ -98,6 +121,21 @@ fi
 if ! is_valid_tier "$tier"; then
     allow_warn "[model-enforcement] unknown tier '${tier}' for agent '${agent_name}' — skipping"
     exit 0
+fi
+
+# ── apply optional project-local override ───────────────────────────────────
+# A project may reassign an agent's tier via <project_root>/.claude/model.local.json
+# (agents[<name>] preferred, else default). A VALID override replaces the frontmatter
+# tier; any error or invalid value falls back to the frontmatter tier (fail-open).
+# Diagnostics go to stderr so they never corrupt the JSON decision on stdout.
+override_tier=$(resolve_override_tier "$project_root" "$bare_name")
+if [ -n "$override_tier" ]; then
+    if is_valid_tier "$override_tier"; then
+        tier="$override_tier"
+    else
+        printf '[model-enforcement] ignoring invalid override tier "%s" for %s in .claude/model.local.json — using frontmatter "%s"\n' \
+            "$override_tier" "$agent_name" "$tier" >&2
+    fi
 fi
 
 # Enforce the short tier name verbatim — the Agent tool rejects full model IDs.
