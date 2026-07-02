@@ -10,6 +10,11 @@ color: red
 
 Read `${CLAUDE_PLUGIN_ROOT}/rules/skills.md` (row: **Debugger**) — invoke listed Skills BEFORE diagnosis and before declaring root cause. Single source of truth; do not paraphrase from memory.
 
+You are an **on-demand agent** (you bypass the SDLC orchestrator), so also honor `skills.md`
+§ **Project Extensions**: self-read the project's `.claude/sdlc.local.yaml` `extensions.skills`
+rows whose `agents` contains `android-debugger` (or equals `"all"`) and invoke them
+(`mandatory` → always, `recommended` → when the task calls for it). If the file or block is absent, do nothing.
+
 ---
 
 # Android Debugging Specialist — Root-Cause Analysis
@@ -57,6 +62,13 @@ You investigate bugs in the project (modular `:feature:<name>`). Detect the proj
 1. Existing tests pass (run the project's unit-test task for its debug flavor, from `the project's build variants`).
 2. `./gradlew ktlintCheck detekt` clean.
 3. No new crashes.
+4. **Remove session debris before Done.** Debugging adds temporary artifacts — strip them all.
+   `Read` `${CLAUDE_PLUGIN_ROOT}/rules/logging.md` (Logging **and** Comment Hygiene) and apply its
+   mandatory cleanup: no debug logs added this session remain in non-test sources (including the
+   project's own `Logger.d/e {}` — the `validate-kotlin` hook does NOT catch those, only
+   `println`/`android.util.Log`/`printStackTrace`), no commented-out code, no narration or
+   `// AI` / `// per plan` provenance comments. Re-run `git diff develop...HEAD` and confirm the
+   diff is only the minimal fix.
 
 ## Common Bug Categories
 
@@ -140,6 +152,7 @@ adb logcat *:E
 - [ ] Lifecycle-aware state collection used for store state (e.g. `collectAsStateWithLifecycle()`)
 - [ ] Dispatcher qualifier on IO/CPU work (per the project's DI conventions)
 - [ ] Regression test added (via `android-tester` or `android-qa`)
+- [ ] Session debris removed: no debug logs added this session (incl. `Logger.d/e {}`), no commented-out code, no `// AI`/`// per plan` narration comments (see `${CLAUDE_PLUGIN_ROOT}/rules/logging.md`)
 - [ ] Unit-test + `ktlintCheck` + `detekt` tasks clean (for the project's debug flavor)
 
 ## Non-Negotiable Rules

@@ -1,7 +1,11 @@
 name: android-bugfix
 description: >
-  Android bug-fix gate. Run android-debugger first (on-demand, for root cause), then:
-  Developer -> Reviewer (loops back to Developer, max 3) -> [Security || Tester] -> QA.
+  Android bug-fix gate. NOTE: android-debugger is an on-demand agent, NOT a phase in this
+  pipeline — invoke it manually first for root-cause analysis, THEN run this workflow. The
+  executable pipeline below starts at development and, by design, ENDS AT QA (no documentation
+  phase): open the PR manually per rules/git-operations.md ("commit/PR only when explicitly
+  requested"). Executable gate: Developer -> Reviewer (loops back to Developer, max 3) ->
+  [Security || Tester] -> QA.
 phases:
   - development
   - name: review

@@ -7,9 +7,9 @@ Each rules file is **lazy**: agents read it only when their role appears in the 
 | `workflow.md` | orchestrator / main thread | Once at session start, then on phase transitions |
 | `skills.md` | android-ba, android-developer, android-reviewer, android-debugger (mandatory); android-tester, android-qa, android-docs, android-devops, android-cicd, android-aar (recommended) | BEFORE phase work — single source of truth for Skill invocations, project-extension self-read rules + Android CLI capability bindings |
 | `testing.md` | android-tester | Before writing tests |
-| `logging.md` | android-developer (pre-Done cleanup), android-reviewer (enforcement check) | Before claiming Done / during review |
+| `logging.md` | android-developer (pre-Done cleanup), android-debugger (pre-Done cleanup — adds debug logs while investigating), android-reviewer (enforcement check) | Before claiming Done / during review — covers BOTH log statements and comment hygiene (no commented-out code, no narration, no `// AI`/`// per plan` provenance chatter) |
 | `documentation.md` | **every agent** | Before answering project-specific questions (vault lookup); android-docs before PR; android-reviewer during review |
-| `git-operations.md` | android-docs (PR step), any agent on commit request | Only when about to commit / open PR |
+| `git-operations.md` | android-docs (PR step — self-read before `gh pr create`), any agent on commit request | Only when about to commit / open PR. Also injected into the `/sdlc` pipeline's `documentation` phase via `manifest.yaml` `phase_injections.documentation`, so the PR-hygiene rules (no AI mentions, empty PR, no stats/checklists) reach the pipeline even when the doc agent is dispatched programmatically. |
 | `enforcement.md` | android-debugger (hook troubleshooting), android-devops (hook scripts), main thread on hook failure | Only when hooks misbehave |
 | `snippets/non-negotiable.md` | android-developer (pre-implementation), android-reviewer (review), android-debugger (verification) | Forbidden-patterns reference |
 | `snippets/proguard-keep.md` | android-security, android-devops | ProGuard/R8 review or rules edit |

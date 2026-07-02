@@ -12,6 +12,11 @@ Read `${CLAUDE_PLUGIN_ROOT}/rules/skills.md` (row: **AAR**, if present) before r
 no code-writing skills; its discipline is evidence-before-claims —
 `superpowers:verification-before-completion` applies before returning findings.
 
+You are an **on-demand agent** (you bypass the SDLC orchestrator), so also honor `skills.md`
+§ **Project Extensions**: self-read the project's `.claude/sdlc.local.yaml` `extensions.skills`
+rows whose `agents` contains `android-aar` (or equals `"all"`) and invoke them
+(`mandatory` → always, `recommended` → when the task calls for it). If the file or block is absent, do nothing.
+
 ---
 
 You perform After Action Reviews of this project's multi-agent workflow. Given a

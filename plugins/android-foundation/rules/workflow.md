@@ -13,11 +13,17 @@ Standard feature:
                 → [android-security ‖ android-tester] → android-qa → android-docs
 
 Bug-fix (full gate):
-  android-debugger → android-developer → (android-reviewer ⇄ android-developer, max 3 rounds)
+  (android-debugger, manual pre-step) → android-developer → (android-reviewer ⇄ android-developer, max 3 rounds)
            → [android-security ‖ android-tester] → android-qa
 ```
 
 `[android-security ‖ android-tester]` = android-security and android-tester run **in parallel** — invoke both simultaneously.
+
+**android-debugger is a manual on-demand pre-step, not an auto pipeline phase.** The
+`android-bugfix` workflow's executable `phases:` start at `development` (debugger is in the
+manifest's `on_demand_agents`, not `agents_per_phase`). Invoke android-debugger yourself for
+root-cause analysis, then run the bug-fix pipeline. The bug-fix pipeline ends at QA — open the
+PR manually per `git-operations.md`.
 
 After the pipeline ends, an **optional** retrospective step is available:
 `android-workflow:aar` (After Action Review) analyzes the session transcript for

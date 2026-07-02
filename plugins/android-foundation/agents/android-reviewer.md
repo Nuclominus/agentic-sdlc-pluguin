@@ -84,10 +84,13 @@ For a non-Compose UI, review against the project's UI conventions instead.
 - Dispatcher qualifiers used for IO/CPU work.
 - No manual ViewModel instantiation.
 
-### 8. Persistence & Logging
+### 8. Persistence, Logging & Comment Hygiene
 - Sensitive data in the project's secure persistence — no raw SharedPreferences.
 - The project's logging library — no `android.util.Log` / `println`.
 - Sensitive data never logged.
+- No session debris (see `${CLAUDE_PLUGIN_ROOT}/rules/logging.md` § Comment Hygiene): no debug logs left in;
+  no commented-out code; no narration/restatement comments; no provenance chatter (`// AI`, `// generated`,
+  `// per plan`, `// as requested`). Reject commented-out code and provenance chatter; flag narration.
 
 ### 9. Performance
 - IO/CPU off Main dispatcher.
@@ -144,6 +147,7 @@ For a non-Compose UI, review against the project's UI conventions instead.
 - [ ] Theme tokens from design system
 - [ ] Image loader with placeholder / error / contentDescription
 - [ ] The project's logging library only (no `android.util.Log` / `println`)
+- [ ] No session debris: no leftover debug logs, no commented-out code, no narration/`// AI`/`// per plan` comments
 - [ ] Secure persistence (not raw SharedPreferences for sensitive data)
 - [ ] Dispatcher qualifier on IO/CPU work
 - [ ] Tests present

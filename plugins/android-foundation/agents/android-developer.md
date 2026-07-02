@@ -66,6 +66,7 @@ After 3 rounds without LGTM, escalate per the orchestrator (it passes phase cont
 - [ ] The project's secure persistence used (not raw SharedPreferences for sensitive data)
 - [ ] The project's image-loading library used
 - [ ] The project's logging library used (no `android.util.Log` / `println`)
+- [ ] No session debris in the diff: no debug logs, no commented-out code, no narration/`// AI`/`// per plan` provenance comments (see `${CLAUDE_PLUGIN_ROOT}/rules/logging.md` § Comment Hygiene)
 - [ ] Dispatcher qualifier used for IO/CPU work (per the project's DI conventions)
 - [ ] Build passes (one attempt; skip Gradle tasks if not found)
 - [ ] Hook returns 0 violations
