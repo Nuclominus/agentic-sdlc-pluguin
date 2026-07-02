@@ -4,6 +4,10 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-07-02
+
+Only the `sdlc` plugin changed; other plugins remain at `1.1.0`.
+
 ### Added
 
 - **Project-local model tier overrides `<project>/.claude/model.local.json`.** A project can reassign
