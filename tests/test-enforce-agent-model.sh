@@ -5,6 +5,10 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HOOK="$REPO_ROOT/plugins/sdlc/hooks/enforce-agent-model.sh"
 fails=0
 
+TMPDIRS=()
+cleanup() { [ "${#TMPDIRS[@]}" -eq 0 ] || rm -rf "${TMPDIRS[@]}"; }
+trap cleanup EXIT
+
 run_hook() {  # $1 = project dir, $2 = requested model  → prints hook stdout
     printf '{"tool_name":"Agent","tool_input":{"subagent_type":"developer","model":"%s"}}' "$2" \
         | CLAUDE_PROJECT_DIR="$1" CLAUDE_PLUGIN_ROOT="" bash "$HOOK"
@@ -18,6 +22,7 @@ enforced_tier() {  # $1 = hook stdout, $2 = requested model
 
 mk_project() {  # $1 = model.local.json contents (or "NONE")  → echoes project dir
     local d; d=$(mktemp -d)
+    TMPDIRS+=("$d")
     mkdir -p "$d/.claude" "$d/plugins/sdlc/agents"
     printf -- '---\nname: developer\nmodel: sonnet\n---\nbody\n' > "$d/plugins/sdlc/agents/developer.md"
     [ "$1" != "NONE" ] && printf '%s' "$1" > "$d/.claude/model.local.json"
@@ -47,5 +52,13 @@ check "missing file passthrough" "sonnet" "$(enforced_tier "$(run_hook "$p" opus
 # 5. malformed JSON → fail open to frontmatter sonnet
 p=$(mk_project '{ this is not json ')
 check "malformed json fail-open" "sonnet" "$(enforced_tier "$(run_hook "$p" opus)" opus)"
+
+# 6. invalid per-agent value WITH a valid default → falls through to default (haiku)
+p=$(mk_project '{"default":"haiku","agents":{"developer":"turbo"}}')
+check "invalid per-agent falls through to default" "haiku" "$(enforced_tier "$(run_hook "$p" sonnet)" sonnet)"
+
+# 7. invalid default (no per-agent entry) → falls back to frontmatter sonnet
+p=$(mk_project '{"default":"turbo"}')
+check "invalid default falls back to frontmatter" "sonnet" "$(enforced_tier "$(run_hook "$p" sonnet)" sonnet)"
 
 [ "$fails" -eq 0 ] && { echo "ALL PASS"; exit 0; } || { echo "$fails FAILED"; exit 1; }
