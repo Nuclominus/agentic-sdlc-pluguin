@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Nuclominus/Agentic-SDLC-Pluguin/schemas/model-local.schema.json",
+  "title": "SDLC Project-Local Model Tier Overrides",
+  "description": "Schema for <project>/.claude/model.local.json — per-project reassignment of the model TIER each SDLC agent dispatches on. Resolution: agents[<bare-agent-name>] -> default -> agent .md frontmatter model: -> sonnet. Tiers are the pipeline_tiers from plugins/sdlc/config/models.json; only these values are accepted by the Agent tool. This file changes which tag an agent uses, never the tag->model_id/pricing mapping (that stays in the registry).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "description": { "type": "string" },
+    "default": {
+      "description": "Tier applied to every agent unless overridden in `agents`.",
+      "enum": ["opus", "sonnet", "haiku", "fable"]
+    },
+    "agents": {
+      "type": "object",
+      "description": "Per-agent tier map. Keys are bare agent names (e.g. developer, android-developer); a namespaced key uses only the part after the last ':'.",
+      "propertyNames": { "pattern": "^[a-z0-9][a-z0-9:-]*$" },
+      "additionalProperties": {
+        "enum": ["opus", "sonnet", "haiku", "fable"]
+      }
+    }
+  }
+}
