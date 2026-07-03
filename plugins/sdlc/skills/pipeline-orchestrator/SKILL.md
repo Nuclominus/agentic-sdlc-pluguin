@@ -642,6 +642,15 @@ If `--dry-run` is NOT present, skip the rest of Step 1d and continue to Step 2.
 
 If `--dry-run` IS present, do the following and then EXIT (see 1d-4):
 
+**0. Resume-aware pre-pass (only if `--resume` / `--resume=<slug>` is also present).**
+Resolve `task_slug` (from `resume_slug`, or derived as in Step 2). If `docs/plans/{task_slug}/`
+does not exist, print `⏭ --resume --dry-run: no workspace at docs/plans/{task_slug}/ — previewing a full run`
+and continue as an ordinary dry-run (every row estimated). Otherwise read `.checkpoint/*.json` and
+compute the already-done unit set + first unfinished phase using the SAME rules as `3-resume-skip` /
+`lib/resume.mjs` (the tested source of truth — ignore `_run.json`, `*.tmp`, and unparseable/statusless
+files; a unit is done only when its checkpoint status ∈ {completed, skipped}). Record the done rows as
+`CONTEXT.dryrun_resume_done`. This pre-pass READS ONLY — it writes no file and creates no workspace.
+
 **1. Load the model registry** for pricing exactly as Step 3d-0 does:
 
 ```
@@ -663,6 +672,11 @@ spawn any agent. For each resolved entry:
 For each row resolve the **model tier** via the Step 3b-3 precedence
 (`CONTEXT.model_overrides.agents[<bare>]` → `CONTEXT.model_overrides.default` →
 agent `.md` frontmatter `model:` → `sonnet`). No agent is spawned — this is a pure lookup.
+
+When the resume pre-pass (step 0) marked rows as already-done (`CONTEXT.dryrun_resume_done`), tag
+those rows **skipped (resumed)** and EXCLUDE them from the cost estimate — they contribute `$0.00`,
+and only rows at or after the re-entry point are counted in step 4's totals. A real `--resume` run
+would dispatch exactly those same remaining rows, so this estimate is the cost to FINISH, not to redo.
 
 **3. Estimate cost per row from a documented token HEURISTIC** (⚠️ this is an ESTIMATE,
 not a measurement — real cost is recorded in Step 3d-1/Step 5 from actual usage). Baseline
@@ -711,6 +725,7 @@ Phases ({N}):
    1. {phase}{ — aspect}    → {agent} ({tier})   ~${est_row}{  loops ⇄ {return_to}, ≤{max_rounds}× | ‖ parallel — flags if any}
    2. {phase}               → {agent} ({tier})   ~${est_row}
    ...
+   3. ⏩ {phase}{ — aspect}   → skipped (resumed from checkpoint)   $0.00
 Skip-rules applied: {csv of CONTEXT.skip_rules_applied[].rule, or "none"}
 Estimated cost: ~${expected_total}  (worst-case ${worst_total})
 Cap: {CONTEXT.cost_cap or "none"}  → {WITHIN | ⚠️ EXCEEDS by $X}
@@ -723,14 +738,18 @@ math is transparent. The `Cap` verdict compares `expected_total` against
 `CONTEXT.cost_cap`: `WITHIN` when `expected_total ≤ cap` (or no cap), else
 `⚠️ EXCEEDS by ${expected_total − cap}`.
 
+When `--resume` is active, already-done rows are printed in the `⏩ … skipped (resumed from checkpoint)  $0.00` form and are excluded from `Estimated cost` (which then reflects only the remaining phases); `{N}` is unchanged.
+
 #### 1d-3. Headless dry-run
 
 If `HEADLESS == true` (Step 0a-1), additionally write a single machine-readable line to
 stdout so CI can gate on it:
 
 ```
-{ "dry_run": true, "workflow": "{active_workflow}", "phases": {N}, "estimated_cost_usd": {expected_total}, "worst_case_usd": {worst_total}, "cap_usd": {CONTEXT.cost_cap or null}, "cap_estimate": "within"|"exceeds" }
+{ "dry_run": true, "workflow": "{active_workflow}", "phases": {N}, "estimated_cost_usd": {expected_total}, "worst_case_usd": {worst_total}, "cap_usd": {CONTEXT.cost_cap or null}, "cap_estimate": "within"|"exceeds", "resumed": true, "reenter_at": "{first unfinished phase}" }
 ```
+
+The `resumed`/`reenter_at` fields appear only when `--resume` is combined with `--dry-run`; they let CI see the computed re-entry point without a real run.
 
 The field is deliberately named **`cap_estimate`** (values `within` | `exceeds`), NOT `cap_status`.
 It is a verdict on the *pre-run estimate* against the cap — a distinct concept from the real-run
@@ -743,7 +762,7 @@ estimate breach the cap?", `cap_status` = "what actually happened during enforce
 
 After printing the preview, STOP the pipeline cleanly:
 
-- Do NOT run Step 2 (no `docs/plans/{slug}/` workspace, no `_brief.md`).
+- Do NOT run Step 2 (no `docs/plans/{slug}/` workspace, no `_brief.md`). (Under `--resume`, the workspace pre-exists; the dry run still neither rewrites `_brief.md` nor writes any checkpoint — it stays read-only.)
 - Do NOT run Step 3 (no agents dispatched).
 - Do NOT run Step 4 (post-pipeline checks) or Step 5 (telemetry) — nothing ran, so there
   is nothing to record.
@@ -757,6 +776,29 @@ side-effect-free: the only output is the preview block (plus the headless JSON l
 2. Create directory `docs/plans/{task_slug}/` if it does not exist.
 3. Create `docs/plans/{task_slug}/_brief.md` with the original `$ARGUMENTS`.
 
+**Resume mode.** When invoked with `resume` (see `start.md` Step 1):
+
+1. Resolve `task_slug` from `resume_slug` or derive it from `$ARGUMENTS` (same algorithm as item 1).
+2. If `docs/plans/{task_slug}/` does not exist → HALT:
+   `⛔ Nothing to resume: docs/plans/{task_slug}/ not found. Run without --resume to start fresh.`
+3. Do NOT recreate `_brief.md`. Read the existing one (it is the SSOT description for agents). If a
+   non-empty description was passed AND it differs from `_brief.md`, print
+   `⚠️ --resume: description differs from saved _brief.md; using saved brief` and continue with the saved brief.
+4. Read `.checkpoint/*.json` (ignore `_run.json`, any `*.tmp`, and any file that fails to parse or
+   lacks `status` — those units are treated as NOT complete). Build `CONTEXT.completed_units` —
+   the set of resolved-phase unit ids (`{phase}` or `{phase}-{aspect}`) whose checkpoint status ∈
+   {completed, skipped}. EXCLUDE any checkpoint that is `_run.json`, a `*.tmp`, unparseable, lacks
+   `status`, or has any other status — in particular `approved` plan-pass units (`{phase}-plan…`),
+   which are NOT done and never correspond to a `resolved_phases` entry. This is exactly the set
+   `lib/resume.mjs`'s `completedUnits()` computes. Set `CONTEXT.resumed = true`.
+5. **MUST PRINT VERBATIM:**
+   ```
+   ⏭ Resume: {task_slug}
+      Completed: {comma-list of completed unit ids}
+      Re-entering at: {first unfinished resolved phase}
+   ```
+   The "first unfinished resolved phase" is computed by the SAME rules as Step 3's skip check below.
+
 This directory is the **single source of truth** for inter-phase communication. Agents read prior phase outputs from here, not from your context window.
 
 ### Step 3 — Execute each phase
@@ -765,6 +807,23 @@ For each phase in order, first determine if the phase is **aspect-agnostic** or 
 
 - **Aspect-agnostic phases** (business_analysis, security, documentation): one agent runs, taking all prior phase outputs as context. Single execution per phase.
 - **Aspect-aware phases** (development; optionally qa if profiles declare per-aspect agents): fan-out — orchestrator runs ONE agent per relevant aspect, sequentially. Default order: `database → backend → frontend → testing` (matches typical dependency direction; backend depends on database; frontend depends on backend's API contract).
+
+**3-checkpoint-init.** Before dispatching any phase, create `docs/plans/{task_slug}/.checkpoint/`
+and write `.checkpoint/_run.json` — the resolved DAG, so `--resume` (and `sdlc-lint resume`) can
+compute the re-entry point without re-resolving the workflow. Shape (validated by
+`schemas/run.schema.json`): `{ task_slug, workflow: CONTEXT.active_workflow, stack: primary_stack,
+resolved_phases: [ {name, kind: "plain"|"loop"|"parallel", aspects: <ordered aspect list or null>,
+members?: [{name, aspects}] } ] }`. Derive each entry from `CONTEXT.resolved_phases`: a plain phase
+sets `kind:"plain"`; a loop phase sets `kind:"loop"`; a `{parallel:[...]}` group sets
+`kind:"parallel"` + `members`; an aspect-aware phase sets `aspects` to the aspects resolved for it by
+the SAME deterministic 3a lookup (the profile's `agents_per_phase` map — the aspects whose agent is
+non-empty, in canonical order `database → backend → frontend → testing`), computed up front here;
+this is a pure lookup, not a dispatch. An aspect-agnostic phase sets `aspects: null`. A
+`{parallel:[...]}` group's `name` (required by `schemas/run.schema.json`, minLength 1) is the
+deterministic synthesized string `"parallel:" + members joined by "+"` (e.g.
+`parallel:security+test`) — this is what `sdlc-lint resume`'s `reenter_at`/`remaining` print for
+the group, since they read each resolved-phase entry's `.name`. Write it
+atomically (`.tmp` → rename). This file is overwritten (not appended) on every fresh run.
 
 **3-shapes. Phase-item shapes (generic control flow).**
 
@@ -798,6 +857,40 @@ If `return_to` is a multi-pass phase with an approval gate (e.g. development's p
 The verdict contract (approved vs changes-requested) is read from the loop phase agent's compact summary — review-role agents state their verdict explicitly. The orchestrator keys off "findings present?" only; it stays platform-agnostic.
 
 For each phase:
+
+**3-resume-skip (resume mode only).** Before 3a, if `CONTEXT.resumed` is set, decide whether this
+resolved phase is already complete and can be skipped. The rules MUST match `tools/sdlc-lint/lib/resume.mjs`
+(the tested source of truth) exactly:
+
+- **Plain aspect-agnostic** — done if `.checkpoint/{phase}.json` status ∈ {completed, skipped}.
+- **Plain aspect-aware** — done if EVERY dispatched aspect has `.checkpoint/{phase}-{aspect}.json`
+  status ∈ {completed, skipped}. If only some aspects are done, do NOT skip the phase; run only the
+  aspects that are NOT done (checkpoint missing, unparseable, or status ∉ {completed, skipped}) — in
+  canonical order — skipping the done aspects.
+- **Development two-pass** — if `.checkpoint/{phase}[-{aspect}].json` status ∈ {completed, skipped}
+  → skip the aspect. Else if `.checkpoint/{phase}-plan[-{aspect}].json` is `approved` → skip the
+  planning pass + gate, go straight to the implement pass (the plan is on disk, approved).
+- **Loop phase** — skip ONLY if `.checkpoint/{phase}.json` status ∈ {completed, skipped} (verdict was approved).
+  Otherwise re-run the loop as a unit from round 1. (Its `return_to` phase is re-dispatched by the
+  loop as normal, even if that phase has a completed checkpoint — consistent with "a phase returned
+  via changes is not complete".)
+- **Parallel group** (`{parallel:[a,b,…]}`) — the group is done iff EVERY member is done by that
+  member's own rule above (a plain member: `.checkpoint/{member}.json` status ∈ {completed, skipped};
+  an aspect-aware member: every aspect done). If only some members are done, do NOT skip the group;
+  re-dispatch only the not-done members (the done members' checkpoints are reused), then continue.
+
+When a unit is skipped: load its checkpoint into `CONTEXT.phases[]` (set that element's
+`origin: "resumed"`), add its `cost_usd` to `CONTEXT.running_cost_usd`, and **MUST PRINT VERBATIM:**
+```
+⏩ Phase {N}/{total}: {phase_name}{ — aspect} → skipped (resumed from checkpoint)
+```
+Freshly-dispatched units (this run) get `origin: "fresh"`. If ALL resolved phases are already done,
+print `Resume: nothing left to run — re-verifying.` and go straight to Step 4 (post-checks) then
+Step 5 (re-assemble telemetry).
+
+<!-- DRIFT GUARD: these skip rules are mirrored in tools/sdlc-lint/lib/resume.mjs and its
+     fixtures/resume-* . When you change resume skip-semantics here, update resume.mjs + the
+     fixtures + resume.test.mjs in the SAME change, or CI (sdlc-lint all) will diverge from runtime. -->
 
 **3a. Look up agent(s):**
 
@@ -1030,6 +1123,24 @@ gate uses the ACTUAL accumulated `cost_usd`. Both read the same cap from `CONTEX
 
 If validation fails, **do not proceed** — ask the user how to handle (retry, skip, abort).
 
+**3d-3. Write the phase checkpoint (resume substrate).** After 3d-1/3d-2 (telemetry computed) AND
+3e (validation passed), atomically write `docs/plans/{task_slug}/.checkpoint/{unit}.json` where
+`{unit}` = `{phase}` for an aspect-agnostic phase or `{phase}-{aspect}` for an aspect-aware one.
+The file IS the `phases[]` telemetry entry for this unit (same fields — see Step 5) plus
+`output_file` (the `0X-{phase}{-aspect}.md` path) and `completed_at` (ISO). Set `status:"completed"`.
+In the checkpoint file, set `aspect` to the aspect string for an aspect-aware unit, or `null` for an
+aspect-agnostic unit (matching the Step 5 example and `schemas/checkpoint.schema.json`, where `aspect`
+is `string|null`). Validated by `schemas/checkpoint.schema.json`. Write to `{unit}.json.tmp` then
+rename (atomic).
+
+- **Dev planning pass:** right after the plan approval gate (3b-special) is approved, write
+  `.checkpoint/{phase}-plan{-aspect}.json` with `status:"approved"` (no cost fields required). This
+  lets resume skip the planning gate and re-enter directly at the implement pass.
+- **Skipped phases:** when a phase is skipped by a skip-rule (Step 0c) or by an empty agent map
+  (3a), write its checkpoint with `status:"skipped"` so resume treats it as done (nothing to do).
+
+This write is purely additive — it creates checkpoint files and changes no phase-dispatch logic.
+
 ### Step 4 — Run post-pipeline checks
 
 For each command in `EFFECTIVE_PROFILE.post_pipeline_checks` (already merged with `sdlc.local.yaml` in Step 1b), execute via `Bash`:
@@ -1053,7 +1164,14 @@ If any command fails:
 
 ### Step 5 — Write telemetry and final summary
 
-Write `docs/plans/{task_slug}/_telemetry.json`:
+Assemble `phases[]` by reading `docs/plans/{task_slug}/.checkpoint/*.json` (every unit file except
+`_run.json`, AND except any checkpoint whose `status` is `approved` or whose unit id ends in
+`-plan` (i.e. matches `{phase}-plan[-aspect]`) — those are dev two-pass planning-gate markers, not
+phase completions, and carry no cost fields, so ingesting them would produce a bogus zero-cost
+phase row and risk `undefined` in the token sums), ordered by `completed_at`. Because each
+remaining checkpoint IS a `phases[]` element, no re-derivation is needed — this makes the totals
+correct even after a `--resume` (the cost of phases finished in an earlier session is preserved in
+their checkpoints, not lost). Then write `docs/plans/{task_slug}/_telemetry.json`:
 
 ```json
 {
@@ -1129,6 +1247,15 @@ Compute aggregates from `phases[]`:
 - `cache_hit_ratio` = `total_cached_input_tokens / max(total_input_tokens, 1)` rounded to 2 decimals.
 - `cost_cap_usd` = `CONTEXT.cost_cap` (the active workflow recipe's `caps.max_total_cost_usd`), or `null` when the recipe declared no cap.
 - `cap_status` = `CONTEXT.cap_status` from the Step 3d-cap gate: `"within"` (cap set and never exceeded, or no cap), `"exceeded-continued"` (user approved continuing past the cap), or `"exceeded-aborted"` (user aborted, or headless abort). When the run was cost-aborted, also set `aborted_at_phase` to the phase that was about to run.
+- `resumed` = `true` when this run entered via `--resume` (else omit or `false`).
+- `resumed_at` = ISO timestamp of the resume entry (only when `resumed`).
+- `resume_slug` = the resumed slug (only when `resumed`).
+- each `phases[]` element carries `origin: "resumed" | "fresh"` — `"resumed"` when it was loaded
+  from a checkpoint written in an earlier session (not dispatched this run), else `"fresh"`. NOTE:
+  `origin` is NOT stored in the checkpoint file (`schemas/checkpoint.schema.json` is
+  `additionalProperties:false` and has no `origin` field) — it is layered on at assembly time here,
+  tracked via `CONTEXT` during Step 3 (`3-resume-skip` marks skipped units `"resumed"`; freshly
+  dispatched units are `"fresh"`), not read back off disk.
 
 > Token counts come from the Agent tool's usage envelope when present. If a phase's result lacks usage data, fall back to char-length / 4 estimation and set `phases[N].usage_source: "estimated"` (default `"reported"`).
 

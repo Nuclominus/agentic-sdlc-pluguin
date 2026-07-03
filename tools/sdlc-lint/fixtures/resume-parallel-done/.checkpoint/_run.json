@@ -1,0 +1,7 @@
+{ "task_slug": "parallel-done", "workflow": "android-feature", "stack": "android",
+  "resolved_phases": [
+    { "name": "business_analysis", "kind": "plain", "aspects": null },
+    { "name": "development", "kind": "plain", "aspects": null },
+    { "name": "parallel:security+test", "kind": "parallel", "aspects": null,
+      "members": [ { "name": "security", "aspects": null }, { "name": "test", "aspects": null } ] },
+    { "name": "documentation", "kind": "plain", "aspects": null } ] }

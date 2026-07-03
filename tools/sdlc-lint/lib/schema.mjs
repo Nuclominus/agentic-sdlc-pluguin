@@ -11,6 +11,8 @@ const SCHEMA_MAP = [
   { glob: "plugins/sdlc/config/models.json", schema: "schemas/models.schema.json",      parse: "json" },
   { glob: "**/.claude/model.local.json",     schema: "schemas/model-local.schema.json", parse: "json" },
   { glob: "plugins/**/.claude-plugin/plugin.json", schema: "schemas/plugin.schema.json", parse: "json" },
+  { glob: "docs/plans/**/.checkpoint/*.json", schema: "schemas/checkpoint.schema.json", parse: "json", reject: /\/_run\.json$/ },
+  { glob: "docs/plans/**/.checkpoint/_run.json", schema: "schemas/run.schema.json", parse: "json" },
 ];
 
 const fmtErr = (e) => `${e.instancePath || "/"} ${e.message}`;
@@ -19,7 +21,7 @@ export function checkSchemas(root = process.cwd()) {
   const ajv = new Ajv({ allErrors: true, strict: false });
   addFormats(ajv);
   const results = [];
-  for (const { glob, schema, parse } of SCHEMA_MAP) {
+  for (const { glob, schema, parse, reject } of SCHEMA_MAP) {
     let validate;
     try {
       validate = ajv.compile(JSON.parse(readFileSync(join(root, schema), "utf8")));
@@ -28,7 +30,8 @@ export function checkSchemas(root = process.cwd()) {
       continue;
     }
     const files = globSync(glob, { cwd: root, absolute: true, dot: true })
-      .filter(f => !f.includes("/test-fixtures/"));
+      .filter(f => !f.includes("/test-fixtures/"))
+      .filter(f => !(typeof reject !== "undefined" && reject && reject.test(f)));
     for (const file of files) {
       let raw;
       try {

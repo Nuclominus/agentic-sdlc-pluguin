@@ -1,0 +1,5 @@
+{ "task_slug": "corrupt-tmp", "workflow": "default", "stack": "vanilla",
+  "resolved_phases": [
+    { "name": "business_analysis", "kind": "plain", "aspects": null },
+    { "name": "security", "kind": "plain", "aspects": null },
+    { "name": "documentation", "kind": "plain", "aspects": null } ] }
