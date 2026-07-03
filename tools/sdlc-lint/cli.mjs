@@ -37,19 +37,16 @@ const detectRows = () => listFixtures(FIX).map(name => ({ name, ...resolveFixtur
 
 function printDetect2(rows) {
   const failed = rows.filter(r => !r.ok);
-  if (!jsonOut) {
+  if (jsonOut) {
+    console.log(JSON.stringify({ command: "detect", checked: rows.length, failed: failed.length, failures: failed }));
+  } else {
     for (const r of failed) console.error(`✗ ${r.name}: expected ${JSON.stringify(r.expected)}, got ${JSON.stringify(r.actual)}`);
     console.log(`detect: ${rows.length - failed.length}/${rows.length} fixtures matched`);
   }
   return failed.length ? 1 : 0;
 }
 function printDetect() {
-  const rows = detectRows();
-  if (jsonOut) {
-    const failed = rows.filter(r => !r.ok);
-    console.log(JSON.stringify({ command: "detect", checked: rows.length, failed: failed.length, failures: failed }));
-  }
-  return printDetect2(rows);
+  return printDetect2(detectRows());
 }
 
 function runAll() {
