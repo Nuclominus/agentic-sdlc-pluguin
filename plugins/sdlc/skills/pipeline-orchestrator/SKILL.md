@@ -587,8 +587,12 @@ algorithm in `plugins/sdlc/workflows/RESOLVER.md` (Steps 1–5).
 Summary:
 
 1. **Locate:** resolve `WORKFLOW_NAME` by precedence (first hit wins): `--workflow=NAME` →
-   `sdlc.local.yaml` `active_workflow` → `CONTEXT.profile_default_workflow` (the primary profile's
-   declared `workflow`) → `"default"`.
+   `sdlc.local.yaml` `active_workflow` → **match-based auto-selection** (RESOLVER.md Step 1.5 —
+   evaluate each recipe's `match:` block against the Step 0c signals + `$ARGUMENTS`; skipped when
+   `--no-auto-workflow` is present or a higher tier already resolved) → `CONTEXT.profile_default_workflow`
+   (the primary profile's declared `workflow`) → `"default"`.
+   When auto-selection fires, **MUST print** verbatim (CSV = the satisfied condition keys):
+   `🧭 Auto-selected workflow '{name}' — matched: {csv of satisfied condition keys}. Override with --workflow=NAME or --no-auto-workflow.`
    Find the recipe via `Glob ~/.claude/plugins/cache/**/workflows/{WORKFLOW_NAME}.yaml` —
    discovered across ALL plugins (core + platform plugins), not just core. Ambiguous/missing → HALT per RESOLVER.md Step 1.
    If not found → HALT with the error message specified in RESOLVER.md Step 1.
