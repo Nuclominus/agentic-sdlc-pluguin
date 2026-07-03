@@ -222,3 +222,20 @@ test("rollupWorkspace skips non-object telemetry (null) with a warning, others s
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+import { execFileSync } from "node:child_process";
+
+const LINT_CLI = join(dirname(fileURLToPath(import.meta.url)), "..", "cli.mjs");
+
+test("sdlc-lint rollup <root> --json reports run_count", () => {
+  const root = seedWorkspace();
+  try {
+    const out = execFileSync("node", [LINT_CLI, "rollup", root, "--json"], { encoding: "utf8" });
+    const parsed = JSON.parse(out.trim().split("\n").pop());
+    assert.equal(parsed.command, "rollup");
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.run_count, 3);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

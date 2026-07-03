@@ -6,6 +6,7 @@ import { checkAllWorkflows } from "./lib/cycles.mjs";
 import { resolveFixture, listFixtures } from "./lib/detect.mjs";
 import { resolveWorkspace } from "./lib/resume.mjs";
 import { renderReportFile } from "./lib/report.mjs";
+import { rollupWorkspace } from "./lib/rollup.mjs";
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 
 const args = process.argv.slice(2);
@@ -136,10 +137,25 @@ switch (cmd) {
     }
     break;
   }
+  case "rollup": {
+    const target = args[1] && !args[1].startsWith("--") ? resolve(root, args[1]) : root;
+    try {
+      const { htmlPath, agg, text, warnings } = rollupWorkspace(target);
+      for (const w of warnings) console.error(`⚠ ${w}`);
+      if (jsonOut) console.log(JSON.stringify({ command: "rollup", ok: true, html_path: htmlPath, run_count: agg.run_count }));
+      else { console.log(text); console.log(`\nwrote ${htmlPath}`); }
+      code = 0;
+    } catch (e) {
+      if (jsonOut) console.log(JSON.stringify({ command: "rollup", ok: false, error: e.message }));
+      else console.error(`✗ rollup: ${e.message}`);
+      code = 2;
+    }
+    break;
+  }
   case "all": code = runAll(); break;
   case undefined:
   case "--help":
-    console.log("Usage: sdlc-lint <schema|cycles|detect|resume|report|all> [--json]");
+    console.log("Usage: sdlc-lint <schema|cycles|detect|resume|report|rollup|all> [--json]");
     break;
   default:
     console.error(`unknown command: ${cmd}`);
