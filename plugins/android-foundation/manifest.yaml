@@ -43,6 +43,8 @@ on_demand_agents:
   - android-cicd       # GitHub Actions, Gradle CI, lint/test pipelines
   - android-aar        # read-only After Action Review of a workflow run
 
+aar_analyst: android-aar   # overrides the neutral core's aar-analyst for /sdlc:aar
+
 convention_skills:
   - android-foundation:android-compose-ui
   - android-foundation:android-architecture

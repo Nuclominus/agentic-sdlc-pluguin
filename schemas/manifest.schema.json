@@ -137,6 +137,11 @@
       "items": { "type": "string", "minLength": 1 },
       "uniqueItems": true
     },
+    "aar_analyst": {
+      "type": "string",
+      "description": "Foundation only (optional): agent name that overrides the generic `aar-analyst` for the /sdlc:aar retrospective. Absent → the neutral core's `aar-analyst` is used.",
+      "minLength": 1
+    },
     "convention_skills": {
       "type": "array",
       "description": "Fully-qualified `plugin:skill` ids to apply during development (and other phases as the agent sees fit). Merged across the foundation and active frameworks.",
