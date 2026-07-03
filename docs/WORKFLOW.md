@@ -129,3 +129,27 @@ docs/plans/<task-slug>/
 ```
 
 See [`WALKTHROUGH.md`](WALKTHROUGH.md) for a full end-to-end run of these phases on a real task.
+
+### Resuming an interrupted run
+
+Every phase writes an atomic checkpoint to `docs/plans/{slug}/.checkpoint/` the moment it finishes.
+If a run is interrupted — crash, `Ctrl-C`, a cost-cap abort, or a fatal halt — re-run with
+`--resume` to continue from the first unfinished phase:
+
+```
+/sdlc:start "<same description>" --resume
+# or target the workspace directly:
+/sdlc:start --resume=<slug>
+```
+
+Completed phases are skipped and their cost is preserved in the final `_telemetry.json` (each phase
+records `origin: "resumed" | "fresh"`). `--resume --dry-run` previews what would be skipped without
+dispatching anything.
+
+You can inspect a workspace's re-entry point deterministically with the linter:
+
+```
+node tools/sdlc-lint/cli.mjs resume docs/plans/<slug>
+```
+
+**Non-goal:** resume trusts the code on disk; it does not restore git state.

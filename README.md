@@ -331,6 +331,9 @@ next phase, if the running total exceeds the cap it **pauses** for approve-conti
 `cap_status` (`within` | `exceeded-continued` | `exceeded-aborted`). Both `--dry-run` and the
 real-run gate read the cap from the resolved active workflow recipe.
 
+**`--resume`** — continue an interrupted pipeline from the first unfinished phase (per-phase
+checkpoints in `docs/plans/{slug}/.checkpoint/`). See `docs/WORKFLOW.md`.
+
 ---
 
 ## Available Plugins
