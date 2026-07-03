@@ -30,6 +30,17 @@ AI-assisted SDLC pipelines for **Android** development, built on the **Stack Pro
 
 See [`docs/WORKFLOW.md`](docs/WORKFLOW.md) for system diagrams and [`docs/WALKTHROUGH.md`](docs/WALKTHROUGH.md) for a full end-to-end Android run.
 
+### Verifying plugins locally
+
+Before opening a PR, run the deterministic verifier (schema + workflow-cycle + stack-detection checks):
+
+```bash
+npm ci --prefix tools/sdlc-lint
+node tools/sdlc-lint/cli.mjs all
+```
+
+CI runs the same `sdlc-lint all` plus `shellcheck` and the unit tests on every push/PR.
+
 ---
 
 ## How It Works: Stack Provider Pattern

@@ -2,3 +2,4 @@
 *.log
 docs/plans/_*.json
 docs/plans/_*.log
+node_modules/

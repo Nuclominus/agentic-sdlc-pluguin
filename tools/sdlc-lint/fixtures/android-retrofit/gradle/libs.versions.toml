@@ -1,0 +1,1 @@
+retrofit = { module = "com.squareup.retrofit2:retrofit", version = "2.11.0" }

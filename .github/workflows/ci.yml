@@ -1,0 +1,28 @@
+name: CI
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install sdlc-lint deps
+        run: npm ci --prefix tools/sdlc-lint
+      - name: sdlc-lint (schema + cycles + detect)
+        run: node tools/sdlc-lint/cli.mjs all --json
+      - name: sdlc-lint unit tests
+        run: npm test --prefix tools/sdlc-lint
+      - name: shellcheck hooks
+        run: |
+          sudo apt-get update && sudo apt-get install -y shellcheck
+          find plugins -type f -name '*.sh' -path '*/hooks/*' -print0 | xargs -0 -r shellcheck
+      - name: enforce-agent-model test
+        run: bash tests/test-enforce-agent-model.sh
+      - name: model-local schema test
+        run: python3 tests/test-model-local-schema.py

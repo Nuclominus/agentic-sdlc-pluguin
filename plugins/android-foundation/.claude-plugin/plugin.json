@@ -1,7 +1,7 @@
 {
   "name": "android-foundation",
   "version": "1.1.0",
-  "description": "Android Foundation — the centerpiece Android stack provider (Kotlin + Gradle) for the Agentic SDLC marketplace. Registers the android profile via manifest.yaml (kind: foundation, aspect: android, priority 300); provides the full specialized agent roster plus convention skills for Jetpack Compose UI, architecture, data and Navigation-Compose. Carries the pinned house rules (Coil3, Kermit, KSP, @Serializable routes, DataStore, Play Billing); detect-don't-impose libraries (Retrofit, Room, Dagger/Hilt) attach as additive framework plugins. Builds are CI-deferred; in-pipeline verification is detekt + unit tests + Kotlin compile-check.",
+  "description": "Android Foundation — the centerpiece Android (Kotlin + Gradle) stack provider for the Agentic SDLC marketplace. Registers the android profile via manifest.yaml (kind: foundation, aspect: android, priority 300); ships the full specialized agent roster plus convention skills for Compose UI, architecture, data and Navigation. Carries pinned house rules (Coil3, Kermit, KSP, @Serializable routes, DataStore, Play Billing); detect-don't-impose libraries (Retrofit, Room, Dagger/Hilt) attach as additive framework plugins. In-pipeline checks: detekt + unit tests + compile-check (builds CI-deferred).",
   "author": {
     "name": "Nuclominus",
     "url": "https://github.com/Nuclominus"

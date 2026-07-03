@@ -187,6 +187,7 @@ If `HEADLESS == true`, suppress this print (warnings already went to stderr; suc
 `CONTEXT.{plugin}_unavailable` flags propagate into agent prompts via Step 3b-1's `availability_flags:` line in the per-call CONTEXT trailer — do not duplicate that wiring here.
 
 ### Step 0b — Detect the FOUNDATION (manifest.yaml, kind: foundation)
+<!-- Detection-rule semantics here are independently verified by tools/sdlc-lint (detect.mjs + fixtures). If you change file_exists/file_contains/file_glob/any/all handling, update detect.mjs and the fixture expected.json files to match. -->
 
 The orchestrator's job here is narrow: **pick the foundation, then delegate framework resolution to it.**
 All declarative profile data lives in one **`manifest.yaml` per plugin** (the plugin `.md`/`README.md`
