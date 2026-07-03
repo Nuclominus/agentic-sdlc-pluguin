@@ -1,4 +1,5 @@
-// Pure renderer — no imports. The file-I/O wrapper (later task) adds node:fs / node:path.
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -173,4 +174,25 @@ export function renderReport(t, extras = {}) {
     artifactsSection(t, extras.artifactFiles),
   ].filter(Boolean);
   return doc(t, sections.join("\n"));
+}
+
+export function renderReportFile(dir) {
+  const telPath = join(dir, "_telemetry.json");
+  if (!existsSync(telPath)) throw new Error(`no _telemetry.json in ${dir}`);
+  let t;
+  try { t = JSON.parse(readFileSync(telPath, "utf8")); }
+  catch (e) { throw new Error(`unparseable _telemetry.json in ${dir}: ${e.message}`); }
+
+  let postChecksMarkdown;
+  const pc = join(dir, "05-post-checks.md");
+  if (existsSync(pc)) {
+    try { postChecksMarkdown = readFileSync(pc, "utf8").split("\n").slice(-30).join("\n"); } catch { /* degrade */ }
+  }
+  let artifactFiles = [];
+  try { artifactFiles = readdirSync(dir).filter((f) => /^\d\d-.*\.md$/.test(f)).sort(); } catch { /* degrade */ }
+
+  const html = renderReport(t, { postChecksMarkdown, artifactFiles });
+  const htmlPath = join(dir, "report.html");
+  writeFileSync(htmlPath, html);
+  return { htmlPath, ok: true };
 }

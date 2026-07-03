@@ -1,9 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdtempSync, writeFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { renderReport } from "../lib/report.mjs";
+import { tmpdir } from "node:os";
+import { renderReport, renderReportFile } from "../lib/report.mjs";
 
 const FIX = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "report-basic");
 const tel = JSON.parse(readFileSync(join(FIX, "_telemetry.json"), "utf8"));
@@ -78,4 +79,21 @@ test("deps preflight and artifact links render", () => {
   assert.match(html, /superpowers/);
   assert.match(html, /href="01-business-analysis\.md"/);
   assert.match(html, /href="_telemetry\.json"/);
+});
+
+test("renderReportFile writes report.html next to telemetry", () => {
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-report-"));
+  writeFileSync(join(dir, "_telemetry.json"), JSON.stringify(tel));
+  writeFileSync(join(dir, "01-business-analysis.md"), "# BA\n...");
+  const { htmlPath, ok } = renderReportFile(dir);
+  assert.equal(ok, true);
+  assert.ok(existsSync(htmlPath));
+  const html = readFileSync(htmlPath, "utf8");
+  assert.match(html, /add-subscription-billing/);
+  assert.match(html, /href="01-business-analysis\.md"/); // picked up the NN-*.md sibling
+});
+
+test("renderReportFile throws a clear error when telemetry is missing", () => {
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-report-empty-"));
+  assert.throws(() => renderReportFile(dir), /_telemetry\.json/);
 });
