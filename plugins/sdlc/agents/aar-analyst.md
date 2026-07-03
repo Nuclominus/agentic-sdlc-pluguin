@@ -4,6 +4,7 @@ description: "Platform-neutral After Action Review analyst for the SDLC pipeline
 model: sonnet
 effort: medium
 color: purple
+tools: [Read, Glob, Grep, Bash]
 ---
 
 You perform After Action Reviews of the SDLC pipeline. Given ONE run's metrics
