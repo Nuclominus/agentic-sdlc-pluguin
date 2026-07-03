@@ -1,0 +1,6 @@
+{ "task_slug": "loop-not-approved", "workflow": "review-loop", "stack": "vanilla",
+  "resolved_phases": [
+    { "name": "business_analysis", "kind": "plain", "aspects": null },
+    { "name": "development", "kind": "plain", "aspects": null },
+    { "name": "review", "kind": "loop", "aspects": null },
+    { "name": "documentation", "kind": "plain", "aspects": null } ] }

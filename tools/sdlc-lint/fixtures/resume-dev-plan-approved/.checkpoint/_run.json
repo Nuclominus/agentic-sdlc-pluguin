@@ -1,0 +1,5 @@
+{ "task_slug": "dev-plan-approved", "workflow": "default", "stack": "vanilla",
+  "resolved_phases": [
+    { "name": "business_analysis", "kind": "plain", "aspects": null },
+    { "name": "development", "kind": "plain", "aspects": null },
+    { "name": "qa", "kind": "plain", "aspects": null } ] }

@@ -1,0 +1,4 @@
+{ "task_slug": "all-done", "workflow": "default", "stack": "vanilla",
+  "resolved_phases": [
+    { "name": "business_analysis", "kind": "plain", "aspects": null },
+    { "name": "documentation", "kind": "plain", "aspects": null } ] }

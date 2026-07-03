@@ -1,0 +1,7 @@
+{ "task_slug": "clean-midpoint", "workflow": "default", "stack": "android",
+  "resolved_phases": [
+    { "name": "business_analysis", "kind": "plain", "aspects": null },
+    { "name": "development", "kind": "plain", "aspects": ["database", "backend"] },
+    { "name": "qa", "kind": "plain", "aspects": null },
+    { "name": "security", "kind": "plain", "aspects": null },
+    { "name": "documentation", "kind": "plain", "aspects": null } ] }
