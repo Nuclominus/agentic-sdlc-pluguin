@@ -818,7 +818,11 @@ sets `kind:"plain"`; a loop phase sets `kind:"loop"`; a `{parallel:[...]}` group
 `kind:"parallel"` + `members`; an aspect-aware phase sets `aspects` to the aspects resolved for it by
 the SAME deterministic 3a lookup (the profile's `agents_per_phase` map — the aspects whose agent is
 non-empty, in canonical order `database → backend → frontend → testing`), computed up front here;
-this is a pure lookup, not a dispatch. An aspect-agnostic phase sets `aspects: null`. Write it
+this is a pure lookup, not a dispatch. An aspect-agnostic phase sets `aspects: null`. A
+`{parallel:[...]}` group's `name` (required by `schemas/run.schema.json`, minLength 1) is the
+deterministic synthesized string `"parallel:" + members joined by "+"` (e.g.
+`parallel:security+test`) — this is what `sdlc-lint resume`'s `reenter_at`/`remaining` print for
+the group, since they read each resolved-phase entry's `.name`. Write it
 atomically (`.tmp` → rename). This file is overwritten (not appended) on every fresh run.
 
 **3-shapes. Phase-item shapes (generic control flow).**
@@ -870,6 +874,10 @@ resolved phase is already complete and can be skipped. The rules MUST match `too
   Otherwise re-run the loop as a unit from round 1. (Its `return_to` phase is re-dispatched by the
   loop as normal, even if that phase has a completed checkpoint — consistent with "a phase returned
   via changes is not complete".)
+- **Parallel group** (`{parallel:[a,b,…]}`) — the group is done iff EVERY member is done by that
+  member's own rule above (a plain member: `.checkpoint/{member}.json` status ∈ {completed, skipped};
+  an aspect-aware member: every aspect done). If only some members are done, do NOT skip the group;
+  re-dispatch only the not-done members (the done members' checkpoints are reused), then continue.
 
 When a unit is skipped: load its checkpoint into `CONTEXT.phases[]` (set that element's
 `origin: "resumed"`), add its `cost_usd` to `CONTEXT.running_cost_usd`, and **MUST PRINT VERBATIM:**
@@ -1157,10 +1165,13 @@ If any command fails:
 ### Step 5 — Write telemetry and final summary
 
 Assemble `phases[]` by reading `docs/plans/{task_slug}/.checkpoint/*.json` (every unit file except
-`_run.json`), ordered by `completed_at`. Because each checkpoint IS a `phases[]` element, no
-re-derivation is needed — this makes the totals correct even after a `--resume` (the cost of
-phases finished in an earlier session is preserved in their checkpoints, not lost). Then write
-`docs/plans/{task_slug}/_telemetry.json`:
+`_run.json`, AND except any checkpoint whose `status` is `approved` or whose unit id ends in
+`-plan` (i.e. matches `{phase}-plan[-aspect]`) — those are dev two-pass planning-gate markers, not
+phase completions, and carry no cost fields, so ingesting them would produce a bogus zero-cost
+phase row and risk `undefined` in the token sums), ordered by `completed_at`. Because each
+remaining checkpoint IS a `phases[]` element, no re-derivation is needed — this makes the totals
+correct even after a `--resume` (the cost of phases finished in an earlier session is preserved in
+their checkpoints, not lost). Then write `docs/plans/{task_slug}/_telemetry.json`:
 
 ```json
 {
@@ -1240,7 +1251,11 @@ Compute aggregates from `phases[]`:
 - `resumed_at` = ISO timestamp of the resume entry (only when `resumed`).
 - `resume_slug` = the resumed slug (only when `resumed`).
 - each `phases[]` element carries `origin: "resumed" | "fresh"` — `"resumed"` when it was loaded
-  from a checkpoint written in an earlier session (not dispatched this run), else `"fresh"`.
+  from a checkpoint written in an earlier session (not dispatched this run), else `"fresh"`. NOTE:
+  `origin` is NOT stored in the checkpoint file (`schemas/checkpoint.schema.json` is
+  `additionalProperties:false` and has no `origin` field) — it is layered on at assembly time here,
+  tracked via `CONTEXT` during Step 3 (`3-resume-skip` marks skipped units `"resumed"`; freshly
+  dispatched units are `"fresh"`), not read back off disk.
 
 > Token counts come from the Agent tool's usage envelope when present. If a phase's result lacks usage data, fall back to char-length / 4 estimation and set `phases[N].usage_source: "estimated"` (default `"reported"`).
 
