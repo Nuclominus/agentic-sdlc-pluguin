@@ -581,7 +581,7 @@ Add above `switch`:
 ```js
 const FIX = resolve(dirname(fileURLToPath(import.meta.url)), "fixtures");
 function printDetect() {
-  const rows = readdirSync(FIX).map(name => ({ name, ...resolveFixture(join(FIX, name), root) }));
+  const rows = listFixtures(FIX).map(name => ({ name, ...resolveFixture(join(FIX, name), root) }));
   const failed = rows.filter(r => !r.ok);
   if (jsonOut) {
     console.log(JSON.stringify({ command: "detect", checked: rows.length, failed: failed.length, failures: failed }));
@@ -654,7 +654,7 @@ In `tools/sdlc-lint/cli.mjs`, add above `switch`:
 function runAll() {
   const schema = checkSchemas(root);
   const cycles = checkAllWorkflows(root);
-  const detect = readdirSync(FIX).map(name => ({ name, ...resolveFixture(join(FIX, name), root) }));
+  const detect = listFixtures(FIX).map(name => ({ name, ...resolveFixture(join(FIX, name), root) }));
   const codes = [printSchema(schema), printCycles(cycles), printDetect2(detect)];
   const exit = Math.max(...codes);
   if (jsonOut) console.log(JSON.stringify({ command: "all", ok: exit === 0, exit }));
@@ -672,7 +672,7 @@ function printDetect2(rows) {
   return failed.length ? 1 : 0;
 }
 function printDetect() {
-  return printDetect2(readdirSync(FIX).map(name => ({ name, ...resolveFixture(join(FIX, name), root) })));
+  return printDetect2(listFixtures(FIX).map(name => ({ name, ...resolveFixture(join(FIX, name), root) })));
 }
 ```
 Add the case:
