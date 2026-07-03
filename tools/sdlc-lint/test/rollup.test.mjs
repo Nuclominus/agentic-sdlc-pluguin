@@ -1,9 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync, cpSync } from "node:fs";
 import { join, dirname } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { computeRollup } from "../lib/rollup.mjs";
+import { computeRollup, rollupWorkspace } from "../lib/rollup.mjs";
 
 const FIXROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "rollup-multi", "docs", "plans");
 const load = (slug) => JSON.parse(readFileSync(join(FIXROOT, slug, "_telemetry.json"), "utf8"));
@@ -156,4 +157,54 @@ test("html empty-state renders a valid page", () => {
 
 test("html is deterministic (byte-identical across calls)", () => {
   assert.equal(renderRollupHtml(computeRollup(runs())), renderRollupHtml(computeRollup(runs())));
+});
+
+function seedWorkspace() {
+  const root = mkdtempSync(join(tmpdir(), "sdlc-rollup-"));
+  const plans = join(root, "docs", "plans");
+  for (const slug of ["run-a", "run-b", "run-c"]) {
+    mkdirSync(join(plans, slug), { recursive: true });
+    cpSync(join(FIXROOT, slug, "_telemetry.json"), join(plans, slug, "_telemetry.json"));
+  }
+  return root;
+}
+
+test("rollupWorkspace writes docs/plans/rollup/index.html and returns agg", () => {
+  const root = seedWorkspace();
+  try {
+    const { htmlPath, agg, text } = rollupWorkspace(root);
+    assert.equal(agg.run_count, 3);
+    assert.ok(existsSync(htmlPath));
+    assert.match(htmlPath.replace(/\\/g, "/"), /docs\/plans\/rollup\/index\.html$/);
+    assert.match(readFileSync(htmlPath, "utf8"), /SDLC cross-run rollup/);
+    assert.match(text, /3 run\(s\)/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("rollupWorkspace on empty workspace → run_count 0, valid page, no throw", () => {
+  const root = mkdtempSync(join(tmpdir(), "sdlc-rollup-empty-"));
+  try {
+    const { agg, htmlPath } = rollupWorkspace(root);
+    assert.equal(agg.run_count, 0);
+    assert.ok(existsSync(htmlPath));
+    assert.match(readFileSync(htmlPath, "utf8"), /No pipeline runs recorded yet/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("rollupWorkspace skips malformed telemetry with a warning", () => {
+  const root = seedWorkspace();
+  try {
+    const plans = join(root, "docs", "plans");
+    mkdirSync(join(plans, "run-bad"), { recursive: true });
+    writeFileSync(join(plans, "run-bad", "_telemetry.json"), "{ not json");
+    const { agg, warnings } = rollupWorkspace(root);
+    assert.equal(agg.run_count, 3);                 // the 3 good runs still aggregate
+    assert.ok(warnings.some((w) => /run-bad/.test(w)));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

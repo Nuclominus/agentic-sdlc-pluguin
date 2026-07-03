@@ -5,6 +5,8 @@
 // builtins only). Deterministic: no Date.now()/new Date()/Math.random(). The
 // dev/CI copy at tools/sdlc-lint/lib/rollup.mjs re-exports from here.
 import { computeMetrics } from "../aar/metrics.mjs";
+import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 
 const num = (n) => (typeof n === "number" && isFinite(n) ? n : 0);
 const byNameAsc = (a, b, k) => (a[k] < b[k] ? -1 : a[k] > b[k] ? 1 : 0);
@@ -263,4 +265,33 @@ ${barCell(r.cost_usd, maxRunCost)}</tr>`).join("\n");
     `<header><h1>SDLC cross-run rollup</h1><p class="sub">${agg.run_count} run(s) · ${fmtUsd(t.cost_usd)} total</p></header>`,
     kpis, runsSection, cotSection, modelSection, phaseSection, qaSection, incidentsSection,
   ].filter(Boolean).join("\n"));
+}
+
+export function rollupWorkspace(root) {
+  const plansDir = join(root, "docs", "plans");
+  const warnings = [];
+  const runs = [];
+  let entries = [];
+  try {
+    entries = readdirSync(plansDir, { withFileTypes: true }).filter((e) => e.isDirectory() && e.name !== "rollup");
+  } catch {
+    entries = []; // docs/plans absent → empty rollup, still valid
+  }
+  for (const e of entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
+    const tel = join(plansDir, e.name, "_telemetry.json");
+    if (!existsSync(tel)) continue;
+    try {
+      runs.push({ slug: e.name, telemetry: JSON.parse(readFileSync(tel, "utf8")) });
+    } catch (err) {
+      warnings.push(`skipped ${e.name}: unreadable _telemetry.json (${err.message})`);
+    }
+  }
+  const agg = computeRollup(runs);
+  const text = renderRollupText(agg);
+  const html = renderRollupHtml(agg);
+  const outDir = join(plansDir, "rollup");
+  mkdirSync(outDir, { recursive: true });
+  const htmlPath = join(outDir, "index.html");
+  writeFileSync(htmlPath, html);
+  return { htmlPath, agg, text, warnings };
 }
