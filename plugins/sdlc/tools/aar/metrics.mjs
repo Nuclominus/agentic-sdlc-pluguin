@@ -98,10 +98,9 @@ export function computeMetricsFile(dirOrSlug, root = process.cwd()) {
 
 // Direct-invocation CLI (does NOT fire on import). Prints the dashboard as JSON.
 if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
-  const args = process.argv.slice(2);
-  const target = args.find((a) => !a.startsWith("--"));
+  const target = process.argv[2];
   if (!target) {
-    console.error("usage: metrics.mjs <slug-or-dir> [--json]");
+    console.error("usage: metrics.mjs <slug-or-dir>");
     process.exit(2);
   } else {
     try {

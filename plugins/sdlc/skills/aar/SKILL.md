@@ -28,7 +28,7 @@ findings will be limited).
 
 ## Step 3 — Compute deterministic metrics
 
-Run: `node ${CLAUDE_PLUGIN_ROOT}/tools/aar/metrics.mjs {slug} --json`
+Run: `node ${CLAUDE_PLUGIN_ROOT}/tools/aar/metrics.mjs {slug}`
 
 Capture the JSON dashboard. These numbers are authoritative — never recompute
 costs by hand.
