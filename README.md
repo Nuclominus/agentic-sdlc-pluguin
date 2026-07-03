@@ -199,7 +199,7 @@ A **workflow recipe** is a YAML file declaring which phases to run and in what s
 **Built-in intents.** `analysis`, `testing`, and `debug` (core) plus `android-debug` (android) each carry
 a `match:` block so `/sdlc:start` can auto-select them from the task text — e.g. "analyze/audit/assess …"
 → `analysis`, "add tests / coverage" → `testing`, "debug/crash/regression/root-cause" → `debug` (or
-`android-debug` on an Android project, which wins the tie by sorting first). `android-debug` wires the
+`android-debug` on an Android project, which wins the tie via `match.priority: 10`). `android-debug` wires the
 otherwise on-demand `android-debugger` into a real pipeline phase (`debugging` → `android-debugger`).
 
 ### Control-flow shapes (generic)

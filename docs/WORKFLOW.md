@@ -99,7 +99,7 @@ Additional built-in intents ship with a `match:` block for auto-selection:
 - `debug` (core) — Dev → QA fix-and-verify (developer does root-cause; vanilla has no debugger agent).
 - `android-debug` (android) — Debugger → Dev → Review(⇄Dev ×2) → Test; wires `android-debugger` via the
   `debugging` phase. On Android both `debug` and `android-debug` match; `android-debug` wins the tie
-  (sorts first alphabetically).
+  via `match.priority: 10` (the first tie-break rule), not by name order.
 
 ## 4. Model tiers (cost discipline)
 

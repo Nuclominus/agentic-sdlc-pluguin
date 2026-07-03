@@ -4,6 +4,9 @@ description: >
   missing coverage, write unit tests, or validate that current behavior is tested,
   without a development phase.
 match:
-  arguments_pattern: "\\btest(s|ing)?\\b|\\bcoverage\\b|\\bunit\\s+test"
+  # Anchored to test-authoring INTENT (a verb + "test(s)"), so ordinary feature
+  # requests that merely mention "test" (e.g. "implement and test login") do NOT
+  # route here. Also matches "test/code coverage".
+  arguments_pattern: "\\b(add|write|backfill|improve|increase)\\s+(unit\\s+|integration\\s+)?tests?\\b|\\b(test|code)\\s+coverage\\b"
 phases:
   - qa
