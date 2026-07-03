@@ -4,7 +4,8 @@ import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { computeRollup, rollupWorkspace } from "../lib/rollup.mjs";
+import { execFileSync } from "node:child_process";
+import { computeRollup, renderRollupText, renderRollupHtml, rollupWorkspace } from "../lib/rollup.mjs";
 
 const FIXROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "rollup-multi", "docs", "plans");
 const load = (slug) => JSON.parse(readFileSync(join(FIXROOT, slug, "_telemetry.json"), "utf8"));
@@ -92,8 +93,6 @@ test("empty run-set → run_count 0, null cost", () => {
   assert.equal(agg.totals.cost_usd, null);
 });
 
-import { renderRollupText } from "../lib/rollup.mjs";
-
 test("text digest lists totals, runs, models and phases", () => {
   const txt = renderRollupText(computeRollup(runs()));
   assert.match(txt, /3 run\(s\)/);
@@ -116,8 +115,6 @@ test("text digest handles empty run-set", () => {
 test("text digest is deterministic", () => {
   assert.equal(renderRollupText(computeRollup(runs())), renderRollupText(computeRollup(runs())));
 });
-
-import { renderRollupHtml } from "../lib/rollup.mjs";
 
 test("html is a complete self-contained document", () => {
   const html = renderRollupHtml(computeRollup(runs()));
@@ -222,8 +219,6 @@ test("rollupWorkspace skips non-object telemetry (null) with a warning, others s
     rmSync(root, { recursive: true, force: true });
   }
 });
-
-import { execFileSync } from "node:child_process";
 
 const LINT_CLI = join(dirname(fileURLToPath(import.meta.url)), "..", "cli.mjs");
 
