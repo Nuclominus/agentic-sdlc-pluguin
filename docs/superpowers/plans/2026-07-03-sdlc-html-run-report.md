@@ -123,9 +123,7 @@ Expected: FAIL — `Cannot find module '../lib/report.mjs'`.
 - [ ] **Step 4: Implement `lib/report.mjs`** (skeleton: helpers, CSS, doc wrapper, header + KPI; later tasks add sections)
 
 ```js
-import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-
+// Pure renderer — no imports. The file-I/O wrapper (Task 4) adds node:fs / node:path.
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmtUsd = (n) => (n == null ? "—" : `$${Number(n).toFixed(2)}`);
@@ -498,6 +496,15 @@ Run: `cd tools/sdlc-lint && node --test test/report.test.mjs`
 Expected: FAIL — `renderReportFile` not exported.
 
 - [ ] **Step 3: Add `renderReportFile` to `lib/report.mjs`**
+
+First add the node builtins this wrapper needs at the **top** of `lib/report.mjs` (Task 1 keeps the pure renderer import-free; the file-I/O layer brings its own imports):
+
+```js
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+```
+
+Then append the function:
 
 ```js
 export function renderReportFile(dir) {
