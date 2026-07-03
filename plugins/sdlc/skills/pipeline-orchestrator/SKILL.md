@@ -722,8 +722,15 @@ If `HEADLESS == true` (Step 0a-1), additionally write a single machine-readable 
 stdout so CI can gate on it:
 
 ```
-{ "dry_run": true, "workflow": "{active_workflow}", "phases": {N}, "estimated_cost_usd": {expected_total}, "worst_case_usd": {worst_total}, "cap_usd": {CONTEXT.cost_cap or null}, "cap_status": "within"|"exceeds" }
+{ "dry_run": true, "workflow": "{active_workflow}", "phases": {N}, "estimated_cost_usd": {expected_total}, "worst_case_usd": {worst_total}, "cap_usd": {CONTEXT.cost_cap or null}, "cap_estimate": "within"|"exceeds" }
 ```
+
+The field is deliberately named **`cap_estimate`** (values `within` | `exceeds`), NOT `cap_status`.
+It is a verdict on the *pre-run estimate* against the cap — a distinct concept from the real-run
+enforcement outcome recorded in `_telemetry.json` as `cap_status`
+(`within` | `exceeded-continued` | `exceeded-aborted`, Step 5). Keeping the keys separate means a CI
+consumer never has to disambiguate two vocabularies under one key: `cap_estimate` = "would the
+estimate breach the cap?", `cap_status` = "what actually happened during enforcement?".
 
 #### 1d-4. Clean early exit
 
