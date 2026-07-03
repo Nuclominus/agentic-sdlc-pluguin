@@ -1,7 +1,7 @@
 ---
 name: business-analyst
 description: |
-  Senior business analyst for ambiguous feature requests. Reads product context (Jira tickets, README, existing code) and produces user stories, acceptance criteria, data model sketches, and edge cases.
+  [DORMANT — vanilla opt-in fallback only; Android runs android-ba] Senior business analyst for ambiguous feature requests. Reads product context (Jira tickets, README, existing code) and produces user stories, acceptance criteria, data model sketches, and edge cases.
 
   <example>
   user invokes /sdlc:start "Add subscription billing with Stripe"

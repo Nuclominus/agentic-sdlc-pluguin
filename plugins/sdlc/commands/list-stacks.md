@@ -28,8 +28,8 @@ List every `manifest.yaml` profile registered in installed plugins. Shows which 
 ```
 Stack profiles found:
 
-  🎯 vanilla       priority=0     (always matches)              ← active fallback
-  🎯 android       priority=300   matches: settings.gradle.kts
+  💤 vanilla       priority=0     dormant — opt-in via .sdlc-enable-vanilla / --stack=vanilla
+  🎯 android       priority=300   matches: settings.gradle.kts              ← active
 
 Additive framework providers:
   ➕ retrofit      framework      enriches: network · matches: libs.versions.toml contains retrofit
@@ -39,10 +39,11 @@ Active frameworks: retrofit
 Override with: /sdlc:start --stack=NAME "<feature>"  ·  toggle frameworks via .claude/sdlc.local.yaml
 ```
 
-If no profiles found except vanilla:
+If no foundation matches (vanilla is dormant unless opted in):
 ```
-Only the vanilla profile is registered. Install the Android Foundation plugin
-(/plugin install android-foundation@agentic-sdlc) to add platform-specific agents.
+No foundation matched this project. Install the Android Foundation plugin
+(/plugin install android-foundation@agentic-sdlc) for an Android project, or opt into the
+generic fallback with an empty .sdlc-enable-vanilla file (or /sdlc:start --stack=vanilla).
 ```
 
 ## When to use

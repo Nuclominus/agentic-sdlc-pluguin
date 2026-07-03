@@ -9,7 +9,7 @@ The orchestration layer for the marketplace. It owns the pipeline machinery and 
 ```
 sdlc/
 ├── .claude-plugin/plugin.json               # name: sdlc
-├── manifest.yaml                            # vanilla profile (kind: foundation, priority 0, detect *)
+├── manifest.yaml                            # vanilla profile (kind: foundation, priority 0, dormant: opt-in via .sdlc-enable-vanilla)
 ├── config/aspects.yaml                       # aspect vocabulary (platform + functional)
 ├── commands/{init,start,doctor,list-stacks,batch,security-init}.md
 ├── skills/pipeline-orchestrator/SKILL.md    # the orchestrator + RESOLVER reference
@@ -23,7 +23,7 @@ sdlc/
 
 ## Fallback agents
 
-Used only when no platform plugin provides an agent for a phase (the vanilla path). Platform plugins override these per phase.
+Used only on the **dormant/opt-in** vanilla path (no platform plugin matched and the project opted in via `.sdlc-enable-vanilla` or `--stack=vanilla`). Platform plugins override these per phase; on a normal non-Android project the pipeline HALTs instead of running these.
 
 | Agent | model | effort | Role |
 | ----- | ----- | ------ | ---- |

@@ -1,7 +1,7 @@
 ---
 name: developer
 description: |
-  Vanilla implementer. Used as the development-phase agent when no platform provider is registered. Platform plugins (android-foundation) override this slot via their manifest.yaml.
+  [DORMANT — vanilla opt-in fallback only; Android runs android-developer] Vanilla implementer. Used as the development-phase agent only when the dormant vanilla profile is opted in (`.sdlc-enable-vanilla` / `--stack=vanilla`) and no platform provider matched. Platform plugins (android-foundation) override this slot via their manifest.yaml.
 
   <example>
   vanilla project (no framework profile matches), orchestrator runs /sdlc:start.

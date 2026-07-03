@@ -1,7 +1,7 @@
 ---
 name: security-analyst
 description: |
-  Platform-neutral security review of the development-phase changes. Applies the security standard injected by the active stack profile (e.g. MASVS/MASTG for mobile) as authoritative, with a generic baseline fallback. Fixes Critical and High directly, documents Medium without fixing, skips Low/Info.
+  [DORMANT — vanilla opt-in fallback only; Android runs android-security] Platform-neutral security review of the development-phase changes. Applies the security standard injected by the active stack profile (e.g. MASVS/MASTG for mobile) as authoritative, with a generic baseline fallback. Fixes Critical and High directly, documents Medium without fixing, skips Low/Info.
 
   <example>
   development implemented handling of untrusted user input. security-analyst checks: validation at the trust boundary, no injection into interpreters/queries, secrets not hardcoded or logged, sensitive data encrypted at rest and in transit. Fixes Critical issues.

@@ -1,12 +1,19 @@
-# Vanilla — SDLC manifest (kind: foundation). The always-matching fallback profile.
-# Loses to any foundation with higher priority. Claims all aspects when no other foundation matches.
+# Vanilla — SDLC manifest (kind: foundation). DORMANT / opt-in fallback profile.
+# No longer auto-matches every project. In this Android-only marketplace the generic pipeline is
+# muted by default so a non-Android project HALTs asking for a foundation rather than silently
+# running generic agents. Revive it per project in either of two ways:
+#   • create an empty  .sdlc-enable-vanilla  file in the project root (detect below), or
+#   • pass  --stack=vanilla  to /sdlc:start (compatibility override, skips auto-detect).
+# Kept intact — manifest + its 5 agents (plugins/sdlc/agents/) — as a reference profile / template
+# for a future non-Android foundation. Loses to any foundation with higher priority when it matches.
 
 kind: foundation
 stack: vanilla
 priority: 0
 
 detect:
-  any: ["*"]                       # always matches
+  all:
+    - file_exists: .sdlc-enable-vanilla   # dormant: opt in by creating this file (was: any ["*"])
 
 agents_per_phase:
   business_analysis: business-analyst

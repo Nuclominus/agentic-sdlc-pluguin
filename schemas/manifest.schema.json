@@ -63,7 +63,7 @@
     },
     "priority": {
       "type": "integer",
-      "description": "0 = vanilla fallback. 100+ = stack provider. Higher wins per platform aspect. For frameworks this is documentational only — they never compete for an aspect.",
+      "description": "0 = vanilla fallback (dormant/opt-in). 100+ = stack provider. Higher wins per platform aspect. For frameworks this is documentational only — they never compete for an aspect.",
       "minimum": 0,
       "maximum": 1000
     },
@@ -187,7 +187,7 @@
       "oneOf": [
         {
           "type": "string",
-          "description": "Wildcard '*' for vanilla profiles only.",
+          "description": "Wildcard '*' — always-matches. Still supported, but no shipped profile uses it (vanilla is now opt-in via file_exists).",
           "enum": ["*"]
         },
         {

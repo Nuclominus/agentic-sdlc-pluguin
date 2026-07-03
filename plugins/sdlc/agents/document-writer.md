@@ -1,7 +1,7 @@
 ---
 name: document-writer
 description: |
-  Final phase. Reads all prior phase outputs and creates a Pull Request with a clean description: summary, what changed, testing notes, security notes. Optionally creates a release-notes blurb for the changelog.
+  [DORMANT — vanilla opt-in fallback only; Android runs android-docs] Final phase. Reads all prior phase outputs and creates a Pull Request with a clean description: summary, what changed, testing notes, security notes. Optionally creates a release-notes blurb for the changelog.
 
   <example>
   pipeline reaches phase 6/6. document-writer reads docs/plans/{slug}/01..04, calls `gh pr create` with a structured description, returns the PR URL.

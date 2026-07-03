@@ -93,7 +93,7 @@ Agentic-SDLC-Plugin/
 │
 ├── plugins/                      (all flat peers)
 │   ├── sdlc/                     ← CORE (platform-agnostic engine)
-│   │   ├── manifest.yaml         ← vanilla profile (kind: foundation, priority 0)
+│   │   ├── manifest.yaml         ← vanilla profile (kind: foundation, priority 0, dormant/opt-in)
 │   │   ├── config/aspects.yaml   ← aspect vocabulary (platform + functional lists)
 │   │   ├── skills/pipeline-orchestrator/SKILL.md
 │   │   ├── agents/               ← business-analyst, developer, qa-engineer, security-analyst, document-writer
@@ -127,16 +127,21 @@ Agentic-SDLC-Plugin/
 Both foundation and framework profiles are a single `manifest.yaml` (all-YAML, no frontmatter/markdown
 body) distinguished by `kind:`, validated by `schemas/manifest.schema.json`.
 
-### 3.1. Vanilla profile (`plugins/sdlc/manifest.yaml`)
+### 3.1. Vanilla profile (`plugins/sdlc/manifest.yaml`) — dormant / opt-in
 
 ```yaml
 kind: foundation
 stack: vanilla
 priority: 0
 detect:
-  any: ["*"]
+  all:
+    - file_exists: .sdlc-enable-vanilla   # dormant: no longer auto-matches
 ```
-Always matches; loses to any foundation with a higher priority.
+**Dormant by default.** In this Android-only marketplace the generic profile is muted so a
+non-Android project HALTs asking for a foundation instead of silently running generic agents.
+Revive it per project by creating an empty `.sdlc-enable-vanilla` file, or with `--stack=vanilla`.
+The manifest and its 5 agents are kept intact as a reference template for a future non-Android
+foundation. When it matches, it still loses to any foundation with a higher priority.
 
 ### 3.2. Android Foundation profile (`plugins/android-foundation/manifest.yaml`)
 
@@ -191,7 +196,7 @@ module build files) and the orchestrator executes that search (see §4.1).
 | `hosts_aspects` | array \| `all` | — | Foundation only. The **functional** categories this foundation accepts frameworks for (or the sugar `all`). A framework attaches when its `enriches_aspect` ∈ this list AND its `dependency` is found. |
 | `framework_detection` | array | — | Foundation only. Ordered files/globs where the orchestrator searches for a framework's `dependency`, on this foundation's behalf. Pairs with `hosts_aspects`. |
 | `workflow` | string | — | Foundation only. Default recipe when this is the PRIMARY profile. |
-| `detect.any` / `detect.all` | array | ✳️ | Detection rules. `["*"]` for vanilla. `file_exists` / `file_contains` / `file_glob`, nestable via `any`/`all`. Required for foundations; optional for frameworks that use `dependency`. |
+| `detect.any` / `detect.all` | array | ✳️ | Detection rules. `file_exists` / `file_contains` / `file_glob`, nestable via `any`/`all` (`["*"]` wildcard is still supported but no shipped profile uses it — vanilla is now opt-in via `file_exists`). Required for foundations; optional for frameworks that use `dependency`. |
 | `dependency` | string \| array | ✳️ | Framework only. The library coordinate(s) to detect (e.g. `com.squareup.retrofit2`). The plugin only names it; the foundation owning its aspect declares where to look and the orchestrator executes the search (§4.1). One of `detect` / `dependency` is required. |
 
 ---
@@ -268,7 +273,7 @@ The five core fallbacks live in `plugins/sdlc/agents/`; the Android roster lives
 | Agent | Plugin | Model | Effort | Why |
 |---|---|---|---|---|
 | business-analyst | sdlc | opus | high | Requirements errors cascade through every phase. |
-| developer | sdlc | sonnet | medium | Vanilla fallback (non-Android projects). |
+| developer | sdlc | sonnet | medium | Vanilla fallback (dormant/opt-in — `--stack=vanilla` or `.sdlc-enable-vanilla`). |
 | qa-engineer | sdlc | sonnet | medium | Clear criteria; hard 3-attempt cap. |
 | security-analyst | sdlc | opus | high | Threat model; read-only. |
 | document-writer | sdlc | haiku | low | Structured output from known facts. |

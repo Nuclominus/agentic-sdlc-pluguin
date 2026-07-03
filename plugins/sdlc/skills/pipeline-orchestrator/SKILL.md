@@ -236,7 +236,20 @@ Foundations declare which **platform aspects** they own via the `aspects:` field
 - `testing` — test infrastructure (when distinct from backend/frontend conventions)
 - `messaging` — queues, events, async (rare; opt-in)
 
-Resolution algorithm (run AFTER finding all matching foundations in 0b above). Only foundations are in play here — `FRAMEWORK_MANIFESTS` were set aside in 0b-1, so frameworks cannot leak into winner resolution by construction:
+**0b-aspects-fast — single-foundation short-circuit (the common case).** In this marketplace
+exactly one foundation matches on a normal run (Android; `vanilla` is dormant/opt-in). When
+`len(matching FOUNDATIONS) == 1`, that foundation is `PRIMARY_PROFILE`; set
+`ACTIVE_PROFILES[aspect] = it` for each canonical aspect it declares in `aspects:` (Android
+declares only `android`, which is not a canonical platform aspect, so `ACTIVE_PROFILES[*] = None`
+and everything runs off `PRIMARY_PROFILE` — the aspect-agnostic path). Set
+`PRIMARY_PROFILE.workflow → CONTEXT.profile_default_workflow`, then **skip the per-aspect loop and
+tie-HALT below** and proceed to 0b-frameworks. The full algorithm that follows is **latent infra**:
+it only arbitrates when 2+ foundations match (no such case ships today — kept schema-validated and
+fixture-tested so a second platform foundation remains a drop-in).
+
+Full resolution algorithm (run AFTER finding all matching foundations in 0b above; used when the
+fast-path did not apply, i.e. 2+ matching foundations). Only foundations are in play here —
+`FRAMEWORK_MANIFESTS` were set aside in 0b-1, so frameworks cannot leak into winner resolution by construction:
 
 ```
 STACK_PROFILES = matching FOUNDATIONS   # kind: foundation only; FRAMEWORK_MANIFESTS resolved later, in 0b-frameworks
@@ -260,9 +273,14 @@ PRIMARY_PROFILE = STACK_PROFILE with highest priority overall (tiebreaker: alpha
 PRIMARY_PROFILE.workflow  →  CONTEXT.profile_default_workflow  (or None if the profile omits it)
 
 if no profiles match at all:
-  PRIMARY_PROFILE = vanilla profile from core
-  ACTIVE_PROFILES[*] = vanilla profile (it claims all aspects)
+  HALT with error: "This pipeline requires a matching stack foundation (e.g. an Android/Gradle
+  project). No foundation's detect rules matched this project root. To run the generic fallback,
+  create an empty .sdlc-enable-vanilla file in the project root, or pass --stack=vanilla."
 ```
+
+(The `vanilla` foundation is dormant — its `detect` requires an opt-in `.sdlc-enable-vanilla`
+file — so on a normal non-Android project no foundation matches and this HALT fires. Opting in, or
+`--stack=vanilla`, revives the generic profile and its 5 core agents.)
 
 If `--stack=NAME` was used, all aspect winners come from that single profile (compatibility mode).
 
@@ -440,7 +458,7 @@ The merge input is **`ACTIVE_PROFILES.values()` plus `PRIMARY_PROFILE` plus `ADD
 
 Merge across profiles to build `EFFECTIVE_PROFILE`:
 
-- For aspect-agnostic phases (`business_analysis`, `security`, `documentation`): use `PRIMARY_PROFILE`'s agent. If absent in primary, fall back to vanilla (core) agent. **Additive profiles are never consulted for agent selection.**
+- For aspect-agnostic phases (`business_analysis`, `security`, `documentation`): use `PRIMARY_PROFILE`'s agent. `PRIMARY_PROFILE` (Android, or opted-in vanilla) declares every pipeline phase, so there is no missing-agent case on the happy path; if `PRIMARY_PROFILE` genuinely lacks an agent for a scheduled phase, HALT (see Failure modes). **Additive profiles are never consulted for agent selection.**
 - For aspect-aware phases (`development`, plus `qa` if a profile declares per-aspect agents): build `EFFECTIVE_PROFILE.agents_per_phase[phase] = {aspect: agent}` by collecting from each `ACTIVE_PROFILES[aspect].agents_per_phase[phase][aspect]`.
 - `convention_skills`: union of all active profiles' arrays — stack profiles **and** additive profiles (de-duplicated). A framework's convention skill (e.g. `retrofit-plugin:retrofit-conventions`) lands here.
 - `phase_prompts_injection`: per-phase concat of all active profiles' injections — stack profiles first, then `ADDITIVE_PROFILES` in deterministic order (alphabetical by `stack`). Each framework contributes its `development` / `security` guidance.
@@ -1396,7 +1414,7 @@ Hard rules:
 | Failure | Behavior |
 |---|---|
 | `manifest.yaml` parse error | Skip that profile, log warning, continue with others. |
-| No matching profile | Fall back to vanilla. |
+| No matching profile | HALT: no foundation matched — this marketplace requires an Android/Gradle project. Opt into the generic fallback with an empty `.sdlc-enable-vanilla` file or `--stack=vanilla`. |
 | Agent does not exist (referenced in profile) | Halt. Print error: `Agent '{name}' referenced by {profile} not installed`. |
 | Agent fails (exception in subagent) | Mark phase as failed in telemetry. Ask user: retry / skip / abort. |
 | Post-pipeline check fails | Report; do not retry. The user decides next steps. |

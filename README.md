@@ -94,7 +94,7 @@ Stack providers (foundations) detect by project structure (`detect`); framework 
 
 | Priority | Plugin              | Aspects | Detect / dependency                                                 |
 | -------- | ------------------- | ------- | ------------------------------------------------------------------- |
-| 0        | `vanilla` (sdlc)    | —       | `*` (always matches)                                                |
+| 0        | `vanilla` (sdlc)    | —       | dormant — opt-in via `.sdlc-enable-vanilla` or `--stack=vanilla`     |
 | 300      | `android-foundation`| android | `(settings.gradle.kts OR settings.gradle)` **AND** `**/*.kt`        |
 | additive | `retrofit-plugin`   | —       | `dependency: com.squareup.retrofit2`                                |
 | additive | `room-plugin`       | —       | `dependency: androidx.room`                                         |
@@ -365,7 +365,7 @@ real-run gate read the cap from the resolved active workflow recipe.
 | Android app repo                  | android (300)                           | android-developer                          |
 | Android app + Retrofit            | android (300) + retrofit (add.)         | android-developer, enriched by retrofit    |
 | Android app + Retrofit/Room/Hilt  | android (300) + retrofit + room + dagger| android-developer, enriched by all three   |
-| Unknown stack                     | vanilla (0)                             | developer (fallback)                       |
+| Unknown stack                     | none → HALT (opt in: `.sdlc-enable-vanilla` / `--stack=vanilla`) | developer (only when vanilla opted in)     |
 
 ---
 

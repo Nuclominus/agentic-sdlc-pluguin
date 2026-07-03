@@ -1,7 +1,7 @@
 ---
 name: qa-engineer
 description: |
-  Test writer and runner. Adds unit/integration/feature tests for development-phase changes. Aims for ≥80% coverage.
+  [DORMANT — vanilla opt-in fallback only; Android runs android-tester/android-qa] Test writer and runner. Adds unit/integration/feature tests for development-phase changes. Aims for ≥80% coverage.
 
   ⚠️ HARD ITERATION CAP: Maximum 3 attempts to fix failing tests, then STOP and report. This is non-negotiable — runaway iterations are the #1 cost incident.
 
