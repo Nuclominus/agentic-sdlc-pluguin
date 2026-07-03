@@ -20,6 +20,7 @@ jobs:
         run: npm test --prefix tools/sdlc-lint
       - name: AAR reference integrity
         run: |
+          # planning docs under docs/superpowers/ legitimately retain old skill references
           if grep -rn "android-workflow:aar" --include='*.md' --include='*.yaml' --exclude-dir=superpowers .; then
             echo "::error::dangling android-workflow:aar reference — repoint to sdlc:aar"
             exit 1

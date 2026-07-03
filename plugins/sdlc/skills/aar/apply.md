@@ -7,7 +7,7 @@ You (the main session) apply findings. The analyst never edits. **No auto-apply.
 Present the findings and lessons candidates. Ask the user to multi-select which
 to apply (e.g. by number). Nothing happens to unselected items.
 
-## Two-tier gate — by blast radius
+## Tiered gate — by blast radius
 
 ### Tier 1 — Lessons (low-risk, always offered)
 
