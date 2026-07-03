@@ -90,3 +90,28 @@ test("empty run-set → run_count 0, null cost", () => {
   assert.equal(agg.run_count, 0);
   assert.equal(agg.totals.cost_usd, null);
 });
+
+import { renderRollupText } from "../lib/rollup.mjs";
+
+test("text digest lists totals, runs, models and phases", () => {
+  const txt = renderRollupText(computeRollup(runs()));
+  assert.match(txt, /3 run\(s\)/);
+  assert.match(txt, /\$0\.82/);          // total cost
+  assert.match(txt, /run-a/);            // per-run rows use the workspace slug (dir name)
+  assert.match(txt, /OVER/);             // run-b cap breach
+  assert.match(txt, /claude-opus-4-8/);  // by_model
+  assert.match(txt, /business_analysis/);// by_phase
+});
+
+test("text digest flags partial cost when unpriced runs exist", () => {
+  const txt = renderRollupText(computeRollup(runs()));
+  assert.match(txt, /partial/);          // 1 unpriced run
+});
+
+test("text digest handles empty run-set", () => {
+  assert.match(renderRollupText(computeRollup([])), /No pipeline runs recorded yet/);
+});
+
+test("text digest is deterministic", () => {
+  assert.equal(renderRollupText(computeRollup(runs())), renderRollupText(computeRollup(runs())));
+});

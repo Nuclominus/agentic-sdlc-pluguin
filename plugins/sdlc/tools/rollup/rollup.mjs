@@ -8,6 +8,9 @@ import { computeMetrics } from "../aar/metrics.mjs";
 
 const num = (n) => (typeof n === "number" && isFinite(n) ? n : 0);
 const byNameAsc = (a, b, k) => (a[k] < b[k] ? -1 : a[k] > b[k] ? 1 : 0);
+const fmtUsd = (n) => (n == null ? "—" : `$${Number(n).toFixed(2)}`);
+const fmtInt = (n) => String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+const pct = (r) => (r == null ? "—" : `${Math.round(Number(r) * 100)}%`);
 
 // dated asc, undated last, slug-asc tiebreak
 function cmpStartedAt(a, b) {
@@ -119,4 +122,34 @@ export function computeRollup(runs) {
     qa_distribution,
     incidents: { cap_breaches: cap_breach_incidents, skips },
   };
+}
+
+export function renderRollupText(agg) {
+  if (agg.run_count === 0) return "No pipeline runs recorded yet (no docs/plans/*/_telemetry.json).";
+  const t = agg.totals;
+  const lines = [];
+  lines.push(`SDLC cross-run rollup — ${agg.run_count} run(s)`);
+  lines.push(
+    `Total cost ${fmtUsd(t.cost_usd)}${t.unpriced_runs ? ` (partial — ${t.unpriced_runs} unpriced)` : ""}` +
+    ` · cache ${pct(t.cache_hit_ratio_weighted)} · cap breaches ${t.cap_breaches}` +
+    ` · skips ${t.skip_rules} · QA iters ${t.qa_iterations}`
+  );
+  lines.push("");
+  lines.push(`${"RUN".padEnd(24)} ${"WHEN".padEnd(20)} ${"COST".padStart(8)} ${"CACHE".padStart(6)} CAP`);
+  for (const r of agg.runs) {
+    lines.push(
+      `${String(r.slug).padEnd(24).slice(0, 24)} ${String(r.started_at ?? "—").padEnd(20).slice(0, 20)}` +
+      ` ${fmtUsd(r.cost_usd).padStart(8)} ${pct(r.cache_hit_ratio).padStart(6)} ${r.cap_breach ? "OVER" : "ok"}`
+    );
+  }
+  lines.push("");
+  lines.push("BY MODEL");
+  for (const m of agg.by_model) {
+    lines.push(`  ${String(m.model).padEnd(28)} ${fmtUsd(m.cost_usd).padStart(8)} ${fmtInt(m.input_tokens + m.output_tokens).padStart(11)} tok`);
+  }
+  lines.push("BY PHASE");
+  for (const p of agg.by_phase) {
+    lines.push(`  ${String(p.phase).padEnd(28)} ${fmtUsd(p.cost_usd).padStart(8)} ${fmtInt(p.input_tokens + p.output_tokens).padStart(11)} tok`);
+  }
+  return lines.join("\n");
 }
