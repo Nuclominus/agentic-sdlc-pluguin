@@ -110,12 +110,67 @@ function costBreakdownSection(t) {
 <tbody>${rows}</tbody></table>${note}</section>`;
 }
 
+function signalsSection(t) {
+  const items = [];
+  const qa = (t.phases || []).find((p) => p.phase === "qa");
+  if (qa && (qa.qa_status || qa.qa_iterations_used != null)) {
+    items.push(`QA: ${esc(qa.qa_status || "—")} (${fmtInt(qa.qa_iterations_used)} iteration(s))`);
+  }
+  for (const s of t.skip_rules_applied || []) {
+    items.push(`Skipped <b>${esc(s.phase_skipped)}</b> — ${esc(s.rule)}`);
+  }
+  if (t.cap_status && t.cap_status !== "within") items.push(`Cap: <b>${esc(t.cap_status)}</b>`);
+  if (t.aborted_at_phase) items.push(`Aborted at <b>${esc(t.aborted_at_phase)}</b>`);
+  if (!items.length) return "";
+  return `<section><h2>Signals</h2><ul class="sig">${items.map((i) => `<li>${i}</li>`).join("")}</ul></section>`;
+}
+
+function postChecksSection(t, md) {
+  const checks = t.post_pipeline_checks || [];
+  if (!checks.length && !md) return "";
+  const rows = checks.map((c) => {
+    const icon = c.skipped ? "⏭" : c.exit_code === 0 ? "✅" : "❌";
+    const ec = c.exit_code == null ? "skip" : esc(c.exit_code);
+    return `<tr><td>${icon}</td><td><code>${esc(c.command)}</code></td><td class="num">${ec}</td></tr>`;
+  }).join("\n");
+  const excerpt = md ? `<details><summary>Output tail</summary><pre>${esc(md)}</pre></details>` : "";
+  return `<section><h2>Post-pipeline checks</h2>${checks.length ? `<table><tbody>${rows}</tbody></table>` : ""}${excerpt}</section>`;
+}
+
+function touchedFilesSection(t) {
+  const files = t.touched_files;
+  if (!Array.isArray(files) || !files.length) return "";
+  const rows = files.map((f) =>
+    `<li><span class="st st-${esc(f.status)}">${esc(f.status)}</span> <code>${esc(f.path)}</code></li>`).join("");
+  return `<section><h2>Touched files (${files.length})</h2><ul class="files">${rows}</ul></section>`;
+}
+
+function depsSection(t) {
+  const d = t.deps_preflight;
+  if (!d || !Object.keys(d).length) return "";
+  const rows = Object.entries(d).map(([name, v]) => {
+    const miss = v && v.missing_skills && v.missing_skills.length ? ` — missing ${esc(v.missing_skills.join(", "))}` : "";
+    return `<li><code>${esc(name)}</code>: ${esc(v ? v.status : "—")}${miss}</li>`;
+  }).join("");
+  return `<section><h2>Dependency preflight</h2><ul>${rows}</ul></section>`;
+}
+
+function artifactsSection(t, files) {
+  const list = (files || []).map((f) => `<li><a href="${esc(f)}">${esc(f)}</a></li>`).join("");
+  return `<section><h2>Artifacts</h2><ul class="files">${list}<li><a href="_telemetry.json">_telemetry.json</a></li></ul></section>`;
+}
+
 export function renderReport(t, extras = {}) {
   const sections = [
     headerSection(t),
     kpiSection(t),
     timelineSection(t),
     costBreakdownSection(t),
+    signalsSection(t),
+    postChecksSection(t, extras.postChecksMarkdown),
+    touchedFilesSection(t),
+    depsSection(t),
+    artifactsSection(t, extras.artifactFiles),
   ].filter(Boolean);
   return doc(t, sections.join("\n"));
 }

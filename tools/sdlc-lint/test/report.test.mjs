@@ -50,3 +50,32 @@ test("cost-by-model note flags unpriced phases", () => {
   // security phase has cost_usd:null → partial note with count 1
   assert.match(html, /1 phase\(s\) unpriced/);
 });
+
+test("signals panel surfaces QA and skip-rules", () => {
+  const html = renderReport(tel);
+  assert.match(html, /QA:\s*completed/);
+  assert.match(html, /Skipped/);
+  assert.match(html, /config-only/);
+});
+
+test("touched-files section lists files, and is omitted when absent", () => {
+  const withFiles = renderReport(tel);
+  assert.match(withFiles, /Touched files \(2\)/);
+  assert.match(withFiles, /SubscriptionRepository\.kt/);
+
+  const { touched_files, ...noFiles } = tel; // omit the key
+  const html = renderReport(noFiles);
+  assert.doesNotMatch(html, /Touched files/);
+});
+
+test("post-checks render commands and pass/fail", () => {
+  const html = renderReport(tel);
+  assert.match(html, /gradlew detekt/);
+});
+
+test("deps preflight and artifact links render", () => {
+  const html = renderReport(tel, { artifactFiles: ["01-business-analysis.md"] });
+  assert.match(html, /superpowers/);
+  assert.match(html, /href="01-business-analysis\.md"/);
+  assert.match(html, /href="_telemetry\.json"/);
+});
