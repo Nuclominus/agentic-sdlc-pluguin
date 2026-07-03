@@ -277,13 +277,18 @@ export function rollupWorkspace(root) {
   } catch {
     entries = []; // docs/plans absent → empty rollup, still valid
   }
-  for (const e of entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
+  for (const e of entries.sort((a, b) => byNameAsc(a, b, "name"))) {
     const tel = join(plansDir, e.name, "_telemetry.json");
     if (!existsSync(tel)) continue;
     try {
-      runs.push({ slug: e.name, telemetry: JSON.parse(readFileSync(tel, "utf8")) });
+      const parsed = JSON.parse(readFileSync(tel, "utf8"));
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        warnings.push(`skipped ${e.name}: _telemetry.json is not a telemetry object`);
+        continue;
+      }
+      runs.push({ slug: e.name, telemetry: parsed });
     } catch (err) {
-      warnings.push(`skipped ${e.name}: unreadable _telemetry.json (${err.message})`);
+      warnings.push(`skipped ${e.name}: unparseable _telemetry.json (${err.message})`);
     }
   }
   const agg = computeRollup(runs);

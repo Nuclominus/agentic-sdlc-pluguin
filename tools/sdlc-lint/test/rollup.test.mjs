@@ -208,3 +208,17 @@ test("rollupWorkspace skips malformed telemetry with a warning", () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("rollupWorkspace skips non-object telemetry (null) with a warning, others still aggregate", () => {
+  const root = seedWorkspace();
+  try {
+    const plans = join(root, "docs", "plans");
+    mkdirSync(join(plans, "run-null"), { recursive: true });
+    writeFileSync(join(plans, "run-null", "_telemetry.json"), "null");
+    const { agg, warnings } = rollupWorkspace(root);
+    assert.equal(agg.run_count, 3);                 // 3 good runs still aggregate; null skipped
+    assert.ok(warnings.some((w) => /run-null/.test(w)));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
