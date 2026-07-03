@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "bin": { "sdlc-lint": "./cli.mjs" },
-  "scripts": { "test": "node --test test" },
+  "scripts": { "test": "node --test" },
   "dependencies": {
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
