@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Nuclominus/Agentic-SDLC-Pluguin/schemas/checkpoint.schema.json",
+  "title": "SDLC Phase Checkpoint",
+  "description": "One completed unit of pipeline work, written atomically after a phase (or aspect, or dev planning pass) finishes. Structurally a telemetry phases[] element plus output_file + completed_at, so Step 5 assembles _telemetry.json from these files without drift.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["phase", "status", "completed_at"],
+  "properties": {
+    "phase": { "type": "string", "minLength": 1 },
+    "aspect": { "type": ["string", "null"] },
+    "status": { "enum": ["completed", "skipped", "approved"] },
+    "agent": { "type": "string" },
+    "model": { "type": "string" },
+    "input_tokens": { "type": "integer", "minimum": 0 },
+    "output_tokens": { "type": "integer", "minimum": 0 },
+    "cached_input_tokens": { "type": "integer", "minimum": 0 },
+    "cost_usd": { "type": ["number", "null"], "minimum": 0 },
+    "usage_source": { "enum": ["reported", "estimated"] },
+    "compact_summary_chars": { "type": "integer", "minimum": 0 },
+    "compact_handoff_violation": { "type": "boolean" },
+    "qa_iterations_used": { "type": "integer", "minimum": 0 },
+    "qa_status": { "enum": ["completed", "capped"] },
+    "output_file": { "type": "string" },
+    "completed_at": { "type": "string", "format": "date-time" }
+  }
+}
