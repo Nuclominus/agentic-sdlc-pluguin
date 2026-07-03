@@ -3,3 +3,4 @@
 docs/plans/_*.json
 docs/plans/_*.log
 node_modules/
+docs/plans/**/.checkpoint/

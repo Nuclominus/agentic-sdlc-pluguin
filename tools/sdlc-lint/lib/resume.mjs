@@ -30,9 +30,11 @@ const DONE = new Set(["completed", "skipped"]);
 const isDone = (u) => u != null && DONE.has(u.status);
 
 // Is one resolved (plain) phase fully done? aspect-aware → every aspect done.
+// An empty aspect list resolves to NOT done (a phase with no dispatched aspects
+// hasn't run) — never treat a vacuous `[].every()` as complete.
 function plainDone(phase, units) {
   if (phase.aspects == null) return isDone(units.get(phase.name));
-  return phase.aspects.every(a => isDone(units.get(unitId(phase.name, a))));
+  return phase.aspects.length > 0 && phase.aspects.every(a => isDone(units.get(unitId(phase.name, a))));
 }
 
 function phaseDone(phase, units) {
@@ -41,7 +43,9 @@ function phaseDone(phase, units) {
     return isDone(units.get(phase.name));
   }
   if (phase.kind === "parallel") {
-    return (phase.members ?? []).every(m => plainDone(m, units));
+    // A members-less parallel entry is NOT done — never vacuously complete.
+    const members = phase.members ?? [];
+    return members.length > 0 && members.every(m => plainDone(m, units));
   }
   return plainDone(phase, units);
 }
@@ -79,6 +83,9 @@ export function resolveWorkspace(workspaceDir) {
     throw new Error(`cannot resume ${workspaceDir}: .checkpoint/_run.json not found`);
   }
   const run = JSON.parse(readFileSync(runPath, "utf8"));
+  if (!run || !Array.isArray(run.resolved_phases)) {
+    throw new Error(`cannot resume ${workspaceDir}: .checkpoint/_run.json has no resolved_phases array`);
+  }
   const { units, warnings } = loadCheckpoints(checkpointDir);
   return { ...computeReentry(run.resolved_phases, units), warnings };
 }
