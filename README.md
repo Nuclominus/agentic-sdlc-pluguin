@@ -99,6 +99,7 @@ Stack providers (foundations) detect by project structure (`detect`); framework 
 | additive | `retrofit-plugin`   | —       | `dependency: com.squareup.retrofit2`                                |
 | additive | `room-plugin`       | —       | `dependency: androidx.room`                                         |
 | additive | `dagger-plugin`     | —       | `dependency: com.google.dagger` (Dagger + Hilt)                     |
+| additive | `workmanager-plugin`| —       | `dependency: androidx.work`                                         |
 
 ### Detection rules
 
@@ -295,7 +296,7 @@ Cost is controlled exclusively through `model` + `effort` (Claude Code does not 
 
 - core fallback agents → [`plugins/sdlc/README.md`](plugins/sdlc/README.md)
 - Android roster → [`plugins/android-foundation/README.md`](plugins/android-foundation/README.md)
-- framework providers ship no agents → [`retrofit-plugin`](plugins/retrofit-plugin/README.md) · [`room-plugin`](plugins/room-plugin/README.md) · [`dagger-plugin`](plugins/dagger-plugin/README.md)
+- framework providers ship no agents → [`retrofit-plugin`](plugins/retrofit-plugin/README.md) · [`room-plugin`](plugins/room-plugin/README.md) · [`dagger-plugin`](plugins/dagger-plugin/README.md) · [`workmanager-plugin`](plugins/workmanager-plugin/README.md)
 
 > `effort: high` on Opus is the costliest combination — reserved for leverage agents (BA, Security) where reasoning quality affects every downstream phase.
 
@@ -345,6 +346,7 @@ checkpoints in `docs/plans/{slug}/.checkpoint/`). See `docs/WORKFLOW.md`.
 | `retrofit-plugin`    | Framework provider | Retrofit/OkHttp — additive (skill + injections + ProGuard), no agents  |
 | `room-plugin`        | Framework provider | Room persistence — additive (skill + injections + ProGuard), no agents |
 | `dagger-plugin`      | Framework provider | Dagger/Hilt DI — additive (skill + injections + ProGuard), no agents   |
+| `workmanager-plugin` | Framework provider | WorkManager background — additive (skill + injections + ProGuard), no agents |
 
 ### Optional external dependencies
 

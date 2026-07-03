@@ -48,6 +48,11 @@
       "name": "dagger-plugin",
       "source": "./plugins/dagger-plugin",
       "description": "Additive framework provider for Dagger / Hilt dependency injection (com.google.dagger). Auto-detected by the orchestrator from the Gradle version catalog / build files; enriches the `di` aspect (enriches_aspect: di) via manifest.yaml (kind: framework) with the hilt-conventions skill, development + security phase-prompt injections (constructor injection, @Module/@InstallIn, @Binds over @Provides, deliberate scoping, KSP), and R8/ProGuard keep rules. Realizes the 'detect, don't impose' DI resolution: the foundation states the generic DI principle, this plugin adds Hilt/Dagger specifics only when detected. Ships NO agents."
+    },
+    {
+      "name": "workmanager-plugin",
+      "source": "./plugins/workmanager-plugin",
+      "description": "Additive framework provider for Android WorkManager deferrable background work (androidx.work). Auto-detected by the orchestrator from the Gradle version catalog / build files; enriches the `background` aspect (enriches_aspect: background) via manifest.yaml (kind: framework) with the workmanager-conventions skill, development + security phase-prompt injections (CoroutineWorker, unique enqueue + ExistingWorkPolicy, Constraints/backoff, WorkerFactory DI, idempotent doWork/Result, non-sensitive inputData, WorkInfo Flow), and R8/ProGuard keep rules. First provider of the `background` aspect. Ships NO agents — it specializes the existing development / security phase prompts."
     }
   ]
 }

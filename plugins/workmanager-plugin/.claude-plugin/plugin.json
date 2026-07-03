@@ -1,0 +1,22 @@
+{
+  "name": "workmanager-plugin",
+  "version": "1.0.0",
+  "description": "Additive framework provider for Android WorkManager deferrable background work. Auto-detected by the orchestrator from the Gradle version catalog / build files; enriches the `background` aspect (enriches_aspect: background) via manifest.yaml (kind: framework) with the workmanager-conventions skill, development + security phase-prompt injections, and R8/ProGuard keep rules. Ships NO agents — it specializes the existing development / security phase prompts.",
+  "author": {
+    "name": "Nuclominus",
+    "url": "https://github.com/Nuclominus"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/Nuclominus/Agentic-SDLC-Pluguin",
+  "keywords": [
+    "android",
+    "workmanager",
+    "background",
+    "coroutineworker",
+    "sdlc",
+    "framework-provider"
+  ],
+  "dependencies": [
+    "sdlc"
+  ]
+}
