@@ -189,8 +189,18 @@ A **workflow recipe** is a YAML file declaring which phases to run and in what s
 | `hotfix`        | sdlc (core)    | Dev → QA → Security → Docs                                        |
 | `refactor`      | sdlc (core)    | Dev → QA → Security → Docs                                        |
 | `docs-only`     | sdlc (core)    | Docs                                                              |
+| `analysis`      | sdlc (core)    | BA → Security (reports only — no code, no PR)                     |
+| `testing`       | sdlc (core)    | QA (backfill / verify tests)                                      |
+| `debug`         | sdlc (core)    | Dev → QA (fix-and-verify; developer does root-cause)             |
 | `android-feature` | android-foundation | BA → Dev → Review(⇄Dev ×3) → [Security ‖ Test] → QA → Docs   |
 | `android-bugfix`  | android-foundation | Dev → Review(⇄Dev ×3) → [Security ‖ Test] → QA              |
+| `android-debug`   | android-foundation | Debugger → Dev → Review(⇄Dev ×2) → Test                     |
+
+**Built-in intents.** `analysis`, `testing`, and `debug` (core) plus `android-debug` (android) each carry
+a `match:` block so `/sdlc:start` can auto-select them from the task text — e.g. "analyze/audit/assess …"
+→ `analysis`, "add tests / coverage" → `testing`, "debug/crash/regression/root-cause" → `debug` (or
+`android-debug` on an Android project, which wins the tie via `match.priority: 10`). `android-debug` wires the
+otherwise on-demand `android-debugger` into a real pipeline phase (`debugging` → `android-debugger`).
 
 ### Control-flow shapes (generic)
 
@@ -232,7 +242,24 @@ When auto-selection fires it announces:
 
 ### Custom recipes
 
-Place a YAML file under any plugin's `workflows/` (or a project-local recipe). Names must be unique across the marketplace; core recipe names are reserved.
+Place a YAML file under any plugin's `workflows/`. Names must be unique across the marketplace; core recipe names are reserved (a plugin must not reuse them).
+
+### Project-local workflows
+
+A project may ship its own recipes without editing any plugin. Drop a YAML file at:
+
+```text
+<project>/.claude/sdlc-workflows/<name>.yaml
+```
+
+These are discovered with **highest precedence**: a project recipe **shadows** any plugin recipe of the same name (intentional per-project override — not an ambiguity halt; only two *plugins* colliding on a name halts). They validate against the same `schemas/workflow.schema.json`. Author one interactively:
+
+```bash
+/sdlc:workflow-config                # step-by-step: name, phases, match, caps → writes .claude/sdlc-workflows/<name>.yaml
+/sdlc:workflow-config --list         # list project recipes + which plugin recipes they shadow
+```
+
+Selection precedence with a project recipe: `--workflow=NAME` resolves the name, then the resolver prefers `<project>/.claude/sdlc-workflows/NAME.yaml` over any plugin's `workflows/NAME.yaml`.
 
 ---
 

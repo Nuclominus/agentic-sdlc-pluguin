@@ -1,0 +1,10 @@
+name: debug
+description: >
+  Generic fix-and-verify pipeline — the developer performs root-cause analysis and
+  the fix (vanilla ships no dedicated debugger agent), then QA verifies. Use for
+  crashes, regressions, and root-cause investigations that end in a code change.
+match:
+  arguments_pattern: "\\bdebug\\b|\\bcrash\\b|\\bregression\\b|\\broot.?cause\\b"
+phases:
+  - development
+  - qa

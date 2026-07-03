@@ -81,8 +81,25 @@ flowchart LR
   up to 3 rounds, then escalates to the user.
 - **[security ‖ test]** is a *parallel group*: both agents are dispatched in a single message and must
   return before `qa` begins.
-- On-demand agents (not in the pipeline; invoke directly): `android-debugger`, `android-devops`,
-  `android-cicd`, `android-aar`.
+- On-demand agents (not in the pipeline; invoke directly): `android-devops`, `android-cicd`,
+  `android-aar`. `android-debugger` is on-demand **and** wired as the `debugging` phase of the
+  `android-debug` recipe (manifest `agents_per_phase.debugging → android-debugger`).
+
+## 3b. Project-local recipes & built-in intents
+
+Recipe discovery reads **two sources**, project-local first: `<project>/.claude/sdlc-workflows/<name>.yaml`
+takes **highest precedence** and **shadows** a plugin recipe of the same name (intentional override — not
+an ambiguity halt; only two *plugins* colliding on a name halts). Project recipes validate against the same
+`schemas/workflow.schema.json`; author them with `/sdlc:workflow-config`.
+
+Additional built-in intents ship with a `match:` block for auto-selection:
+
+- `analysis` (core) — BA → Security, **reports only** (no code, no PR); matches "analyze/audit/assess".
+- `testing` (core) — QA only; backfill/verify tests; matches "test/coverage".
+- `debug` (core) — Dev → QA fix-and-verify (developer does root-cause; vanilla has no debugger agent).
+- `android-debug` (android) — Debugger → Dev → Review(⇄Dev ×2) → Test; wires `android-debugger` via the
+  `debugging` phase. On Android both `debug` and `android-debug` match; `android-debug` wins the tie
+  via `match.priority: 10` (the first tie-break rule), not by name order.
 
 ## 4. Model tiers (cost discipline)
 
