@@ -642,6 +642,15 @@ If `--dry-run` is NOT present, skip the rest of Step 1d and continue to Step 2.
 
 If `--dry-run` IS present, do the following and then EXIT (see 1d-4):
 
+**0. Resume-aware pre-pass (only if `--resume` / `--resume=<slug>` is also present).**
+Resolve `task_slug` (from `resume_slug`, or derived as in Step 2). If `docs/plans/{task_slug}/`
+does not exist, print `⏭ --resume --dry-run: no workspace at docs/plans/{task_slug}/ — previewing a full run`
+and continue as an ordinary dry-run (every row estimated). Otherwise read `.checkpoint/*.json` and
+compute the already-done unit set + first unfinished phase using the SAME rules as `3-resume-skip` /
+`lib/resume.mjs` (the tested source of truth — ignore `_run.json`, `*.tmp`, and unparseable/statusless
+files; a unit is done only when its checkpoint status ∈ {completed, skipped}). Record the done rows as
+`CONTEXT.dryrun_resume_done`. This pre-pass READS ONLY — it writes no file and creates no workspace.
+
 **1. Load the model registry** for pricing exactly as Step 3d-0 does:
 
 ```
@@ -663,6 +672,11 @@ spawn any agent. For each resolved entry:
 For each row resolve the **model tier** via the Step 3b-3 precedence
 (`CONTEXT.model_overrides.agents[<bare>]` → `CONTEXT.model_overrides.default` →
 agent `.md` frontmatter `model:` → `sonnet`). No agent is spawned — this is a pure lookup.
+
+When the resume pre-pass (step 0) marked rows as already-done (`CONTEXT.dryrun_resume_done`), tag
+those rows **skipped (resumed)** and EXCLUDE them from the cost estimate — they contribute `$0.00`,
+and only rows at or after the re-entry point are counted in step 4's totals. A real `--resume` run
+would dispatch exactly those same remaining rows, so this estimate is the cost to FINISH, not to redo.
 
 **3. Estimate cost per row from a documented token HEURISTIC** (⚠️ this is an ESTIMATE,
 not a measurement — real cost is recorded in Step 3d-1/Step 5 from actual usage). Baseline
@@ -711,6 +725,7 @@ Phases ({N}):
    1. {phase}{ — aspect}    → {agent} ({tier})   ~${est_row}{  loops ⇄ {return_to}, ≤{max_rounds}× | ‖ parallel — flags if any}
    2. {phase}               → {agent} ({tier})   ~${est_row}
    ...
+   3. ⏩ {phase}{ — aspect}   → skipped (resumed from checkpoint)   $0.00
 Skip-rules applied: {csv of CONTEXT.skip_rules_applied[].rule, or "none"}
 Estimated cost: ~${expected_total}  (worst-case ${worst_total})
 Cap: {CONTEXT.cost_cap or "none"}  → {WITHIN | ⚠️ EXCEEDS by $X}
@@ -723,14 +738,18 @@ math is transparent. The `Cap` verdict compares `expected_total` against
 `CONTEXT.cost_cap`: `WITHIN` when `expected_total ≤ cap` (or no cap), else
 `⚠️ EXCEEDS by ${expected_total − cap}`.
 
+When `--resume` is active, already-done rows are printed in the `⏩ … skipped (resumed from checkpoint)  $0.00` form and are excluded from `Estimated cost` (which then reflects only the remaining phases); `{N}` is unchanged.
+
 #### 1d-3. Headless dry-run
 
 If `HEADLESS == true` (Step 0a-1), additionally write a single machine-readable line to
 stdout so CI can gate on it:
 
 ```
-{ "dry_run": true, "workflow": "{active_workflow}", "phases": {N}, "estimated_cost_usd": {expected_total}, "worst_case_usd": {worst_total}, "cap_usd": {CONTEXT.cost_cap or null}, "cap_estimate": "within"|"exceeds" }
+{ "dry_run": true, "workflow": "{active_workflow}", "phases": {N}, "estimated_cost_usd": {expected_total}, "worst_case_usd": {worst_total}, "cap_usd": {CONTEXT.cost_cap or null}, "cap_estimate": "within"|"exceeds", "resumed": true, "reenter_at": "{first unfinished phase}" }
 ```
+
+The `resumed`/`reenter_at` fields appear only when `--resume` is combined with `--dry-run`; they let CI see the computed re-entry point without a real run.
 
 The field is deliberately named **`cap_estimate`** (values `within` | `exceeds`), NOT `cap_status`.
 It is a verdict on the *pre-run estimate* against the cap — a distinct concept from the real-run
@@ -743,7 +762,7 @@ estimate breach the cap?", `cap_status` = "what actually happened during enforce
 
 After printing the preview, STOP the pipeline cleanly:
 
-- Do NOT run Step 2 (no `docs/plans/{slug}/` workspace, no `_brief.md`).
+- Do NOT run Step 2 (no `docs/plans/{slug}/` workspace, no `_brief.md`). (Under `--resume`, the workspace pre-exists; the dry run still neither rewrites `_brief.md` nor writes any checkpoint — it stays read-only.)
 - Do NOT run Step 3 (no agents dispatched).
 - Do NOT run Step 4 (post-pipeline checks) or Step 5 (telemetry) — nothing ran, so there
   is nothing to record.
