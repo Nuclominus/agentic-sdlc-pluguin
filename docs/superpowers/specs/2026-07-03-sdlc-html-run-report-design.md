@@ -32,7 +32,7 @@ Non-goals (explicitly out for v1):
 
 | # | Decision | Choice | Rationale |
 |---|----------|--------|-----------|
-| D1 | Renderer location | **`sdlc-lint report <slug\|dir>` subcommand + `lib/report.mjs`** | Roadmap: "the same CLI becomes the engine for D". Reuses `tools/sdlc-lint` load/schema layer, its `node_modules`, and `test/` harness. No 2nd dependency tree. *(Question timed out — Option 1, my recommendation.)* |
+| D1 | Renderer location | **Canonical dep-free renderer shipped IN the plugin** (`plugins/sdlc/tools/report/{report,cli}.mjs`), invoked at runtime via `${CLAUDE_PLUGIN_ROOT}`; the dev/CI `tools/sdlc-lint` re-exports it (SSOT) for its `report` verb + tests | **Corrected after PR #26 review.** Original plan invoked the repo-root `tools/sdlc-lint/cli.mjs`, which is NOT in the shipped payload (`source: ./plugins/sdlc`) — the feature would never run on a consumer install. The renderer is dependency-free so it needs no `node_modules` on install. |
 | D2 | Rendering model | **Deterministic Node ESM**, not LLM-inline | Testable against fixtures, zero per-run token cost, byte-stable output. |
 | D3 | Authoritative input | **`_telemetry.json`** (structured), enriched by sibling files | It is the SSOT the orchestrator already writes. The report never re-derives costs. |
 | D4 | Output | **Self-contained HTML**: inline CSS, **zero** external refs, theme-aware (light/dark via `prefers-color-scheme`), every interpolated value HTML-escaped | Portable + shareable + XSS-safe (phase summaries are untrusted text). |

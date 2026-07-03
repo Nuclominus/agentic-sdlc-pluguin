@@ -1304,7 +1304,11 @@ After `_telemetry.json` is written, render a self-contained HTML report — unle
 
 1. If `command -v node` fails → print `HTML report: skipped (node unavailable)` and skip to the
    final summary.
-2. Else run via `Bash`: `node tools/sdlc-lint/cli.mjs report {task_slug}`.
+2. Else run via `Bash`: `node "${CLAUDE_PLUGIN_ROOT}/tools/report/cli.mjs" report {task_slug}`.
+   The renderer is shipped inside this plugin (`plugins/sdlc/tools/report/`, dependency-free), so it
+   is present on every install; `${CLAUDE_PLUGIN_ROOT}` resolves to the installed plugin root while
+   `{task_slug}` resolves against the project cwd (`docs/plans/{task_slug}/`). Do NOT invoke the
+   repo-local `tools/sdlc-lint/` path — that dev/CI tool is not part of the shipped payload.
    - On exit 0 → the file is at `docs/plans/{task_slug}/report.html`. Add it to the **Artifacts**
      block of the final summary and print `HTML report: docs/plans/{task_slug}/report.html`.
    - On non-zero exit → print `HTML report: failed — {stderr tail}` and continue. The report is a
