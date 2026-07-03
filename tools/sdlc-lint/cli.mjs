@@ -1,6 +1,10 @@
 #!/usr/bin/env node
+import { readdirSync } from "node:fs";
+import { resolve, join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { checkSchemas } from "./lib/schema.mjs";
 import { checkAllWorkflows } from "./lib/cycles.mjs";
+import { resolveFixture } from "./lib/detect.mjs";
 
 const args = process.argv.slice(2);
 const cmd = args[0];
@@ -29,10 +33,24 @@ function printCycles(results) {
   return failed.length ? 1 : 0;
 }
 
+const FIX = resolve(dirname(fileURLToPath(import.meta.url)), "fixtures");
+function printDetect() {
+  const rows = readdirSync(FIX).map(name => ({ name, ...resolveFixture(join(FIX, name), root) }));
+  const failed = rows.filter(r => !r.ok);
+  if (jsonOut) {
+    console.log(JSON.stringify({ command: "detect", checked: rows.length, failed: failed.length, failures: failed }));
+  } else {
+    for (const r of failed) console.error(`✗ ${r.name}: expected ${JSON.stringify(r.expected)}, got ${JSON.stringify(r.actual)}`);
+    console.log(`detect: ${rows.length - failed.length}/${rows.length} fixtures matched`);
+  }
+  return failed.length ? 1 : 0;
+}
+
 let code = 0;
 switch (cmd) {
   case "schema": code = printSchema(checkSchemas(root)); break;
   case "cycles": code = printCycles(checkAllWorkflows(root)); break;
+  case "detect": code = printDetect(); break;
   case undefined:
   case "--help":
     console.log("Usage: sdlc-lint <schema|cycles|detect|all> [--json]");
