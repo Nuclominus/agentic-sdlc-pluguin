@@ -1,0 +1,36 @@
+{
+  "task_slug": "add-subscription-billing",
+  "stack": "<script>alert(1)</script>",
+  "primary_profile": "android",
+  "additive_profiles": ["retrofit"],
+  "narrative_language": "uk",
+  "resumed": true,
+  "started_at": "2026-07-03T10:00:00Z",
+  "completed_at": "2026-07-03T10:03:07Z",
+  "wall_clock_seconds": 187,
+  "model_enforcement_corrections": 0,
+  "phases": [
+    { "phase": "business_analysis", "aspect": null, "agent": "business-analyst", "model": "claude-opus-4-8", "status": "completed", "origin": "resumed", "input_tokens": 35000, "output_tokens": 3000, "cached_input_tokens": 21000, "cost_usd": 0.16 },
+    { "phase": "qa", "aspect": null, "agent": "qa-engineer", "model": "claude-sonnet-5", "status": "completed", "origin": "fresh", "qa_iterations_used": 2, "qa_status": "completed", "input_tokens": 28000, "output_tokens": 2100, "cached_input_tokens": 18000, "cost_usd": 0.04 },
+    { "phase": "security", "aspect": null, "agent": "security-analyst", "model": "claude-haiku-4-5-20251001", "status": "completed", "origin": "fresh", "input_tokens": 12000, "output_tokens": 900, "cached_input_tokens": 6000, "cost_usd": null }
+  ],
+  "skip_rules_applied": [
+    { "rule": "config-only", "phase_skipped": "qa", "reason": "all changed paths matched config globs" }
+  ],
+  "post_pipeline_checks": [
+    { "command": "./gradlew detekt", "exit_code": 0 },
+    { "command": "echo <script>alert(1)</script>", "exit_code": 1 }
+  ],
+  "touched_files": [
+    { "status": "A", "path": "feature/billing/SubscriptionRepository.kt" },
+    { "status": "M", "path": "app/build.gradle.kts" }
+  ],
+  "total_input_tokens": 75000,
+  "total_output_tokens": 6000,
+  "total_cached_input_tokens": 45000,
+  "total_cost_usd": 0.20,
+  "cost_cap_usd": 0.60,
+  "cap_status": "within",
+  "cache_hit_ratio": 0.6,
+  "deps_preflight": { "superpowers": { "status": "available", "missing_skills": [] } }
+}
