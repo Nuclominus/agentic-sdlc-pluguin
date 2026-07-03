@@ -642,9 +642,15 @@ function printResumeFixtures() {
   const failed = [];
   for (const name of resumeFixtureDirs()) {
     const dir = join(FIX, name);
-    const expected = JSON.parse(readFileSync(join(dir, "expected-reentry.json"), "utf8"));
-    let actual;
-    try { actual = resolveWorkspace(dir); } catch (e) { failed.push({ name, error: e.message }); continue; }
+    let expected, actual;
+    try {
+      expected = JSON.parse(readFileSync(join(dir, "expected-reentry.json"), "utf8"));
+      actual = resolveWorkspace(dir);
+    } catch (e) {
+      // misconfigured fixture (missing/malformed expected-reentry.json or _run.json) = tool error
+      failed.push({ name, error: e.message, tool_error: true });
+      continue;
+    }
     const ok = actual.reenter_at === expected.reenter_at
       && JSON.stringify(actual.remaining) === JSON.stringify(expected.remaining)
       && JSON.stringify([...actual.completed].sort()) === JSON.stringify([...expected.completed].sort());
@@ -656,11 +662,11 @@ function printResumeFixtures() {
     for (const f of failed) console.error(`✗ ${f.name}: ${f.error ?? JSON.stringify(f.actual)}`);
     console.log(`resume: ${resumeFixtureDirs().length - failed.length}/${resumeFixtureDirs().length} fixtures matched`);
   }
-  return failed.length ? 1 : 0;
+  return failed.some(r => r.tool_error) ? 2 : failed.length ? 1 : 0; // 2=misconfig, 1=mismatch, 0=clean
 }
 ```
 
-(Delete the placeholder `printResumeFixtures` stub you added first — keep only the real one. Also `readFileSync` is already imported at the top of `cli.mjs`? It is NOT — add `readFileSync` to the `node:fs` import: `import { readdirSync, readFileSync } from "node:fs";`.)
+(`cli.mjs` currently imports NOTHING from `node:fs` — add the import: `import { readdirSync, readFileSync } from "node:fs";`.)
 
 Extend `runAll` (line 52-57) to include resume fixtures:
 
