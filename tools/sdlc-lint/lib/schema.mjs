@@ -10,6 +10,7 @@ const SCHEMA_MAP = [
   { glob: "plugins/**/workflows/*.yaml",     schema: "schemas/workflow.schema.json",    parse: "yaml" },
   { glob: "plugins/sdlc/config/models.json", schema: "schemas/models.schema.json",      parse: "json" },
   { glob: "**/.claude/model.local.json",     schema: "schemas/model-local.schema.json", parse: "json" },
+  { glob: "plugins/**/.claude-plugin/plugin.json", schema: "schemas/plugin.schema.json", parse: "json" },
 ];
 
 const fmtErr = (e) => `${e.instancePath || "/"} ${e.message}`;
@@ -29,9 +30,15 @@ export function checkSchemas(root = process.cwd()) {
     const files = globSync(glob, { cwd: root, absolute: true, dot: true })
       .filter(f => !f.includes("/test-fixtures/"));
     for (const file of files) {
+      let raw;
+      try {
+        raw = readFileSync(file, "utf8");
+      } catch (e) {
+        results.push({ file, schema, ok: false, errors: [`read: ${e.message}`] });
+        continue;
+      }
       let data;
       try {
-        const raw = readFileSync(file, "utf8");
         data = parse === "yaml" ? YAML.parse(raw) : JSON.parse(raw);
       } catch (e) {
         results.push({ file, schema, ok: false, errors: [`parse: ${e.message}`] });

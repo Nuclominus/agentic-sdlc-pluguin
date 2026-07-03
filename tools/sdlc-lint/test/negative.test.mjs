@@ -46,6 +46,20 @@ test("CLI `schema` exits 2 when schemas are missing (tool error)", () => {
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 });
 
+test("checkSchemas flags an invalid plugin.json (missing required field)", () => {
+  const tmp = mkTmp();
+  try {
+    cpSync(join(REPO, "schemas"), join(tmp, "schemas"), { recursive: true });
+    mkdirSync(join(tmp, "plugins", "x", ".claude-plugin"), { recursive: true });
+    writeFileSync(join(tmp, "plugins", "x", ".claude-plugin", "plugin.json"), JSON.stringify({ name: "x" }));  // missing required version/description
+    const results = checkSchemas(tmp);
+    const bad = results.find(r => r.file.endsWith(".claude-plugin/plugin.json"));
+    assert.ok(bad, "plugin.json should be validated");
+    assert.equal(bad.ok, false);
+    assert.notEqual(bad.tool_error, true);
+  } finally { rmSync(tmp, { recursive: true, force: true }); }
+});
+
 test("CLI `all` exits non-zero on an invalid manifest", () => {
   const tmp = mkTmp();
   try {
