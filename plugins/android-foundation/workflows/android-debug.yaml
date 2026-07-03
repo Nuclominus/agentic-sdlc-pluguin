@@ -1,0 +1,18 @@
+name: android-debug
+description: >
+  Android fix-and-verify pipeline that wires the on-demand android-debugger into the
+  DAG: Debugger (root cause) -> Developer (fix) -> Reviewer (loops back to Developer,
+  max 2) -> Tester. The `debugging` phase maps to android-debugger via the android
+  foundation manifest's agents_per_phase. Note: on an Android project both `debug`
+  and `android-debug` match the same arguments; per the auto-select tie-break,
+  `android-debug` sorts before `debug` alphabetically and wins.
+match:
+  arguments_pattern: "\\bdebug\\b|\\bcrash\\b|\\bregression\\b|\\broot.?cause\\b"
+phases:
+  - debugging
+  - development
+  - name: review
+    loop:
+      return_to: development
+      max_rounds: 2
+  - test

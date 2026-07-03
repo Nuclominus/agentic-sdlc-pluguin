@@ -1,0 +1,12 @@
+name: analysis
+description: >
+  Read-only assessment — business-analysis + security review that produce REPORTS
+  ONLY. No implementation, no code changes, and no PR are created. Use to audit,
+  assess, or review an area before deciding what (if anything) to build.
+match:
+  arguments_pattern: "\\banaly[sz]e\\b|\\baudit\\b|\\bassess\\b|\\breview\\s+the\\b"
+caps:
+  max_total_cost_usd: 0.30
+phases:
+  - business_analysis
+  - security

@@ -593,8 +593,10 @@ Summary:
    (the primary profile's declared `workflow`) → `"default"`.
    When auto-selection fires, **MUST print** verbatim (CSV = the satisfied condition keys):
    `🧭 Auto-selected workflow '{name}' — matched: {csv of satisfied condition keys}. Override with --workflow=NAME or --no-auto-workflow.`
-   Find the recipe via `Glob ~/.claude/plugins/cache/**/workflows/{WORKFLOW_NAME}.yaml` —
-   discovered across ALL plugins (core + platform plugins), not just core. Ambiguous/missing → HALT per RESOLVER.md Step 1.
+   Find the recipe — discovered across ALL plugins (core + platform plugins) via
+   `Glob ~/.claude/plugins/cache/**/workflows/{WORKFLOW_NAME}.yaml` AND from
+   `<project>/.claude/sdlc-workflows/{WORKFLOW_NAME}.yaml` (project-local recipes take highest
+   precedence and shadow a plugin recipe of the same name). Ambiguous/missing → HALT per RESOLVER.md Step 1.
    If not found → HALT with the error message specified in RESOLVER.md Step 1.
 2. **Read, parse, and validate:** `Read` the file, validate against
    `schemas/workflow.schema.json`, extract the `phases` array, normalize each

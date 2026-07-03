@@ -28,6 +28,7 @@ framework_detection:
 
 agents_per_phase:
   business_analysis: android-ba      # Opus/high — BA + embedded DDD (module placement)
+  debugging: android-debugger        # Sonnet/medium — root-cause phase (also stays on-demand); used by android-debug
   development: android-developer     # Sonnet/medium — implementer (Architecture Detection)
   review: android-reviewer           # Sonnet/medium — read-only review; ⇄developer loop (max 3)
   security: android-security         # Opus/high — MASVS/MASTG; runs ‖ test

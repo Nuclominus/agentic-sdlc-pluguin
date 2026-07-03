@@ -1,0 +1,9 @@
+name: testing
+description: >
+  Backfill or verify tests on existing code — runs the QA phase only. Use to add
+  missing coverage, write unit tests, or validate that current behavior is tested,
+  without a development phase.
+match:
+  arguments_pattern: "\\btest(s|ing)?\\b|\\bcoverage\\b|\\bunit\\s+test"
+phases:
+  - qa

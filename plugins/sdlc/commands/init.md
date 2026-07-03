@@ -20,6 +20,8 @@ One-time project setup. Detects the platform(s), writes a starter local-override
    # Uncomment and edit only what you need; delete the rest.
 
    # active_workflow: android-feature      # detected default for the PRIMARY profile; overrides the profile's declared workflow
+   # Project-local recipes: drop custom workflow YAMLs in .claude/sdlc-workflows/<name>.yaml
+   # (they shadow plugin recipes of the same name). Author them with /sdlc:workflow-config.
 
    # post_pipeline_checks:                 # REPLACES the profile's defaults entirely
    #   - "./gradlew testDebugUnitTest"

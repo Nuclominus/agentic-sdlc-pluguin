@@ -18,36 +18,47 @@ Step 1c.
    e.g. a platform profile sets `workflow: <its-recipe>`.)*
 5. Otherwise: `WORKFLOW_NAME = "default"`.
 
-Search path — workflow recipes are discovered across **all installed plugins**, not just core
-(the same aggregation pattern used for `manifest.yaml` and `runtime-dependencies.json`). Glob:
+Search path — workflow recipes are discovered from **two sources**: project-local recipes in the
+current project, and recipes shipped across **all installed plugins** (the same aggregation pattern
+used for `manifest.yaml` and `runtime-dependencies.json`). Glob both:
 
 ```text
-~/.claude/plugins/cache/**/workflows/{WORKFLOW_NAME}.yaml
+<project>/.claude/sdlc-workflows/{WORKFLOW_NAME}.yaml   # project-local (highest precedence)
+~/.claude/plugins/cache/**/workflows/{WORKFLOW_NAME}.yaml   # all plugins (core + platform)
 ```
 
-This covers core (`sdlc/workflows/`) and every plugin that ships a `workflows/` directory
+The plugin glob covers core (`sdlc/workflows/`) and every plugin that ships a `workflows/` directory
 (e.g. `<platform>-plugin/workflows/<recipe>.yaml`). Resolution:
 
-- **Exactly one match** → use it.
-- **Multiple matches** (same `WORKFLOW_NAME` shipped by more than one plugin) → **HALT** (ambiguous):
+- **Project-local recipe present** (`<project>/.claude/sdlc-workflows/{WORKFLOW_NAME}.yaml` exists) →
+  **use it**, and it **shadows** any plugin recipe of the same name. This is intentional per-project
+  overriding, **not** an ambiguity halt — the project wins.
+- **No project recipe, exactly one plugin match** → use the plugin recipe.
+- **No project recipe, multiple plugin matches** (same `WORKFLOW_NAME` shipped by more than one plugin)
+  → **HALT** (ambiguous — only two *plugins* colliding on a name halts):
 
 ```text
 ❌ Workflow '{WORKFLOW_NAME}' is ambiguous — defined in multiple plugins:
    {list each matching path}
    Rename one, or pass --workflow= with a unique name.
+   (A project-local <project>/.claude/sdlc-workflows/{WORKFLOW_NAME}.yaml would override both.)
 ```
 
 - Workflow names should be unique across the marketplace. Core recipe names
-  (`default`, `bugfix`, `hotfix`, `refactor`, `docs-only`) are reserved — a plugin must not reuse them.
+  (`default`, `bugfix`, `hotfix`, `refactor`, `docs-only`, `analysis`, `testing`, `debug`) are reserved
+  — a plugin must not reuse them. A **project** MAY reuse any name to deliberately shadow a plugin recipe.
 
-*(Iteration 4+: also search `<project>/.claude/sdlc-workflows/` for project-local recipes.)*
+Project-local recipes are validated against the same `schemas/workflow.schema.json` (Step 2 below,
+unchanged). Author them interactively with `/sdlc:workflow-config`.
 
 If no file is found → **HALT**:
 
 ```text
 ❌ Workflow '{WORKFLOW_NAME}' not found.
-   Searched: ~/.claude/plugins/cache/**/workflows/{WORKFLOW_NAME}.yaml
-   Available: {list all *.yaml found via Glob of **/workflows/, excluding test-fixtures/}
+   Searched: <project>/.claude/sdlc-workflows/{WORKFLOW_NAME}.yaml
+             ~/.claude/plugins/cache/**/workflows/{WORKFLOW_NAME}.yaml
+   Available: {list all *.yaml found via Glob of <project>/.claude/sdlc-workflows/*.yaml
+              AND **/workflows/, excluding test-fixtures/ — annotate project-local ones as "(project)"}
    Omit --workflow=NAME to use the default workflow.
 ```
 
