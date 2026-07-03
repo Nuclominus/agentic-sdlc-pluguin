@@ -1,0 +1,18 @@
+{
+  "task_slug": "search-index",
+  "stack": "android",
+  "primary_profile": "android",
+  "resumed": false,
+  "started_at": "2026-07-03T09:00:00Z",
+  "phases": [
+    { "phase": "development", "agent": "developer", "model": "claude-sonnet-5", "status": "completed", "input_tokens": 22000, "output_tokens": 1800, "cached_input_tokens": 11000, "cost_usd": 0.07, "qa_iterations_used": 0 },
+    { "phase": "security", "agent": "security-analyst", "model": "claude-haiku-4-5-20251001", "status": "completed", "input_tokens": 9000, "output_tokens": 700, "cached_input_tokens": 4000, "cost_usd": null }
+  ],
+  "total_input_tokens": 31000,
+  "total_output_tokens": 2500,
+  "total_cached_input_tokens": 15000,
+  "total_cost_usd": 0.07,
+  "cost_cap_usd": 0.40,
+  "cap_status": "within",
+  "cache_hit_ratio": 0.48
+}

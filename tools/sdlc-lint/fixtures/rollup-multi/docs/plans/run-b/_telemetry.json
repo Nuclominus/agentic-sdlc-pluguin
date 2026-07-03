@@ -1,0 +1,19 @@
+{
+  "task_slug": "auth-refresh",
+  "stack": "android",
+  "primary_profile": "android",
+  "resumed": false,
+  "started_at": "2026-07-02T09:00:00Z",
+  "phases": [
+    { "phase": "business_analysis", "agent": "business-analyst", "model": "claude-opus-4-8", "status": "completed", "input_tokens": 40000, "output_tokens": 3200, "cached_input_tokens": 20000, "cost_usd": 0.30 },
+    { "phase": "development", "agent": "developer", "model": "claude-opus-4-8", "status": "completed", "input_tokens": 35000, "output_tokens": 3000, "cached_input_tokens": 12000, "cost_usd": 0.20, "qa_iterations_used": 0 },
+    { "phase": "qa", "agent": "qa-engineer", "model": "claude-haiku-4-5-20251001", "status": "completed", "qa_iterations_used": 1, "input_tokens": 8000, "output_tokens": 600, "cached_input_tokens": 3000, "cost_usd": 0.05 }
+  ],
+  "total_input_tokens": 83000,
+  "total_output_tokens": 6800,
+  "total_cached_input_tokens": 35000,
+  "total_cost_usd": 0.55,
+  "cost_cap_usd": 0.50,
+  "cap_status": "over",
+  "cache_hit_ratio": 0.42
+}

@@ -1,0 +1,20 @@
+{
+  "task_slug": "billing",
+  "stack": "android",
+  "primary_profile": "android",
+  "resumed": true,
+  "started_at": "2026-07-01T09:00:00Z",
+  "phases": [
+    { "phase": "business_analysis", "agent": "business-analyst", "model": "claude-opus-4-8", "status": "completed", "input_tokens": 30000, "output_tokens": 2500, "cached_input_tokens": 18000, "cost_usd": 0.14 },
+    { "phase": "development", "aspect": "backend", "agent": "developer", "model": "claude-sonnet-5", "status": "completed", "input_tokens": 20000, "output_tokens": 1500, "cached_input_tokens": 9000, "cost_usd": 0.06, "qa_iterations_used": 0 },
+    { "phase": "qa", "agent": "qa-engineer", "model": "claude-sonnet-5", "status": "completed", "qa_iterations_used": 2, "input_tokens": 10000, "output_tokens": 800, "cached_input_tokens": 5000, "cost_usd": 0.0 }
+  ],
+  "skip_rules_applied": [ { "rule": "config-only", "phase_skipped": "security", "reason": "config paths only" } ],
+  "total_input_tokens": 60000,
+  "total_output_tokens": 4800,
+  "total_cached_input_tokens": 32000,
+  "total_cost_usd": 0.20,
+  "cost_cap_usd": 0.60,
+  "cap_status": "within",
+  "cache_hit_ratio": 0.53
+}
