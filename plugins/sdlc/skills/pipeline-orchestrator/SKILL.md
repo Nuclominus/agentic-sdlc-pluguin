@@ -1234,7 +1234,10 @@ their checkpoints, not lost). Then write `docs/plans/{task_slug}/_telemetry.json
   "cache_hit_ratio": 0.58,
   "deps_preflight": {
     "superpowers": { "status": "available", "missing_skills": [] }
-  }
+  },
+  "touched_files": [
+    { "status": "M", "path": "app/src/main/Foo.kt" }
+  ]
 }
 ```
 
@@ -1256,6 +1259,9 @@ Compute aggregates from `phases[]`:
   `additionalProperties:false` and has no `origin` field) — it is layered on at assembly time here,
   tracked via `CONTEXT` during Step 3 (`3-resume-skip` marks skipped units `"resumed"`; freshly
   dispatched units are `"fresh"`), not read back off disk.
+- `touched_files` (optional) = `git diff --name-status <merge-base>...HEAD` parsed into
+  `[{ "status": "A|M|D|R...", "path": "<repo-relative>" }]`, reusing the git already run in Step 0c.
+  On any git error, **omit the key** (never fabricate). Consumed by the HTML report (Step 5b).
 
 > Token counts come from the Agent tool's usage envelope when present. If a phase's result lacks usage data, fall back to char-length / 4 estimation and set `phases[N].usage_source: "estimated"` (default `"reported"`).
 
@@ -1281,6 +1287,7 @@ Artifacts:
   docs/plans/{task_slug}/02-development.md
   ...
   docs/plans/{task_slug}/_telemetry.json
+  docs/plans/{task_slug}/report.html
 
 Post-pipeline checks:
   ✅ ./gradlew detekt
@@ -1289,6 +1296,27 @@ Post-pipeline checks:
 
 PR: {pr_url_if_created}
 ```
+
+### Step 5b — Render the HTML run-report
+
+After `_telemetry.json` is written, render a self-contained HTML report — unless the user passed
+`--no-report` or the effective profile sets `report: false`.
+
+1. If `command -v node` fails → print `HTML report: skipped (node unavailable)` and skip to the
+   final summary.
+2. Else run via `Bash`: `node "${CLAUDE_PLUGIN_ROOT}/tools/report/cli.mjs" report {task_slug}`.
+   The renderer is shipped inside this plugin (`plugins/sdlc/tools/report/`, dependency-free), so it
+   is present on every install; `${CLAUDE_PLUGIN_ROOT}` resolves to the installed plugin root while
+   `{task_slug}` resolves against the project cwd (`docs/plans/{task_slug}/`). Do NOT invoke the
+   repo-local `tools/sdlc-lint/` path — that dev/CI tool is not part of the shipped payload.
+   - On exit 0 → the file is at `docs/plans/{task_slug}/report.html`. Add it to the **Artifacts**
+     block of the final summary and print `HTML report: docs/plans/{task_slug}/report.html`.
+   - On non-zero exit → print `HTML report: failed — {stderr tail}` and continue. The report is a
+     convenience; a render failure NEVER fails the pipeline (the run already succeeded).
+
+Skipped entirely under `--dry-run` (nothing ran; consistent with "Do NOT run Step 5").
+Under `--resume`, the report is regenerated from the reassembled telemetry, so it reflects the full
+multi-session picture.
 
 ---
 

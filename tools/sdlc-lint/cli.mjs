@@ -5,7 +5,8 @@ import { checkSchemas } from "./lib/schema.mjs";
 import { checkAllWorkflows } from "./lib/cycles.mjs";
 import { resolveFixture, listFixtures } from "./lib/detect.mjs";
 import { resolveWorkspace } from "./lib/resume.mjs";
-import { readdirSync, readFileSync } from "node:fs";
+import { renderReportFile } from "./lib/report.mjs";
+import { readdirSync, readFileSync, existsSync } from "node:fs";
 
 const args = process.argv.slice(2);
 const cmd = args[0];
@@ -118,10 +119,27 @@ switch (cmd) {
   case "resume":
     code = args[1] && !args[1].startsWith("--") ? printResumeOne(resolve(root, args[1])) : printResumeFixtures();
     break;
+  case "report": {
+    const target = args[1] && !args[1].startsWith("--") ? args[1] : null;
+    if (!target) { console.error("usage: sdlc-lint report <slug-or-dir> [--json]"); code = 2; break; }
+    const direct = resolve(root, target);
+    const dir = existsSync(join(direct, "_telemetry.json")) ? direct : join(root, "docs", "plans", target);
+    try {
+      const { htmlPath } = renderReportFile(dir);
+      if (jsonOut) console.log(JSON.stringify({ command: "report", ok: true, html_path: htmlPath }));
+      else console.log(`report: wrote ${htmlPath}`);
+      code = 0;
+    } catch (e) {
+      if (jsonOut) console.log(JSON.stringify({ command: "report", ok: false, error: e.message }));
+      else console.error(`✗ report: ${e.message}`);
+      code = 2;
+    }
+    break;
+  }
   case "all": code = runAll(); break;
   case undefined:
   case "--help":
-    console.log("Usage: sdlc-lint <schema|cycles|detect|resume|all> [--json]");
+    console.log("Usage: sdlc-lint <schema|cycles|detect|resume|report|all> [--json]");
     break;
   default:
     console.error(`unknown command: ${cmd}`);
