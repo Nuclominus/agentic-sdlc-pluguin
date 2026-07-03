@@ -757,6 +757,29 @@ side-effect-free: the only output is the preview block (plus the headless JSON l
 2. Create directory `docs/plans/{task_slug}/` if it does not exist.
 3. Create `docs/plans/{task_slug}/_brief.md` with the original `$ARGUMENTS`.
 
+**Resume mode.** When invoked with `resume` (see `start.md` Step 1):
+
+1. Resolve `task_slug` from `resume_slug` or derive it from `$ARGUMENTS` (same algorithm as item 1).
+2. If `docs/plans/{task_slug}/` does not exist → HALT:
+   `⛔ Nothing to resume: docs/plans/{task_slug}/ not found. Run without --resume to start fresh.`
+3. Do NOT recreate `_brief.md`. Read the existing one (it is the SSOT description for agents). If a
+   non-empty description was passed AND it differs from `_brief.md`, print
+   `⚠️ --resume: description differs from saved _brief.md; using saved brief` and continue with the saved brief.
+4. Read `.checkpoint/*.json` (ignore `_run.json`, any `*.tmp`, and any file that fails to parse or
+   lacks `status` — those units are treated as NOT complete). Build `CONTEXT.completed_units` —
+   the set of resolved-phase unit ids (`{phase}` or `{phase}-{aspect}`) whose checkpoint status ∈
+   {completed, skipped}. EXCLUDE any checkpoint that is `_run.json`, a `*.tmp`, unparseable, lacks
+   `status`, or has any other status — in particular `approved` plan-pass units (`{phase}-plan…`),
+   which are NOT done and never correspond to a `resolved_phases` entry. This is exactly the set
+   `lib/resume.mjs`'s `completedUnits()` computes. Set `CONTEXT.resumed = true`.
+5. **MUST PRINT VERBATIM:**
+   ```
+   ⏭ Resume: {task_slug}
+      Completed: {comma-list of completed unit ids}
+      Re-entering at: {first unfinished resolved phase}
+   ```
+   The "first unfinished resolved phase" is computed by the SAME rules as Step 3's skip check below.
+
 This directory is the **single source of truth** for inter-phase communication. Agents read prior phase outputs from here, not from your context window.
 
 ### Step 3 — Execute each phase
@@ -811,6 +834,36 @@ If `return_to` is a multi-pass phase with an approval gate (e.g. development's p
 The verdict contract (approved vs changes-requested) is read from the loop phase agent's compact summary — review-role agents state their verdict explicitly. The orchestrator keys off "findings present?" only; it stays platform-agnostic.
 
 For each phase:
+
+**3-resume-skip (resume mode only).** Before 3a, if `CONTEXT.resumed` is set, decide whether this
+resolved phase is already complete and can be skipped. The rules MUST match `tools/sdlc-lint/lib/resume.mjs`
+(the tested source of truth) exactly:
+
+- **Plain aspect-agnostic** — done if `.checkpoint/{phase}.json` status ∈ {completed, skipped}.
+- **Plain aspect-aware** — done if EVERY dispatched aspect has `.checkpoint/{phase}-{aspect}.json`
+  status ∈ {completed, skipped}. If only some aspects are done, do NOT skip the phase; run only the
+  aspects that are NOT done (checkpoint missing, unparseable, or status ∉ {completed, skipped}) — in
+  canonical order — skipping the done aspects.
+- **Development two-pass** — if `.checkpoint/{phase}[-{aspect}].json` status ∈ {completed, skipped}
+  → skip the aspect. Else if `.checkpoint/{phase}-plan[-{aspect}].json` is `approved` → skip the
+  planning pass + gate, go straight to the implement pass (the plan is on disk, approved).
+- **Loop phase** — skip ONLY if `.checkpoint/{phase}.json` status ∈ {completed, skipped} (verdict was approved).
+  Otherwise re-run the loop as a unit from round 1. (Its `return_to` phase is re-dispatched by the
+  loop as normal, even if that phase has a completed checkpoint — consistent with "a phase returned
+  via changes is not complete".)
+
+When a unit is skipped: load its checkpoint into `CONTEXT.phases[]` (set that element's
+`origin: "resumed"`), add its `cost_usd` to `CONTEXT.running_cost_usd`, and **MUST PRINT VERBATIM:**
+```
+⏩ Phase {N}/{total}: {phase_name}{ — aspect} → skipped (resumed from checkpoint)
+```
+Freshly-dispatched units (this run) get `origin: "fresh"`. If ALL resolved phases are already done,
+print `Resume: nothing left to run — re-verifying.` and go straight to Step 4 (post-checks) then
+Step 5 (re-assemble telemetry).
+
+<!-- DRIFT GUARD: these skip rules are mirrored in tools/sdlc-lint/lib/resume.mjs and its
+     fixtures/resume-* . When you change resume skip-semantics here, update resume.mjs + the
+     fixtures + resume.test.mjs in the SAME change, or CI (sdlc-lint all) will diverge from runtime. -->
 
 **3a. Look up agent(s):**
 

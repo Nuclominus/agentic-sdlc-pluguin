@@ -1,6 +1,6 @@
 ---
 description: Run the full SDLC pipeline (BA → Dev → QA → Security → Docs) for a feature, with auto-detection of the framework stack.
-argument-hint: "<feature description> [--stack=NAME] [--dry-run]"
+argument-hint: "<feature description> [--stack=NAME] [--dry-run] [--resume[=slug]]"
 ---
 
 # /sdlc:start
@@ -16,6 +16,11 @@ You MUST follow these steps **in order**, **printing each announcement verbatim*
 If `$ARGUMENTS` is empty: ask the user for a feature description and stop. Do NOT proceed.
 
 If `$ARGUMENTS` contains `--stack=NAME`: extract the value and remember it as `forced_stack`. Strip it from the description.
+
+If `$ARGUMENTS` contains `--resume` or `--resume=<slug>`: set `resume` mode. For `--resume=<slug>`
+remember `<slug>` as `resume_slug`; for bare `--resume` the slug is derived from the description
+exactly as in the skill's Step 2. Strip the flag from the description. Pass `resume` / `resume_slug`
+to the skill in Step 2.
 
 Print verbatim:
 ```
@@ -93,6 +98,24 @@ The cost figures are a clearly-labeled **HEURISTIC estimate** (baseline token as
 model-registry pricing), not a measurement — real cost is recorded from actual usage in a
 real run. In headless mode `--dry-run` also emits a machine-readable JSON line to stdout for
 CI gating.
+
+## Resuming an interrupted run (`--resume`)
+
+If a run was interrupted (crash, cost-cap abort, fatal halt), re-invoke with `--resume` to continue
+from the first unfinished phase instead of re-running everything:
+
+```
+/sdlc:start "Add subscription billing with Stripe" --resume
+/sdlc:start --resume=add-subscription-billing-with-stripe
+```
+
+The orchestrator reads `docs/plans/{slug}/.checkpoint/` — phases with a `completed`/`skipped`
+checkpoint are skipped (their cost is preserved in the final telemetry); the pipeline re-enters at
+the first unfinished phase. Combine with `--dry-run` to preview what would be skipped without
+dispatching anything.
+
+**Non-goal:** `--resume` does NOT restore repository state. It trusts the workspace and the code on
+disk; if git moved under the completed phases, that is the operator's responsibility.
 
 ## Cost caps (`caps.max_total_cost_usd`)
 
