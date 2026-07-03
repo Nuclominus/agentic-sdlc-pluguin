@@ -33,8 +33,7 @@ function printCycles(results) {
 }
 
 const FIX = resolve(dirname(fileURLToPath(import.meta.url)), "fixtures");
-function printDetect() {
-  const rows = listFixtures(FIX).map(name => ({ name, ...resolveFixture(join(FIX, name), root) }));
+function printDetect2(rows) {
   const failed = rows.filter(r => !r.ok);
   if (jsonOut) {
     console.log(JSON.stringify({ command: "detect", checked: rows.length, failed: failed.length, failures: failed }));
@@ -44,12 +43,26 @@ function printDetect() {
   }
   return failed.length ? 1 : 0;
 }
+function printDetect() {
+  return printDetect2(listFixtures(FIX).map(name => ({ name, ...resolveFixture(join(FIX, name), root) })));
+}
+
+function runAll() {
+  const schema = checkSchemas(root);
+  const cycles = checkAllWorkflows(root);
+  const detect = listFixtures(FIX).map(name => ({ name, ...resolveFixture(join(FIX, name), root) }));
+  const codes = [printSchema(schema), printCycles(cycles), printDetect2(detect)];
+  const exit = Math.max(...codes);
+  if (jsonOut) console.log(JSON.stringify({ command: "all", ok: exit === 0, exit }));
+  return exit;
+}
 
 let code = 0;
 switch (cmd) {
   case "schema": code = printSchema(checkSchemas(root)); break;
   case "cycles": code = printCycles(checkAllWorkflows(root)); break;
   case "detect": code = printDetect(); break;
+  case "all": code = runAll(); break;
   case undefined:
   case "--help":
     console.log("Usage: sdlc-lint <schema|cycles|detect|all> [--json]");
