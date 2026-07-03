@@ -766,6 +766,19 @@ For each phase in order, first determine if the phase is **aspect-agnostic** or 
 - **Aspect-agnostic phases** (business_analysis, security, documentation): one agent runs, taking all prior phase outputs as context. Single execution per phase.
 - **Aspect-aware phases** (development; optionally qa if profiles declare per-aspect agents): fan-out — orchestrator runs ONE agent per relevant aspect, sequentially. Default order: `database → backend → frontend → testing` (matches typical dependency direction; backend depends on database; frontend depends on backend's API contract).
 
+**3-checkpoint-init.** Before dispatching any phase, create `docs/plans/{task_slug}/.checkpoint/`
+and write `.checkpoint/_run.json` — the resolved DAG, so `--resume` (and `sdlc-lint resume`) can
+compute the re-entry point without re-resolving the workflow. Shape (validated by
+`schemas/run.schema.json`): `{ task_slug, workflow: CONTEXT.active_workflow, stack: primary_stack,
+resolved_phases: [ {name, kind: "plain"|"loop"|"parallel", aspects: <ordered aspect list or null>,
+members?: [{name, aspects}] } ] }`. Derive each entry from `CONTEXT.resolved_phases`: a plain phase
+sets `kind:"plain"`; a loop phase sets `kind:"loop"`; a `{parallel:[...]}` group sets
+`kind:"parallel"` + `members`; an aspect-aware phase sets `aspects` to the aspects resolved for it by
+the SAME deterministic 3a lookup (the profile's `agents_per_phase` map — the aspects whose agent is
+non-empty, in canonical order `database → backend → frontend → testing`), computed up front here;
+this is a pure lookup, not a dispatch. An aspect-agnostic phase sets `aspects: null`. Write it
+atomically (`.tmp` → rename). This file is overwritten (not appended) on every fresh run.
+
 **3-shapes. Phase-item shapes (generic control flow).**
 
 A resolved phase entry is one of three shapes. All are generic; the active profile still supplies the agent for each named phase via `agents_per_phase`. The orchestrator never hardcodes which phases exist.
@@ -1030,6 +1043,24 @@ gate uses the ACTUAL accumulated `cost_usd`. Both read the same cap from `CONTEX
 
 If validation fails, **do not proceed** — ask the user how to handle (retry, skip, abort).
 
+**3d-3. Write the phase checkpoint (resume substrate).** After 3d-1/3d-2 (telemetry computed) AND
+3e (validation passed), atomically write `docs/plans/{task_slug}/.checkpoint/{unit}.json` where
+`{unit}` = `{phase}` for an aspect-agnostic phase or `{phase}-{aspect}` for an aspect-aware one.
+The file IS the `phases[]` telemetry entry for this unit (same fields — see Step 5) plus
+`output_file` (the `0X-{phase}{-aspect}.md` path) and `completed_at` (ISO). Set `status:"completed"`.
+In the checkpoint file, set `aspect` to the aspect string for an aspect-aware unit, or `null` for an
+aspect-agnostic unit (matching the Step 5 example and `schemas/checkpoint.schema.json`, where `aspect`
+is `string|null`). Validated by `schemas/checkpoint.schema.json`. Write to `{unit}.json.tmp` then
+rename (atomic).
+
+- **Dev planning pass:** right after the plan approval gate (3b-special) is approved, write
+  `.checkpoint/{phase}-plan{-aspect}.json` with `status:"approved"` (no cost fields required). This
+  lets resume skip the planning gate and re-enter directly at the implement pass.
+- **Skipped phases:** when a phase is skipped by a skip-rule (Step 0c) or by an empty agent map
+  (3a), write its checkpoint with `status:"skipped"` so resume treats it as done (nothing to do).
+
+This write is purely additive — it creates checkpoint files and changes no phase-dispatch logic.
+
 ### Step 4 — Run post-pipeline checks
 
 For each command in `EFFECTIVE_PROFILE.post_pipeline_checks` (already merged with `sdlc.local.yaml` in Step 1b), execute via `Bash`:
@@ -1053,7 +1084,11 @@ If any command fails:
 
 ### Step 5 — Write telemetry and final summary
 
-Write `docs/plans/{task_slug}/_telemetry.json`:
+Assemble `phases[]` by reading `docs/plans/{task_slug}/.checkpoint/*.json` (every unit file except
+`_run.json`), ordered by `completed_at`. Because each checkpoint IS a `phases[]` element, no
+re-derivation is needed — this makes the totals correct even after a `--resume` (the cost of
+phases finished in an earlier session is preserved in their checkpoints, not lost). Then write
+`docs/plans/{task_slug}/_telemetry.json`:
 
 ```json
 {
@@ -1129,6 +1164,11 @@ Compute aggregates from `phases[]`:
 - `cache_hit_ratio` = `total_cached_input_tokens / max(total_input_tokens, 1)` rounded to 2 decimals.
 - `cost_cap_usd` = `CONTEXT.cost_cap` (the active workflow recipe's `caps.max_total_cost_usd`), or `null` when the recipe declared no cap.
 - `cap_status` = `CONTEXT.cap_status` from the Step 3d-cap gate: `"within"` (cap set and never exceeded, or no cap), `"exceeded-continued"` (user approved continuing past the cap), or `"exceeded-aborted"` (user aborted, or headless abort). When the run was cost-aborted, also set `aborted_at_phase` to the phase that was about to run.
+- `resumed` = `true` when this run entered via `--resume` (else omit or `false`).
+- `resumed_at` = ISO timestamp of the resume entry (only when `resumed`).
+- `resume_slug` = the resumed slug (only when `resumed`).
+- each `phases[]` element carries `origin: "resumed" | "fresh"` — `"resumed"` when it was loaded
+  from a checkpoint written in an earlier session (not dispatched this run), else `"fresh"`.
 
 > Token counts come from the Agent tool's usage envelope when present. If a phase's result lacks usage data, fall back to char-length / 4 estimation and set `phases[N].usage_source: "estimated"` (default `"reported"`).
 
