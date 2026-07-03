@@ -401,8 +401,7 @@ test("text digest lists totals, runs, models and phases", () => {
   const txt = renderRollupText(computeRollup(runs()));
   assert.match(txt, /3 run\(s\)/);
   assert.match(txt, /\$0\.82/);          // total cost
-  assert.match(txt, /billing/);          // slug from telemetry task_slug? no — slug is run-a
-  assert.match(txt, /run-a/);
+  assert.match(txt, /run-a/);            // per-run rows use the workspace slug (dir name)
   assert.match(txt, /OVER/);             // run-b cap breach
   assert.match(txt, /claude-opus-4-8/);  // by_model
   assert.match(txt, /business_analysis/);// by_phase
