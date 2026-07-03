@@ -20,9 +20,9 @@ Bug-fix (full gate):
 `[android-security ‖ android-tester]` = android-security and android-tester run **in parallel** — invoke both simultaneously.
 
 After the pipeline ends, an **optional** retrospective step is available:
-`android-workflow:aar` (After Action Review) analyzes the session transcript for
-token cost and agent cooperation and proposes approvable workflow improvements.
-It is user-triggered, never automatic.
+`sdlc:aar` (After Action Review) analyzes the run's metrics dashboard and
+session transcript for token cost and agent cooperation and proposes approvable
+workflow improvements. It is user-triggered, never automatic.
 
 ## Knowledge sourcing — applies to every step
 
@@ -163,10 +163,12 @@ Read `${CLAUDE_PLUGIN_ROOT}/rules/documentation.md` and verify the android-docs 
 
 ## Step 7: AAR — After Action Review (optional, retrospective)
 
-- Runs **only** when the user invokes `android-workflow:aar` after a cycle ends.
-- A read-only `aar` analyst subagent parses the session transcript JSONL
-  (`~/.claude/projects/<encoded-cwd>/<session>.jsonl`) — the only durable record
-  of the run, since handoff envelopes are not persisted.
+- Runs **only** when the user invokes `sdlc:aar` (via `/sdlc:aar`) after a cycle ends.
+- A read-only `aar` analyst subagent reads the deterministic metrics dashboard
+  (`tools/aar/metrics.mjs` over `docs/plans/{slug}/_telemetry.json`) for cost
+  accounting and parses the session transcript JSONL
+  (`~/.claude/projects/<encoded-cwd>/<session>.jsonl`) for cooperation signals —
+  the only durable record of the run, since handoff envelopes are not persisted.
 - Produces findings bucketed into **agents / rules / settings / vault docs**, each
   with transcript evidence and a concrete proposed edit.
 - The user multi-selects findings, reviews a diff per item, and approves; AAR

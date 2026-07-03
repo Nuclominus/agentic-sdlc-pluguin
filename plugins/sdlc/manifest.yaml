@@ -15,6 +15,8 @@ agents_per_phase:
   security: security-analyst
   documentation: document-writer
 
+# aar_analyst: (unset) → the neutral core's `aar-analyst` runs /sdlc:aar retrospectives.
+
 convention_skills: []
 extra_phases: []
 pre_phase_commands: []

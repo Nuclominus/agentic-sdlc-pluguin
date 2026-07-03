@@ -918,6 +918,8 @@ The prompt MUST be assembled in this exact order so the stable prefix (everythin
 
 {phase_prompts_injection[phase] from active profiles, concatenated}
 
+{sdlc_lessons_block — see 3b-1b; OMITTED ENTIRELY when .claude/sdlc-lessons.md is absent or empty}
+
 Convention skills to consider invoking: {convention_skills (sorted, deterministic)}
 
 {project_extension_skills_block — see 3b-1a; OMITTED ENTIRELY when no rule targets this agent}
@@ -984,6 +986,28 @@ value (task_slug, timestamps) into this block.
 Note: this injection covers the **pipeline phase agents** the orchestrator dispatches. ON-DEMAND
 agents that bypass the orchestrator (e.g. debugger / devops / cicd / aar) self-read their matching
 `extensions.skills` rows at use-time — see the platform plugin's `rules/skills.md`.
+
+**3b-1b. Build the `sdlc_lessons_block`** (AAR lessons injection).
+
+Once at session start, read `.claude/sdlc-lessons.md` if it exists.
+
+- If it is present and non-empty, the block is:
+
+  ```
+  Lessons learned (from prior AAR cycles, project-curated):
+  {verbatim contents of .claude/sdlc-lessons.md}
+  ```
+
+- If the file is **absent or empty (whitespace-only)**, the block is the empty
+  string and is OMITTED entirely (no header), so the stable prefix stays
+  byte-identical for projects with no lessons.
+
+This block lives in the **stable prefix** (not the per-call trailer): it is read
+once and is identical across every phase of the run, so it qualifies for prompt
+caching. It is invalidated only by an edit to `.claude/sdlc-lessons.md` (i.e. a
+`/sdlc:aar` apply), which is acceptable. Hold the read result in
+`CONTEXT.sdlc_lessons_block` and reuse it for every phase — do NOT re-read per
+phase.
 
 **3b-2. MUST PRINT VERBATIM** before spawning each agent:
 
@@ -1540,6 +1564,11 @@ Hard rules:
 - The stable prefix MUST contain ZERO references to `task_slug`, ISO timestamps, run UUIDs, or any per-call value. All such values live in the trailer.
 - The stable prefix's `convention_skills` list MUST be sorted deterministically — never insertion-ordered.
 - The `project_extension_skills_block` (3b-1a) MUST be deduped by skill (strictest policy wins), ordered deterministically (mandatory-first, then alphabetical by skill), and OMITTED entirely when no row targets the agent — never emit an empty header. It is invalidated only by edits to `sdlc.local.yaml` or install/uninstall of a referenced skill's plugin, which is acceptable.
+- The `sdlc_lessons_block` (3b-1b) is the VERBATIM contents of
+  `.claude/sdlc-lessons.md`, read ONCE at session start, byte-identical across
+  all phases, and OMITTED entirely (no header) when the file is absent or
+  empty. Never splice it into the per-call trailer, and never re-read it per
+  phase. It is invalidated only by an edit to that file — acceptable.
 - The stable prefix's `phase_prompts_injection` MUST be concatenated in a deterministic order (alphabetical by source plugin name) to keep multi-plugin merges byte-stable.
 - Do NOT splice user-supplied free text (e.g. raw `$ARGUMENTS`) into the stable prefix. `$ARGUMENTS` belongs in `_brief.md`, which the agent reads via the inputs list.
 - When adding new phase guidance, prefer extending the agent's `.md` body (truly stable system prompt) over enriching the orchestrator's prefix.

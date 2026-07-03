@@ -28,11 +28,12 @@
             { "required": ["framework_detection"] },
             { "required": ["hosts_aspects"] },
             { "required": ["agents_per_phase"] },
-            { "required": ["on_demand_agents"] }
+            { "required": ["on_demand_agents"] },
+            { "required": ["aar_analyst"] }
           ]
         },
         "properties": { "aspects": { "maxItems": 0 } },
-        "description": "Framework (additive) manifests enrich existing phases. They MUST declare `enriches_aspect` and MUST NOT declare `workflow` / `framework_detection` / `hosts_aspects` / `agents_per_phase` / `on_demand_agents` / a non-empty `aspects`."
+        "description": "Framework (additive) manifests enrich existing phases. They MUST declare `enriches_aspect` and MUST NOT declare `workflow` / `framework_detection` / `hosts_aspects` / `agents_per_phase` / `on_demand_agents` / `aar_analyst` / a non-empty `aspects`."
       }
     },
     {
@@ -136,6 +137,11 @@
       "description": "Foundation only (informational): agents invoked directly, NOT by the pipeline (e.g. debugger, devops, cicd, aar).",
       "items": { "type": "string", "minLength": 1 },
       "uniqueItems": true
+    },
+    "aar_analyst": {
+      "type": "string",
+      "description": "Foundation only (optional): agent name that overrides the generic `aar-analyst` for the /sdlc:aar retrospective. Absent → the neutral core's `aar-analyst` is used.",
+      "minLength": 1
     },
     "convention_skills": {
       "type": "array",

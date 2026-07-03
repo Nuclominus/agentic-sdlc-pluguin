@@ -4,6 +4,16 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+### Added
+
+- **sdlc:aar** — After Action Review cycle (Roadmap C1): `/sdlc:aar [slug]` analyzes
+  a run's cost (deterministic `tools/aar/metrics.mjs` over `_telemetry.json`) and
+  agent cooperation (session transcript), then applies approved workflow
+  improvements and persists lessons to `.claude/sdlc-lessons.md`, which the
+  orchestrator injects into every future phase's stable prompt prefix. Generic
+  `aar-analyst`, overridable per foundation via `aar_analyst`. Repoints the
+  previously orphaned AAR skill references.
+
 ## [1.3.0] — 2026-07-02
 
 Only the `sdlc` plugin changed; other plugins remain at `1.1.0`.
