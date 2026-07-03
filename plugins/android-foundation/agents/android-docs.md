@@ -115,7 +115,7 @@ STOP and fix the vault if any item fails. Then `gh pr create`.
 
 Once the PR is opened, print this one line and stop — do NOT auto-invoke anything:
 
-> Workflow complete. Run `android-workflow:aar` to review this cycle for token / cooperation improvements.
+> Workflow complete. Run `/sdlc:aar` to review this cycle for token / cooperation improvements.
 
 AAR is opt-in and retrospective; the user decides whether to run it.
 
