@@ -9,10 +9,14 @@ Step 1c.
 1. If `$ARGUMENTS` contains `--workflow=NAME`, use `NAME` as `WORKFLOW_NAME`.
 2. Else if `EFFECTIVE_PROFILE` (from sdlc.local.yaml) specifies `active_workflow`,
    use that as `WORKFLOW_NAME`. *(Iteration 4+)*
-3. Else if the PRIMARY profile declared a `workflow:` in its `manifest.yaml`
+3. **Else run match-based auto-selection** (Step 1.5 below): evaluate every
+   discovered recipe's `match:` block against the diff signals + `$ARGUMENTS`. If
+   exactly one recipe is selected, use its `name` as `WORKFLOW_NAME`. Skipped when
+   `$ARGUMENTS` contains `--no-auto-workflow`, or when tiers 1–2 already resolved a name.
+4. Else if the PRIMARY profile declared a `workflow:` in its `manifest.yaml`
    (`CONTEXT.profile_default_workflow`), use that. *(Generic — any profile may set it;
    e.g. a platform profile sets `workflow: <its-recipe>`.)*
-4. Otherwise: `WORKFLOW_NAME = "default"`.
+5. Otherwise: `WORKFLOW_NAME = "default"`.
 
 Search path — workflow recipes are discovered across **all installed plugins**, not just core
 (the same aggregation pattern used for `manifest.yaml` and `runtime-dependencies.json`). Glob:
@@ -46,6 +50,68 @@ If no file is found → **HALT**:
    Available: {list all *.yaml found via Glob of **/workflows/, excluding test-fixtures/}
    Omit --workflow=NAME to use the default workflow.
 ```
+
+## Step 1.5: Match-based auto-selection
+
+This tier fires **only** when tiers 1–2 above did NOT resolve a `WORKFLOW_NAME`
+(no `--workflow=NAME`, no `active_workflow`). It detects intent from the diff
+signals and `$ARGUMENTS`, choosing a more specific recipe than the generic
+profile default. It is **deterministic** — the same inputs always yield the same
+result.
+
+**Skip conditions.** Do NOT run this tier (fall straight through to tier 4, the
+profile default) when ANY of these hold:
+
+- `$ARGUMENTS` contains `--no-auto-workflow`, OR
+- tier 1 (`--workflow=NAME`) or tier 2 (`active_workflow`) already resolved a name.
+
+**Signals available by Step 1c** (computed in Step 0c): `LOC_TOUCHED` (integer),
+`HAS_MIGRATIONS` (boolean), `CONFIG_ONLY` (boolean), and the raw `$ARGUMENTS` string.
+
+### Candidate set
+
+Every discovered recipe (globbed across ALL plugins, same search path as Step 1)
+that carries a **non-empty** `match:` block is a candidate. A recipe whose `match`
+block is empty or absent is NOT a candidate — it can only be chosen explicitly
+(via `--workflow=` / `active_workflow` / profile default).
+
+### Match predicate
+
+A candidate MATCHES **iff ALL conditions present in its `match` block are satisfied**
+against the signals. Conditions that are absent from the block are ignored (not a
+constraint). The conditions:
+
+| Key | Satisfied when |
+| --- | --- |
+| `arguments_pattern` | the ECMAScript regex, tested **case-insensitively**, finds a match in `$ARGUMENTS` |
+| `loc_touched_max` | `LOC_TOUCHED <= value` |
+| `loc_touched_min` | `LOC_TOUCHED >= value` |
+| `has_migrations: true` | `HAS_MIGRATIONS == true` |
+| `config_only: true` | `CONFIG_ONLY == true` |
+
+(For `has_migrations` / `config_only`, a `false` value imposes no constraint.)
+
+### Tie-break (when more than one recipe matches)
+
+Apply these rules **in order**; stop at the first that yields a unique winner:
+
+1. **Most specific wins** — highest count of *satisfied* conditions in the `match` block.
+2. **Most conservative cost cap** — lowest `caps.max_total_cost_usd`. Treat a recipe
+   with **no** `caps.max_total_cost_usd` as `+∞` (a present cap always beats no cap).
+3. **Alphabetical** — lowest `name` in ASCII/lexicographic order.
+
+### Outcome
+
+- **Exactly one recipe survives** → select it. Set `CONTEXT.workflow_autoselected = true`
+  and `CONTEXT.active_workflow = <name>` (this becomes `WORKFLOW_NAME`), then continue to Step 2.
+  **MUST print** (verbatim, substituting the CSV of the satisfied condition keys):
+
+  ```text
+  🧭 Auto-selected workflow '{name}' — matched: {csv of satisfied condition keys}. Override with --workflow=NAME or --no-auto-workflow.
+  ```
+
+- **No recipe matches** → do nothing here; fall through to tier 4 (profile default)
+  / tier 5 (`"default"`) exactly as before. Print nothing for this tier.
 
 ## Step 2: Read, parse, and validate
 

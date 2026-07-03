@@ -202,12 +202,33 @@ A **workflow recipe** is a YAML file declaring which phases to run and in what s
 
 ### Workflow selection precedence
 
-`--workflow=NAME` > `.claude/sdlc.local.yaml active_workflow` > the PRIMARY profile's declared `workflow:` > `default`.
+`--workflow=NAME` > `.claude/sdlc.local.yaml active_workflow` > **match-based auto-selection** > the PRIMARY profile's declared `workflow:` > `default`.
 
 ```bash
 /sdlc:start "Add dark mode"                            # android profile → android-feature (auto)
 /sdlc:start --workflow=docs-only "Update README"       # explicit override
 ```
+
+### Automatic workflow selection
+
+When no explicit workflow is chosen (no `--workflow=`, no `active_workflow`), the orchestrator inspects the change and picks the most fitting recipe by evaluating each recipe's optional `match:` block. This tier sits **between** `active_workflow` and the profile default: explicit choices always win, but intent detection beats the generic default.
+
+A recipe is a **candidate** only if it carries a non-empty `match:` block (a recipe with no `match:` can only be chosen explicitly). Available signals: `$ARGUMENTS`, `LOC_TOUCHED`, `HAS_MIGRATIONS`, `CONFIG_ONLY`. A candidate **matches iff ALL conditions present in its `match:` block are satisfied** (absent conditions are ignored):
+
+- `arguments_pattern` — ECMAScript regex, tested **case-insensitively** against `$ARGUMENTS`.
+- `loc_touched_max` / `loc_touched_min` — `LOC_TOUCHED <= max` / `LOC_TOUCHED >= min`.
+- `has_migrations: true` — matches only when a migration is present.
+- `config_only: true` — matches only when the change touches config-only files.
+
+**Tie-break** when several recipes match, applied in order: (1) most specific — highest count of satisfied conditions; (2) most conservative — lowest `caps.max_total_cost_usd` (no cap = +∞); (3) alphabetical by `name`. If exactly one survives it is selected; if none match, selection falls through to the profile default unchanged.
+
+When auto-selection fires it announces:
+
+```text
+🧭 Auto-selected workflow 'bugfix' — matched: arguments_pattern,loc_touched_max. Override with --workflow=NAME or --no-auto-workflow.
+```
+
+**Override** by naming a workflow (`/sdlc:start --workflow=NAME "…"`) or by disabling the tier entirely (`/sdlc:start --no-auto-workflow "…"`, which jumps straight to the profile default).
 
 ### Custom recipes
 

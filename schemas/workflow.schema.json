@@ -20,7 +20,7 @@
     },
     "match": {
       "type": "object",
-      "description": "Deterministic signals for auto-selecting this recipe (Iteration 1+). Absent in Iteration 0.",
+      "description": "Deterministic signals for match-based auto-selection of this recipe. ACTIVE: the orchestrator evaluates this block (RESOLVER.md Step 1.5) between the sdlc.local.yaml active_workflow tier and the profile default. A recipe matches iff ALL present conditions are satisfied against the diff signals + $ARGUMENTS; an empty/absent block means the recipe is never auto-selected (explicit choice only). Ties break by most satisfied conditions, then lowest caps.max_total_cost_usd (no cap = +∞), then alphabetical name.",
       "additionalProperties": false,
       "properties": {
         "arguments_pattern": {
