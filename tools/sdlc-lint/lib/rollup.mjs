@@ -3,4 +3,4 @@
 // marketplace consumers get it via ${CLAUDE_PLUGIN_ROOT} — see the /sdlc:report
 // command). This file keeps the `sdlc-lint rollup` verb and the rollup test-suite
 // pointed at that single source of truth, so they exercise the exact code that ships.
-export { computeRollup, renderRollupText } from "../../../plugins/sdlc/tools/rollup/rollup.mjs";
+export { computeRollup, renderRollupText, renderRollupHtml } from "../../../plugins/sdlc/tools/rollup/rollup.mjs";

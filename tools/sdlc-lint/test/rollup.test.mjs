@@ -115,3 +115,45 @@ test("text digest handles empty run-set", () => {
 test("text digest is deterministic", () => {
   assert.equal(renderRollupText(computeRollup(runs())), renderRollupText(computeRollup(runs())));
 });
+
+import { renderRollupHtml } from "../lib/rollup.mjs";
+
+test("html is a complete self-contained document", () => {
+  const html = renderRollupHtml(computeRollup(runs()));
+  assert.match(html, /^<!doctype html>/i);
+  assert.match(html, /<\/html>\s*$/i);
+  assert.doesNotMatch(html, /https?:\/\//);
+  assert.doesNotMatch(html, /src=/);
+  assert.doesNotMatch(html, /<link/i);
+  assert.doesNotMatch(html, /@import url\(/i);
+});
+
+test("html surfaces totals, runs, models, phases, incidents", () => {
+  const html = renderRollupHtml(computeRollup(runs()));
+  assert.match(html, /\$0\.82/);              // total cost
+  assert.match(html, /run-a/);
+  assert.match(html, /claude-opus-4-8/);
+  assert.match(html, /business_analysis/);
+  assert.match(html, /over/i);                // cap breach incident
+});
+
+test("html escapes injected markup from untrusted fields", () => {
+  const evil = { slug: "<script>alert(1)</script>", telemetry: {
+    task_slug: "x", started_at: "2026-07-04T00:00:00Z",
+    phases: [{ phase: "development", model: "m", status: "completed", input_tokens: 1, output_tokens: 1, cost_usd: 0.01 }],
+    total_input_tokens: 1, total_output_tokens: 1, total_cost_usd: 0.01, cap_status: "within",
+  } };
+  const html = renderRollupHtml(computeRollup([evil]));
+  assert.doesNotMatch(html, /<script>alert\(1\)<\/script>/);
+  assert.match(html, /&lt;script&gt;/);
+});
+
+test("html empty-state renders a valid page", () => {
+  const html = renderRollupHtml(computeRollup([]));
+  assert.match(html, /^<!doctype html>/i);
+  assert.match(html, /No pipeline runs recorded yet/);
+});
+
+test("html is deterministic (byte-identical across calls)", () => {
+  assert.equal(renderRollupHtml(computeRollup(runs())), renderRollupHtml(computeRollup(runs())));
+});
