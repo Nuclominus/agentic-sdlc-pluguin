@@ -607,6 +607,136 @@ Summary:
 The resolved `CONTEXT.resolved_phases[]` replaces the hardcoded list for all
 downstream steps. Phase names and their semantics are unchanged.
 
+### Step 1d — Cost cap + optional dry-run plan preview
+
+Everything needed to describe the plan is known by the end of Step 1c: the active
+profiles, the resolved workflow, `CONTEXT.resolved_phases[]`, and the per-agent model
+tiers (resolvable via the Step 3b-3 precedence). This step (a) resolves the cost cap
+used by BOTH the dry-run preview and real-run enforcement (Step 3d-cap), and (b) — only
+when `--dry-run` is present — prints a resolved-plan preview and STOPS the pipeline
+before any workspace is created or any agent is dispatched.
+
+#### 1d-0. Resolve the cost cap (always — dry-run and real runs)
+
+Read `caps.max_total_cost_usd` from the **active workflow recipe** parsed in Step 1c
+(the recipe object validated against `schemas/workflow.schema.json`). Persist:
+
+```
+CONTEXT.cost_cap = <recipe>.caps.max_total_cost_usd   # a number, or null when the recipe declares no cap
+```
+
+Both `--dry-run` (below) and the real-run gate (Step 3d-cap) read `CONTEXT.cost_cap`
+from here — the cap is never restated elsewhere. If no cap is set, downstream logic
+treats cost as unbounded (never pauses/aborts on cost).
+
+#### 1d-1. Dry-run preview (only if `$ARGUMENTS` contains `--dry-run`)
+
+If `--dry-run` is NOT present, skip the rest of Step 1d and continue to Step 2.
+
+If `--dry-run` IS present, do the following and then EXIT (see 1d-4):
+
+**1. Load the model registry** for pricing exactly as Step 3d-0 does:
+
+```
+MODELS = parse(Glob("~/.claude/plugins/cache/**/sdlc/config/models.json"))
+```
+
+**2. Expand `CONTEXT.resolved_phases[]` into a flat list of dispatch rows.** Do NOT
+spawn any agent. For each resolved entry:
+
+- **Parallel group** `{parallel:[a,b,…]}` → expand to its members (each member is its
+  own dispatch; parallelism saves wall-clock, not tokens). Tag the group in the display.
+- **Loop phase** `{name, loop:{return_to, max_rounds}}` → one row for the loop phase,
+  flagged `loops ⇄ {return_to}, ≤{max_rounds}×` (iteration cost folded into totals in step 4).
+- **Aspect-aware phase** (`development`, or `qa` when a profile declares per-aspect
+  agents) → one row **per resolved aspect** (canonical order `database → backend →
+  frontend → testing`), reading the agent from `EFFECTIVE_PROFILE.agents_per_phase[phase][aspect]`.
+- **Plain / aspect-agnostic phase** → one row, agent from `EFFECTIVE_PROFILE.agents_per_phase[phase]`.
+
+For each row resolve the **model tier** via the Step 3b-3 precedence
+(`CONTEXT.model_overrides.agents[<bare>]` → `CONTEXT.model_overrides.default` →
+agent `.md` frontmatter `model:` → `sonnet`). No agent is spawned — this is a pure lookup.
+
+**3. Estimate cost per row from a documented token HEURISTIC** (⚠️ this is an ESTIMATE,
+not a measurement — real cost is recorded in Step 3d-1/Step 5 from actual usage). Baseline
+per-dispatch token assumptions, keyed by resolved tier:
+
+| tier | input tokens | cached fraction | output tokens |
+|---|---|---|---|
+| `opus`, `fable` | 35 000 | 60% | 3 000 |
+| `sonnet` | 28 000 | 60% | 2 500 |
+| `haiku` | 18 000 | 60% | 1 500 |
+
+Per-row estimate, using registry pricing `P = MODELS.models[].pricing` for the tier
+(USD per MTok), with `cached = 0.60 × input`, `uncached = input − cached`:
+
+```
+est_row = uncached/1e6 * P.input + cached/1e6 * P.cached_input + output/1e6 * P.output
+```
+
+(Sanity check: an `opus` row ⇒ `14k/1e6·5 + 21k/1e6·0.5 + 3k/1e6·25 = $0.16`, matching the
+Step 5 telemetry example.)
+
+Phase-shape multipliers, applied on top of the per-row baseline (all documented, all
+heuristic):
+
+- **development** is two-pass (plan + implement); count it as **×1.6 per aspect** (plan
+  pass ≈ 0.6× a full dispatch, implement ≈ 1.0×).
+- **Loop phase L** returning to phase R (single-run estimates `est(L)`, `est(R)`):
+  iterating adds a surcharge on top of the one-time rows already counted —
+  `expected` folds in `0.5 × (est(L) + est(R))` (assume ~1.5 rounds), `worst-case`
+  folds in `(max_rounds − 1) × (est(L) + est(R))` (every round hits the cap).
+
+**4. Totals.**
+
+```
+base_total     = Σ est_row over all rows (development already ×1.6/aspect)
+expected_total = base_total + Σ over loop phases 0.5·(est(L)+est(R))
+worst_total    = base_total + Σ over loop phases (max_rounds−1)·(est(L)+est(R))
+```
+
+#### 1d-2. MUST PRINT VERBATIM (dry-run contract)
+
+```
+🔎 DRY RUN — no agents dispatched, no code written.
+Stack: {primary_stack} | Workflow: {active_workflow}{ (auto-selected) if CONTEXT.workflow_autoselected}
+Phases ({N}):
+   1. {phase}{ — aspect}    → {agent} ({tier})   ~${est_row}{  loops ⇄ {return_to}, ≤{max_rounds}× | ‖ parallel — flags if any}
+   2. {phase}               → {agent} ({tier})   ~${est_row}
+   ...
+Skip-rules applied: {csv of CONTEXT.skip_rules_applied[].rule, or "none"}
+Estimated cost: ~${expected_total}  (worst-case ${worst_total})
+Cap: {CONTEXT.cost_cap or "none"}  → {WITHIN | ⚠️ EXCEEDS by $X}
+```
+
+`{N}` counts top-level resolved entries (a parallel group is one slot; loop re-runs are
+not separate slots), matching the `{total}` convention in Step 3. Row lines, however, are
+enumerated per dispatch (aspect fan-out and parallel members each get a line) so the cost
+math is transparent. The `Cap` verdict compares `expected_total` against
+`CONTEXT.cost_cap`: `WITHIN` when `expected_total ≤ cap` (or no cap), else
+`⚠️ EXCEEDS by ${expected_total − cap}`.
+
+#### 1d-3. Headless dry-run
+
+If `HEADLESS == true` (Step 0a-1), additionally write a single machine-readable line to
+stdout so CI can gate on it:
+
+```
+{ "dry_run": true, "workflow": "{active_workflow}", "phases": {N}, "estimated_cost_usd": {expected_total}, "worst_case_usd": {worst_total}, "cap_usd": {CONTEXT.cost_cap or null}, "cap_status": "within"|"exceeds" }
+```
+
+#### 1d-4. Clean early exit
+
+After printing the preview, STOP the pipeline cleanly:
+
+- Do NOT run Step 2 (no `docs/plans/{slug}/` workspace, no `_brief.md`).
+- Do NOT run Step 3 (no agents dispatched).
+- Do NOT run Step 4 (post-pipeline checks) or Step 5 (telemetry) — nothing ran, so there
+  is nothing to record.
+
+Exit code 0 (a dry run is a successful preview, not a failure). `--dry-run` is
+side-effect-free: the only output is the preview block (plus the headless JSON line).
+
 ### Step 2 — Generate task slug and prepare workspace
 
 1. Generate `task_slug` from `$ARGUMENTS`: lowercase, alphanumerics + dashes, max 40 chars.
@@ -832,6 +962,51 @@ Resolve a tier to its concrete model ID via the `models[]` entry whose `tag` equ
 
 Both fields go into the QA phase entry of `phases[]`.
 
+**3d-cap. Cost-cap gate (real runs)** — enforce `caps.max_total_cost_usd` from the active
+workflow recipe. This check sits at the **end of Step 3d, gating the next iteration of the
+Step 3 phase loop** (it runs after this phase's `cost_usd` is computed in 3d-1, before the
+next phase — or the next loop round, or the next aspect in a fan-out — is dispatched).
+
+1. Maintain a running total. Initialize `CONTEXT.running_cost_usd = 0` at the start of
+   Step 3, then after each phase/aspect's `cost_usd` is computed in 3d-1:
+   `CONTEXT.running_cost_usd += cost_usd` (treat a `null`-priced phase as `0` — it cannot
+   contribute to a cost cap it has no price for).
+2. If `CONTEXT.cost_cap` (resolved in Step 1d-0) is `null`, there is no cap — skip this
+   gate entirely and continue.
+3. If a next dispatch exists (another phase, another loop round, or another aspect) AND
+   `CONTEXT.running_cost_usd > CONTEXT.cost_cap`:
+
+   **Interactive (`HEADLESS == false`):** PAUSE before the next dispatch.
+
+   🚨 **MUST PRINT VERBATIM:**
+   ```
+   💰 COST CAP EXCEEDED — pausing before next phase.
+      Spent so far: ${CONTEXT.running_cost_usd}   Cap: ${CONTEXT.cost_cap}   Over by: ${running_cost_usd − cost_cap}
+      Next up: {next_phase}{ — aspect}
+      Approve continuing, or abort?
+   ```
+   Ask the user **approve continuing** / **abort**.
+   - **approve** → set `CONTEXT.cap_status = "exceeded-continued"`, continue the Step 3
+     loop. Do not ask again for subsequent overages this run (the user already accepted the
+     overrun); keep accumulating `running_cost_usd` for the final report.
+   - **abort** → set `CONTEXT.cap_status = "exceeded-aborted"`, stop dispatching further
+     phases, and proceed to Step 5 to write partial telemetry (with
+     `aborted_at_phase: {next_phase}`) and print the final summary.
+
+   **Headless (`HEADLESS == true`):** treat a cap-exceed as an **abort** (consistent with
+   Step 0a's headless `block` handling). Set `CONTEXT.cap_status = "exceeded-aborted"`,
+   write one machine-readable line to stderr, and stop dispatching:
+   ```
+   ERROR: cost cap exceeded — running=${running_cost_usd} cap=${cost_cap} next_phase={next_phase} — aborting (headless)
+   ```
+   Then proceed to Step 5 (partial telemetry with `aborted_at_phase`, exit 1).
+
+4. If the cap is set and never exceeded through the last phase, `CONTEXT.cap_status`
+   defaults to `"within"`.
+
+Only the estimate is used by the `--dry-run` WITHIN/EXCEEDS flag (Step 1d-2); this real-run
+gate uses the ACTUAL accumulated `cost_usd`. Both read the same cap from `CONTEXT.cost_cap`.
+
 **3e. Validate phase output:**
 - BA phase: must contain acceptance criteria or scope bullets.
 - Development phase: must list files changed.
@@ -922,6 +1097,8 @@ Write `docs/plans/{task_slug}/_telemetry.json`:
   "total_output_tokens": 9800,
   "total_cached_input_tokens": 88000,
   "total_cost_usd": 0.52,
+  "cost_cap_usd": 0.60,
+  "cap_status": "within",
   "cache_hit_ratio": 0.58,
   "deps_preflight": {
     "superpowers": { "status": "available", "missing_skills": [] }
@@ -936,6 +1113,8 @@ Compute aggregates from `phases[]`:
 - `total_cached_input_tokens` = sum of phase `cached_input_tokens`.
 - `total_cost_usd` = sum of phase `cost_usd`, **skipping `null` entries** (phases whose model had no registry pricing). If any phase was null-priced, append `(partial — {n} phase(s) unpriced)` to the printed Cost line so the omission is visible.
 - `cache_hit_ratio` = `total_cached_input_tokens / max(total_input_tokens, 1)` rounded to 2 decimals.
+- `cost_cap_usd` = `CONTEXT.cost_cap` (the active workflow recipe's `caps.max_total_cost_usd`), or `null` when the recipe declared no cap.
+- `cap_status` = `CONTEXT.cap_status` from the Step 3d-cap gate: `"within"` (cap set and never exceeded, or no cap), `"exceeded-continued"` (user approved continuing past the cap), or `"exceeded-aborted"` (user aborted, or headless abort). When the run was cost-aborted, also set `aborted_at_phase` to the phase that was about to run.
 
 > Token counts come from the Agent tool's usage envelope when present. If a phase's result lacks usage data, fall back to char-length / 4 estimation and set `phases[N].usage_source: "estimated"` (default `"reported"`).
 
@@ -947,7 +1126,7 @@ Print the final summary to the user:
 Stack:           {stack} (priority {priority})
 Phases run:      {N} ({skip_rules_applied summary})
 Wall clock:      {wall_clock_seconds}s
-Cost:            ${total_cost_usd}
+Cost:            ${total_cost_usd}{IF cost_cap_usd set: "  (cap ${cost_cap_usd} — " + cap_status + ")"}
 
 Phase results:
   ✅ business_analysis     ({agent}, {tokens}, ${cost})

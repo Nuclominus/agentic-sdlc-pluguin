@@ -1,6 +1,6 @@
 ---
 description: Run the full SDLC pipeline (BA → Dev → QA → Security → Docs) for a feature, with auto-detection of the framework stack.
-argument-hint: "<feature description> [--stack=NAME]"
+argument-hint: "<feature description> [--stack=NAME] [--dry-run]"
 ---
 
 # /sdlc:start
@@ -65,7 +65,44 @@ If any phase fails fatally (e.g. agent crashes, post-validation impossible to sa
 /sdlc:start "Add subscription billing with Stripe"
 /sdlc:start "Add /healthz endpoint" --stack=vanilla
 /sdlc:start "Fix typo in README"
+/sdlc:start "Add dark mode" --dry-run
 ```
+
+## Dry-run preview (`--dry-run`)
+
+Add `--dry-run` to any invocation to see the resolved plan **without dispatching a single
+agent or writing any code**. The orchestrator resolves the stack, workflow, phases, and
+per-agent model tiers (Step 1c), then prints a preview and **exits cleanly** — no
+`docs/plans/{slug}/` workspace is created, no phases run, no post-checks, no telemetry.
+
+It prints (Step 1d in `pipeline-orchestrator/SKILL.md`):
+
+```
+🔎 DRY RUN — no agents dispatched, no code written.
+Stack: <stack> | Workflow: <name>
+Phases (N):
+   1. business_analysis  → business-analyst (opus)   ~$0.16
+   2. development         → developer (sonnet)        ~$0.11
+   ...
+Skip-rules applied: <...>
+Estimated cost: ~$<expected>  (worst-case $<worst>)
+Cap: <caps.max_total_cost_usd or "none">  → WITHIN | ⚠️ EXCEEDS by $X
+```
+
+The cost figures are a clearly-labeled **HEURISTIC estimate** (baseline token assumptions ×
+model-registry pricing), not a measurement — real cost is recorded from actual usage in a
+real run. In headless mode `--dry-run` also emits a machine-readable JSON line to stdout for
+CI gating.
+
+## Cost caps (`caps.max_total_cost_usd`)
+
+A workflow recipe may declare `caps.max_total_cost_usd`. In a **real run**, the orchestrator
+tracks a running cost total; before dispatching the next phase, if the accumulated cost has
+exceeded the cap it **pauses** and asks you to **approve continuing** or **abort** (Step
+3d-cap). In headless mode a cap-exceed is treated as an **abort** with a machine-readable
+stderr line and exit 1. The final telemetry records `cost_cap_usd` and `cap_status`
+(`within` | `exceeded-continued` | `exceeded-aborted`). Both `--dry-run` and the real-run
+gate read the cap from the resolved active workflow recipe.
 
 ## Headless mode
 

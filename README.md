@@ -242,6 +242,36 @@ Cost is controlled exclusively through `model` + `effort` (Claude Code does not 
 
 **Levers:** skip-rules for trivial changes · QA 3-attempt hard cap · compact ≤2–3K-token handoffs · prompt caching (stable prefixes).
 
+### Dry-run & cost caps
+
+**`--dry-run`** previews the resolved plan and dispatches **nothing** — no agents, no code,
+no `docs/plans/{slug}/` workspace, no telemetry. After resolving the stack, workflow, phases,
+and per-agent model tiers, the orchestrator prints a plan block and exits cleanly:
+
+```bash
+/sdlc:start "Add dark mode" --dry-run
+```
+```
+🔎 DRY RUN — no agents dispatched, no code written.
+Stack: android | Workflow: android-feature
+Phases (6):
+   1. business_analysis  → android-ba (opus)          ~$0.16
+   2. development         → android-developer (sonnet) ~$0.18
+   ...
+Estimated cost: ~$0.63  (worst-case $0.91)
+Cap: 0.60  → ⚠️ EXCEEDS by $0.03
+```
+
+Cost figures are a **heuristic estimate** (baseline per-phase token assumptions × model-registry
+pricing), not a measurement. In headless mode a machine-readable JSON line is also written to stdout.
+
+**`caps.max_total_cost_usd`** (declared in a workflow recipe, e.g. `hotfix.yaml` caps at `$0.60`)
+gates a **real run**: the orchestrator accumulates actual per-phase cost and, before dispatching the
+next phase, if the running total exceeds the cap it **pauses** for approve-continue / abort
+(interactive) or **aborts** with exit 1 (headless). Telemetry records `cost_cap_usd` and
+`cap_status` (`within` | `exceeded-continued` | `exceeded-aborted`). Both `--dry-run` and the
+real-run gate read the cap from the resolved active workflow recipe.
+
 ---
 
 ## Available Plugins
