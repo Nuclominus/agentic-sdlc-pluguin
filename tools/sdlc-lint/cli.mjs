@@ -1,10 +1,9 @@
 #!/usr/bin/env node
-import { readdirSync } from "node:fs";
 import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkSchemas } from "./lib/schema.mjs";
 import { checkAllWorkflows } from "./lib/cycles.mjs";
-import { resolveFixture } from "./lib/detect.mjs";
+import { resolveFixture, listFixtures } from "./lib/detect.mjs";
 
 const args = process.argv.slice(2);
 const cmd = args[0];
@@ -35,7 +34,7 @@ function printCycles(results) {
 
 const FIX = resolve(dirname(fileURLToPath(import.meta.url)), "fixtures");
 function printDetect() {
-  const rows = readdirSync(FIX).map(name => ({ name, ...resolveFixture(join(FIX, name), root) }));
+  const rows = listFixtures(FIX).map(name => ({ name, ...resolveFixture(join(FIX, name), root) }));
   const failed = rows.filter(r => !r.ok);
   if (jsonOut) {
     console.log(JSON.stringify({ command: "detect", checked: rows.length, failed: failed.length, failures: failed }));

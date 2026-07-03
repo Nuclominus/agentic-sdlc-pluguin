@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { globSync } from "tinyglobby";
 import { loadManifests } from "./load.mjs";
@@ -42,6 +42,13 @@ export function resolveStack(evalRoot, { foundations, frameworks }) {
     if (hosted && dependencyPresent(evalRoot, paths, fw.doc.dependency)) additive.push(fw.doc.stack);
   }
   return { foundation: winner.doc.stack, priority: winner.doc.priority ?? 0, additive: additive.sort() };
+}
+
+export function listFixtures(fixturesDir) {
+  return readdirSync(fixturesDir, { withFileTypes: true })
+    .filter(e => e.isDirectory() && existsSync(join(fixturesDir, e.name, "expected.json")))
+    .map(e => e.name)
+    .sort();
 }
 
 export function resolveFixture(fixtureDir, repoRoot) {
