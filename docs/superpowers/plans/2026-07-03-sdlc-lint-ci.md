@@ -689,8 +689,10 @@ Expected: PASS.
 
 - [ ] **Step 5: Run the full suite + the command**
 
-Run: `node --test tools/sdlc-lint/test && node tools/sdlc-lint/cli.mjs all`
+Run: `npm test --prefix tools/sdlc-lint && node tools/sdlc-lint/cli.mjs all`
 Expected: all unit tests pass; `all` prints three summary lines, exit 0.
+
+> Note: use `npm test --prefix tools/sdlc-lint` (auto-discovery from the package dir), NOT `node --test tools/sdlc-lint/test` — a bare directory positional is read as a module path by Node 22 and fails.
 
 - [ ] **Step 6: Commit**
 
@@ -732,7 +734,7 @@ jobs:
       - name: sdlc-lint (schema + cycles + detect)
         run: node tools/sdlc-lint/cli.mjs all --json
       - name: sdlc-lint unit tests
-        run: node --test tools/sdlc-lint/test
+        run: npm test --prefix tools/sdlc-lint
       - name: shellcheck hooks
         run: |
           sudo apt-get update && sudo apt-get install -y shellcheck
@@ -749,7 +751,7 @@ Run:
 ```bash
 npm ci --prefix tools/sdlc-lint && \
 node tools/sdlc-lint/cli.mjs all --json && \
-node --test tools/sdlc-lint/test && \
+npm test --prefix tools/sdlc-lint && \
 find plugins -type f -name '*.sh' -path '*/hooks/*' -print0 | xargs -0 -r shellcheck ; \
 bash tests/test-enforce-agent-model.sh && \
 python3 tests/test-model-local-schema.py
@@ -813,7 +815,7 @@ Do not alter any surrounding instruction text.
 
 - [ ] **Step 5: Verify the suite still passes after cleanup**
 
-Run: `node tools/sdlc-lint/cli.mjs all && node --test tools/sdlc-lint/test`
+Run: `node tools/sdlc-lint/cli.mjs all && npm test --prefix tools/sdlc-lint`
 Expected: exit 0 (removing `android-plugin` must not change detection — it had no manifest).
 
 - [ ] **Step 6: Commit**
