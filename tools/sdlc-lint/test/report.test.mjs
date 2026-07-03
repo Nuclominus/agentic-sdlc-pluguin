@@ -36,3 +36,17 @@ test("escapes injected markup from untrusted fields", () => {
 test("output is deterministic (byte-identical across calls)", () => {
   assert.equal(renderReport(tel), renderReport(tel));
 });
+
+test("phase timeline lists every phase with agent and model", () => {
+  const html = renderReport(tel);
+  assert.match(html, /business_analysis/);
+  assert.match(html, /qa-engineer/);
+  assert.match(html, /claude-sonnet-5/);
+  assert.match(html, /resumed<\/span>/); // origin badge on the resumed phase
+});
+
+test("cost-by-model note flags unpriced phases", () => {
+  const html = renderReport(tel);
+  // security phase has cost_usd:null → partial note with count 1
+  assert.match(html, /1 phase\(s\) unpriced/);
+});

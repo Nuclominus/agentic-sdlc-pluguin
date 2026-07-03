@@ -66,10 +66,56 @@ ${tile("Model corrections", fmtInt(t.model_enforcement_corrections))}
 </section>`;
 }
 
+const ICON = { completed: "✅", skipped: "⏩", aborted: "⏸", approved: "✅" };
+
+function timelineSection(t) {
+  const phases = t.phases || [];
+  if (!phases.length) return "";
+  const maxCost = Math.max(...phases.map((p) => p.cost_usd || 0), 0.0001);
+  const rows = phases.map((p) => {
+    const name = p.aspect ? `${p.phase} · ${p.aspect}` : p.phase;
+    const w = Math.round(((p.cost_usd || 0) / maxCost) * 100);
+    const origin = p.origin === "resumed" ? ` <span class="badge">resumed</span>` : "";
+    return `<tr><td>${ICON[p.status] || "•"}</td>
+<td>${esc(name)}${origin}</td>
+<td>${esc(p.agent || "—")}</td>
+<td><code>${esc(p.model || "—")}</code></td>
+<td class="num">${fmtInt((p.input_tokens || 0) + (p.output_tokens || 0))}</td>
+<td class="num">${fmtUsd(p.cost_usd)}</td>
+<td class="bar"><span style="width:${w}%"></span></td></tr>`;
+  }).join("\n");
+  return `<section><h2>Phase timeline</h2>
+<table><thead><tr><th></th><th>Phase</th><th>Agent</th><th>Model</th><th class="num">Tokens</th><th class="num">Cost</th><th>Cost share</th></tr></thead>
+<tbody>${rows}</tbody></table></section>`;
+}
+
+function costBreakdownSection(t) {
+  const phases = t.phases || [];
+  if (!phases.length) return "";
+  const byModel = new Map();
+  let unpriced = 0;
+  for (const p of phases) {
+    const k = p.model || "—";
+    const m = byModel.get(k) || { input: 0, output: 0, cost: 0 };
+    m.input += p.input_tokens || 0;
+    m.output += p.output_tokens || 0;
+    if (p.cost_usd == null) unpriced++; else m.cost += p.cost_usd;
+    byModel.set(k, m);
+  }
+  const rows = [...byModel.entries()].sort((a, b) => b[1].cost - a[1].cost).map(([model, m]) =>
+    `<tr><td><code>${esc(model)}</code></td><td class="num">${fmtInt(m.input)}</td><td class="num">${fmtInt(m.output)}</td><td class="num">${fmtUsd(m.cost)}</td></tr>`).join("\n");
+  const note = unpriced ? `<p class="note">Cost partial — ${unpriced} phase(s) unpriced (no registry pricing).</p>` : "";
+  return `<section><h2>Cost by model</h2>
+<table><thead><tr><th>Model</th><th class="num">Input</th><th class="num">Output</th><th class="num">Cost</th></tr></thead>
+<tbody>${rows}</tbody></table>${note}</section>`;
+}
+
 export function renderReport(t, extras = {}) {
   const sections = [
     headerSection(t),
     kpiSection(t),
+    timelineSection(t),
+    costBreakdownSection(t),
   ].filter(Boolean);
   return doc(t, sections.join("\n"));
 }
