@@ -122,7 +122,7 @@ switch (cmd) {
   case "report": {
     const target = args[1] && !args[1].startsWith("--") ? args[1] : null;
     if (!target) { console.error("usage: sdlc-lint report <slug-or-dir> [--json]"); code = 2; break; }
-    const direct = join(root, target);
+    const direct = resolve(root, target);
     const dir = existsSync(join(direct, "_telemetry.json")) ? direct : join(root, "docs", "plans", target);
     try {
       const { htmlPath } = renderReportFile(dir);

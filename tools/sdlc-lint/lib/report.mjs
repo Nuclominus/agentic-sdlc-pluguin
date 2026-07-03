@@ -130,7 +130,7 @@ function postChecksSection(t, md) {
   const checks = t.post_pipeline_checks || [];
   if (!checks.length && !md) return "";
   const rows = checks.map((c) => {
-    const icon = c.skipped ? "⏭" : c.exit_code === 0 ? "✅" : "❌";
+    const icon = c.skipped || c.exit_code == null ? "⏭" : c.exit_code === 0 ? "✅" : "❌";
     const ec = c.exit_code == null ? "skip" : esc(c.exit_code);
     return `<tr><td>${icon}</td><td><code>${esc(c.command)}</code></td><td class="num">${ec}</td></tr>`;
   }).join("\n");

@@ -1,6 +1,6 @@
 {
   "task_slug": "add-subscription-billing",
-  "stack": "<script>alert(1)</script>",
+  "stack": "android",
   "primary_profile": "android",
   "additive_profiles": ["retrofit"],
   "narrative_language": "uk",
