@@ -220,7 +220,7 @@ A recipe is a **candidate** only if it carries a non-empty `match:` block (a rec
 - `has_migrations: true` — matches only when a migration is present.
 - `config_only: true` — matches only when the change touches config-only files.
 
-**Tie-break** when several recipes match, applied in order: (1) most specific — highest count of satisfied conditions; (2) most conservative — lowest `caps.max_total_cost_usd` (no cap = +∞); (3) alphabetical by `name`. If exactly one survives it is selected; if none match, selection falls through to the profile default unchanged.
+**Tie-break** when several recipes match, applied in order: (1) highest `match.priority` (integer, default `0`) — the explicit author override; (2) most specific — highest count of satisfied conditions; (3) most conservative — lowest `caps.max_total_cost_usd` (no cap = +∞); (4) alphabetical by `name`, a final deterministic backstop. If exactly one survives it is selected; if none match, selection falls through to the profile default unchanged.
 
 When auto-selection fires it announces:
 

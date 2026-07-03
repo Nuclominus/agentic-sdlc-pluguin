@@ -95,10 +95,15 @@ constraint). The conditions:
 
 Apply these rules **in order**; stop at the first that yields a unique winner:
 
-1. **Most specific wins** — highest count of *satisfied* conditions in the `match` block.
-2. **Most conservative cost cap** — lowest `caps.max_total_cost_usd`. Treat a recipe
+1. **Explicit priority** — highest `match.priority` (integer, default `0` when the field
+   is absent). This is the author-controlled override: set it to force a recipe to win a
+   tie deterministically (e.g. `android-debug` sets `priority: 10` to beat the generic
+   `debug` recipe).
+2. **Most specific wins** — highest count of *satisfied* conditions in the `match` block.
+3. **Most conservative cost cap** — lowest `caps.max_total_cost_usd`. Treat a recipe
    with **no** `caps.max_total_cost_usd` as `+∞` (a present cap always beats no cap).
-3. **Alphabetical** — lowest `name` in ASCII/lexicographic order.
+4. **Alphabetical** — lowest `name` in ASCII/lexicographic order. Final deterministic
+   backstop only — reached when priority, specificity, and cost are all equal.
 
 ### Outcome
 
