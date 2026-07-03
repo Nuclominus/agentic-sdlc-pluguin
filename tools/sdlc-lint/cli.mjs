@@ -33,25 +33,27 @@ function printCycles(results) {
 }
 
 const FIX = resolve(dirname(fileURLToPath(import.meta.url)), "fixtures");
+const detectRows = () => listFixtures(FIX).map(name => ({ name, ...resolveFixture(join(FIX, name), root) }));
+
 function printDetect2(rows) {
   const failed = rows.filter(r => !r.ok);
-  if (jsonOut) {
-    console.log(JSON.stringify({ command: "detect", checked: rows.length, failed: failed.length, failures: failed }));
-  } else {
+  if (!jsonOut) {
     for (const r of failed) console.error(`✗ ${r.name}: expected ${JSON.stringify(r.expected)}, got ${JSON.stringify(r.actual)}`);
     console.log(`detect: ${rows.length - failed.length}/${rows.length} fixtures matched`);
   }
   return failed.length ? 1 : 0;
 }
 function printDetect() {
-  return printDetect2(listFixtures(FIX).map(name => ({ name, ...resolveFixture(join(FIX, name), root) })));
+  const rows = detectRows();
+  if (jsonOut) {
+    const failed = rows.filter(r => !r.ok);
+    console.log(JSON.stringify({ command: "detect", checked: rows.length, failed: failed.length, failures: failed }));
+  }
+  return printDetect2(rows);
 }
 
 function runAll() {
-  const schema = checkSchemas(root);
-  const cycles = checkAllWorkflows(root);
-  const detect = listFixtures(FIX).map(name => ({ name, ...resolveFixture(join(FIX, name), root) }));
-  const codes = [printSchema(schema), printCycles(cycles), printDetect2(detect)];
+  const codes = [printSchema(checkSchemas(root)), printCycles(checkAllWorkflows(root)), printDetect2(detectRows())];
   const exit = Math.max(...codes);
   if (jsonOut) console.log(JSON.stringify({ command: "all", ok: exit === 0, exit }));
   return exit;
