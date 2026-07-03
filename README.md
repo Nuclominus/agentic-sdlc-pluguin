@@ -2,7 +2,7 @@
 
 AI-assisted SDLC pipelines for **Android** development, built on the **Stack Provider Pattern**: a single platform-agnostic core orchestrator runs the pipeline; **Android Foundation** registers itself via a declarative `manifest.yaml` (`kind: foundation`) and drives the flow; **framework plugins** (Retrofit, Room, Dagger/Hilt, …) attach **additively** via `manifest.yaml` (`kind: framework`). No core overrides, no slot registries, no copy-paste.
 
-**v0.5.0** — flat plugin set: 1 platform-agnostic core (`sdlc`) + the **Android Foundation** centerpiece (`android-foundation`) + additive **framework plugins** (`retrofit-plugin`, `room-plugin`, `dagger-plugin`). Cost-optimized: model tiering + `effort` per-subagent. Generic control flow (review-loops, parallel groups), workflow discovery across plugins, auto-detected framework enrichment, and guaranteed per-agent model enforcement.
+**v0.5.0** — flat plugin set: 1 platform-agnostic core (`sdlc`) + the **Android Foundation** centerpiece (`android-foundation`) + additive **framework plugins** (`retrofit-plugin`, `room-plugin`, `dagger-plugin`, `workmanager-plugin`). Cost-optimized: model tiering + `effort` per-subagent. Generic control flow (review-loops, parallel groups), workflow discovery across plugins, auto-detected framework enrichment, and guaranteed per-agent model enforcement. Operational tooling: `--resume` checkpoints, a per-run HTML report, a cross-run cost rollup (`/sdlc:report`), and an After Action Review learning cycle (`/sdlc:aar`).
 
 > Adapted from [AratKruglik/claude-sdlc](https://github.com/AratKruglik/claude-sdlc) (MIT) — re-oriented around an Android Foundation with a Framework Provider Pattern. See `NOTICE`.
 
@@ -182,6 +182,8 @@ When a framework plugin's library is detected, its guidance joins the run withou
 | `/sdlc:extension [--list]`      | Author the Project Extension Manifest step-by-step (per-agent Skill mappings)       |
 | `/sdlc:start "feature"`         | Run the pipeline (auto-selects the profile's workflow)             |
 | `/sdlc:batch "task1" "task2"`   | Run pipelines in parallel for multiple tasks (isolated worktrees)  |
+| `/sdlc:report`                  | Cross-run cost rollup over all runs → `docs/plans/rollup/index.html` + digest (deterministic, no LLM) |
+| `/sdlc:aar`                     | After Action Review of a run — token cost + agent cooperation; persists approved lessons |
 | `/sdlc:list-stacks`             | Show detected stack profiles and their priorities                  |
 | `/sdlc:doctor`                  | Preflight: deps, stack detection, host capability (uname/toolchains), cost |
 | `/sdlc:security-init`           | Materialize security-patterns for the security-guidance plugin     |
@@ -334,6 +336,25 @@ real-run gate read the cap from the resolved active workflow recipe.
 
 **`--resume`** — continue an interrupted pipeline from the first unfinished phase (per-phase
 checkpoints in `docs/plans/{slug}/.checkpoint/`). See `docs/WORKFLOW.md`.
+
+### Run reports, cross-run rollup & AAR
+
+**Per-run HTML report.** At the end of every run the orchestrator renders a self-contained
+`docs/plans/{slug}/report.html` from `_telemetry.json` — phase timeline, cost by model, signals
+(QA iterations, skip rules, cap status), post-pipeline checks, and touched files. No external
+assets; open it straight in a browser.
+
+**`/sdlc:report` — cross-run rollup.** A deterministic, dependency-free script globs **every**
+`docs/plans/*/_telemetry.json` and renders `docs/plans/rollup/index.html` plus a terminal digest:
+total spend, cost over time, cost by phase and by model, cache-hit trend, cap-breach incidents,
+skip-rule frequency, and the QA-iteration distribution. Reuses the run metrics; spends **no** LLM
+tokens.
+
+**`/sdlc:aar` — After Action Review.** Reviews a completed run (token cost + how the agents
+cooperated) from its telemetry + session transcript, proposes improvements, and — only on your
+approval — appends curated lessons to `.claude/sdlc-lessons.md`. The orchestrator injects those
+lessons into later runs' phase prompts (cache-safe, in the stable prefix), closing a lightweight
+learning loop.
 
 ---
 
