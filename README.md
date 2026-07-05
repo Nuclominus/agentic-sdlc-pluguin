@@ -4,8 +4,6 @@ AI-assisted SDLC pipelines for **Android** development, built on the **Stack Pro
 
 **v0.5.0** — flat plugin set: 1 platform-agnostic core (`sdlc`) + the **Android Foundation** centerpiece (`android-foundation`) + additive **framework plugins** (`retrofit-plugin`, `room-plugin`, `dagger-plugin`, `workmanager-plugin`). Cost-optimized: model tiering + `effort` per-subagent. Generic control flow (review-loops, parallel groups), workflow discovery across plugins, auto-detected framework enrichment, and guaranteed per-agent model enforcement. Operational tooling: `--resume` checkpoints, a per-run HTML report, a cross-run cost rollup (`/sdlc:report`), and an After Action Review learning cycle (`/sdlc:aar`).
 
-> Adapted from [AratKruglik/claude-sdlc](https://github.com/AratKruglik/claude-sdlc) (MIT) — re-oriented around an Android Foundation with a Framework Provider Pattern. See `NOTICE`.
-
 ---
 
 ## Quickstart
