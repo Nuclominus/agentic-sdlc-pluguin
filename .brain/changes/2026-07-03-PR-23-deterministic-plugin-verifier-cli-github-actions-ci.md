@@ -14,7 +14,7 @@ files_changed: 36
 
 ## Summary
 
-## Summary
+Adds **`tools/sdlc-lint`** — a deterministic Node ESM verifier for the marketplace — plus **GitHub Actions CI**. It's a *parallel verification layer*: it never invokes or changes the `pipeline-orchestrator` skill (the "core never changes" invariant holds — the only touch is a single guard comment). This closes the biggest robustness gap: the marketplace previously had **no CI** and only 2 micro-tests, so a bad merge could silently break every user's stack auto-detection.
 
 ## Changed areas
 

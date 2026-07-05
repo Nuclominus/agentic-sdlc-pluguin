@@ -14,7 +14,7 @@ files_changed: 7
 
 ## Summary
 
-## Summary
+Introduces a **model registry** as the single source of truth for tag → model ID, and points the `sonnet` tier at **Sonnet 5**. Model IDs were duplicated across `README.md`, `CORE-TODO.md`, and the orchestrator `SKILL.md`, and the `sonnet` mapping was stale (`claude-sonnet-4-6`) — the root of the "model-enforcement can't determine the sonnet model correctly" symptom. Now a model bump is a **one-line edit** in one file.
 
 ## Changed areas
 

@@ -14,7 +14,7 @@ files_changed: 17
 
 ## Summary
 
-## Summary
+Restructures the stack/framework relationship into a **three-level delegation tree** — `core → foundation → frameworks` — with **zero plugin→plugin dependencies**.
 
 ## Changed areas
 

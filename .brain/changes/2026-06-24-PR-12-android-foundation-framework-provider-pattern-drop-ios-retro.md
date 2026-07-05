@@ -14,7 +14,7 @@ files_changed: 100
 
 ## Summary
 
-## Context
+Inverts the marketplace topology: **Android becomes the centerpiece** (`android-foundation`) and framework libraries (Retrofit, Room, Dagger/Hilt) attach as **additive plugins** managed by the generic `sdlc` orchestrator. iOS is dropped — this is now an Android-only tool.
 
 ## Changed areas
 

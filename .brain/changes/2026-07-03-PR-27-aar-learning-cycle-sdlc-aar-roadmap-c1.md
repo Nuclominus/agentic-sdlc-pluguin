@@ -14,7 +14,7 @@ files_changed: 20
 
 ## Summary
 
-## Summary
+Closes Roadmap **C1** — builds the platform-neutral `sdlc:aar` skill and completes the After Action Review learning cycle. The AAR loop was designed on paper but never ported: the `android-aar` agent referenced a skill `android-workflow:aar` (and a plugin namespace) that never existed, leaving nine dangling references. This wires up the real, shipped skill and closes the loop: **gather → report → apply → persist**.
 
 ## Changed areas
 

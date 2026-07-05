@@ -14,7 +14,9 @@ files_changed: 6
 
 ## Summary
 
-## Context
+Completes the testTag rollout on the documentation side (follows #4 convention, #5 enforcement). Two asks:
+1. Add a vault documentation template for test tags.
+2. Update the doc-writer to document test tags during work when there are UI changes.
 
 ## Changed areas
 

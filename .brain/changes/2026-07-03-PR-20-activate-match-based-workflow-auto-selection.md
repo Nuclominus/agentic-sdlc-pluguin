@@ -14,7 +14,7 @@ files_changed: 4
 
 ## Summary
 
-## Summary
+Activates the dormant `match:` engine on workflow recipes. The orchestrator now auto-selects the most fitting recipe from diff signals + `$ARGUMENTS` when no explicit workflow is chosen — a new deterministic tier inserted between `active_workflow` and the profile default.
 
 ## Changed areas
 

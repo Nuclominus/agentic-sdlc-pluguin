@@ -14,7 +14,7 @@ files_changed: 3
 
 ## Summary
 
-## Summary
+`enforce-agent-model.sh` (the `PreToolUse:Agent` model-enforcement hook) never matched **plugin-namespaced** agents. Agents are dispatched as `<plugin>:<agent>` (e.g. `android-plugin:android-developer`), but the frontmatter file on disk is `<agent>.md`. The hook searched `*/agents/android-plugin:android-developer.md`, found nothing, fell into the fail-open branch, and emitted:
 
 ## Changed areas
 

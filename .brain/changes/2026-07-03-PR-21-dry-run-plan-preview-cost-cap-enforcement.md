@@ -14,7 +14,7 @@ files_changed: 3
 
 ## Summary
 
-## Summary
+Feature **D** — a `--dry-run` plan preview plus enforcement of `caps.max_total_cost_usd`.
 
 ## Changed areas
 

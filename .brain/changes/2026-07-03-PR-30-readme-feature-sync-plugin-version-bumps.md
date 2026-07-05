@@ -14,7 +14,7 @@ files_changed: 4
 
 ## Summary
 
-## Summary
+Documentation + version-metadata sync for the work merged over the last day (B1 `--resume` #25, D HTML report #26, C1 AAR #27, B2 rollup #28, C2 WorkManager #29). No behavior changes.
 
 ## Changed areas
 

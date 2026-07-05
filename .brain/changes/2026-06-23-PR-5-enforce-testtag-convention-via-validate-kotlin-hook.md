@@ -14,7 +14,7 @@ files_changed: 5
 
 ## Summary
 
-## Context
+Follows up #4 (testTag convention) by implementing the deferred enforcement hook — the optional item from the approved plan. Authorized explicitly by the maintainer (satisfies the plugin's self-modification confirmation boundary for hooks).
 
 ## Changed areas
 

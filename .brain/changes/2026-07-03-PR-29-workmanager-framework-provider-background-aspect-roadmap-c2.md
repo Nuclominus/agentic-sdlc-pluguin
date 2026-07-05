@@ -14,7 +14,7 @@ files_changed: 8
 
 ## Summary
 
-## Summary
+Roadmap **C2** (first provider) — a new additive **framework plugin** for Android **WorkManager**. It is the **first provider of the `background` aspect**, following the proven `retrofit-plugin` / `room-plugin` / `dagger-plugin` shape. Ships **no agents**; enriches the existing development + security phases only when WorkManager is detected.
 
 ## Changed areas
 

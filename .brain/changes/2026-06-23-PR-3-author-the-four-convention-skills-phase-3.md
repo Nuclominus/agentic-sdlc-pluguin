@@ -14,7 +14,7 @@ files_changed: 6
 
 ## Summary
 
-## Summary
+Fills the four `android-plugin` **convention skills** that were still Phase-3 stubs — a 10-line placeholder with a `STUB (Phase 3)` banner. They are injected during the SDLC development phase (`stack.md` → "Convention skills to apply"), so until now the `android-developer`/`android-reviewer` agents got nothing actionable from "Apply skills: …".
 
 ## Changed areas
 

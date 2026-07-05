@@ -14,7 +14,7 @@ files_changed: 11
 
 ## Summary
 
-## Summary
+Roadmap **B2** — a new `/sdlc:report` that aggregates **every** pipeline run's telemetry into a single cross-run rollup. Deterministic, dependency-free, ships inside the plugin.
 
 ## Changed areas
 

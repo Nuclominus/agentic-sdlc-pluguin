@@ -14,7 +14,7 @@ files_changed: 9
 
 ## Summary
 
-## Context
+The android-plugin lacked an explicit **UI-testing requirement**. testTag usage was only implied by scattered raw-string examples in `android-qa.md` (`"login.email"`), the authored `android-compose-ui` skill had **zero** testTag content, and `ui-patterns.md` was referenced as the authoritative home but never specified.
 
 ## Changed areas
 

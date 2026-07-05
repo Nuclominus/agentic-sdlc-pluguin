@@ -14,7 +14,7 @@ files_changed: 4
 
 ## Summary
 
-## Summary
+Implements **CORE-TODO §7** agent binding — maps Google's official `android` CLI capabilities to the agents that own them, entirely within `android-plugin` (the core orchestrator keeps zero Android-CLI knowledge).
 
 ## Changed areas
 

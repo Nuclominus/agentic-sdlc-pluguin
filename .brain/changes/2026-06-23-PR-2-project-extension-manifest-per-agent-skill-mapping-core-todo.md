@@ -14,7 +14,7 @@ files_changed: 12
 
 ## Summary
 
-## Summary
+Implements **CORE-TODO §8** — the Project Extension Manifest. Projects can now extend the SDLC process **without editing any plugin**, via an `extensions.skills` block in the existing `.claude/sdlc.local.yaml` (no new config file). This was the last open item in CORE-TODO.
 
 ## Changed areas
 

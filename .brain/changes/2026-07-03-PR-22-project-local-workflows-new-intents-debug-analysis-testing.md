@@ -14,7 +14,7 @@ files_changed: 11
 
 ## Summary
 
-## Summary
+Feature A — project-local workflows + new intent recipes.
 
 ## Changed areas
 

@@ -14,7 +14,7 @@ files_changed: 12
 
 ## Summary
 
-## Summary
+Adds **project-local model tier overrides**: a project can create `<project>/.claude/model.local.json` to reassign which model tier each SDLC agent dispatches on — a project-wide `default` plus a per-agent `agents{}` map (`opus | sonnet | haiku | fable`). Both the enforcement hook and the orchestrator resolve tiers with the **same** chain, so overrides are honored at dispatch and never silently reverted:
 
 ## Changed areas
 

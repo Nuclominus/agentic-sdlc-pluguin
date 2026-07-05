@@ -14,7 +14,6 @@ files_changed: 7
 
 ## Summary
 
-## Summary
 Make `plugins/sdlc/config/models.json` the single source of truth for **model pricing** (not just tag→model_id), and wire the pipeline orchestrator's telemetry cost to read from it instead of a hardcoded rate table.
 
 ## Changed areas

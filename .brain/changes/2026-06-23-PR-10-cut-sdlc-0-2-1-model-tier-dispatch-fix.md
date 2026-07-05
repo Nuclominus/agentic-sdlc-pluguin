@@ -14,7 +14,7 @@ files_changed: 2
 
 ## Summary
 
-## Why
+The hook/orchestrator fix from #9 is merged to `develop`, but the live pipeline still throws the original `InputValidationError` — plugin updates are **version-gated**. `plugins/sdlc/.claude-plugin/plugin.json` was still `0.2.0`, so `/plugin` reports "already at latest 0.2.0" and never replaces the buggy cached hook (`~/.claude/plugins/cache/agentic-sdlc/sdlc/0.2.0/`).
 
 ## Changed areas
 

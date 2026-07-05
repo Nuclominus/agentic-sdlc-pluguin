@@ -14,7 +14,7 @@ files_changed: 3
 
 ## Summary
 
-## Summary
+The SDLC pipeline crashed on every agent dispatch (e.g. `Phase 1/6: business_analysis → android-ba (opus)`) with:
 
 ## Changed areas
 

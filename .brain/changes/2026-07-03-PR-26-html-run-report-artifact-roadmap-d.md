@@ -14,7 +14,7 @@ files_changed: 10
 
 ## Summary
 
-## Summary
+Roadmap **D — HTML run-report**. At the end of a pipeline run, the orchestrator now renders one **self-contained HTML report** (`docs/plans/{slug}/report.html`) from `_telemetry.json` — significantly more readable than the terminal summary, and shareable as a single file.
 
 ## Changed areas
 

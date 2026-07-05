@@ -14,7 +14,7 @@ files_changed: 54
 
 ## Summary
 
-## Summary
+Adds `--resume` to the SDLC pipeline: every phase writes an atomic per-phase checkpoint, so an interrupted run (crash, `Ctrl-C`, cost-cap abort, fatal halt) continues from the first unfinished phase instead of re-running everything. A run killed on Security now costs one phase, not five.
 
 ## Changed areas
 
