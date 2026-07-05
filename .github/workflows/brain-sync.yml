@@ -1,0 +1,83 @@
+name: brain-sync
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [develop]
+  workflow_dispatch: {}   # manual full-index reconcile (self-heals a row dropped by close-together merges)
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: brain-sync          # serialize runs so two merges don't race the vault
+  cancel-in-progress: false  # queue — never drop a merge event
+
+jobs:
+  sync:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true &&
+       !startsWith(github.event.pull_request.head.ref, 'brain-sync/'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Sync vault
+        id: sync
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            node tools/brain-sync/cli.mjs sync --backfill --vault .brain
+            {
+              echo "pr_ref=all merged PRs (manual reconcile)"
+              echo "branch=brain-sync/reconcile"
+              echo "title=docs(brain): reconcile vault (full backfill)"
+            } >> "$GITHUB_OUTPUT"
+          else
+            node tools/brain-sync/cli.mjs sync --pr ${{ github.event.pull_request.number }} --vault .brain
+            {
+              echo "pr_ref=#${{ github.event.pull_request.number }}"
+              echo "branch=brain-sync/pr-${{ github.event.pull_request.number }}"
+              echo "title=docs(brain): sync vault for #${{ github.event.pull_request.number }}"
+            } >> "$GITHUB_OUTPUT"
+          fi
+      - name: Validate vault
+        id: validate
+        run: |
+          # The follow-up PR still opens either way (so a note is never lost), but the
+          # check verdict is surfaced into the PR body and, on problems, as a warning
+          # annotation — the gate is visible, not decorative.
+          if node tools/brain-sync/cli.mjs check --vault .brain; then
+            echo "status=clean" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=PROBLEMS — see the Validate step log" >> "$GITHUB_OUTPUT"
+            echo "::warning title=brain vault check::vault check reported problems; the follow-up PR still opens so the note is not lost — review before merging"
+          fi
+      - name: Open follow-up PR with the vault update
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: develop
+          branch: ${{ steps.sync.outputs.branch }}
+          add-paths: .brain
+          commit-message: ${{ steps.sync.outputs.title }}
+          title: ${{ steps.sync.outputs.title }}
+          body: |
+            Automated Second Brain vault update for ${{ steps.sync.outputs.pr_ref }}.
+
+            Generated deterministically by `tools/brain-sync`. Vault check: **${{ steps.validate.outputs.status }}**.
+
+            The `changes/` index is eventually-consistent: two PRs merged close together each
+            rebuild the index from the notes on `develop` at that moment, so a row can lag until
+            the next sync. Run this workflow manually (**workflow_dispatch → Run workflow**) to
+            reconcile the full index. Enrich prose / ADR links as needed before or after merge.
+          delete-branch: true

@@ -1,0 +1,6 @@
+# Decisions (ADRs) — Map of Content
+
+> One note per architecture decision. Newest first.
+
+- [[decisions/ADR-0001-stack-provider-pattern]]
+- [[decisions/ADR-0002-framework-provider-pattern]]

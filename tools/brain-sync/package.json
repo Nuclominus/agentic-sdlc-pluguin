@@ -1,0 +1,8 @@
+{
+  "name": "brain-sync",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": { "brain-sync": "./cli.mjs" },
+  "scripts": { "test": "node --test" }
+}
