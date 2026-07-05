@@ -46,6 +46,12 @@ export function checkVault(vault) {
       }
     }
 
+    // Links resolve by exact vault-relative path only (`target + ".md"`). This is stricter
+    // than Obsidian, which also resolves shortest-form links (`[[roadmap]]`) and links into
+    // `_templates/` (excluded from the walk here) — intentional: this vault is machine-
+    // generated with full-path links, and strict resolution catches an ambiguous/typo'd link
+    // that Obsidian's fuzzy matching would silently paper over. Verdict is "resolves by full
+    // path", not "matches what Obsidian renders".
     for (const m of md.matchAll(/\[\[([^\]|#\n]+)(?:[#|][^\]\n]*)?\]\]/g)) {
       const target = m[1].trim();
       if (!target) continue;
