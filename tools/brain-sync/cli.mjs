@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { resolve, join } from "node:path";
-import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
+import { writeFileSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { readPr, listMergedPrNumbers, normalizePr } from "./lib/pr.mjs";
 import { classify } from "./lib/classify.mjs";
 import { renderChangeNote, noteBasename } from "./lib/render.mjs";
@@ -26,6 +26,14 @@ function loadPr(n) {
 function writeNote(pr) {
   const cls = classify(pr);
   mkdirSync(changesDir, { recursive: true });
+  // Exactly one note per PR. The filename embeds the title-derived slug, so an edited
+  // title (or a re-run of backfill against an edited title) would otherwise leave the
+  // old-slug note behind and double-list the PR in the index. Drop any prior note for
+  // this PR number (matched right after the YYYY-MM-DD date) before writing the current one.
+  const prior = new RegExp(`^\\d{4}-\\d{2}-\\d{2}-PR-${pr.number}-.*\\.md$`);
+  for (const f of readdirSync(changesDir)) {
+    if (prior.test(f)) rmSync(join(changesDir, f));
+  }
   const path = join(changesDir, noteBasename(pr, cls));
   writeFileSync(path, renderChangeNote(pr, cls));
   return path;
