@@ -8,7 +8,12 @@ export function noteBasename(pr, cls) {
 function firstParagraph(body) {
   const cleaned = (body ?? "").replace(/\r\n/g, "\n").trim();
   if (!cleaned) return "_No description provided._";
-  return cleaned.split(/\n\s*\n/)[0].trim();
+  const lines = cleaned.split("\n");
+  let i = 0;
+  while (i < lines.length && (lines[i].trim() === "" || /^#{1,6}\s/.test(lines[i]))) i++;
+  const rest = lines.slice(i).join("\n").trim();
+  if (!rest) return "_No description provided._";
+  return rest.split(/\n\s*\n/)[0].trim();
 }
 
 export function renderChangeNote(pr, cls) {

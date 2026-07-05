@@ -42,3 +42,25 @@ test("renderChangeNote handles repo-level PR (no plugins, no roadmap)", () => {
   assert.ok(!/\[\[components\//.test(md));
   assert.ok(!/\[\[planning\/roadmap\]\]/.test(md));
 });
+
+test("renderChangeNote skips a leading PR-body heading and surfaces real prose (blank line variant)", () => {
+  const pr = { ...PR, body: "## Summary\n\nReal prose here.\n\nSecond para." };
+  const md = renderChangeNote(pr, CLS);
+  assert.match(md, /Real prose here\./);
+  // must not echo a contentless heading as the summary body (the naive
+  // implementation renders the note's own "## Summary" section header
+  // immediately followed by the PR body's "## Summary" heading echo)
+  assert.ok(!/## Summary\n\n## Summary\n/.test(md));
+});
+
+test("renderChangeNote skips a leading PR-body heading with no blank line", () => {
+  const pr = { ...PR, body: "## Summary\nReal prose here." };
+  const md = renderChangeNote(pr, CLS);
+  assert.match(md, /Real prose here\./);
+});
+
+test("renderChangeNote falls back to placeholder when body is heading-only", () => {
+  const pr = { ...PR, body: "## Summary" };
+  const md = renderChangeNote(pr, CLS);
+  assert.match(md, /_No description provided\._/);
+});
