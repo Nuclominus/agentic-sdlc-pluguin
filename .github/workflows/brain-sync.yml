@@ -1,0 +1,44 @@
+name: brain-sync
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [develop]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Sync vault for the merged PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node tools/brain-sync/cli.mjs sync --pr ${{ github.event.pull_request.number }} --vault .brain
+      - name: Validate vault
+        run: node tools/brain-sync/cli.mjs check --vault .brain || true
+      - name: Open follow-up PR with the vault update
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: develop
+          branch: brain-sync/pr-${{ github.event.pull_request.number }}
+          add-paths: .brain
+          commit-message: "docs(brain): sync vault for #${{ github.event.pull_request.number }}"
+          title: "docs(brain): sync vault for #${{ github.event.pull_request.number }}"
+          body: |
+            Automated Second Brain vault update for the merge of #${{ github.event.pull_request.number }}.
+
+            Generated deterministically by `tools/brain-sync`. Enrich prose / ADR links as needed
+            before or after merge.
+          delete-branch: true
