@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-07-06 | #35 | `feat` | — | [[changes/2026-07-06-PR-35-session-recorder-closing-agent-real-run-clock]] |
 | 2026-07-06 | #33 | `docs` | — | [[changes/2026-07-06-PR-33-point-to-the-brain-second-brain-vault]] |
 | 2026-07-05 | #32 | `docs` | — | [[changes/2026-07-05-PR-32-bind-second-brain-vault-into-repo-working-rules]] |
 | 2026-07-05 | #31 | `feat` | — | [[changes/2026-07-05-PR-31-second-brain-vault-brain-pr-merge-auto-sync]] |
