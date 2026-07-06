@@ -28,6 +28,8 @@ AI-assisted SDLC pipelines for **Android** development, built on the **Stack Pro
 
 See [`docs/WORKFLOW.md`](docs/WORKFLOW.md) for system diagrams and [`docs/WALKTHROUGH.md`](docs/WALKTHROUGH.md) for a full end-to-end Android run.
 
+This repo's own architecture, decisions, per-PR changes, and roadmap live in the **Second Brain** Obsidian vault at [`.brain/`](.brain/) — the source of truth for how the marketplace works and evolves (see [`.brain/README.md`](.brain/README.md)).
+
 ### Verifying plugins locally
 
 Before opening a PR, run the deterministic verifier (schema + workflow-cycle + stack-detection checks):
