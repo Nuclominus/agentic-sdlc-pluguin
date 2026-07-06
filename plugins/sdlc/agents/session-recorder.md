@@ -64,13 +64,15 @@ files or guess elapsed time.
 
 5. **Today's date** via `Bash`: `date -u +%F` → `YYYY-MM-DD`.
 
-6. **Create-or-append** to `journal_path`:
-   - **Missing file** → `Write` it with the stable header, then the first entry.
+6. **Create-or-append** to `journal_path`. Every entry ends with a `---` delimiter on its own line
+   (preceded by a blank line), so each entry's span is unambiguous — from its `##` heading through
+   its trailing `---` inclusive. This is what makes replace safe on a crowded journal.
+   - **Missing file** → `Write` it with the stable header, then the first entry (with its `---`).
    - **Exists** → `Read` it, then `Write` it back with the new entry inserted **directly after the
      header block** (newest-first ordering).
    - **Idempotency guard** — if an entry with the SAME `## {date} · {task_slug}` heading already
-     exists (a resume or re-run on the same day), REPLACE that entry in place rather than adding a
-     duplicate.
+     exists (a resume or re-run on the same day), REPLACE that whole entry span (heading through its
+     next `---`) in place rather than adding a duplicate.
 
 7. **Return** exactly one line:
    ```
@@ -85,16 +87,19 @@ Stable header (written once, on create):
 # SDLC Run Journal
 
 One entry per pipeline run — newest first. Auto-appended by the `session-recorder` agent at the
-close of each run. Numbers are read verbatim from each run's `_telemetry.json`.
+close of each run. Numbers are read verbatim from each run's `_telemetry.json`. Each entry ends
+with a `---` delimiter.
 ```
 
-Each entry (newest inserted directly under the header):
+Each entry (newest inserted directly under the header; a blank line then `---` closes it):
 
 ```markdown
 ## 2026-07-06 · add-subscription-billing
 Added Stripe subscription billing: repository, ViewModel,
 paywall screen, DataStore cache. Tests + security pass green.
 ⏱ 3m 07s · $0.20 · 5 phases
+
+---
 ```
 
 - Cost prints as `$0.20`. If `total_cost_usd` is `null` (unpriced models) → print `$— · 5 phases`.
@@ -109,6 +114,8 @@ normally — never fail:
 ## 2026-07-06 · add-subscription-billing
 Run closed; telemetry unavailable (elapsed/cost not recorded).
 ⏱ — · $— · — phases
+
+---
 ```
 
 ## Non-negotiable rules
