@@ -12,6 +12,7 @@ status: in-progress
 | B1 | `--resume` checkpoints            | done        | #25 |
 | B2 | cross-run rollup `/sdlc:report`   | done        | #28 |
 | B3 | (planned)                         | planned     | — |
+| B4 | `session-recorder` run journal + measured run clock | done | #35 |
 | C1 | AAR learning cycle `/sdlc:aar`    | done        | #27 |
 | C2 | WorkManager provider (background) | in-progress | #29 |
 | D  | HTML run-report artifact          | done        | #26 |
