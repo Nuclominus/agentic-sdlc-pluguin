@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-07-06 | #40 | `chore` | — | [[changes/2026-07-06-PR-40-sdlc-1-5-0-marketplace-1-5-0]] |
 | 2026-07-06 | #36 | `fix` | — | [[changes/2026-07-06-PR-36-repair-two-pre-existing-lint-and-test-failures-on-develop]] |
 | 2026-07-06 | #35 | `feat` | — | [[changes/2026-07-06-PR-35-session-recorder-closing-agent-real-run-clock]] |
 | 2026-07-06 | #33 | `docs` | — | [[changes/2026-07-06-PR-33-point-to-the-brain-second-brain-vault]] |
