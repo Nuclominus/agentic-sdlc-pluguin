@@ -17,12 +17,26 @@ Step 0b · Detect profiles via Glob of manifest.yaml (split by kind)
           · 0b-frameworks: resolve ADDITIVE_PROFILES (+ frameworks.enable/disable override)
 Step 0c · Skip-rule analysis (cost optimization for trivial changes)
 Step 1  · 1a Merge active profiles (winner + PRIMARY + ADDITIVE) → 1b project-local overrides → 1c phase order
-Step 2  · Generate task slug, prepare workspace
+Step 2  · Generate task slug, prepare workspace (+ capture write-once real start clock → .checkpoint/_started_at)
 Step 3  · Execute each phase: look up agent (winner/PRIMARY) → build prompt (base + injected + prior summary)
           → spawn agent → save COMPACT summary
 Step 4  · Run post-pipeline checks
-Step 5  · Telemetry + final summary (stack used, additive frameworks, phases, cost, PR link)
+Step 5  · Telemetry + final summary (measured wall_clock_seconds from Step 2 clock; stack, frameworks, phases, cost, PR link)
+Step 5b · Render HTML run-report
+Step 6  · Close the session: dispatch `session-recorder` → append entry to docs/plans/_journal.md
 ```
+
+**Run clock (Step 2 + Step 5).** Step 2 records a write-once epoch anchor
+`docs/plans/{slug}/.checkpoint/_started_at`; Step 5 computes `wall_clock_seconds` = now − start and
+renders `started_at`/`completed_at` from it. This measured timing (not an estimate) flows into
+`_telemetry.json` and therefore into `report` / `rollup` / `aar`. See
+[[decisions/ADR-0003-session-recorder-run-journal]].
+
+**Session close (Step 6).** The orchestrator's built-in closer dispatches the `session-recorder`
+agent, which appends one short (~20–30 word) newest-first entry — `date · slug · note · elapsed ·
+cost · phase count` — to the cumulative journal `docs/plans/_journal.md`. It always runs (every
+stack/workflow), is skipped under `--dry-run`, and is best-effort (never fails the run). It is NOT a
+workflow phase, so it takes no `agents_per_phase` binding.
 
 The orchestrator prints the active profiles verbatim, including an `additive:` line, so the user can
 verify which frameworks activated.
@@ -41,6 +55,7 @@ The five core fallbacks live in `plugins/sdlc/agents/`; the Android roster lives
 | qa-engineer | sdlc | sonnet | medium | Clear criteria; hard 3-attempt cap. |
 | security-analyst | sdlc | opus | high | Threat model; read-only. |
 | document-writer | sdlc | haiku | low | Structured output from known facts. |
+| session-recorder | sdlc | haiku | low | Built-in run closer (Step 6): ~30-word journal entry from telemetry. Not a phase. |
 | **android-ba / android-developer / android-reviewer / android-security / android-tester / android-qa / android-docs** | android-foundation | opus→haiku | per role | The specialized roster that wins the `android` aspect (see the plugin README). |
 
 Framework providers ship **no agents** — they enrich the prompts the agents above receive.
