@@ -52,5 +52,5 @@ outside the repo, not keyed by `task_slug`).
   foundation could swap in its own closer — not built to avoid resolver churn.
 
 ## Related
-- Implemented by: #<pr>   <!-- fill on merge -->
+- Implemented by: #35
 - Relates to: [[architecture/pipeline-orchestrator]]
