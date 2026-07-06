@@ -4,15 +4,39 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+## [1.5.0] — 2026-07-06
+
+Only the `sdlc` plugin changed (→ `1.5.0`); other plugins are unchanged. This tag also formally
+releases `sdlc` work that shipped to `develop` since **v1.2.0** without a cut release — the
+intermediate `1.3.0` / `1.4.0` version steps were never tagged. Per-PR detail lives in
+[`.brain/changes/`](.brain/changes/).
+
 ### Added
 
-- **sdlc:aar** — After Action Review cycle (Roadmap C1): `/sdlc:aar [slug]` analyzes
-  a run's cost (deterministic `tools/aar/metrics.mjs` over `_telemetry.json`) and
-  agent cooperation (session transcript), then applies approved workflow
-  improvements and persists lessons to `.claude/sdlc-lessons.md`, which the
-  orchestrator injects into every future phase's stable prompt prefix. Generic
-  `aar-analyst`, overridable per foundation via `aar_analyst`. Repoints the
-  previously orphaned AAR skill references.
+- **`session-recorder` closing agent + run journal (#35).** A top-level agent dispatched by the
+  orchestrator as a built-in final step (Step 6): it reads the finished run's `_telemetry.json`,
+  composes a ~20–30 word note, and creates-or-appends one newest-first entry (`date · slug · note ·
+  elapsed · cost · phase count`) to the cumulative journal `docs/plans/_journal.md`. Each entry is
+  closed by a `---` delimiter; same-day + same-slug re-runs replace in place. Best-effort (never
+  fails the run), skipped under `--dry-run`. Design in ADR-0003.
+- **Measured run clock (#35).** Orchestrator Step 2 captures a write-once start anchor
+  (`.checkpoint/_started_at`); Step 5 computes `wall_clock_seconds` from it — run timing is now
+  measured, not estimated, so `/sdlc:report`, the cross-run rollup, and `/sdlc:aar` all report
+  accurate elapsed time.
+- **Catch-up since v1.2.0** (previously shipped to `develop`, never tagged — detail in
+  `.brain/changes/`): `sdlc:aar` After Action Review cycle (#27), `--resume` per-phase checkpoints
+  (#25), HTML run-report artifact (#26), cross-run rollup `/sdlc:report` (#28), WorkManager
+  framework provider (#29), `--dry-run` + cost-cap enforcement (#21), match-based workflow
+  auto-selection (#20), project-local workflows + new intents (#22), deterministic `sdlc-lint`
+  verifier + GitHub Actions CI (#23), and the Second Brain vault `.brain/` with PR-merge auto-sync
+  (#31–#34).
+
+### Fixed
+
+- **Two pre-existing CI failures (#36).** Stale `load.test.mjs` frameworks snapshot (added the
+  `workmanager` provider) and an `AAR reference integrity` false positive (excluded `.brain/`
+  historical change notes from the dead-`android-workflow:aar` grep, mirroring the existing
+  `docs/superpowers/` exclusion).
 
 ## [1.3.0] — 2026-07-02
 
