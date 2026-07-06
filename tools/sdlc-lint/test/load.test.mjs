@@ -12,7 +12,7 @@ test("loadManifests splits foundations and frameworks", () => {
   const fstacks = foundations.map(f => f.doc.stack).sort();
   assert.deepEqual(fstacks, ["android", "vanilla"]);
   const fwstacks = frameworks.map(f => f.doc.stack).sort();
-  assert.deepEqual(fwstacks, ["dagger", "retrofit", "room"]);
+  assert.deepEqual(fwstacks, ["dagger", "retrofit", "room", "workmanager"]);
 });
 
 test("loadWorkflows excludes test-fixtures", () => {
