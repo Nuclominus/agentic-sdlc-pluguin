@@ -35,7 +35,7 @@ intermediate `1.3.0` / `1.4.0` version steps were never tagged. Per-PR detail li
 
 - **Two pre-existing CI failures (#36).** Stale `load.test.mjs` frameworks snapshot (added the
   `workmanager` provider) and an `AAR reference integrity` false positive (excluded `.brain/`
-  historical change notes from the dead-`android-workflow:aar` grep, mirroring the existing
+  historical change notes from the dead-AAR-identifier grep, mirroring the existing
   `docs/superpowers/` exclusion).
 
 ## [1.3.0] — 2026-07-02
