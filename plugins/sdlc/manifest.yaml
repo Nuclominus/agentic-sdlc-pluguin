@@ -16,6 +16,9 @@ agents_per_phase:
   documentation: document-writer
 
 # aar_analyst: (unset) → the neutral core's `aar-analyst` runs /sdlc:aar retrospectives.
+# session-recorder: dispatched by the orchestrator as the built-in run closer (Step 6) — it appends
+#   a short entry to docs/plans/_journal.md. Not a workflow phase and not on-demand, so it takes no
+#   agents_per_phase binding; the core `session-recorder` agent runs on every stack.
 
 convention_skills: []
 extra_phases: []

@@ -775,6 +775,15 @@ side-effect-free: the only output is the preview block (plus the headless JSON l
 1. Generate `task_slug` from `$ARGUMENTS`: lowercase, alphanumerics + dashes, max 40 chars.
 2. Create directory `docs/plans/{task_slug}/` if it does not exist.
 3. Create `docs/plans/{task_slug}/_brief.md` with the original `$ARGUMENTS`.
+4. **Start the real clock (write-once).** Capture a measured start timestamp so elapsed time is
+   real, not estimated — consumed by Step 5 (`wall_clock_seconds`) and the Step 6 journal. Run via
+   `Bash`:
+   ```
+   mkdir -p docs/plans/{task_slug}/.checkpoint
+   [ -f docs/plans/{task_slug}/.checkpoint/_started_at ] || date -u +%s > docs/plans/{task_slug}/.checkpoint/_started_at
+   ```
+   Write-once (`[ -f ] ||`) so `--resume` preserves the original start and elapsed spans the whole
+   run across sessions. `_started_at` holds a single integer (epoch seconds, UTC).
 
 **Resume mode.** When invoked with `resume` (see `start.md` Step 1):
 
@@ -1265,6 +1274,19 @@ their checkpoints, not lost). Then write `docs/plans/{task_slug}/_telemetry.json
 }
 ```
 
+Compute the timing from the real clock captured in Step 2 (via `Bash`):
+
+- `start=$(cat docs/plans/{task_slug}/.checkpoint/_started_at)` (epoch seconds, UTC).
+- `end=$(date -u +%s)`.
+- `wall_clock_seconds` = `end - start` (integer; clamp negatives to 0).
+- `started_at` / `completed_at` = the two epochs rendered ISO-8601 UTC. Portable rendering:
+  `date -u -r <epoch> +%FT%TZ` (BSD/macOS) or `date -u -d @<epoch> +%FT%TZ` (GNU/Linux) — try one,
+  fall back to the other.
+- **Degraded fallback:** if `.checkpoint/_started_at` is missing or unreadable (e.g. an old run
+  started before this was wired), set `completed_at` to now, estimate `started_at` / `wall_clock_seconds`
+  as before, and DO NOT fail. This keeps `report.mjs` / `rollup.mjs` / `aar/metrics.mjs` timing real
+  whenever the anchor exists.
+
 Compute aggregates from `phases[]`:
 
 - `total_input_tokens` = sum of phase `input_tokens`.
@@ -1341,6 +1363,29 @@ After `_telemetry.json` is written, render a self-contained HTML report — unle
 Skipped entirely under `--dry-run` (nothing ran; consistent with "Do NOT run Step 5").
 Under `--resume`, the report is regenerated from the reassembled telemetry, so it reflects the full
 multi-session picture.
+
+### Step 6 — Close the session (journal entry)
+
+The final act of every run: dispatch the `session-recorder` agent to append one short entry to the
+cumulative run journal `docs/plans/_journal.md`. This is the orchestrator's built-in closer — it
+always runs (on every stack, every workflow), because it is wired here, not as a workflow phase.
+
+Dispatch via the `Agent` tool:
+- `subagent_type`: `session-recorder` (the neutral core agent; not a workflow phase, so it takes no
+  `agents_per_phase` binding).
+- `model`: `haiku` (resolve through `.claude/model.local.json` like any other agent).
+- `description`: `"Close SDLC session — journal entry for {task_slug}"`.
+- `prompt` (per-call context): `task_slug`, `journal_path: docs/plans/_journal.md`,
+  `telemetry_path: docs/plans/{task_slug}/_telemetry.json`.
+
+Rules:
+- Runs on both normal and `--resume` completions (each close appends/refreshes its entry;
+  same-day + same-slug entries are replaced in place, not duplicated).
+- **Skipped entirely under `--dry-run`** (nothing ran — consistent with Step 5 / Step 5b).
+- **Best-effort:** a recorder failure NEVER fails the pipeline (the run already succeeded). On
+  failure, print `Journal: failed — {reason}` and continue to the final summary.
+- On success, add `docs/plans/_journal.md` to the final-summary **Artifacts** block and print the
+  agent's returned `JOURNAL:` line.
 
 ---
 
