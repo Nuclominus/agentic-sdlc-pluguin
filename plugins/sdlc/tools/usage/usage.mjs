@@ -79,6 +79,13 @@ export function extractUsage(jsonlPath, { onlyMainLoop = false, since, until } =
     }
     t.turns += 1;
   };
+  // Claude Code writes ONE JSONL line per content block of an assistant turn
+  // (a thinking block, each parallel tool_use, etc.), and every one of those
+  // lines repeats the SAME response-level `message.usage`. Summing per line
+  // therefore multiplies a single API call's usage by its block count (~2-4x).
+  // Dedup on `message.id` (the API response id, unique per call) so each turn
+  // is counted once; fall back to counting lines that carry no id.
+  const seen = new Set();
   for (const line of readLines(jsonlPath)) {
     let d;
     try { d = JSON.parse(line); } catch { continue; }
@@ -91,6 +98,10 @@ export function extractUsage(jsonlPath, { onlyMainLoop = false, since, until } =
     if (!m || typeof m !== "object" || !m.usage || m.role !== "assistant") continue;
     const model = m.model || "unknown";
     if (model === "<synthetic>") continue;
+    if (m.id) {
+      if (seen.has(m.id)) continue;
+      seen.add(m.id);
+    }
     add(model, m.usage);
   }
   const combined = zeroUsage();

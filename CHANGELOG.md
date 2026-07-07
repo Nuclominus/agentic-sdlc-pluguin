@@ -4,7 +4,19 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
-## [1.7.0] — 2026-07-07
+## [1.7.1] — 2026-07-07
+
+`sdlc` → `1.7.1` (other plugins unchanged). Point-fix to the `1.7.0` transcript-derived cost tool.
+
+### Fixed
+
+- **Cache/token/cost over-count in `tools/usage` (#48).** Claude Code writes one transcript line per
+  content block of an assistant turn (a thinking block, each parallel tool call, …), and every line
+  repeats the *same* response-level `message.usage`. `extractUsage` summed per line, so a single API
+  call's usage was multiplied by its block count — inflating cache-read, billed tokens, and
+  `cost_usd` by ~2–4× (measured 2.4× on a real 7-phase run: `$16.87` → `~$5.4`). `extractUsage` now
+  dedupes on `message.id` (unique per API response), counting each turn once and falling back to
+  per-line counting only for lines with no id. Regression test covers a multi-block turn.
 
 `sdlc` → `1.7.0` (other plugins unchanged). Replaces the `cost_usd: null` fallback of `1.6.0` with
 **real, transcript-derived per-phase cost**. Design in ADR-0005; per-PR detail in
