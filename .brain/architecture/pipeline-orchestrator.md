@@ -32,6 +32,15 @@ renders `started_at`/`completed_at` from it. This measured timing (not an estima
 `_telemetry.json` and therefore into `report` / `rollup` / `aar`. See
 [[decisions/ADR-0003-session-recorder-run-journal]].
 
+**Token telemetry (Step 3d-1 + Step 5).** Per-phase usage is read from the Agent result envelope in
+three shapes: a split input/output/cached triple (`usage_source: reported`), an aggregate-only
+`subagent_tokens` count captured verbatim (`usage_source: subagent_aggregate`, `cost_usd: null`), or
+a char/4 estimate when neither is present (`usage_source: estimated`). Step 5 sums
+`total_subagent_tokens` and sets `cache_hit_ratio: null` when no phase reported a real cached subset,
+rather than a misleading 0. A per-phase `recovery` field records how a mid-run agent crash was
+handled (`sendmessage-resume` vs `fresh-restart`). See
+[[decisions/ADR-0004-aggregate-token-telemetry-crash-recovery]].
+
 **Session close (Step 6).** The orchestrator's built-in closer dispatches the `session-recorder`
 agent, which appends one short (~20–30 word) newest-first entry — `date · slug · note · elapsed ·
 cost · phase count` — to the cumulative journal `docs/plans/_journal.md`. It always runs (every
