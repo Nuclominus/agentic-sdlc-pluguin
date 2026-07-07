@@ -62,6 +62,10 @@ measured usage the harness *does* provide); **overloading `origin`** to also mea
   is `null` when genuinely unknown, so consumers can distinguish "no cache" from "not measured".
 - Cost is `null` for aggregate-only phases (excluded from `total_cost_usd`) — accurate but partial;
   precise per-phase cost returns automatically on any harness that exposes a split triple.
+  **Superseded by [[decisions/ADR-0005-transcript-derived-cost]]:** cost no longer stays `null` —
+  it is recovered from each phase's subagent transcript (which carries the real split the envelope
+  omits) and priced deterministically at report time. The "never fabricate a split" principle here
+  is preserved; only the "leave cost null" outcome changed.
 - Crash recovery now has a defined policy and an auditable `recovery` label; the honest caveat
   stands — resume replays context, so the saving is the avoided redundant re-reads, not a dramatic
   token cut.

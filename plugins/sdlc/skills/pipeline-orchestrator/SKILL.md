@@ -1096,8 +1096,10 @@ Resolve a tier to its concrete model ID via the `models[]` entry whose `tag` equ
 **3d-1. Capture per-phase telemetry** — extract from the Agent tool result. Three envelope shapes, in priority order:
 
 1. **Split triple present** — when the result envelope exposes `input_tokens`, `output_tokens`, `cached_input_tokens`, read all three and set `usage_source: "reported"` (default).
-2. **Aggregate only** — when the envelope exposes only a single aggregate count (this harness's shape: `<usage>subagent_tokens: N, tool_uses, duration_ms</usage>`) and NOT the split triple, record `subagent_tokens: N` **verbatim** on the phase entry and set `usage_source: "subagent_aggregate"`. Do NOT fabricate an `input_tokens`/`output_tokens`/`cached_input_tokens` split from it — leave those keys unset so real (unsplit) usage survives instead of being silently zeroed. `cost_usd` cannot be computed precisely without a split, so set `cost_usd: null` (it is excluded from `total_cost_usd`, per below).
+2. **Aggregate only** — when the envelope exposes only a single aggregate count (this harness's shape: `<usage>subagent_tokens: N, tool_uses, duration_ms</usage>`) and NOT the split triple, record `subagent_tokens: N` **verbatim** on the phase entry and set `usage_source: "subagent_aggregate"`. Do NOT fabricate an `input_tokens`/`output_tokens`/`cached_input_tokens` split from it — leave those keys unset so real (unsplit) usage survives instead of being silently zeroed. `cost_usd` is left `null` **here**, but is filled in at Step 5b from the phase's subagent transcript (see below) — the aggregate count badly understates real billed usage because it ignores per-turn cache reads, so it is a fallback only.
 3. **No usage data** — estimate from prompt + summary character length / 4 and set `usage_source: "estimated"`.
+
+**Always** record `agent_id` on the phase entry — the subagent id from the Agent result envelope (e.g. `agentId: a1b2c3…`). For a multi-pass phase (e.g. dev plan + implement), record the list of ids. This is what Step 5b uses to locate each phase's subagent transcript (`~/.claude/projects/<encoded-cwd>/<session>/subagents/agent-<id>.jsonl`) and compute the **real** input/output/cache split and cost. It is the primary cost path; the shapes above are the live/fallback capture.
 
 Then compute:
 
@@ -1243,10 +1245,15 @@ their checkpoints, not lost). Then write `docs/plans/{task_slug}/_telemetry.json
       "agent": "business-analyst",
       "model": "claude-opus-4-8",
       "status": "completed",
-      "input_tokens": 35000,
-      "output_tokens": 3000,
-      "cached_input_tokens": 21000,
-      "cost_usd": 0.16,
+      "agent_id": "ac70de3f30beff161",
+      "subagent_tokens": 73206,
+      "usage_source": "transcript",
+      "input_tokens": 102625,
+      "output_tokens": 11585,
+      "cached_input_tokens": 1631159,
+      "cache_creation_tokens": 342931,
+      "billed_tokens": 2088300,
+      "cost_usd": 3.76,
       "compact_summary_chars": 1840,
       "compact_handoff_violation": false
     },
@@ -1256,11 +1263,17 @@ their checkpoints, not lost). Then write `docs/plans/{task_slug}/_telemetry.json
       "agent": "qa-engineer",
       "model": "claude-sonnet-5",
       "status": "completed",
+      "agent_id": "ae1d4689404205640",
       "qa_iterations_used": 2,
       "qa_status": "completed",
       "subagent_tokens": 30100,
-      "usage_source": "subagent_aggregate",
-      "cost_usd": null,
+      "usage_source": "transcript",
+      "input_tokens": 40,
+      "output_tokens": 3361,
+      "cached_input_tokens": 869118,
+      "cache_creation_tokens": 143805,
+      "billed_tokens": 1016324,
+      "cost_usd": 0.57,
       "recovery": "sendmessage-resume",
       "compact_summary_chars": 1450,
       "compact_handoff_violation": false
@@ -1272,14 +1285,21 @@ their checkpoints, not lost). Then write `docs/plans/{task_slug}/_telemetry.json
   "post_pipeline_checks": [
     { "command": "...", "exit_code": 0 }
   ],
-  "total_input_tokens": 152000,
-  "total_output_tokens": 9800,
-  "total_cached_input_tokens": 88000,
-  "total_subagent_tokens": 30100,
-  "total_cost_usd": 0.52,
+  "total_input_tokens": 103641,
+  "total_output_tokens": 68547,
+  "total_cached_input_tokens": 15902636,
+  "total_cache_creation_tokens": 1841024,
+  "total_subagent_tokens": 590655,
+  "total_cost_usd": 16.87,
+  "cost_basis": "transcript",
+  "orchestration_overhead": {
+    "cost_usd": 6.52,
+    "main_loop": { "model": "claude-opus-4-8", "cost_usd": 5.16, "turns": 54 },
+    "nested_subagents": { "model": "claude-sonnet-5", "cost_usd": 1.36 }
+  },
   "cost_cap_usd": 0.60,
   "cap_status": "within",
-  "cache_hit_ratio": 0.58,
+  "cache_hit_ratio": 0.99,
   "deps_preflight": {
     "superpowers": { "status": "available", "missing_skills": [] }
   },
@@ -1302,7 +1322,10 @@ Compute the timing from the real clock captured in Step 2 (via `Bash`):
   as before, and DO NOT fail. This keeps `report.mjs` / `rollup.mjs` / `aar/metrics.mjs` timing real
   whenever the anchor exists.
 
-Compute aggregates from `phases[]`:
+Compute aggregates from `phases[]` (these are the **live/fallback** values; Step 5b's transcript
+enrichment overwrites `total_cost_usd`, the `total_*` token aggregates, `cache_hit_ratio`, and adds
+`total_cache_creation_tokens` + `orchestration_overhead` with the real, priced numbers — see
+ADR-0005):
 
 - `total_input_tokens` = sum of phase `input_tokens` (phases with only `subagent_tokens` contribute 0 here — their usage lives in `total_subagent_tokens`).
 - `total_output_tokens` = sum of phase `output_tokens`.
@@ -1367,11 +1390,25 @@ Post-pipeline checks:
 PR: {pr_url_if_created}
 ```
 
-### Step 5b — Render the HTML run-report
+### Step 5b — Enrich cost from transcripts, then render the HTML run-report
 
-After `_telemetry.json` is written, render a self-contained HTML report — unless the user passed
-`--no-report` or the effective profile sets `report: false`.
+After `_telemetry.json` is written, first enrich it with the **real** per-phase token split and
+cost recovered from each phase's subagent transcript, then render a self-contained HTML report —
+unless the user passed `--no-report` or the effective profile sets `report: false`.
 
+0. **Enrich cost (transcript-derived).** If `command -v node` succeeds, run via `Bash`:
+   `node "${CLAUDE_PLUGIN_ROOT}/tools/usage/cli.mjs" enrich {task_slug}`.
+   The tool reads each phase's `agent_id` (recorded in Step 3d-1), locates its subagent transcript
+   (`~/.claude/projects/<encoded-cwd>/<session>/subagents/agent-<id>.jsonl`), sums the real
+   `input`/`output`/`cache_read`/`cache_creation` split, prices it against the model registry
+   (`config/models.json`, incl. `cache_write_multipliers`), and rewrites the phase `cost_usd` +
+   `input_tokens`/`output_tokens`/`cached_input_tokens`/`cache_creation_tokens`/`billed_tokens`
+   with `usage_source: "transcript"`, plus real `total_*` aggregates, `cache_hit_ratio`, and an
+   `orchestration_overhead` block (orchestrator main-loop bounded to the run window + nested
+   subagents). This is the authoritative cost path (ADR-0005); the live capture in 3d-1 is the
+   fallback. On non-zero exit → print `cost enrichment: skipped ({stderr tail})` and continue with
+   the live-captured telemetry — a phase with no locatable transcript keeps its aggregate/`null`
+   cost. Never fail the pipeline on enrichment.
 1. If `command -v node` fails → print `HTML report: skipped (node unavailable)` and skip to the
    final summary.
 2. Else run via `Bash`: `node "${CLAUDE_PLUGIN_ROOT}/tools/report/cli.mjs" report {task_slug}`.
