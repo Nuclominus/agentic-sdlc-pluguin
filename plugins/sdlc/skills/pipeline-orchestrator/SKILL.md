@@ -784,6 +784,13 @@ side-effect-free: the only output is the preview block (plus the headless JSON l
    ```
    Write-once (`[ -f ] ||`) so `--resume` preserves the original start and elapsed spans the whole
    run across sessions. `_started_at` holds a single integer (epoch seconds, UTC).
+5. **Resolve the working checkout FIRST when the brief names an explicit worktree/workspace path.**
+   If `$ARGUMENTS` / `_brief.md` names a specific worktree or workspace directory (or a branch that
+   is expected to live in one), run `git worktree list` **before** any branch-switching, and operate
+   in the matching existing checkout. Do **NOT** `git stash` + `git checkout <branch>` in the current
+   workspace to reach it — that fails with `already checked out at <path>` when the branch is checked
+   out in another worktree, wasting a failed checkout and a needless prompt round. Only fall back to a
+   branch checkout in the current workspace when `git worktree list` shows no worktree for that path.
 
 **Resume mode.** When invoked with `resume` (see `start.md` Step 1):
 
@@ -1086,13 +1093,20 @@ MODELS = parse(Glob("~/.claude/plugins/cache/**/sdlc/config/models.json"))   # {
 
 Resolve a tier to its concrete model ID via the `models[]` entry whose `tag` equals the declared tier. This registry is the single source of truth for model IDs **and pricing** — never hardcode either here.
 
-**3d-1. Capture per-phase telemetry** — extract from the Agent tool result (when usage data is present in the result envelope, read `input_tokens`, `output_tokens`, `cached_input_tokens`; otherwise estimate from prompt + summary character length / 4). Compute:
+**3d-1. Capture per-phase telemetry** — extract from the Agent tool result. Three envelope shapes, in priority order:
+
+1. **Split triple present** — when the result envelope exposes `input_tokens`, `output_tokens`, `cached_input_tokens`, read all three and set `usage_source: "reported"` (default).
+2. **Aggregate only** — when the envelope exposes only a single aggregate count (this harness's shape: `<usage>subagent_tokens: N, tool_uses, duration_ms</usage>`) and NOT the split triple, record `subagent_tokens: N` **verbatim** on the phase entry and set `usage_source: "subagent_aggregate"`. Do NOT fabricate an `input_tokens`/`output_tokens`/`cached_input_tokens` split from it — leave those keys unset so real (unsplit) usage survives instead of being silently zeroed. `cost_usd` cannot be computed precisely without a split, so set `cost_usd: null` (it is excluded from `total_cost_usd`, per below).
+3. **No usage data** — estimate from prompt + summary character length / 4 and set `usage_source: "estimated"`.
+
+Then compute:
 
 - `compact_summary_chars` — `len(CONTEXT.{phase}_output)`. If > 3000 chars (≈ 3K-token target), record `compact_handoff_violation: true` and emit a one-line warning to stderr: `WARN: {phase} compact summary exceeded budget ({chars} chars > 3000)`. Do not abort — the violation is recorded for post-run analysis.
 - `model` — the full model ID, derived from the agent's declared `model:` tier by resolving it against the model registry loaded in 3d-0 (`MODELS.models[].model_id` where `tag` == the tier). The tier is the authoritative value because the PreToolUse hook enforces it at dispatch time; this mapping exists solely so telemetry/cost records the concrete model. **Do not** read this from the Agent result envelope (it is not exposed there).
 - `cost_usd` — computed from the **registry** pricing (SSOT), never a hardcoded rate table. Let `P = MODELS.models[].pricing` where `tag` == the phase tier (the registry is already loaded in 3d-0). Treat `input_tokens` as total input and `cached_input_tokens` as its cached subset (consistent with the `cache_hit_ratio` definition in Step 5). Then (raw token counts, `P.*` in USD per MTok):
   - `cost_usd = (input_tokens - cached_input_tokens)/1e6 * P.input + cached_input_tokens/1e6 * P.cached_input + output_tokens/1e6 * P.output`
   - **If the matched model has no `pricing` block:** set `cost_usd: null`, emit `WARN: no pricing for {model_id} — cost omitted` to stderr, and exclude the phase from `total_cost_usd` (Step 5). Do not abort.
+  - **For a `subagent_aggregate` phase** (envelope shape 2 above — no split triple): `cost_usd` is `null` (an aggregate count can't be priced without an input/output split), and the phase is excluded from `total_cost_usd`. Its `subagent_tokens` still counts toward `total_subagent_tokens`.
 - For aspect-aware phase fan-out, push one entry **per aspect** into `phases[]` with `phase: "{phase_name}"` and `aspect: "{aspect}"` set; aspect-agnostic phases omit `aspect`.
 
 **3d-2. QA-specific telemetry** — when running the `qa` phase, parse the agent's compact summary for the lines `ITERATIONS_USED: N` (max 3, hard cap from the agent prompt) and `STATUS: complete | incomplete-blocked`. Record:
@@ -1244,10 +1258,10 @@ their checkpoints, not lost). Then write `docs/plans/{task_slug}/_telemetry.json
       "status": "completed",
       "qa_iterations_used": 2,
       "qa_status": "completed",
-      "input_tokens": 28000,
-      "output_tokens": 2100,
-      "cached_input_tokens": 18000,
-      "cost_usd": 0.04,
+      "subagent_tokens": 30100,
+      "usage_source": "subagent_aggregate",
+      "cost_usd": null,
+      "recovery": "sendmessage-resume",
       "compact_summary_chars": 1450,
       "compact_handoff_violation": false
     }
@@ -1261,6 +1275,7 @@ their checkpoints, not lost). Then write `docs/plans/{task_slug}/_telemetry.json
   "total_input_tokens": 152000,
   "total_output_tokens": 9800,
   "total_cached_input_tokens": 88000,
+  "total_subagent_tokens": 30100,
   "total_cost_usd": 0.52,
   "cost_cap_usd": 0.60,
   "cap_status": "within",
@@ -1289,11 +1304,12 @@ Compute the timing from the real clock captured in Step 2 (via `Bash`):
 
 Compute aggregates from `phases[]`:
 
-- `total_input_tokens` = sum of phase `input_tokens`.
+- `total_input_tokens` = sum of phase `input_tokens` (phases with only `subagent_tokens` contribute 0 here — their usage lives in `total_subagent_tokens`).
 - `total_output_tokens` = sum of phase `output_tokens`.
 - `total_cached_input_tokens` = sum of phase `cached_input_tokens`.
-- `total_cost_usd` = sum of phase `cost_usd`, **skipping `null` entries** (phases whose model had no registry pricing). If any phase was null-priced, append `(partial — {n} phase(s) unpriced)` to the printed Cost line so the omission is visible.
-- `cache_hit_ratio` = `total_cached_input_tokens / max(total_input_tokens, 1)` rounded to 2 decimals.
+- `total_subagent_tokens` = sum of phase `subagent_tokens` (the aggregate, unsplit counts from `usage_source: "subagent_aggregate"` phases). Omit the key when no phase reported an aggregate.
+- `total_cost_usd` = sum of phase `cost_usd`, **skipping `null` entries** (phases whose model had no registry pricing, AND aggregate-only phases whose cost is not computable without a split). If any phase was null-priced, append `(partial — {n} phase(s) unpriced)` to the printed Cost line so the omission is visible.
+- `cache_hit_ratio` = `total_cached_input_tokens / max(total_input_tokens, 1)` rounded to 2 decimals — **but set it to `null`** when no phase reported a real cached subset (e.g. every phase was `subagent_aggregate` or `estimated`), since a 0 there would falsely read as "zero cache hits" rather than "unknown".
 - `cost_cap_usd` = `CONTEXT.cost_cap` (the active workflow recipe's `caps.max_total_cost_usd`), or `null` when the recipe declared no cap.
 - `cap_status` = `CONTEXT.cap_status` from the Step 3d-cap gate: `"within"` (cap set and never exceeded, or no cap), `"exceeded-continued"` (user approved continuing past the cap), or `"exceeded-aborted"` (user aborted, or headless abort). When the run was cost-aborted, also set `aborted_at_phase` to the phase that was about to run.
 - `resumed` = `true` when this run entered via `--resume` (else omit or `false`).
@@ -1305,11 +1321,19 @@ Compute aggregates from `phases[]`:
   `additionalProperties:false` and has no `origin` field) — it is layered on at assembly time here,
   tracked via `CONTEXT` during Step 3 (`3-resume-skip` marks skipped units `"resumed"`; freshly
   dispatched units are `"fresh"`), not read back off disk.
+- each `phases[]` element that recovered from a **mid-run agent crash** carries `recovery` recording
+  the actual mechanism (distinct from `origin`, which is about cross-session checkpoint resume):
+  `"sendmessage-resume"` when the crashed agent was resumed **in-session** via `SendMessage` (same
+  `agentId`, context replayed), or `"fresh-restart"` when it was replaced by a **new** `Agent` +
+  manual handoff. Omit the key when the phase ran without a crash. This keeps cost attribution and
+  future AARs honest — a fresh-restart re-reads files and roughly doubles the phase's tokens, which a
+  bare "resumed" label would hide. Set it from the crash-handling rule in the workflow (see
+  `android-foundation/rules/workflow.md` Step 2 "Crash recovery").
 - `touched_files` (optional) = `git diff --name-status <merge-base>...HEAD` parsed into
   `[{ "status": "A|M|D|R...", "path": "<repo-relative>" }]`, reusing the git already run in Step 0c.
   On any git error, **omit the key** (never fabricate). Consumed by the HTML report (Step 5b).
 
-> Token counts come from the Agent tool's usage envelope when present. If a phase's result lacks usage data, fall back to char-length / 4 estimation and set `phases[N].usage_source: "estimated"` (default `"reported"`).
+> Token counts come from the Agent tool's usage envelope when present (see 3d-1 for the three envelope shapes). A split `input/output/cached` triple sets `usage_source: "reported"` (default); an aggregate-only envelope records `subagent_tokens` with `usage_source: "subagent_aggregate"`; a phase with no usage data falls back to char-length / 4 estimation with `usage_source: "estimated"`.
 
 Print the final summary to the user:
 

@@ -9,12 +9,14 @@ Work by these rules. No exceptions.
 
 ## Purpose
 
-Logs (`Kermit`, `android.util.Log.*`, `println`, `printStackTrace`) are a **temporary debugging aid**, not a feature. They must never reach the final diff.
+Logs (the project's logging facade — e.g. Kermit's `Logger` — plus `android.util.Log.*`, `println`, `printStackTrace`) are a **temporary debugging aid**, not a feature. They must never reach the final diff.
+
+> **Logger is project-detected.** Kermit is named below only as the common default. Detect the logging library the project actually uses (grep the codebase / version catalog) and substitute its API; a foundation may override this reference. If the project has no logging library, drop the `Logger`-specific rows entirely.
 
 ## Allowed During a Session
 
 While investigating a bug or verifying behaviour, agents may freely add:
-- `Logger.d/e/i/v(...)` (Kermit)
+- `Logger.d/e/i/v(...)` (the project's logging facade, e.g. Kermit)
 - `Log.d/e/i/v/w(...)`
 - `println(...)`
 - `e.printStackTrace()`

@@ -91,6 +91,23 @@ boundaries: android-ba drafts an ADR stub in `.obsidian-vault/architecture/adr-<
 - android-reviewer returns findings → android-developer addresses all → re-verify build → re-hand off.
 - After 3 rounds without LGTM: set `blockers: ["Review loop exceeded 3 rounds. Escalate to human."]` and stop.
 
+### Crash recovery (any dispatched agent)
+
+If a subagent (developer, reviewer, or any phase agent) dies on a **mid-response server error**:
+
+1. **Resume FIRST.** Attempt `SendMessage` to the SAME `agentId` to continue where it stopped —
+   its in-agent context is intact, so it finishes with a handful of tool calls instead of re-reading
+   the whole task.
+2. **Fall back to a fresh `Agent` only if resume fails.** A fresh agent must re-`Read` everything the
+   crashed one had loaded, roughly doubling the phase's tokens.
+3. **Record the mechanism** so telemetry stays honest — set the phase's `recovery` field to
+   `sendmessage-resume` or `fresh-restart` (see `${CLAUDE_PLUGIN_ROOT}`-side orchestrator Step 5 /
+   `schemas/checkpoint.schema.json`). Do NOT label a fresh-restart as a same-session resume.
+
+Honest caveat: resume replays context, so the concrete saving is the redundant re-reads it avoids,
+not a dramatic token cut — but it also preserves correctness (a fresh agent can diverge from the
+crashed one's partial work).
+
 ---
 
 ## Step 2.5: android-reviewer
@@ -158,6 +175,12 @@ Read `${CLAUDE_PLUGIN_ROOT}/rules/documentation.md` and verify the android-docs 
 - Create PR: `[task_id] title`. Example: `[CRF-6] Search Filters`.
 - Use `gh pr create` via GitHub CLI.
 - No AI mentions, no change statistics, no test checklists in PR description.
+
+**Model override for outward-facing docs work.** `android-docs` defaults to `model: haiku`, which is
+fine for vault edits but unreliable for an outward `gh pr create` (PR prose) combined with a
+cross-repo / submodule commit. When the docs phase does BOTH — creates a PR and commits a submodule
+(e.g. a vault submodule) — escalate the docs agent to `sonnet` for that run. Note this in the run so
+the one-off tier bump is intentional, not accidental.
 
 ---
 

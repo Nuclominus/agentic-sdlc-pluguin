@@ -27,6 +27,7 @@ export function computeMetrics(tel) {
     input_tokens: num(p.input_tokens),
     output_tokens: num(p.output_tokens),
     cached_input_tokens: num(p.cached_input_tokens),
+    subagent_tokens: num(p.subagent_tokens),
     cost_usd: p.cost_usd ?? null,
   }));
 
@@ -48,7 +49,7 @@ export function computeMetrics(tel) {
   const top_consumers = by_phase
     .map((p) => ({
       label: p.aspect ? `${p.phase}:${p.aspect}` : p.phase,
-      total_tokens: p.input_tokens + p.output_tokens,
+      total_tokens: p.input_tokens + p.output_tokens + p.subagent_tokens,
       cost_usd: p.cost_usd ?? null,
     }))
     .sort((a, b) => b.total_tokens - a.total_tokens || (a.label < b.label ? -1 : a.label > b.label ? 1 : 0))
@@ -69,6 +70,7 @@ export function computeMetrics(tel) {
       input_tokens: num(tel.total_input_tokens),
       output_tokens: num(tel.total_output_tokens),
       cached_input_tokens: num(tel.total_cached_input_tokens),
+      subagent_tokens: num(tel.total_subagent_tokens),
       cost_usd: tel.total_cost_usd ?? null,
       cost_cap_usd: tel.cost_cap_usd ?? null,
       cap_status: tel.cap_status ?? null,
