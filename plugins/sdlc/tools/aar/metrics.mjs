@@ -18,18 +18,26 @@ const num = (n) => (typeof n === "number" && isFinite(n) ? n : 0);
 export function computeMetrics(tel) {
   const phases = Array.isArray(tel.phases) ? tel.phases : [];
 
-  const by_phase = phases.map((p) => ({
-    phase: p.phase,
-    aspect: p.aspect ?? null,
-    agent: p.agent ?? null,
-    model: p.model ?? null,
-    status: p.status ?? null,
-    input_tokens: num(p.input_tokens),
-    output_tokens: num(p.output_tokens),
-    cached_input_tokens: num(p.cached_input_tokens),
-    subagent_tokens: num(p.subagent_tokens),
-    cost_usd: p.cost_usd ?? null,
-  }));
+  const by_phase = phases.map((p) => {
+    const hasSplit = p.usage_source !== "subagent_aggregate";
+    const billed = hasSplit
+      ? (num(p.billed_tokens) || num(p.input_tokens) + num(p.output_tokens) + num(p.cached_input_tokens) + num(p.cache_creation_tokens))
+      : num(p.input_tokens) + num(p.output_tokens) + num(p.subagent_tokens);
+    return {
+      phase: p.phase,
+      aspect: p.aspect ?? null,
+      agent: p.agent ?? null,
+      model: p.model ?? null,
+      status: p.status ?? null,
+      input_tokens: num(p.input_tokens),
+      output_tokens: num(p.output_tokens),
+      cached_input_tokens: num(p.cached_input_tokens),
+      cache_creation_tokens: num(p.cache_creation_tokens),
+      subagent_tokens: num(p.subagent_tokens),
+      billed_tokens: billed,
+      cost_usd: p.cost_usd ?? null,
+    };
+  });
 
   // by_model — group, sum, flag unpriced; sorted by model name asc for determinism.
   const modelMap = new Map();
@@ -49,7 +57,7 @@ export function computeMetrics(tel) {
   const top_consumers = by_phase
     .map((p) => ({
       label: p.aspect ? `${p.phase}:${p.aspect}` : p.phase,
-      total_tokens: p.input_tokens + p.output_tokens + p.subagent_tokens,
+      total_tokens: p.billed_tokens,
       cost_usd: p.cost_usd ?? null,
     }))
     .sort((a, b) => b.total_tokens - a.total_tokens || (a.label < b.label ? -1 : a.label > b.label ? 1 : 0))
@@ -70,6 +78,7 @@ export function computeMetrics(tel) {
       input_tokens: num(tel.total_input_tokens),
       output_tokens: num(tel.total_output_tokens),
       cached_input_tokens: num(tel.total_cached_input_tokens),
+      cache_creation_tokens: num(tel.total_cache_creation_tokens),
       subagent_tokens: num(tel.total_subagent_tokens),
       cost_usd: tel.total_cost_usd ?? null,
       cost_cap_usd: tel.cost_cap_usd ?? null,

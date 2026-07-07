@@ -14,7 +14,27 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmtUsd = (n) => (n == null ? "—" : `$${Number(n).toFixed(2)}`);
 const fmtInt = (n) => String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-const pct = (r) => `${Math.round((Number(r) || 0) * 100)}%`;
+const pct = (r) => (r == null ? "—" : `${Math.round(Number(r) * 100)}%`);
+// Compact token count for dense breakdown lines: 5.0M, 17k, 146.
+const fmtTok = (n) => {
+  const v = Number(n) || 0;
+  if (v >= 1e6) return `${(v / 1e6).toFixed(1)}M`;
+  if (v >= 1e4) return `${Math.round(v / 1e3)}k`;
+  if (v >= 1e3) return `${(v / 1e3).toFixed(1)}k`;
+  return String(Math.round(v));
+};
+// A phase has a real input/output/cache split (usage_source "reported" or
+// "transcript", or an "estimated" fallback) vs. only the harness aggregate
+// `subagent_tokens` (usage_source "subagent_aggregate"), which cannot be split.
+const hasSplit = (p) => p && p.usage_source !== "subagent_aggregate" &&
+  (p.input_tokens != null || p.output_tokens != null || p.cached_input_tokens != null);
+const billedTokens = (p) => hasSplit(p)
+  ? (p.billed_tokens != null
+    ? p.billed_tokens
+    : (p.input_tokens || 0) + (p.output_tokens || 0) + (p.cached_input_tokens || 0) + (p.cache_creation_tokens || 0))
+  : null;
+const totalBilled = (t) => (t.total_input_tokens || 0) + (t.total_output_tokens || 0) +
+  (t.total_cached_input_tokens || 0) + (t.total_cache_creation_tokens || 0);
 
 const CSS = `
 :root{--bg:#fff;--fg:#1a1a1a;--muted:#666;--line:#e3e3e3;--card:#f7f7f8;--bar:#4f6bed;--accent:#4f6bed}
@@ -66,9 +86,17 @@ function tile(label, value, sub) {
 }
 function kpiSection(t) {
   const capNote = t.cost_cap_usd != null ? `${fmtUsd(t.cost_cap_usd)} cap · ${esc(t.cap_status || "—")}` : "no cap";
+  const oh = t.orchestration_overhead;
+  const costSub = oh && oh.cost_usd != null ? `${capNote} · orch ${fmtUsd(oh.cost_usd)}` : capNote;
+  const billed = totalBilled(t);
+  // Billed tokens are the real, priced total (incl. per-turn cache reads/writes);
+  // fall back to the harness aggregate only if no phase was transcript-enriched.
+  const billedTile = billed > 0
+    ? tile("Billed tokens", fmtInt(billed), `in ${fmtTok(t.total_input_tokens)} · out ${fmtTok(t.total_output_tokens)} · cache r/w ${fmtTok(t.total_cached_input_tokens)}/${fmtTok(t.total_cache_creation_tokens)}`)
+    : tile("Aggregate tokens", fmtInt(t.total_subagent_tokens), "harness aggregate — unpriced");
   return `<section class="kpis">
-${tile("Total cost", fmtUsd(t.total_cost_usd), capNote)}
-${tile("Input tokens", fmtInt(t.total_input_tokens))}
+${tile("Total cost", fmtUsd(t.total_cost_usd), costSub)}
+${billedTile}
 ${tile("Output tokens", fmtInt(t.total_output_tokens))}
 ${tile("Cache hit", pct(t.cache_hit_ratio))}
 ${tile("Phases", fmtInt((t.phases || []).length))}
@@ -78,10 +106,23 @@ ${tile("Model corrections", fmtInt(t.model_enforcement_corrections))}
 
 const ICON = { completed: "✅", skipped: "⏩", aborted: "⏸", approved: "✅" };
 
+function tokenCell(p) {
+  // Real billed total + a compact split subline, or the harness aggregate when
+  // the phase was not transcript-enriched (older runs / missing transcript).
+  const billed = billedTokens(p);
+  if (billed == null) {
+    return `<td class="num">${fmtInt(p.subagent_tokens)}<div class="ts">aggregate</div></td>`;
+  }
+  const split = `in ${fmtTok(p.input_tokens)} · out ${fmtTok(p.output_tokens)} · cache-r ${fmtTok(p.cached_input_tokens)} · cache-w ${fmtTok(p.cache_creation_tokens)}`;
+  return `<td class="num">${fmtInt(billed)}<div class="ts">${split}</div></td>`;
+}
+
 function timelineSection(t) {
   const phases = t.phases || [];
   if (!phases.length) return "";
-  const maxCost = Math.max(...phases.map((p) => p.cost_usd || 0), 0.0001);
+  const oh = t.orchestration_overhead;
+  const ohCost = oh && oh.cost_usd != null ? oh.cost_usd : 0;
+  const maxCost = Math.max(...phases.map((p) => p.cost_usd || 0), ohCost, 0.0001);
   const rows = phases.map((p) => {
     const name = p.aspect ? `${p.phase} · ${p.aspect}` : p.phase;
     const w = Math.round(((p.cost_usd || 0) / maxCost) * 100);
@@ -90,13 +131,29 @@ function timelineSection(t) {
 <td>${esc(name)}${origin}</td>
 <td>${esc(p.agent || "—")}</td>
 <td><code>${esc(p.model || "—")}</code></td>
-<td class="num">${fmtInt((p.input_tokens || 0) + (p.output_tokens || 0))}</td>
+${tokenCell(p)}
 <td class="num">${fmtUsd(p.cost_usd)}</td>
 <td class="bar"><span style="width:${w}%"></span></td></tr>`;
   }).join("\n");
+  // Orchestration overhead (orchestrator main-loop + non-phase/nested subagents)
+  // is not a phase but is real spend — show it so per-row costs reconcile to the total.
+  let ohRow = "";
+  if (oh && oh.cost_usd != null) {
+    const ml = oh.main_loop || {};
+    const billed = (ml.input_tokens || 0) + (ml.output_tokens || 0) + (ml.cached_input_tokens || 0) + (ml.cache_creation_tokens || 0);
+    const w = Math.round((ohCost / maxCost) * 100);
+    ohRow = `<tr><td>⚙</td>
+<td>orchestration <span class="badge">overhead</span></td>
+<td>orchestrator</td>
+<td><code>${esc(ml.model || "—")}</code></td>
+<td class="num">${fmtInt(billed)}<div class="ts">main-loop + nested</div></td>
+<td class="num">${fmtUsd(oh.cost_usd)}</td>
+<td class="bar"><span style="width:${w}%"></span></td></tr>`;
+  }
   return `<section><h2>Phase timeline</h2>
-<table><thead><tr><th></th><th>Phase</th><th>Agent</th><th>Model</th><th class="num">Tokens</th><th class="num">Cost</th><th>Cost share</th></tr></thead>
-<tbody>${rows}</tbody></table></section>`;
+<table><thead><tr><th></th><th>Phase</th><th>Agent</th><th>Model</th><th class="num">Billed tokens</th><th class="num">Cost</th><th>Cost share</th></tr></thead>
+<tbody>${rows}
+${ohRow}</tbody></table></section>`;
 }
 
 function costBreakdownSection(t) {
@@ -104,19 +161,31 @@ function costBreakdownSection(t) {
   if (!phases.length) return "";
   const byModel = new Map();
   let unpriced = 0;
-  for (const p of phases) {
-    const k = p.model || "—";
-    const m = byModel.get(k) || { input: 0, output: 0, cost: 0 };
+  const add = (k, p) => {
+    const m = byModel.get(k) || { input: 0, output: 0, cacheR: 0, cacheW: 0, cost: 0 };
     m.input += p.input_tokens || 0;
     m.output += p.output_tokens || 0;
-    if (p.cost_usd == null) unpriced++; else m.cost += p.cost_usd;
+    m.cacheR += p.cached_input_tokens || 0;
+    m.cacheW += p.cache_creation_tokens || 0;
+    if (p.cost_usd != null) m.cost += p.cost_usd;
     byModel.set(k, m);
+  };
+  for (const p of phases) {
+    if (p.cost_usd == null) unpriced++;
+    if (!hasSplit(p)) continue; // aggregate-only phase: no split to attribute
+    add(p.model || "—", p);
+  }
+  // Fold orchestration overhead (main-loop + nested subagents) into model rows so totals reconcile.
+  const oh = t.orchestration_overhead;
+  if (oh) {
+    if (oh.main_loop && oh.main_loop.model) add(oh.main_loop.model, oh.main_loop);
+    if (oh.nested_subagents && oh.nested_subagents.model) add(oh.nested_subagents.model, oh.nested_subagents);
   }
   const rows = [...byModel.entries()].sort((a, b) => b[1].cost - a[1].cost).map(([model, m]) =>
-    `<tr><td><code>${esc(model)}</code></td><td class="num">${fmtInt(m.input)}</td><td class="num">${fmtInt(m.output)}</td><td class="num">${fmtUsd(m.cost)}</td></tr>`).join("\n");
-  const note = unpriced ? `<p class="note">Cost partial — ${unpriced} phase(s) unpriced (no registry pricing).</p>` : "";
+    `<tr><td><code>${esc(model)}</code></td><td class="num">${fmtInt(m.input)}</td><td class="num">${fmtInt(m.cacheR)}</td><td class="num">${fmtInt(m.cacheW)}</td><td class="num">${fmtInt(m.output)}</td><td class="num">${fmtUsd(m.cost)}</td></tr>`).join("\n");
+  const note = unpriced ? `<p class="note">Cost partial — ${unpriced} phase(s) unpriced (aggregate-only usage, no transcript to split).</p>` : "";
   return `<section><h2>Cost by model</h2>
-<table><thead><tr><th>Model</th><th class="num">Input</th><th class="num">Output</th><th class="num">Cost</th></tr></thead>
+<table><thead><tr><th>Model</th><th class="num">Input</th><th class="num">Cache read</th><th class="num">Cache write</th><th class="num">Output</th><th class="num">Cost</th></tr></thead>
 <tbody>${rows}</tbody></table>${note}</section>`;
 }
 

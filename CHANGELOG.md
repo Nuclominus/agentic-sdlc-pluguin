@@ -4,6 +4,43 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+## [1.7.0] — 2026-07-07
+
+`sdlc` → `1.7.0` (other plugins unchanged). Replaces the `cost_usd: null` fallback of `1.6.0` with
+**real, transcript-derived per-phase cost**. Design in ADR-0005; per-PR detail in
+[`.brain/changes/`](.brain/changes/).
+
+### Added
+
+- **Transcript-derived cost + real billed tokens (#46).** New dependency-free tool
+  `plugins/sdlc/tools/usage/` (`enrich <run-dir> [--session <transcript>]`) reads each phase's
+  subagent transcript (`~/.claude/projects/<cwd>/<session>/subagents/agent-<id>.jsonl`), sums the
+  real `input`/`output`/`cache-read`/`cache-write` split, prices it against the registry, and
+  rewrites `_telemetry.json` with real per-phase `cost_usd`, `billed_tokens`, `cache_creation_tokens`
+  (`usage_source: "transcript"`), real `total_*` aggregates + `cache_hit_ratio`, and an
+  `orchestration_overhead` block (orchestrator main-loop bounded to the run window + nested agents).
+- **Cache-write pricing (#46).** `config/models.json` gains `cache_write_multipliers`
+  (`ephemeral_5m: 1.25`, `ephemeral_1h: 2.0`) so prompt-cache creation is priced relative to the
+  input rate; cache reads stay at `cached_input` (0.1×). Registered in `schemas/models.schema.json`.
+- **Checkpoint fields (#46).** `schemas/checkpoint.schema.json` registers `agent_id`,
+  `cache_creation_tokens`, `billed_tokens`, and the `transcript` usage source.
+
+### Changed
+
+- **Report + metrics show the real billed split (#46).** `tools/report/report.mjs` renders per-phase
+  input / output / cache-read / cache-write + cost and an orchestration row that reconciles to the
+  total; `tools/aar/metrics.mjs` adds `billed_tokens`/`cache_creation_tokens` and ranks top consumers
+  by billed tokens. Both keep an aggregate fallback for un-enriched (older / missing-transcript) runs.
+- **Orchestrator wiring (#46).** `pipeline-orchestrator` Step 3d-1 always records the phase `agent_id`;
+  Step 5b runs cost enrichment before rendering the report. Enrichment never fails the pipeline.
+
+### Fixed
+
+- **Report no longer shows 0 tokens / no cost (#46).** `1.6.0` taught only `metrics.mjs` about the
+  aggregate `subagent_tokens`; `report.mjs`/`rollup.mjs` still summed the unset split and rendered 0.
+  Cost is now the real transcript-derived figure instead of `—`. Supersedes the cost-null decision of
+  ADR-0004.
+
 ## [1.6.0] — 2026-07-07
 
 `sdlc` → `1.6.0` and `android-foundation` → `1.3.0` (other plugins unchanged). Applies the

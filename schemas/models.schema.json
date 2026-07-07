@@ -16,6 +16,15 @@
       "minItems": 1,
       "uniqueItems": true
     },
+    "cache_write_multipliers": {
+      "type": "object",
+      "description": "Prompt-cache CREATION price relative to a model's input rate (Anthropic standard, model-independent). The usage tool multiplies the per-turn ephemeral cache-creation token split by these before pricing at the input rate.",
+      "additionalProperties": false,
+      "properties": {
+        "ephemeral_5m": { "type": "number", "minimum": 0, "description": "Multiplier for 5-minute-TTL cache writes (standard 1.25)." },
+        "ephemeral_1h": { "type": "number", "minimum": 0, "description": "Multiplier for 1-hour-TTL cache writes (standard 2.0)." }
+      }
+    },
     "models": {
       "type": "array",
       "description": "Every available model, keyed by a unique `tag`.",
