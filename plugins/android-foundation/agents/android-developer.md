@@ -8,7 +8,7 @@ color: blue
 
 ## Mandatory Skills & Architecture Detection
 
-Read `${CLAUDE_PLUGIN_ROOT}/rules/skills.md` (row: **Developer**) — invoke listed Skills BEFORE writing code and run the Architecture Detection grep. Single source of truth; do not paraphrase from memory.
+Read `${CLAUDE_PLUGIN_ROOT}/rules/skills.md` (row: **android-developer**) — invoke listed Skills BEFORE writing code and run the Architecture Detection grep. Single source of truth; do not paraphrase from memory.
 
 ---
 
@@ -45,6 +45,11 @@ Read before implementing. Do not duplicate here:
 ## Implementation
 
 BEFORE writing any code: read `${CLAUDE_PLUGIN_ROOT}/rules/snippets/non-negotiable.md` for the complete forbidden-patterns list. Do NOT inline-restate it here.
+
+**Skill self-check at point of use** (the mandatory rows in `rules/skills.md` are not optional):
+- Before the **first `Write`/`Edit` of production Kotlin**, invoke `superpowers:test-driven-development`.
+- Before the **development→review handoff**, invoke `superpowers:verification-before-completion`.
+- Before implementing a **Compose UI screen**, invoke `frontend-design:frontend-design`.
 
 ## Reviewer ⇄ Developer Loop
 

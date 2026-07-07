@@ -4,6 +4,40 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+## [1.6.0] — 2026-07-07
+
+`sdlc` → `1.6.0` and `android-foundation` → `1.3.0` (other plugins unchanged). Applies the
+`brain-rudderstack-phase-b` After Action Review findings to plugin source (the review targeted the
+plugin cache, whose edits are clobbered on update). Design in ADR-0004; per-PR detail in
+[`.brain/changes/`](.brain/changes/).
+
+### Fixed
+
+- **Per-phase telemetry no longer zeroes all tokens (#44).** The harness result envelope exposes
+  only an aggregate `subagent_tokens` count, not the split input/output/cached triple the
+  orchestrator's Step 3d-1 expected — so estimation always fired and the metrics dashboard reported
+  all-zero usage with a misleading zero cache ratio. Step 3d-1 now captures the aggregate verbatim
+  (`usage_source: subagent_aggregate`), Step 5 sums `total_subagent_tokens` and reports
+  `cache_hit_ratio: null` when genuinely unknown, and `tools/aar/metrics.mjs` surfaces the field.
+- **Crash recovery is defined and correctly labelled (#44).** `android-foundation` workflow Step 2
+  now attempts an in-session resume of the same agent before spawning a fresh one, and records which
+  mechanism ran in a new per-phase `recovery` field — so cost attribution stops mislabelling a
+  fresh restart as a same-session resume.
+
+### Added
+
+- **Aggregate-token + recovery telemetry fields (#44).** `schemas/checkpoint.schema.json` registers
+  `subagent_tokens` / `tool_uses` / `duration_ms`, the `subagent_aggregate` usage source, and the
+  `recovery` enum.
+
+### Changed
+
+- **Workflow-doc corrections from the same review (#44):** worktree-first workspace resolution in
+  orchestrator Step 2 (resolve an existing worktree before any stash/checkout); point-of-use Skill
+  self-checks plus a mismatched skills-matrix row-label fix in the android BA/developer agents; a
+  documented docs-phase model escalation for outward PR + submodule work; and de-hardcoded the
+  logging rules from a fixed library to "the project's logger (Kermit if present)".
+
 ## [1.5.0] — 2026-07-06
 
 Only the `sdlc` plugin changed (→ `1.5.0`); other plugins are unchanged. This tag also formally

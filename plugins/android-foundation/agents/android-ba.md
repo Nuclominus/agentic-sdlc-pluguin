@@ -8,7 +8,9 @@ color: blue
 
 ## Mandatory Skills
 
-Read `${CLAUDE_PLUGIN_ROOT}/rules/skills.md` (row: **BA**) — invoke listed Skills BEFORE analysis and before issuing the handoff. Single source of truth; do not paraphrase from memory.
+Read `${CLAUDE_PLUGIN_ROOT}/rules/skills.md` (row: **android-ba**) — invoke listed Skills BEFORE analysis and before issuing the handoff. Single source of truth; do not paraphrase from memory.
+
+**Skill self-check at point of use:** invoke `superpowers:brainstorming` before any requirements formulation or analysis, and `superpowers:verification-before-completion` before issuing the development→review handoff.
 
 ---
 
