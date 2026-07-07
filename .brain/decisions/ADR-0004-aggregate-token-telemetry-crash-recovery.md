@@ -71,5 +71,5 @@ measured usage the harness *does* provide); **overloading `origin`** to also mea
   (`~/.claude/plugins/cache/…`), whose edits are clobbered on update.
 
 ## Related
-- Implemented by: #<pr>
+- Implemented by: #44
 - Relates to: [[architecture/pipeline-orchestrator]] / [[components/sdlc]] / [[components/android-foundation]]
