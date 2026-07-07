@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-07-07 | #46 | `feat` | — | [[changes/2026-07-07-PR-46-transcript-derived-per-phase-cost-real-billed-tokens-1-7-0]] |
 | 2026-07-07 | #44 | `fix` | — | [[changes/2026-07-07-PR-44-apply-aar-plugin-cache-findings-to-plugin-source]] |
 | 2026-07-06 | #42 | `docs` | — | [[changes/2026-07-06-PR-42-mark-session-recorder-shipped-on-the-roadmap-b4]] |
 | 2026-07-06 | #40 | `chore` | — | [[changes/2026-07-06-PR-40-sdlc-1-5-0-marketplace-1-5-0]] |
