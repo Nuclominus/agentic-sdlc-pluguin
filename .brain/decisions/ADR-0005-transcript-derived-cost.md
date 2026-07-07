@@ -85,6 +85,6 @@ would inflate the run — hence the run-window bound).
   cost roughly as much as all work phases combined.
 
 ## Related
-- Implemented by: (this change — PR TBD)
+- Implemented by: #46
 - Supersedes the cost-null decision of: [[decisions/ADR-0004-aggregate-token-telemetry-crash-recovery]]
 - Relates to: [[architecture/pipeline-orchestrator]] / [[components/sdlc]]
