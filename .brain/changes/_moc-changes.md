@@ -5,6 +5,7 @@
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
 | 2026-07-08 | #53 | `fix` | — | [[changes/2026-07-08-PR-53-no-op-first-turn-guard-loud-vault-absent-gate-1-4-0]] |
+| 2026-07-08 | #52 | `feat` | — | [[changes/2026-07-08-PR-52-resilient-transcript-cost-durable-aar-md-artifact-1-9-0]] |
 | 2026-07-08 | #50 | `feat` | — | [[changes/2026-07-08-PR-50-cache-pressure-signal-in-report-aar-1-8-0]] |
 | 2026-07-08 | #48 | `fix` | — | [[changes/2026-07-08-PR-48-dedup-transcript-usage-on-message-id-1-7-1]] |
 | 2026-07-07 | #46 | `feat` | — | [[changes/2026-07-07-PR-46-transcript-derived-per-phase-cost-real-billed-tokens-1-7-0]] |
