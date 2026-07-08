@@ -35,6 +35,15 @@ const billedTokens = (p) => hasSplit(p)
   : null;
 const totalBilled = (t) => (t.total_input_tokens || 0) + (t.total_output_tokens || 0) +
   (t.total_cached_input_tokens || 0) + (t.total_cache_creation_tokens || 0);
+// Cache-pressure subline: average cache-read prefix per turn + the worst-case
+// single-turn prefix, with a ⚠ when the phase tripped `cache_pressure` (set at
+// enrich time). Only for transcript-split phases that recorded turns.
+const cacheLine = (p) => {
+  if (!hasSplit(p) || !p.turns) return "";
+  const perTurn = Math.round((p.cached_input_tokens || 0) / p.turns);
+  const warn = p.cache_pressure ? " ⚠" : "";
+  return `<div class="ts">cache ${fmtTok(perTurn)}/turn · peak ${fmtTok(p.peak_prefix_tokens)}${warn}</div>`;
+};
 
 const CSS = `
 :root{--bg:#fff;--fg:#1a1a1a;--muted:#666;--line:#e3e3e3;--card:#f7f7f8;--bar:#4f6bed;--accent:#4f6bed}
@@ -114,7 +123,7 @@ function tokenCell(p) {
     return `<td class="num">${fmtInt(p.subagent_tokens)}<div class="ts">aggregate</div></td>`;
   }
   const split = `in ${fmtTok(p.input_tokens)} · out ${fmtTok(p.output_tokens)} · cache-r ${fmtTok(p.cached_input_tokens)} · cache-w ${fmtTok(p.cache_creation_tokens)}`;
-  return `<td class="num">${fmtInt(billed)}<div class="ts">${split}</div></td>`;
+  return `<td class="num">${fmtInt(billed)}<div class="ts">${split}</div>${cacheLine(p)}</td>`;
 }
 
 function timelineSection(t) {
@@ -200,6 +209,9 @@ function signalsSection(t) {
   }
   if (t.cap_status && t.cap_status !== "within") items.push(`Cap: <b>${esc(t.cap_status)}</b>`);
   if (t.aborted_at_phase) items.push(`Aborted at <b>${esc(t.aborted_at_phase)}</b>`);
+  for (const p of t.phases || []) {
+    if (p.cache_pressure) items.push(`High cache-pressure: <b>${esc(p.phase)}</b> (peak ${fmtTok(p.peak_prefix_tokens)} &gt; 80k)`);
+  }
   if (!items.length) return "";
   return `<section><h2>Signals</h2><ul class="sig">${items.map((i) => `<li>${i}</li>`).join("")}</ul></section>`;
 }

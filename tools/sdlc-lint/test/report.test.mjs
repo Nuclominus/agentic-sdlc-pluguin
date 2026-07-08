@@ -111,3 +111,34 @@ test("post-checks excerpt renders when markdown tail provided", () => {
   assert.match(html, /Output tail/);
   assert.match(html, /BUILD SUCCESSFUL in 3s/);
 });
+
+test("cache-pressure signal: timeline subline + Signals flag for a flagged phase", () => {
+  const t = {
+    task_slug: "cache-demo", stack: "android", started_at: "2026-07-08T10:00:00Z",
+    completed_at: "2026-07-08T10:30:00Z", wall_clock_seconds: 1800,
+    phases: [{
+      phase: "development", agent: "android-developer", model: "claude-sonnet-5", status: "completed",
+      usage_source: "transcript", input_tokens: 186, output_tokens: 27124,
+      cached_input_tokens: 2780000, cache_creation_tokens: 494153, billed_tokens: 3301463,
+      turns: 39, peak_prefix_tokens: 101000, cache_pressure: true, cost_usd: 0.98,
+    }],
+  };
+  const html = renderReport(t);
+  assert.match(html, /cache 71k\/turn · peak 101k ⚠/);        // subline in the token cell (2.78M/39 ≈ 71k)
+  assert.match(html, /High cache-pressure:.*development.*peak 101k/); // Signals flag
+});
+
+test("cache-pressure signal absent when a phase is under threshold", () => {
+  const t = {
+    task_slug: "calm", stack: "android", phases: [{
+      phase: "qa", agent: "android-qa", model: "claude-sonnet-5", status: "completed",
+      usage_source: "transcript", input_tokens: 40, output_tokens: 3361,
+      cached_input_tokens: 490000, cache_creation_tokens: 143805, billed_tokens: 637206,
+      turns: 10, peak_prefix_tokens: 59000, cache_pressure: false, cost_usd: 0.24,
+    }],
+  };
+  const html = renderReport(t);
+  assert.match(html, /cache 49k\/turn · peak 59k/);   // subline present (490k/10 = 49k)
+  assert.doesNotMatch(html, /⚠/);                      // no warning glyph
+  assert.doesNotMatch(html, /High cache-pressure/);    // no Signals flag
+});
