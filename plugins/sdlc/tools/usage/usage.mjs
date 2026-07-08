@@ -126,9 +126,29 @@ function zeroUsage() {
 
 // ── pricing ───────────────────────────────────────────────────────────────────
 
+/**
+ * Resolve registry pricing for a transcript's model id, tolerating suffixes the
+ * harness may append that are not literal registry keys: a bracketed context tag
+ * (`claude-opus-4-8[1m]`) or a trailing dated snapshot (`claude-sonnet-5-20260115`).
+ * The exact id is tried first, so a registry key that legitimately IS dated
+ * (e.g. `claude-haiku-4-5-20251001`) still matches. Returns the pricing object,
+ * `null` for a known-but-unpriced model, or `null` when the id is unknown.
+ */
+export function lookupPricing(modelId, registry) {
+  if (modelId == null) return null;
+  const id = String(modelId);
+  let P = registry.byId.get(id);
+  if (P !== undefined) return P;
+  const noBracket = id.replace(/\[[^\]]*\]$/, "");
+  if (noBracket !== id) { P = registry.byId.get(noBracket); if (P !== undefined) return P; }
+  const noDate = noBracket.replace(/-\d{8}$/, "");
+  if (noDate !== noBracket) { P = registry.byId.get(noDate); if (P !== undefined) return P; }
+  return null;
+}
+
 /** Price one model's usage totals against the registry. Returns cost_usd or null. */
 export function priceUsage(u, modelId, registry) {
-  const P = registry.byId.get(modelId);
+  const P = lookupPricing(modelId, registry);
   if (!P || P.input == null) return null;
   const cachedRate = P.cached_input != null ? P.cached_input : P.input * 0.1;
   const m5 = registry.multipliers.ephemeral_5m ?? 1.25;
@@ -204,6 +224,33 @@ export function sessionSubagentsDir(sessionTranscriptPath) {
 }
 
 /**
+ * Recover a phase's subagent id from its run checkpoint when _telemetry.json
+ * lacks `agent_id` (the orchestrator failed to propagate it — the primary
+ * lost-cost bug). Matches <runDir>/.checkpoint/<file>.json to the phase by name,
+ * separator-insensitive, preferring an exact phase(+aspect) match over a
+ * phase-only match. Returns the recovered id, or null.
+ */
+export function checkpointAgentId(runDir, phase) {
+  if (!runDir || !phase) return null;
+  const dir = join(runDir, ".checkpoint");
+  if (!existsSync(dir)) return null;
+  const norm = (s) => String(s).toLowerCase().replace(/[-_\s]/g, "");
+  const wantExact = norm(phase.aspect ? `${phase.phase}-${phase.aspect}` : phase.phase);
+  const wantPhase = norm(phase.phase);
+  let fallback = null;
+  for (const f of readdirSync(dir)) {
+    if (!f.endsWith(".json")) continue;
+    let cp;
+    try { cp = JSON.parse(readFileSync(join(dir, f), "utf8")); } catch { continue; }
+    if (!cp || !cp.agent_id) continue;
+    const base = norm(f.replace(/\.json$/, ""));
+    if (base === wantExact) return cp.agent_id;
+    if (base === wantPhase) fallback = cp.agent_id;
+  }
+  return fallback;
+}
+
+/**
  * Parse an orchestrator session transcript into an ordered dispatch map:
  * one entry per Agent tool call — { index, phase, subagent_type, agent_id, description }.
  * `phase` is the pipeline phase name parsed from a "Phase N/M: <phase> ..."
@@ -270,16 +317,31 @@ export function enrichTelemetry(runDir, opts = {}) {
   }
 
   const enriched = [], skipped = [];
+  const pricedIds = new Set();   // a subagent transcript is priced for at most one phase
   let firstResolved = null;
   for (const p of phases) {
     let ids = byPhase.get(p.phase);
     if ((!ids || !ids.length) && p.agent_id) ids = Array.isArray(p.agent_id) ? p.agent_id : [p.agent_id];
+    // Fallback: recover the id from the run's per-phase checkpoint when the
+    // orchestrator did not copy `agent_id` into _telemetry.json.
+    if (!ids || !ids.length) {
+      const cpId = checkpointAgentId(runDir, p);
+      if (cpId) ids = [cpId];
+    }
     if (!ids || !ids.length) { skipped.push(p.phase); continue; }
-    const paths = ids.map((id) => findAgentTranscript(id, { subagentsDir, projectsRoot: opts.projectsRoot })).filter(Boolean);
-    if (!paths.length) { skipped.push(p.phase); continue; }
+    // Drop ids already priced for an earlier phase: a two-pass phase can reuse
+    // one resumed subagent whose single transcript must be counted exactly once.
+    const resolved = ids
+      .filter((id) => !pricedIds.has(id))
+      .map((id) => ({ id, path: findAgentTranscript(id, { subagentsDir, projectsRoot: opts.projectsRoot }) }))
+      .filter((x) => x.path);
+    if (!resolved.length) { skipped.push(p.phase); continue; }
+    const usedIds = resolved.map((x) => x.id);
+    const paths = resolved.map((x) => x.path);
+    for (const id of usedIds) pricedIds.add(id);
     if (!firstResolved) firstResolved = paths[0];
     const r = priceTranscripts(paths, registry);
-    p.agent_id = ids.length === 1 ? ids[0] : ids;
+    p.agent_id = usedIds.length === 1 ? usedIds[0] : usedIds;
     p.input_tokens = r.input_tokens;
     p.output_tokens = r.output_tokens;
     p.cached_input_tokens = r.cached_input_tokens;
@@ -291,6 +353,15 @@ export function enrichTelemetry(runDir, opts = {}) {
     p.cost_usd = r.cost_usd;
     p.usage_source = "transcript";
     enriched.push(p.phase);
+  }
+
+  // If NOTHING resolved to a transcript, do not clobber the pre-enrich telemetry
+  // (aggregate tokens / null cost) with recomputed zeros or a misleading
+  // cost_basis:"transcript". Leave the file untouched and report the skip so the
+  // caller can surface it instead of silently reporting $0.00.
+  if (!enriched.length) {
+    return { telPath, enriched, skipped, total_cost_usd: tel.total_cost_usd ?? null,
+      overhead_cost_usd: null, skipped_all: true };
   }
 
   // Resolve the orchestrator session transcript for overhead accounting. Explicit

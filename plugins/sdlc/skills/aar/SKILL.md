@@ -43,10 +43,18 @@ costs by hand.
    to follow this skill's `gather.md` and return exactly the `report.md` shape.
    The analyst is READ-ONLY.
 
-## Step 5 — Present, approve, apply
+## Step 5 — Present, persist, approve, apply
 
-Render the analyst's report to the user. Then run the approval + apply loop
-defined in `apply.md`:
+Render the analyst's report to the user. Then:
+
+- **Persist the report.** Write the analyst's rendered report (the `report.md`
+  shape) verbatim to `docs/plans/{slug}/_aar.md`, under a `# AAR — {slug}` heading
+  with the run date, so the review is durable and discoverable alongside the run.
+  The analyst is READ-ONLY — **you** (the main session) write this file. Overwrite any
+  prior `_aar.md` for this run. This is the AAR's only run-folder artifact; the run's
+  `_telemetry.json` is machine-owned and stays untouched.
+
+Then run the approval + apply loop defined in `apply.md`:
 
 - The user multi-selects which findings to apply.
 - For each approved finding, follow the tiered gate in `apply.md`.
