@@ -10,6 +10,9 @@ The analyst distills two sources. **Telemetry-first**, transcript best-effort.
 - `totals` — input/output/cached tokens, `cost_usd`, `cost_cap_usd`,
   `cap_status`, `cache_hit_ratio`, `wall_clock_seconds`.
 - `by_phase` — per-phase agent, model, status, tokens, cost.
+- `cache_pressure_phases` — phases whose worst-case per-turn prompt-cache read
+  (`peak_prefix_tokens`) tripped the cache-pressure threshold (~80k), each with
+  `reads_per_turn`. These are the top targets for cache-read reduction.
 - `by_model` — cost/token aggregation, `unpriced` count.
 - `top_consumers` — the 5 heaviest phases by tokens.
 - `qa_iterations`, `cap_breach`, `unpriced_phase_count`, `skip_rules_count`,

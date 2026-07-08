@@ -75,6 +75,18 @@ test("extractUsage counts a multi-block assistant turn once (dedup on message.id
   assert.equal(u.turns, 2, "two API calls, not four transcript lines");
 });
 
+test("extractUsage records peak_prefix_tokens as the max single-turn cache-read", () => {
+  const dir = mkdtempSync(join(tmpdir(), "usage-"));
+  const p = writeAgent(dir, "peak00000000", [
+    turn("claude-sonnet-5", { input_tokens: 5, output_tokens: 8, cache_read_input_tokens: 20000 }),
+    turn("claude-sonnet-5", { input_tokens: 5, output_tokens: 8, cache_read_input_tokens: 90000 }),
+    turn("claude-sonnet-5", { input_tokens: 5, output_tokens: 8, cache_read_input_tokens: 45000 }),
+  ]);
+  const u = extractUsage(p).byModel["claude-sonnet-5"];
+  assert.equal(u.peak_prefix_tokens, 90000);
+  assert.equal(u.turns, 3);
+});
+
 test("priceUsage applies input/cached/output rates and cache-write multipliers", () => {
   // sonnet pricing 2.00 / 0.20 / 10.00; multipliers 1.25 (5m), 2.0 (1h).
   const u = { input_tokens: 1_000_000, output_tokens: 2_000_000, cache_read_tokens: 4_000_000,
@@ -87,6 +99,18 @@ test("priceUsage applies input/cached/output rates and cache-write multipliers",
 test("priceUsage returns null for a model with no registry pricing", () => {
   const fakeReg = { byId: new Map([["claude-x", null]]), multipliers: reg.multipliers };
   assert.equal(priceUsage({ input_tokens: 1, output_tokens: 1, cache_read_tokens: 0, cache_write_5m_tokens: 0, cache_write_1h_tokens: 0 }, "claude-x", fakeReg), null);
+});
+
+test("priceTranscripts takes peak as max across transcripts and turns as the sum", () => {
+  const dir = mkdtempSync(join(tmpdir(), "usage-"));
+  const a = writeAgent(dir, "planaaaa0000", [turn("claude-sonnet-5", { input_tokens: 2, output_tokens: 4, cache_read_input_tokens: 30000 })]);
+  const b = writeAgent(dir, "implbbbb0000", [
+    turn("claude-sonnet-5", { input_tokens: 2, output_tokens: 4, cache_read_input_tokens: 101000 }),
+    turn("claude-sonnet-5", { input_tokens: 2, output_tokens: 4, cache_read_input_tokens: 60000 }),
+  ]);
+  const r = priceTranscripts([a, b], reg);
+  assert.equal(r.peak_prefix_tokens, 101000);
+  assert.equal(r.turns, 3);
 });
 
 test("deriveDispatchMap parses phase, subagent_type, and agent_id in dispatch order", () => {
@@ -215,4 +239,44 @@ test("enrichTelemetry skips a phase with no locatable transcript, keeping its ag
   const tel = JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8"));
   assert.equal(tel.phases[1].usage_source, "subagent_aggregate");
   assert.equal(tel.phases[1].cost_usd, null);
+});
+
+test("enrichTelemetry sets turns, peak_prefix_tokens and cache_pressure per phase", () => {
+  const { runDir, sess } = buildRun();
+  enrichTelemetry(runDir, { sessionTranscript: sess, registry: reg });
+  const tel = JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8"));
+  const dev = tel.phases.find((p) => p.phase === "development");   // agent bbbb33334444, cache_read 1_000_000
+  assert.equal(dev.turns, 1);
+  assert.equal(dev.peak_prefix_tokens, 1000000);
+  assert.equal(dev.cache_pressure, true);
+  const ba = tel.phases.find((p) => p.phase === "business_analysis"); // cache_read 200_000 < 80k? no, 200k > 80k
+  assert.equal(ba.cache_pressure, true);
+});
+
+test("enrichTelemetry flags cache_pressure=false when peak stays under the threshold", () => {
+  // Self-contained minimal run (own tmp session + one subagent) so the false
+  // branch is exercised without disturbing buildRun() or the other enrich tests.
+  const root = mkdtempSync(join(tmpdir(), "run-"));
+  const sub = join(root, "proj", "sess", "subagents");
+  // Single transcript-derived phase; peak single-turn cache-read 60k ≤ 80k threshold.
+  writeAgent(sub, "eeee66667777", [
+    turn("claude-sonnet-5", { input_tokens: 10, output_tokens: 20, cache_read_input_tokens: 60000 }),
+  ]);
+  const runDir = join(root, "plan");
+  mkdirSync(runDir, { recursive: true });
+  writeFileSync(join(runDir, "_telemetry.json"), JSON.stringify({
+    task_slug: "low", started_at: "2026-07-07T13:28:00Z", completed_at: "2026-07-07T14:16:00Z",
+    phases: [
+      { phase: "development", agent: "x-dev", model: "claude-sonnet-5", status: "completed",
+        agent_id: "eeee66667777", subagent_tokens: 100, usage_source: "subagent_aggregate", cost_usd: null },
+    ],
+    total_subagent_tokens: 100, total_cost_usd: null, cache_hit_ratio: null,
+  }, null, 2));
+  enrichTelemetry(runDir, { registry: reg, projectsRoot: root });
+  const tel = JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8"));
+  const dev = tel.phases.find((p) => p.phase === "development");
+  assert.equal(dev.usage_source, "transcript");
+  assert.equal(dev.turns, 1);
+  assert.equal(dev.peak_prefix_tokens, 60000);
+  assert.equal(dev.cache_pressure, false);
 });

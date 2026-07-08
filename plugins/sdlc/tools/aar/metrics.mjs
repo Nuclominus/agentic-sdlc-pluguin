@@ -36,6 +36,10 @@ export function computeMetrics(tel) {
       subagent_tokens: num(p.subagent_tokens),
       billed_tokens: billed,
       cost_usd: p.cost_usd ?? null,
+      turns: num(p.turns),
+      peak_prefix_tokens: num(p.peak_prefix_tokens),
+      reads_per_turn: num(p.turns) > 0 ? Math.round(num(p.cached_input_tokens) / num(p.turns)) : 0,
+      cache_pressure: p.cache_pressure === true,
     };
   });
 
@@ -63,6 +67,13 @@ export function computeMetrics(tel) {
     .sort((a, b) => b.total_tokens - a.total_tokens || (a.label < b.label ? -1 : a.label > b.label ? 1 : 0))
     .slice(0, 5);
 
+  // Phases whose worst-case prefix tripped the cache-pressure flag (set at enrich
+  // time). Ordered by peak desc for stable, most-severe-first reporting.
+  const cache_pressure_phases = by_phase
+    .filter((p) => p.cache_pressure)
+    .map((p) => ({ phase: p.phase, peak_prefix_tokens: p.peak_prefix_tokens, reads_per_turn: p.reads_per_turn }))
+    .sort((a, b) => b.peak_prefix_tokens - a.peak_prefix_tokens || (a.phase < b.phase ? -1 : a.phase > b.phase ? 1 : 0));
+
   const qa_iterations = phases.reduce((s, p) => s + num(p.qa_iterations_used), 0);
   const unpriced_phase_count = by_phase.filter((p) => p.cost_usd == null).length;
   const cap_breach = tel.cap_status != null && tel.cap_status !== "within";
@@ -89,6 +100,7 @@ export function computeMetrics(tel) {
     by_phase,
     by_model,
     top_consumers,
+    cache_pressure_phases,
     qa_iterations,
     cap_breach,
     unpriced_phase_count,

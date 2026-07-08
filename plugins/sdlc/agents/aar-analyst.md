@@ -31,7 +31,10 @@ applies only what they approve.
 Follow the `sdlc:aar` skill's `gather.md` contract. In short:
 
 - **Cost/token accounting** — read from `metrics_json` (totals, by_phase,
-  by_model, top_consumers). Do not re-derive.
+  by_model, top_consumers). Do not re-derive. When `cache_pressure_phases` is
+  non-empty, call out each flagged phase (peak prefix + reads/turn) and
+  recommend a cache-read remedy — surgical reads (`offset/limit`, grep-first,
+  no re-reads) and/or a smaller injected prefix — rather than a raw token cut.
 - **Cooperation signals** — from the transcript: review-loop round count vs the
   workflow's `max_rounds` cap; parallel phases actually dispatched in one
   assistant message; redundant re-reads of the same file across agents;

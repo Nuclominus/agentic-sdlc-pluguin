@@ -74,3 +74,23 @@ test("computeMetricsFile throws a clear error when telemetry is missing", () => 
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("by_phase carries cache-pressure fields and cache_pressure_phases lists flagged phases", () => {
+  const t = { task_slug: "cache-demo", phases: [
+    { phase: "development", agent: "android-developer", model: "claude-sonnet-5", status: "completed",
+      usage_source: "transcript", cached_input_tokens: 2780000, billed_tokens: 3301463,
+      turns: 39, peak_prefix_tokens: 101000, cache_pressure: true, cost_usd: 0.98 },
+    { phase: "qa", agent: "android-qa", model: "claude-sonnet-5", status: "completed",
+      usage_source: "transcript", cached_input_tokens: 490000, billed_tokens: 637206,
+      turns: 10, peak_prefix_tokens: 59000, cache_pressure: false, cost_usd: 0.24 },
+  ] };
+  const d = computeMetrics(t);
+  const dev = d.by_phase.find((p) => p.phase === "development");
+  assert.equal(dev.turns, 39);
+  assert.equal(dev.peak_prefix_tokens, 101000);
+  assert.equal(dev.reads_per_turn, Math.round(2780000 / 39)); // 71282
+  assert.equal(dev.cache_pressure, true);
+  assert.equal(d.cache_pressure_phases.length, 1);
+  assert.equal(d.cache_pressure_phases[0].phase, "development");
+  assert.equal(d.cache_pressure_phases[0].peak_prefix_tokens, 101000);
+});

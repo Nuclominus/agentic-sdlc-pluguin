@@ -17,6 +17,9 @@
     "cached_input_tokens": { "type": "integer", "minimum": 0 },
     "cache_creation_tokens": { "type": "integer", "minimum": 0, "description": "Real prompt-cache CREATION tokens summed from the phase's subagent transcript (usage_source \"transcript\")." },
     "billed_tokens": { "type": "integer", "minimum": 0, "description": "input + output + cached_input + cache_creation — the real billed total the transcript-derived cost is computed from." },
+    "turns": { "type": "integer", "minimum": 0, "description": "Distinct API responses (deduped on message.id) in the phase's subagent transcript(s), summed across passes (usage_source \"transcript\")." },
+    "peak_prefix_tokens": { "type": "integer", "minimum": 0, "description": "Largest single-turn cache-read (worst-case re-read prefix) across the phase's transcript(s), max across passes." },
+    "cache_pressure": { "type": "boolean", "description": "peak_prefix_tokens exceeded the cache-pressure threshold (default 80k) at enrich time." },
     "subagent_tokens": { "type": "integer", "minimum": 0 },
     "agent_id": {
       "description": "The Agent-tool subagent id(s) for this phase (from the Agent result envelope). Used to locate the subagent transcript ~/.claude/projects/<cwd>/<session>/subagents/agent-<id>.jsonl for transcript-derived cost. A list when the phase ran multiple passes (e.g. dev plan + implement).",
