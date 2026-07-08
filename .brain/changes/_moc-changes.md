@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-07-08 | #50 | `feat` | — | [[changes/2026-07-08-PR-50-cache-pressure-signal-in-report-aar-1-8-0]] |
 | 2026-07-08 | #48 | `fix` | — | [[changes/2026-07-08-PR-48-dedup-transcript-usage-on-message-id-1-7-1]] |
 | 2026-07-07 | #46 | `feat` | — | [[changes/2026-07-07-PR-46-transcript-derived-per-phase-cost-real-billed-tokens-1-7-0]] |
 | 2026-07-07 | #44 | `fix` | — | [[changes/2026-07-07-PR-44-apply-aar-plugin-cache-findings-to-plugin-source]] |
