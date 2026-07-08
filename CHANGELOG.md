@@ -11,7 +11,7 @@ cache-pressure signal built on the transcript-derived usage (1.7.0/1.7.1).
 
 ### Added
 
-- **Cache-pressure signal (E5, #NN).** `tools/usage` now records per phase `turns`,
+- **Cache-pressure signal (E5, #50).** `tools/usage` now records per phase `turns`,
   `peak_prefix_tokens` (largest single-turn cache-read), and a `cache_pressure` flag
   (peak > 80k). The HTML report shows `reads/turn · peak` under each phase and flags
   heavy phases in Signals; `tools/aar/metrics` adds those fields to `by_phase` plus a
