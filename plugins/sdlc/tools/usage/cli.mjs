@@ -51,6 +51,9 @@ if (cmd !== "enrich") {
         } else {
           console.log(`  total_cost_usd: $${(r.total_cost_usd ?? 0).toFixed(2)}` +
             (r.overhead_cost_usd != null ? `  (orchestration overhead $${r.overhead_cost_usd.toFixed(2)})` : ""));
+          if (r.overhead_window_fallback) {
+            console.error(`WARN: overhead window fell back to the full transcript — telemetry started_at/completed_at look wrong; verify orchestration cost`);
+          }
         }
       }
     } catch (e) {
