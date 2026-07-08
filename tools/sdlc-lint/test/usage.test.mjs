@@ -338,6 +338,65 @@ test("enrichTelemetry prices a resumed subagent once across two phases (no doubl
   assert.ok(Math.abs(tel.total_cost_usd - single) < 1e-9, `total ${tel.total_cost_usd} should equal a single count ${single}`);
 });
 
+// A run whose orchestrator wrote a WRONG started_at/completed_at into telemetry
+// (the model transcribed the epoch anchor incorrectly) but whose machine-written
+// .checkpoint/_started_at is correct. The overhead window must come from the
+// authoritative anchor, not the bad ISO strings — else every main-loop turn is
+// silently filtered out and the largest cost bucket reads as $0 (ADR-0007).
+function buildAnchorRun({ withAnchor = true, telWindow, wallSeconds } = {}) {
+  const root = mkdtempSync(join(tmpdir(), "anchor-"));
+  const sess = join(root, "proj", "sess.jsonl");
+  const sub = join(root, "proj", "sess", "subagents");
+  mkdirSync(dirname(sess), { recursive: true });
+  // Two orchestrator main-loop turns at 13:30 and 13:35 (one is an Agent dispatch),
+  // plus the dispatched phase subagent transcript.
+  writeFileSync(sess, [
+    JSON.stringify({ type: "assistant", timestamp: "2026-07-07T13:30:00Z", message: { role: "assistant", model: "claude-opus-4-8", usage: { input_tokens: 1000, output_tokens: 500, cache_read_input_tokens: 0 }, content: [
+      { type: "tool_use", id: "t1", name: "Agent", input: { subagent_type: "x:dev", description: "Phase 1/1: development" } }] } }),
+    JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "t1", content: "agentId: ffff00001111" }] } }),
+    turn("claude-opus-4-8", { input_tokens: 2000, output_tokens: 300, cache_read_input_tokens: 0 }, { timestamp: "2026-07-07T13:35:00Z" }),
+  ].join("\n") + "\n");
+  writeAgent(sub, "ffff00001111", [turn("claude-sonnet-5", { input_tokens: 100, output_tokens: 2000, cache_read_input_tokens: 50000, cache_creation_input_tokens: 4000 }, { timestamp: "2026-07-07T13:31:00Z" })]);
+
+  const runDir = join(root, "plan");
+  mkdirSync(join(runDir, ".checkpoint"), { recursive: true });
+  if (withAnchor) {
+    const startEpoch = Math.floor(Date.parse("2026-07-07T13:28:00Z") / 1000);
+    writeFileSync(join(runDir, ".checkpoint", "_started_at"), String(startEpoch));
+  }
+  writeFileSync(join(runDir, "_telemetry.json"), JSON.stringify({
+    task_slug: "anchor",
+    // Bogus model-authored window that excludes the 13:30/13:35 orchestrator turns.
+    started_at: (telWindow || ["2026-07-07T01:00:00Z", "2026-07-07T01:10:00Z"])[0],
+    completed_at: (telWindow || ["2026-07-07T01:00:00Z", "2026-07-07T01:10:00Z"])[1],
+    wall_clock_seconds: wallSeconds ?? 3000, // 13:28 + 50min covers the real turns
+    phases: [{ phase: "development", agent: "x-dev", model: "claude-sonnet-5", status: "completed", agent_id: "ffff00001111", subagent_tokens: 100, usage_source: "subagent_aggregate", cost_usd: null }],
+    total_subagent_tokens: 100, total_cost_usd: null, cache_hit_ratio: null,
+  }, null, 2));
+  return { runDir, projectsRoot: root };
+}
+
+test("enrichTelemetry prices overhead from the checkpoint epoch anchor when telemetry timestamps are wrong", () => {
+  const { runDir, projectsRoot } = buildAnchorRun();
+  enrichTelemetry(runDir, { registry: reg, projectsRoot });
+  const tel = JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8"));
+  const oh = tel.orchestration_overhead;
+  assert.ok(oh, "overhead present");
+  assert.equal(oh.main_loop.turns, 2, "both orchestrator turns recovered via the anchor window");
+  assert.ok(oh.main_loop.cost_usd > 0, "main-loop cost priced, not zeroed by the bad telemetry window");
+  assert.ok(oh.cost_usd > 0);
+});
+
+test("enrichTelemetry falls back to the full transcript and flags it when the window excludes every main-loop turn", () => {
+  // No authoritative anchor + a bogus telemetry window => the window would zero the
+  // overhead. The tool must fall back to the unbounded transcript and signal it.
+  const { runDir, projectsRoot } = buildAnchorRun({ withAnchor: false });
+  const r = enrichTelemetry(runDir, { registry: reg, projectsRoot });
+  assert.equal(r.overhead_window_fallback, true, "fallback flagged so the CLI/orchestrator can WARN");
+  const tel = JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8"));
+  assert.ok(tel.orchestration_overhead.main_loop.cost_usd > 0, "overhead recovered rather than silently $0");
+});
+
 test("enrichTelemetry leaves telemetry untouched when nothing resolves (no zero-clobber)", () => {
   const root = mkdtempSync(join(tmpdir(), "noclobber-"));
   const runDir = join(root, "plan");

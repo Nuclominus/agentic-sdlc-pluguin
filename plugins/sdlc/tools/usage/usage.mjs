@@ -361,7 +361,7 @@ export function enrichTelemetry(runDir, opts = {}) {
   // caller can surface it instead of silently reporting $0.00.
   if (!enriched.length) {
     return { telPath, enriched, skipped, total_cost_usd: tel.total_cost_usd ?? null,
-      overhead_cost_usd: null, skipped_all: true };
+      overhead_cost_usd: null, overhead_window_fallback: false, skipped_all: true };
   }
 
   // Resolve the orchestrator session transcript for overhead accounting. Explicit
@@ -376,7 +376,7 @@ export function enrichTelemetry(runDir, opts = {}) {
   }
 
   // Orchestration overhead = orchestrator main-loop turns + non-phase/nested subagents.
-  let overhead = null;
+  let overhead = null, overheadWindowFallback = false;
   if (sessionTranscript) {
     const paths = [];
     const phaseIds = new Set([].concat(...[...byPhase.values()], ...phases.map((p) => (Array.isArray(p.agent_id) ? p.agent_id : p.agent_id ? [p.agent_id] : []))));
@@ -388,8 +388,21 @@ export function enrichTelemetry(runDir, opts = {}) {
     }
     const nested = priceTranscripts(paths, registry);
     // Bound the orchestrator's own turns to the run window so a long-lived session
-    // (activity before/after this run) doesn't inflate the run's overhead.
-    const main = priceMainLoop(sessionTranscript, registry, { since: tel.started_at, until: tel.completed_at });
+    // (activity before/after this run) doesn't inflate the run's overhead. Source the
+    // window from the MACHINE-written .checkpoint/_started_at epoch (+ wall_clock),
+    // NOT the model-authored started_at/completed_at ISO strings — the orchestrator
+    // can transcribe those wrong, and a window that misses the transcript silently
+    // zeroes the largest cost bucket (ADR-0007).
+    const win = overheadWindow(runDir, tel);
+    let main = priceMainLoop(sessionTranscript, registry, win);
+    // Defense in depth: if the window excluded EVERY main-loop turn but the
+    // transcript genuinely has some, the window is wrong — recover the real cost
+    // from the whole transcript and flag it so the caller can WARN rather than
+    // silently report $0 orchestration overhead.
+    if (main.turns === 0) {
+      const unbounded = priceMainLoop(sessionTranscript, registry, {});
+      if (unbounded.turns > 0) { main = unbounded; overheadWindowFallback = true; }
+    }
     overhead = {
       cost_usd: round2((main.cost_usd || 0) + (nested.cost_usd || 0)),
       main_loop: main,
@@ -411,7 +424,31 @@ export function enrichTelemetry(runDir, opts = {}) {
   tel.cost_basis = "transcript";
 
   writeFileSync(telPath, JSON.stringify(tel, null, 2) + "\n");
-  return { telPath, enriched, skipped, total_cost_usd: tel.total_cost_usd, overhead_cost_usd: overhead ? overhead.cost_usd : null };
+  return { telPath, enriched, skipped, total_cost_usd: tel.total_cost_usd,
+    overhead_cost_usd: overhead ? overhead.cost_usd : null, overhead_window_fallback: overheadWindowFallback };
+}
+
+/**
+ * The window used to bound the orchestrator's own (main-loop) turns for overhead
+ * pricing. Prefer the authoritative MACHINE-written epoch anchor
+ * (<runDir>/.checkpoint/_started_at, written by orchestrator Step 2 via `date +%s`)
+ * plus `wall_clock_seconds`; fall back to the model-authored started_at/completed_at
+ * only when no usable anchor exists. This decouples cost accounting from the model's
+ * fallible ISO-timestamp transcription in Step 5 — a wrong absolute start there used
+ * to move the window off the real turns and zero the overhead (ADR-0007).
+ */
+function overheadWindow(runDir, tel) {
+  let since = tel.started_at, until = tel.completed_at;
+  try {
+    const ep = Number(readFileSync(join(runDir, ".checkpoint", "_started_at"), "utf8").trim());
+    if (Number.isFinite(ep) && ep > 0) {
+      const startMs = ep * 1000;
+      since = new Date(startMs).toISOString();
+      const wall = num(tel.wall_clock_seconds);
+      until = wall > 0 ? new Date(startMs + wall * 1000).toISOString() : tel.completed_at;
+    }
+  } catch { /* no readable anchor — keep the telemetry ISO window */ }
+  return { since, until };
 }
 
 function priceMainLoop(sessionTranscriptPath, registry, window = {}) {
