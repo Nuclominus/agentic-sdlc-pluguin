@@ -16,7 +16,7 @@ status: in-progress
 | C1 | AAR learning cycle `/sdlc:aar`    | done        | #27 |
 | C2 | WorkManager provider (background) | in-progress | #29 |
 | D  | HTML run-report artifact          | done        | #26 |
-| E  | pipeline cache/cost efficiency    | planned     | —   |
+| E  | pipeline cache/cost efficiency    | in-progress | #NN |
 
 _Remaining: complete C2 (Koin / Ktor / kotlinx.serialization / DataStore-Proto), then B3._
 
@@ -26,3 +26,7 @@ reads. On a real 7-phase run, cache-read is **6.65M tokens across 117 subagent t
 re-reads its whole accumulated prefix, so `cache_read ≈ turns × avg_prefix`. Split: **~27% fixed
 boilerplate floor** re-read every turn, **~73% accumulated context**. Sub-items E1–E5 specced in
 [[planning/backlog]]; promote here when scheduled.
+
+**E5 (cache-pressure signal) shipped in #NN (1.8.0):** per-phase `reads/turn` +
+`peak_prefix_tokens` in the report and `cache_pressure_phases` in the AAR. Remaining: E2
+(surgical reads), E1 (trim floor), E3 (fewer turns), E4 (routing).

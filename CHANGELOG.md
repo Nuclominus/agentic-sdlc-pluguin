@@ -4,6 +4,20 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+## [1.8.0] — 2026-07-08
+
+`sdlc` → `1.8.0` (other plugins unchanged). Track E enabler: a per-phase
+cache-pressure signal built on the transcript-derived usage (1.7.0/1.7.1).
+
+### Added
+
+- **Cache-pressure signal (E5, #NN).** `tools/usage` now records per phase `turns`,
+  `peak_prefix_tokens` (largest single-turn cache-read), and a `cache_pressure` flag
+  (peak > 80k). The HTML report shows `reads/turn · peak` under each phase and flags
+  heavy phases in Signals; `tools/aar/metrics` adds those fields to `by_phase` plus a
+  `cache_pressure_phases` list the AAR analyst uses to target cache-read reduction.
+  `schemas/checkpoint.schema.json` registers the new fields.
+
 ## [1.7.1] — 2026-07-07
 
 `sdlc` → `1.7.1` (other plugins unchanged). Point-fix to the `1.7.0` transcript-derived cost tool.
