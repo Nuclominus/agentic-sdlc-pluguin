@@ -11,9 +11,6 @@ FILE_PATH="${1:-}"
 VAULT=".obsidian-vault"
 TEMPLATES="$VAULT/_templates"
 
-# If the vault isn't initialised yet, do nothing.
-[[ ! -d "$VAULT" ]] && exit 0
-
 # Skip test sources.
 case "$FILE_PATH" in
   *Test.kt|*Spec.kt|*/src/test/*|*/src/androidTest/*) exit 0 ;;
@@ -25,6 +22,13 @@ case "$FILE_PATH" in
   app/src/main/*.kt|app/src/main/**/*.kt) ;;
   *) exit 0 ;;
 esac
+
+# The vault must exist to stub into. An absent vault on a PRODUCTION edit is worth a
+# warning (usually an untracked vault a git worktree never inherited), not silence.
+if [[ ! -d "$VAULT" ]]; then
+  echo "WARN: check-docs-sync: $VAULT absent — cannot stub vault note for $FILE_PATH (is the vault tracked/inherited?)." >&2
+  exit 0
+fi
 
 DATE="$(date +%F)"
 

@@ -19,6 +19,13 @@ Do NOT paraphrase from memory; the vault evolves and memory does not.
 No other documentation source is authoritative. There is no Notion, no `docs/wiki/`,
 no scattered READMEs. The vault is it.
 
+> **Act, don't stall.** Your FIRST emitted action in a phase MUST be a tool call
+> (`Read`/`Glob`/`Grep`/…) — never end a turn on skill-selection or vault-availability
+> reasoning alone (that returns zero tool calls and forces a wasteful resume). The vault
+> is an **optional** module: if `.obsidian-vault/` is absent, skip the vault reads entirely
+> and proceed straight to the codebase and `docs/plans/{task_slug}/`. Do not spend a turn
+> "checking" whether the vault exists — a single `Glob`/`Read` that misses IS the check.
+
 ### Reading map
 
 | You need… | Read |
@@ -171,6 +178,7 @@ user confirmation** per the global CLAUDE.md self-modification rule — do not w
 
 Before creating any PR, android-docs MUST verify:
 
+- [ ] No `_vault-pending.md` breadcrumb sits at the repo root — its presence means the docs gate ran with **no vault** (usually an untracked vault a git worktree never inherited). Restore/track the vault and re-validate, or explicitly record why docs are deferred; do NOT create the PR treating an absent vault as a silent pass.
 - [ ] Every hook-created stub in `.obsidian-vault/modules/` and `.obsidian-vault/screens/` has been filled (no `<!-- STUB -->` markers in changed notes).
 - [ ] New modules have a `.obsidian-vault/modules/<name>.md` linked from `_moc-modules.md`.
 - [ ] New screens are in `.obsidian-vault/screens/<Name>.md` and linked from `_moc-screens.md` + `.obsidian-vault/navigation/routes.md`.
@@ -197,5 +205,6 @@ android-reviewer rejects (returns the diff to android-developer) when:
 - A typed edge is a bare slug or does not resolve, or `depends_on:` drifts from its prose mirror.
 - `architecture/dependency-graph.md` is stale (a changed `depends_on:` edge isn't reflected — re-run `gen-mermaid.mjs`).
 - `validate-docs.mjs` reports findings that were neither fixed nor escalated (a layer violation rewritten to pass is a hard reject).
+- A `_vault-pending.md` breadcrumb is present (the docs gate ran with no vault — an untracked/uninherited vault) and the change touches production code without an acknowledged deferral.
 
 Severity: **major**.

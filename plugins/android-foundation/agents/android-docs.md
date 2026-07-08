@@ -97,6 +97,7 @@ Rules:
 Verify the full checklist in `${CLAUDE_PLUGIN_ROOT}/rules/documentation.md` "DocsWriter Definition of Done".
 Key items:
 
+- [ ] No `_vault-pending.md` at the repo root — if present, the vault was absent when the gate ran (often an untracked vault a worktree didn't inherit); restore/track it and re-validate before PR, or record why docs are deferred. An absent vault is not a silent pass.
 - [ ] Every changed note has fresh `updated:` frontmatter.
 - [ ] No `<!-- STUB -->` marker remains in any changed note.
 - [ ] Typed edges are path-qualified wikilinks and resolve; `depends_on:` matches its prose mirror (no drift).

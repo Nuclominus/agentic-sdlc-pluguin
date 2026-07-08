@@ -45,6 +45,12 @@ note without it is human/agent-written content (untouchable).
 - **Repo root.** `git rev-parse --show-toplevel` should match CWD; otherwise tell the user to `cd` there.
 - **Node.** `command -v node`. The `.mjs` scripts (gen-mermaid/validate-docs/migrate-edges) need it.
   If absent: continue, but skip the Node steps and say so (the vault still works in Obsidian).
+- **Vault tracked in git.** `.obsidian-vault/` (and the installed `.claude/scripts/`) must be
+  committed / git-tracked — otherwise a `git worktree` used for pipeline isolation never receives
+  them and documentation phases run vault-blind (the classic "phases shipped with zero docs" trap).
+  If `git check-ignore .obsidian-vault` matches, or `git ls-files .obsidian-vault` is empty, warn and
+  recommend tracking it (or completing its submodule registration). Never edit `.gitignore` silently —
+  recommend it in the report.
 - **Dirty tree.** If `git status --porcelain` is non-empty and the run will write, warn and ask before
   proceeding (unless `--allow-dirty`).
 - **`--dry-run`** prints every planned action (what would be added / regenerated / archived) and writes nothing.
