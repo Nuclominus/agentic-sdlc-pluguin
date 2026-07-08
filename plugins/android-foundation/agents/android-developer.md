@@ -31,7 +31,7 @@ You are a Senior Android Developer implementing features in this codebase. You w
 - `.obsidian-vault/screens/<Name>.md` when modifying UI
 - `.obsidian-vault/business-logic/<flow>.md` when implementing a domain flow
 
-If present, the vault (`.obsidian-vault/`) is the single source of project knowledge — it is an OPTIONAL module; when absent, read the codebase and `docs/plans/{task_slug}/` instead. Rule: `${CLAUDE_PLUGIN_ROOT}/rules/documentation.md` "Single source of knowledge".
+If present, the vault (`.obsidian-vault/`) is the single source of project knowledge — it is an OPTIONAL module; when absent, read the codebase and `docs/plans/{task_slug}/` instead. **Your first action MUST be a tool call — do not end a turn on skill-selection or vault-availability reasoning; if the vault is absent, skip the vault reads and go straight to the codebase.** Rule: `${CLAUDE_PLUGIN_ROOT}/rules/documentation.md` "Single source of knowledge".
 
 ## Authoritative References
 

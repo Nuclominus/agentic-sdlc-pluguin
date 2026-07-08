@@ -11,10 +11,20 @@
 // violation is SURFACED, not silenced — never rewrite an edge green to make this pass.
 // Non-blocking, no npm deps. Run from the repo root: `node .claude/scripts/validate-docs.mjs`.
 
-import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const VAULT = process.env.VAULT_DIR || '.obsidian-vault';
+
+// Breadcrumb dropped when the gate runs with no vault present — makes the absence
+// discoverable (and self-documents the usual cause + fix) instead of a silent pass.
+const VAULT_PENDING_NOTE = (vault) =>
+  `# Vault pending\n\n` +
+  `\`${vault}\` was not found when the documentation gate ran, so vault docs were ` +
+  `**not** validated for this change.\n\n` +
+  `Most common cause: the vault is untracked in git, so a \`git worktree\` used for ` +
+  `pipeline isolation never received it. Fix by committing/tracking \`${vault}\` (or its ` +
+  `submodule) and re-running \`/manage-vault\`. Delete this file once the vault is in place.\n`;
 
 // ─── Architecture rules as data (tip 7) ─────────────────────────────────────
 // Layer rank: a module may depend DOWNWARD or SAME layer. Depending upward is an
@@ -89,7 +99,19 @@ function allNotes() {
 
 function main() {
   if (!existsSync(VAULT)) {
-    console.error(`validate-docs: ${VAULT} not found.`);
+    // The vault is an OPTIONAL module — but its absence is NOT a silent pass. Make
+    // it loud (an untracked vault that a git worktree never inherited is the classic
+    // trap that ships phases with zero docs) and leave a discoverable breadcrumb,
+    // yet stay non-fatal (exit 0) so a project that deliberately runs without a
+    // vault is never blocked.
+    console.error(`validate-docs: ⚠ ${VAULT} not found — docs were NOT validated (vault absent).`);
+    console.error(`validate-docs:   If this project uses a vault, this working tree likely did not inherit it`);
+    console.error(`validate-docs:   (an untracked .obsidian-vault is not checked out into git worktrees).`);
+    console.error(`validate-docs:   Run /manage-vault to (re)scaffold, and track/commit the vault so worktrees get it.`);
+    try {
+      writeFileSync('_vault-pending.md', VAULT_PENDING_NOTE(VAULT));
+      console.error(`validate-docs:   wrote _vault-pending.md breadcrumb.`);
+    } catch { /* breadcrumb is best-effort; the stderr warning is the primary signal */ }
     process.exit(0);
   }
   const moduleLayer = new Map(); // id -> layer
