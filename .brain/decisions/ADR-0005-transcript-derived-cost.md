@@ -88,3 +88,23 @@ would inflate the run — hence the run-window bound).
 - Implemented by: #46
 - Supersedes the cost-null decision of: [[decisions/ADR-0004-aggregate-token-telemetry-crash-recovery]]
 - Relates to: [[architecture/pipeline-orchestrator]] / [[components/sdlc]]
+
+## Addendum (2026-07-08) — enrichment resilience
+
+Real-world run `brain-rudderstack-phase-c` shipped with `$—` despite intact transcripts: the
+orchestrator recorded each phase's `agent_id` in `.checkpoint/*.json` but **not** in
+`_telemetry.json`, so enrichment (which keys phases to transcripts by `agent_id`) skipped every
+phase. Because the totals are always recomputed, a naive all-skip would also have clobbered
+`total_cost_usd` to a real `0`. Hardening (this release):
+
+- `agent_id` is now REQUIRED in `_telemetry.json` (Step 3d-1); `enrichTelemetry` falls back to
+  `.checkpoint/<phase>.json` when it is missing.
+- **No-clobber guard:** when no phase resolves a transcript, telemetry is left unchanged (never
+  overwritten with `total_cost_usd: 0` / `cost_basis:"transcript"`); the CLI reports `no transcripts
+  resolved`.
+- A subagent transcript reused across a two-pass phase (resumed developer) is priced **once**, not
+  double-counted.
+- Pricing tolerates model-id suffixes (`[1m]`, dated snapshots) that are not literal registry keys.
+- Step 5b resolves and passes `--session`, then verifies `cost_basis` flipped to `"transcript"`,
+  warning if enrichment produced no priced phases.
+

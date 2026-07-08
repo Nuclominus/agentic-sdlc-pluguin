@@ -4,7 +4,7 @@
 // This file keeps the usage test-suite pointed at that single source of truth, so
 // it exercises the exact code that ships.
 export {
-  loadRegistry, extractUsage, priceUsage, priceTranscripts,
-  findAgentTranscript, sessionSubagentsDir, deriveDispatchMap, enrichTelemetry,
+  loadRegistry, extractUsage, priceUsage, lookupPricing, priceTranscripts,
+  findAgentTranscript, sessionSubagentsDir, checkpointAgentId, deriveDispatchMap, enrichTelemetry,
   CACHE_PRESSURE_PEAK_TOKENS,
 } from "../../../plugins/sdlc/tools/usage/usage.mjs";

@@ -46,8 +46,12 @@ if (cmd !== "enrich") {
         console.log(`enrich: ${r.telPath}`);
         console.log(`  enriched: ${r.enriched.join(", ") || "(none)"}`);
         if (r.skipped.length) console.log(`  skipped (no transcript): ${r.skipped.join(", ")}`);
-        console.log(`  total_cost_usd: $${(r.total_cost_usd ?? 0).toFixed(2)}` +
-          (r.overhead_cost_usd != null ? `  (orchestration overhead $${r.overhead_cost_usd.toFixed(2)})` : ""));
+        if (r.skipped_all) {
+          console.log(`  no transcripts resolved — telemetry left unchanged (cost stays aggregate/unpriced)`);
+        } else {
+          console.log(`  total_cost_usd: $${(r.total_cost_usd ?? 0).toFixed(2)}` +
+            (r.overhead_cost_usd != null ? `  (orchestration overhead $${r.overhead_cost_usd.toFixed(2)})` : ""));
+        }
       }
     } catch (e) {
       if (jsonOut) console.log(JSON.stringify({ command: "enrich", ok: false, error: e.message }));

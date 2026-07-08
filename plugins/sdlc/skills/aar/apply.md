@@ -34,6 +34,7 @@ rule.
 ## After applying
 
 - Summarize what was applied vs skipped.
+- Confirm the durable report was written to `docs/plans/{slug}/_aar.md` (Step 5).
 - Run `superpowers:verification-before-completion` discipline: confirm each
   edited file actually changed as intended before claiming done.
 - Remind the user the lessons take effect on the next `/sdlc:start`.

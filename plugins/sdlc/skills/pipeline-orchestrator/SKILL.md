@@ -1101,6 +1101,8 @@ Resolve a tier to its concrete model ID via the `models[]` entry whose `tag` equ
 
 **Always** record `agent_id` on the phase entry — the subagent id from the Agent result envelope (e.g. `agentId: a1b2c3…`). For a multi-pass phase (e.g. dev plan + implement), record the list of ids. This is what Step 5b uses to locate each phase's subagent transcript (`~/.claude/projects/<encoded-cwd>/<session>/subagents/agent-<id>.jsonl`) and compute the **real** input/output/cache split and cost. It is the primary cost path; the shapes above are the live/fallback capture.
 
+> **This is REQUIRED, not best-effort.** A phase whose `agent_id` is absent from `_telemetry.json` loses its real cost (the whole run then reads as aggregate/`$—`). Write the id verbatim into **both** the checkpoint (Step 3d-3) **and** the `phases[]` entry. Step 5b now recovers a missing id from `.checkpoint/<phase>.json` as a safety net, but do not rely on the net — record it here.
+
 Then compute:
 
 - `compact_summary_chars` — `len(CONTEXT.{phase}_output)`. If > 3000 chars (≈ 3K-token target), record `compact_handoff_violation: true` and emit a one-line warning to stderr: `WARN: {phase} compact summary exceeded budget ({chars} chars > 3000)`. Do not abort — the violation is recorded for post-run analysis.
@@ -1396,19 +1398,29 @@ After `_telemetry.json` is written, first enrich it with the **real** per-phase 
 cost recovered from each phase's subagent transcript, then render a self-contained HTML report —
 unless the user passed `--no-report` or the effective profile sets `report: false`.
 
-0. **Enrich cost (transcript-derived).** If `command -v node` succeeds, run via `Bash`:
-   `node "${CLAUDE_PLUGIN_ROOT}/tools/usage/cli.mjs" enrich {task_slug}`.
-   The tool reads each phase's `agent_id` (recorded in Step 3d-1), locates its subagent transcript
-   (`~/.claude/projects/<encoded-cwd>/<session>/subagents/agent-<id>.jsonl`), sums the real
-   `input`/`output`/`cache_read`/`cache_creation` split, prices it against the model registry
-   (`config/models.json`, incl. `cache_write_multipliers`), and rewrites the phase `cost_usd` +
-   `input_tokens`/`output_tokens`/`cached_input_tokens`/`cache_creation_tokens`/`billed_tokens`
-   with `usage_source: "transcript"`, plus real `total_*` aggregates, `cache_hit_ratio`, and an
-   `orchestration_overhead` block (orchestrator main-loop bounded to the run window + nested
-   subagents). This is the authoritative cost path (ADR-0005); the live capture in 3d-1 is the
-   fallback. On non-zero exit → print `cost enrichment: skipped ({stderr tail})` and continue with
-   the live-captured telemetry — a phase with no locatable transcript keeps its aggregate/`null`
-   cost. Never fail the pipeline on enrichment.
+0. **Enrich cost (transcript-derived).** If `command -v node` succeeds:
+   a. **Resolve this run's session transcript (best-effort)** so the tool can derive the
+      phase→`agent_id` map deterministically and price orchestration overhead even when a phase's
+      `agent_id` never reached `_telemetry.json`. Encode the project cwd (`/`→`-`) and pick the
+      newest `~/.claude/projects/<encoded-cwd>/*.jsonl` (this session). Pass it as `--session`.
+   b. Run via `Bash`:
+      `node "${CLAUDE_PLUGIN_ROOT}/tools/usage/cli.mjs" enrich {task_slug}` — appending
+      `--session "<path>"` when step (a) resolved one.
+      The tool locates each phase's subagent transcript from its `agent_id` — recorded in Step 3d-1,
+      **or recovered from `.checkpoint/<phase>.json` / the `--session` dispatch map** when telemetry
+      omitted it — sums the real `input`/`output`/`cache_read`/`cache_creation` split, prices it
+      against the model registry (`config/models.json`, incl. `cache_write_multipliers`), and
+      rewrites the phase `cost_usd` + token split with `usage_source: "transcript"`, plus real
+      `total_*` aggregates, `cache_hit_ratio`, and an `orchestration_overhead` block. A subagent
+      transcript reused across two passes is priced once (no double count). This is the authoritative
+      cost path (ADR-0005); the live capture in 3d-1 is the fallback. When **no** phase resolves a
+      transcript the tool prints `no transcripts resolved` and leaves telemetry **unchanged** (it does
+      NOT zero it). On non-zero exit → print `cost enrichment: skipped ({stderr tail})` and continue
+      with the live-captured telemetry. Never fail the pipeline on enrichment.
+   c. **Verify (visibility).** Re-read `_telemetry.json`. If `cost_basis` is not `"transcript"`, or the
+      enrich output reported `no transcripts resolved` or any `skipped` phases, print
+      `WARN: cost enrichment incomplete — cost may read as aggregate/$—` so a silent cost loss is
+      visible in the run log rather than surfacing only later in the report/journal.
 1. If `command -v node` fails → print `HTML report: skipped (node unavailable)` and skip to the
    final summary.
 2. Else run via `Bash`: `node "${CLAUDE_PLUGIN_ROOT}/tools/report/cli.mjs" report {task_slug}`.

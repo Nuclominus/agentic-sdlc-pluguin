@@ -280,3 +280,79 @@ test("enrichTelemetry flags cache_pressure=false when peak stays under the thres
   assert.equal(dev.peak_prefix_tokens, 60000);
   assert.equal(dev.cache_pressure, false);
 });
+
+test("priceUsage tolerates a bracketed context suffix and a dated snapshot id", () => {
+  const u = { input_tokens: 1_000_000, output_tokens: 0, cache_read_tokens: 0, cache_write_5m_tokens: 0, cache_write_1h_tokens: 0 };
+  const opus = priceUsage(u, "claude-opus-4-8", reg);
+  const sonnet = priceUsage(u, "claude-sonnet-5", reg);
+  assert.ok(opus > 0 && sonnet > 0);
+  // A [1m] context tag and a dated snapshot both resolve to the base model's price.
+  assert.equal(priceUsage(u, "claude-opus-4-8[1m]", reg), opus);
+  assert.equal(priceUsage(u, "claude-sonnet-5-20260115", reg), sonnet);
+  // A genuinely unknown model is still unpriced.
+  assert.equal(priceUsage(u, "gpt-5", reg), null);
+});
+
+test("enrichTelemetry recovers agent_id from the run checkpoint when telemetry omits it", () => {
+  const root = mkdtempSync(join(tmpdir(), "cp-"));
+  const sub = join(root, "proj", "sess", "subagents");
+  writeAgent(sub, "ccee11112222", [turn("claude-sonnet-5", { input_tokens: 100, output_tokens: 200, cache_read_input_tokens: 5000, cache_creation_input_tokens: 1000 })]);
+  const runDir = join(root, "plan");
+  mkdirSync(join(runDir, ".checkpoint"), { recursive: true });
+  // The checkpoint carries the id; the telemetry phase does NOT.
+  writeFileSync(join(runDir, ".checkpoint", "security.json"), JSON.stringify({ phase: "security", agent_id: "ccee11112222", status: "completed" }));
+  writeFileSync(join(runDir, "_telemetry.json"), JSON.stringify({
+    task_slug: "cp", started_at: "2026-07-07T13:28:00Z", completed_at: "2026-07-07T14:16:00Z",
+    phases: [{ phase: "security", agent: "x-sec", model: "claude-sonnet-5", status: "completed", subagent_tokens: 300, usage_source: "subagent_aggregate", cost_usd: null }],
+    total_subagent_tokens: 300, total_cost_usd: null, cost_basis: "subagent_aggregate", cache_hit_ratio: null,
+  }, null, 2));
+  const r = enrichTelemetry(runDir, { registry: reg, projectsRoot: root });
+  assert.deepEqual(r.enriched, ["security"]);
+  const tel = JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8"));
+  assert.equal(tel.phases[0].usage_source, "transcript");
+  assert.equal(tel.phases[0].agent_id, "ccee11112222");
+  assert.ok(tel.phases[0].cost_usd > 0);
+  assert.equal(tel.cost_basis, "transcript");
+});
+
+test("enrichTelemetry prices a resumed subagent once across two phases (no double count)", () => {
+  const root = mkdtempSync(join(tmpdir(), "dedup-"));
+  const sub = join(root, "proj", "sess", "subagents");
+  writeAgent(sub, "abcabc123123", [turn("claude-sonnet-5", { input_tokens: 1000, output_tokens: 2000, cache_read_input_tokens: 50000, cache_creation_input_tokens: 4000 })]);
+  const runDir = join(root, "plan");
+  mkdirSync(runDir, { recursive: true });
+  // Both dev passes recorded the SAME resumed subagent id — one transcript.
+  writeFileSync(join(runDir, "_telemetry.json"), JSON.stringify({
+    task_slug: "dd", started_at: "2026-07-07T13:28:00Z", completed_at: "2026-07-07T14:16:00Z",
+    phases: [
+      { phase: "development_plan", agent: "x-dev", model: "claude-sonnet-5", status: "completed", agent_id: "abcabc123123", subagent_tokens: 100, usage_source: "subagent_aggregate", cost_usd: null },
+      { phase: "development_implement", agent: "x-dev", model: "claude-sonnet-5", status: "completed", agent_id: "abcabc123123", subagent_tokens: 200, usage_source: "subagent_aggregate", cost_usd: null },
+    ],
+    total_subagent_tokens: 300, total_cost_usd: null, cache_hit_ratio: null,
+  }, null, 2));
+  const single = priceTranscripts([join(sub, "agent-abcabc123123.jsonl")], reg).cost_usd;
+  const r = enrichTelemetry(runDir, { registry: reg, projectsRoot: root });
+  assert.equal(r.enriched.length, 1, "shared transcript priced for exactly one phase");
+  assert.deepEqual(r.skipped, ["development_implement"]);
+  const tel = JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8"));
+  assert.ok(Math.abs(tel.total_cost_usd - single) < 1e-9, `total ${tel.total_cost_usd} should equal a single count ${single}`);
+});
+
+test("enrichTelemetry leaves telemetry untouched when nothing resolves (no zero-clobber)", () => {
+  const root = mkdtempSync(join(tmpdir(), "noclobber-"));
+  const runDir = join(root, "plan");
+  mkdirSync(runDir, { recursive: true });
+  writeFileSync(join(runDir, "_telemetry.json"), JSON.stringify({
+    task_slug: "nc", started_at: "2026-07-07T13:28:00Z", completed_at: "2026-07-07T14:16:00Z",
+    phases: [{ phase: "business_analysis", agent: "x-ba", model: "claude-opus-4-8", status: "completed", agent_id: "0000nonexist0", subagent_tokens: 5000, usage_source: "subagent_aggregate", cost_usd: null }],
+    total_subagent_tokens: 5000, total_cost_usd: null, cost_basis: "subagent_aggregate", cache_hit_ratio: null,
+  }, null, 2));
+  const r = enrichTelemetry(runDir, { registry: reg, projectsRoot: root });
+  assert.equal(r.skipped_all, true);
+  assert.deepEqual(r.enriched, []);
+  const tel = JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8"));
+  assert.equal(tel.cost_basis, "subagent_aggregate", "cost_basis not flipped to transcript");
+  assert.equal(tel.total_cost_usd, null, "cost not clobbered to 0");
+  assert.equal(tel.phases[0].usage_source, "subagent_aggregate");
+  assert.equal(tel.phases[0].cost_usd, null);
+});
