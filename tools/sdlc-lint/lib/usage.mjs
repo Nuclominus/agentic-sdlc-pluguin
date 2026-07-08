@@ -6,4 +6,5 @@
 export {
   loadRegistry, extractUsage, priceUsage, priceTranscripts,
   findAgentTranscript, sessionSubagentsDir, deriveDispatchMap, enrichTelemetry,
+  CACHE_PRESSURE_PEAK_TOKENS,
 } from "../../../plugins/sdlc/tools/usage/usage.mjs";

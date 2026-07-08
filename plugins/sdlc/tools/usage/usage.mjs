@@ -51,6 +51,11 @@ function findRegistry() {
 
 const num = (v) => (Number.isFinite(v) ? v : Number(v) || 0);
 
+// Cache-pressure threshold: a phase is flagged when its worst-case single-turn
+// cache-read (peak_prefix_tokens) exceeds this. One documented constant, tuned
+// here; consumers (report, metrics) read the stored `cache_pressure` boolean.
+export const CACHE_PRESSURE_PEAK_TOKENS = 80_000;
+
 /**
  * Sum the real usage split from one transcript JSONL (a subagent's, or a main
  * session's). `onlyMainLoop` keeps only non-sidechain assistant turns (used to
@@ -66,6 +71,7 @@ export function extractUsage(jsonlPath, { onlyMainLoop = false, since, until } =
     t.input_tokens += num(u.input_tokens);
     t.output_tokens += num(u.output_tokens);
     t.cache_read_tokens += num(u.cache_read_input_tokens);
+    t.peak_prefix_tokens = Math.max(t.peak_prefix_tokens, num(u.cache_read_input_tokens));
     const cc = u.cache_creation || {};
     const w5 = num(cc.ephemeral_5m_input_tokens);
     const w1 = num(cc.ephemeral_1h_input_tokens);
@@ -105,14 +111,16 @@ export function extractUsage(jsonlPath, { onlyMainLoop = false, since, until } =
     add(model, m.usage);
   }
   const combined = zeroUsage();
-  for (const t of Object.values(byModel)) for (const k of Object.keys(combined)) combined[k] += t[k];
+  for (const t of Object.values(byModel)) for (const k of Object.keys(combined)) {
+    combined[k] = k === "peak_prefix_tokens" ? Math.max(combined[k], t[k]) : combined[k] + t[k];
+  }
   return { byModel, combined };
 }
 
 function zeroUsage() {
   return {
     input_tokens: 0, output_tokens: 0, cache_read_tokens: 0,
-    cache_write_5m_tokens: 0, cache_write_1h_tokens: 0, turns: 0,
+    cache_write_5m_tokens: 0, cache_write_1h_tokens: 0, peak_prefix_tokens: 0, turns: 0,
   };
 }
 
@@ -147,7 +155,7 @@ export function priceTranscripts(paths, registry) {
     const { byModel } = extractUsage(p);
     for (const [model, u] of Object.entries(byModel)) {
       models.add(model);
-      for (const k of Object.keys(total)) total[k] += u[k];
+      for (const k of Object.keys(total)) total[k] = k === "peak_prefix_tokens" ? Math.max(total[k], u[k]) : total[k] + u[k];
       const c = priceUsage(u, model, registry);
       if (c == null) unpriced += 1; else { cost += c; anyPriced = true; }
     }
@@ -163,6 +171,7 @@ export function priceTranscripts(paths, registry) {
     billed_tokens: total.input_tokens + total.output_tokens + total.cache_read_tokens +
       total.cache_write_5m_tokens + total.cache_write_1h_tokens,
     turns: total.turns,
+    peak_prefix_tokens: total.peak_prefix_tokens,
     cost_usd: anyPriced ? round2(cost) : null,
     unpriced_models: unpriced,
   };
@@ -276,6 +285,9 @@ export function enrichTelemetry(runDir, opts = {}) {
     p.cached_input_tokens = r.cached_input_tokens;
     p.cache_creation_tokens = r.cache_creation_tokens;
     p.billed_tokens = r.billed_tokens;
+    p.turns = r.turns;
+    p.peak_prefix_tokens = r.peak_prefix_tokens;
+    p.cache_pressure = r.peak_prefix_tokens > CACHE_PRESSURE_PEAK_TOKENS;
     p.cost_usd = r.cost_usd;
     p.usage_source = "transcript";
     enriched.push(p.phase);
@@ -338,7 +350,7 @@ function priceMainLoop(sessionTranscriptPath, registry, window = {}) {
   const models = new Set();
   for (const [model, u] of Object.entries(byModel)) {
     models.add(model);
-    for (const k of Object.keys(total)) total[k] += u[k];
+    for (const k of Object.keys(total)) total[k] = k === "peak_prefix_tokens" ? Math.max(total[k], u[k]) : total[k] + u[k];
     const c = priceUsage(u, model, registry);
     if (c != null) { cost += c; anyPriced = true; }
   }
