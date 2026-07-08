@@ -4,6 +4,54 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+## [1.9.1] — 2026-07-08
+
+`sdlc` → `1.9.1` (other plugins unchanged). Point-fix to the transcript-derived
+orchestration-overhead accounting from 1.7.0/1.9.0. Design in ADR-0007.
+
+### Fixed
+
+- **Orchestration overhead silently priced at `$0` (ADR-0007).** The
+  `orchestration_overhead.main_loop` window was read from telemetry
+  `started_at`/`completed_at` — ISO strings the LLM orchestrator authors in Step 5. On
+  run `cit-478-batch-editor-animations` it wrote a start of `00:14:19Z` where the
+  machine anchor (`.checkpoint/_started_at` epoch) and the real transcript turns were at
+  `14:54:19Z`: right *duration* (2776s, so `completed_at` stayed self-consistent),
+  absolute start off ~14h. `priceMainLoop` filtered **every** one of the ~34
+  `claude-opus-4-8` orchestrator turns out of that window, so `main_loop` collapsed to
+  `{turns:0, cost_usd:null}` and the run's largest cost bucket read as `$0` — reported
+  `$8.15` vs a true `$13.22`. Per-phase costs use no window, so the loss was silent.
+  `overheadWindow()` now sources the window from the machine-written
+  `.checkpoint/_started_at` epoch + `wall_clock_seconds`, falling back to the telemetry
+  ISO only when no anchor exists. Defense-in-depth: a window that still excludes every
+  main-loop turn while the transcript has some reprices unbounded and sets
+  `overhead_window_fallback`, which `cli.mjs` surfaces as a `WARN` — a zeroed overhead
+  can never be silent again. Two regression tests; full sdlc-lint suite green (106).
+
+## [1.9.0] — 2026-07-08
+
+`sdlc` → `1.9.0` (other plugins unchanged). Resilient transcript-derived cost + a
+durable AAR artifact. Design in ADR-0005 (2026-07-08 addendum) / ADR-0006; per-PR
+detail in [`.brain/changes/`](.brain/changes/).
+
+### Fixed
+
+- **Lost cost when `agent_id` never reached `_telemetry.json` (#52).** A run shipped
+  `$—` because each phase's `agent_id` was written to `.checkpoint/*.json` but not to
+  `_telemetry.json`, so enrichment (which keys phases to transcripts by `agent_id`)
+  skipped every phase (transcripts were intact — a `--session` backfill recovered
+  `$18.01` + `$8.99` overhead). Enrichment now recovers the id from
+  `.checkpoint/<phase>.json`, never clobbers `total_cost_usd` to `0` when nothing
+  resolves, prices a resumed subagent's shared transcript once, and tolerates model-id
+  suffixes (`[1m]`, dated snapshots). Step 3d-1 makes per-phase `agent_id` mandatory;
+  Step 5b auto-resolves `--session` and verifies `cost_basis` flipped to `transcript`.
+
+### Added
+
+- **Durable `_aar.md` artifact (ADR-0006).** `/sdlc:aar` now persists its review to
+  `docs/plans/{slug}/_aar.md` (discoverable + durable); the analyst stays read-only, the
+  main session writes the file, and the trigger stays user-only.
+
 ## [1.8.0] — 2026-07-08
 
 `sdlc` → `1.8.0` (other plugins unchanged). Track E enabler: a per-phase
