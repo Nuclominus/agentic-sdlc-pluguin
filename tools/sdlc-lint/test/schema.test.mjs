@@ -33,6 +33,14 @@ test("checkpoint.schema rejects an unknown status", () => {
   assert.equal(v({ phase: "security", status: "half", completed_at: "2026-07-03T10:15:00Z" }), false);
 });
 
+test("checkpoint.schema accepts transcript cache-pressure fields", () => {
+  const v = compile("schemas/checkpoint.schema.json");
+  assert.ok(v({
+    phase: "development", status: "completed", completed_at: "2026-07-08T10:00:00Z",
+    usage_source: "transcript", turns: 39, peak_prefix_tokens: 101000, cache_pressure: true,
+  }));
+});
+
 test("run.schema accepts a resolved phase list", () => {
   const v = compile("schemas/run.schema.json");
   assert.ok(v({ task_slug: "x", workflow: "default", resolved_phases: [{ name: "qa", kind: "plain", aspects: null }] }));
