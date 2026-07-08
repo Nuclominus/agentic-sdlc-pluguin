@@ -16,5 +16,13 @@ status: in-progress
 | C1 | AAR learning cycle `/sdlc:aar`    | done        | #27 |
 | C2 | WorkManager provider (background) | in-progress | #29 |
 | D  | HTML run-report artifact          | done        | #26 |
+| E  | pipeline cache/cost efficiency    | planned     | —   |
 
 _Remaining: complete C2 (Koin / Ktor / kotlinx.serialization / DataStore-Proto), then B3._
+
+**Track E — pipeline cache/cost efficiency.** Now that per-run cost is measured accurately
+(transcript-derived, #46; over-count fixed in #48), reduce the dominant cost driver: prompt-cache
+reads. On a real 7-phase run, cache-read is **6.65M tokens across 117 subagent turns** — each turn
+re-reads its whole accumulated prefix, so `cache_read ≈ turns × avg_prefix`. Split: **~27% fixed
+boilerplate floor** re-read every turn, **~73% accumulated context**. Sub-items E1–E5 specced in
+[[planning/backlog]]; promote here when scheduled.

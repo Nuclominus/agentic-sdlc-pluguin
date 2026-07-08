@@ -50,6 +50,31 @@ test("extractUsage with no TTL split treats the whole cache-creation count as 5m
   assert.equal(u.cache_write_1h_tokens, 0);
 });
 
+test("extractUsage counts a multi-block assistant turn once (dedup on message.id)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "usage-"));
+  // One API response (msg id "m1") logged as 3 content-block lines that all
+  // repeat the SAME response-level usage — the real Claude Code transcript shape.
+  const block = (content) => JSON.stringify({
+    type: "assistant", uuid: content, timestamp: "2026-07-07T13:40:00Z",
+    message: { role: "assistant", id: "m1", model: "claude-sonnet-5", content: [{ type: content }],
+      usage: { input_tokens: 5, output_tokens: 8, cache_read_input_tokens: 15000, cache_creation_input_tokens: 1000 } },
+  });
+  // A genuinely distinct second call (msg id "m2").
+  const second = JSON.stringify({
+    type: "assistant", timestamp: "2026-07-07T13:40:01Z",
+    message: { role: "assistant", id: "m2", model: "claude-sonnet-5", content: [{ type: "text" }],
+      usage: { input_tokens: 3, output_tokens: 4, cache_read_input_tokens: 20000, cache_creation_input_tokens: 0 } },
+  });
+  const p = writeAgent(dir, "dedup0000000", [block("thinking"), block("tool_use"), block("tool_use"), second]);
+  const u = extractUsage(p).byModel["claude-sonnet-5"];
+  // Without dedup this would be 15000*3 + 20000 = 65000; with dedup it is 35000.
+  assert.equal(u.cache_read_tokens, 35000, "m1 counted once, not per block");
+  assert.equal(u.input_tokens, 8);
+  assert.equal(u.output_tokens, 12);
+  assert.equal(u.cache_write_5m_tokens, 1000);
+  assert.equal(u.turns, 2, "two API calls, not four transcript lines");
+});
+
 test("priceUsage applies input/cached/output rates and cache-write multipliers", () => {
   // sonnet pricing 2.00 / 0.20 / 10.00; multipliers 1.25 (5m), 2.0 (1h).
   const u = { input_tokens: 1_000_000, output_tokens: 2_000_000, cache_read_tokens: 4_000_000,
