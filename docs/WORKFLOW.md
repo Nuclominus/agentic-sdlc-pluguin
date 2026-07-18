@@ -1,4 +1,4 @@
-# How the system works
+# 🧩 How the system works
 
 This document shows the moving parts of the Agentic SDLC marketplace and how a run flows through them.
 The diagrams are Mermaid (rendered natively by GitHub).

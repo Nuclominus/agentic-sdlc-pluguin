@@ -1,4 +1,4 @@
-# Dynamic Workflow Recipes
+# 🧭 Dynamic Workflow Recipes
 
 A **workflow recipe** is a YAML file declaring which phases to run and in what shape. Recipes are
 discovered across **all** plugins (`**/workflows/*.yaml`), validated against

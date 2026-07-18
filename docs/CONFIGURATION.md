@@ -1,4 +1,4 @@
-# Configuration & Local Overrides
+# ⚙️ Configuration & Local Overrides
 
 Adapt the pipeline to a project **without editing any plugin**, via a `.claude/sdlc.local.yaml` at
 the project root.

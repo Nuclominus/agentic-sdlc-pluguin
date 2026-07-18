@@ -1,4 +1,4 @@
-# Installation & Requirements
+# 📦 Installation & Requirements
 
 The [Quickstart](../README.md#quickstart) covers the fast path. This page is the full step-by-step
 install, optional dependencies, and requirements.

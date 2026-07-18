@@ -1,4 +1,4 @@
-# Cost & Models
+# 💰 Cost & Models
 
 How the pipeline enforces per-agent model tiers, and how cost is controlled and reported.
 

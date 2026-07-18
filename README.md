@@ -36,13 +36,13 @@ The README is the front door; each topic has a focused page under [`docs/`](docs
 
 | Topic | Page |
 | ----- | ---- |
-| **How the system works** — orchestration flow, Stack Provider Pattern, detection rules, pipeline phases, model tiers, artifacts | [`docs/WORKFLOW.md`](docs/WORKFLOW.md) |
-| **End-to-end run** — a full Android pipeline, phase by phase | [`docs/WALKTHROUGH.md`](docs/WALKTHROUGH.md) |
-| **Workflow recipes** — built-in recipes, control-flow shapes, auto-selection, custom & project-local recipes | [`docs/RECIPES.md`](docs/RECIPES.md) |
-| **Cost & models** — model-tier enforcement, `model`+`effort`, dry-run & caps, reports/rollup/AAR | [`docs/COST-AND-MODELS.md`](docs/COST-AND-MODELS.md) |
-| **Configuration** — `.claude/sdlc.local.yaml` overrides + Project Extension Manifest | [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) |
-| **Installation** — step-by-step install, optional deps, requirements | [`docs/INSTALLATION.md`](docs/INSTALLATION.md) |
-| **Contributing** — authoring a foundation or framework plugin | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
+| 🧩 **How the system works** — orchestration flow, Stack Provider Pattern, detection rules, pipeline phases, model tiers, artifacts | [`docs/WORKFLOW.md`](docs/WORKFLOW.md) |
+| 🎬 **End-to-end run** — a full Android pipeline, phase by phase | [`docs/WALKTHROUGH.md`](docs/WALKTHROUGH.md) |
+| 🧭 **Workflow recipes** — built-in recipes, control-flow shapes, auto-selection, custom & project-local recipes | [`docs/RECIPES.md`](docs/RECIPES.md) |
+| 💰 **Cost & models** — model-tier enforcement, `model`+`effort`, dry-run & caps, reports/rollup/AAR | [`docs/COST-AND-MODELS.md`](docs/COST-AND-MODELS.md) |
+| ⚙️ **Configuration** — `.claude/sdlc.local.yaml` overrides + Project Extension Manifest | [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) |
+| 📦 **Installation** — step-by-step install, optional deps, requirements | [`docs/INSTALLATION.md`](docs/INSTALLATION.md) |
+| 🤝 **Contributing** — authoring a foundation or framework plugin | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 
 This repo's own architecture, decisions, per-PR changes, and roadmap live in the **Second Brain** Obsidian vault at [`.brain/`](.brain/) — the engineering source of truth for how the marketplace works and evolves (see [`.brain/README.md`](.brain/README.md)).
 
