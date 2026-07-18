@@ -1,4 +1,4 @@
-# How the system works
+# 🧩 How the system works
 
 This document shows the moving parts of the Agentic SDLC marketplace and how a run flows through them.
 The diagrams are Mermaid (rendered natively by GitHub).
@@ -58,6 +58,72 @@ orchestrator's `ADDITIVE_PROFILES` set, and feed their convention-skills + phase
 profile merge. They are **enrich-only** — they ship no agents and own no phases, and are excluded from
 per-aspect winner resolution and `PRIMARY_PROFILE` selection.
 
+### Key principles
+
+1. **Core never changes.** Pipeline logic lives exclusively in `pipeline-orchestrator/SKILL.md`. It has zero knowledge of any platform, library, security standard, or workflow recipe.
+2. **The foundation registers itself** via `manifest.yaml` (`kind: foundation`) — it declares auto-detection rules, priority, agents per phase, an optional default workflow, and convention skills.
+3. **Framework plugins attach additively** via `manifest.yaml` (`kind: framework`). They enrich existing phases (convention skill + dev/security injections + ProGuard) and ship **no agents** — they never win an aspect or own a phase. The core picks the foundation, then **delegates** framework discovery to it: the foundation collects every `kind: framework` manifest whose `enriches_aspect` (a functional category like `network`/`persistence`/`di`) is in its `hosts_aspects`, and detects them via its own `framework_detection`. Frameworks point *up* to a category, never sideways at a plugin.
+4. **Priority wins.** When multiple foundations match, the highest priority takes over. Framework manifests do not compete.
+5. **Everything is discovered, not hardcoded.** Manifests (`**/manifest.yaml`, split by `kind`), workflows (`**/workflows/*.yaml`), and runtime dependencies (`**/runtime-dependencies.json`) are globbed across all installed plugins.
+
+### Stack Priority Table
+
+Stack providers (foundations) detect by project structure (`detect`); framework providers just name a `dependency` and point at a functional category via `enriches_aspect`. The foundation hosting that category (`hosts_aspects`) declares where to search (`framework_detection`: catalog first, then build files) and the orchestrator executes it.
+
+| Priority | Plugin              | Aspects | Detect / dependency                                                 |
+| -------- | ------------------- | ------- | ------------------------------------------------------------------- |
+| 0        | `vanilla` (sdlc)    | —       | `*` (always matches)                                                |
+| 300      | `android-foundation`| android | `(settings.gradle.kts OR settings.gradle)` **AND** `**/*.kt`        |
+| additive | `retrofit-plugin`   | —       | `dependency: com.squareup.retrofit2`                                |
+| additive | `room-plugin`       | —       | `dependency: androidx.room`                                         |
+| additive | `dagger-plugin`     | —       | `dependency: com.google.dagger` (Dagger + Hilt)                     |
+| additive | `workmanager-plugin`| —       | `dependency: androidx.work`                                         |
+
+### Detection rules
+
+A profile's `detect` block supports four rule types, freely nestable via `any` / `all`:
+
+| Rule | Matches when |
+| ---- | ------------ |
+| `file_exists: <path>` | the file exists |
+| `file_contains: { path, pattern }` | the file at `path` matches the regex (`path` may be a glob like `**/build.gradle` — matches if any globbed file contains the pattern) |
+| `file_glob: <pattern>` | ≥1 file matches the glob (variable-named / nested artifacts — module-level build files, monorepo subtrees) |
+| `any: [...]` / `all: [...]` | nested OR / AND (recursive) |
+
+This is why projects auto-detect with **no `--stack=` flag** — and why framework plugins activate automatically when their library appears in the build.
+
+### Framework Provider Pattern (additive profiles)
+
+A **framework plugin** ships a `manifest.yaml` with `kind: framework`. Unlike a foundation, it:
+
+- **Owns no aspect and no agents.** It is excluded from per-aspect winner resolution and from PRIMARY_PROFILE selection — it cannot drive a phase.
+- **Decorates a functional category, not a plugin.** It declares `enriches_aspect: <network|persistence|di|ui|background|analytics|architecture>` and depends on **no** sibling plugin (its `plugin.json → dependencies` lists only `sdlc`). It is never considered unless a winning foundation's `hosts_aspects` includes that category — so any foundation hosting it satisfies the contract, and frameworks stay true peers, never referencing another plugin's skill id directly.
+- **Enriches existing phases.** It contributes a convention skill, `development` + `security` phase-prompt injections, ProGuard/R8 keep rules, and (optionally) post-checks — all merged into the run by the orchestrator's existing profile-merge.
+- **Auto-detects** from the Gradle version catalog / build files; the foundation hosting its category consumes its guidance through that phase's existing agents — only when the library is present.
+
+Toggle frameworks per project in `.claude/sdlc.local.yaml`:
+
+```yaml
+frameworks:
+  enable: [retrofit]    # force-on even if detection missed it
+  disable: [dagger]     # suppress even if detected
+```
+
+The boundary: **pinned house rules** (Coil3, Kermit, KSP, `@Serializable` routes, DataStore, Play Billing) stay in the foundation as non-negotiables; **detect-don't-impose libraries** (Retrofit, Room, Dagger/Hilt) become framework plugins. `retrofit-plugin` is the reference implementation.
+
+> Authoring a foundation or framework plugin — including `manifest.yaml` examples and schema
+> validation — is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md). Deeper architecture depth
+> lives in the dev vault under `.brain/architecture/`.
+
+### Stack Composition Examples
+
+| Project                           | Profile(s)                              | Development dispatch                       |
+| --------------------------------- | --------------------------------------- | ------------------------------------------ |
+| Android app repo                  | android (300)                           | android-developer                          |
+| Android app + Retrofit            | android (300) + retrofit (add.)         | android-developer, enriched by retrofit    |
+| Android app + Retrofit/Room/Hilt  | android (300) + retrofit + room + dagger| android-developer, enriched by all three   |
+| Unknown stack                     | vanilla (0)                             | developer (fallback)                       |
+
 ## 3. The Android pipeline (workflow `android-feature`)
 
 ```mermaid
@@ -84,6 +150,30 @@ flowchart LR
 - On-demand agents (not in the pipeline; invoke directly): `android-devops`, `android-cicd`,
   `android-aar`. `android-debugger` is on-demand **and** wired as the `debugging` phase of the
   `android-debug` recipe (manifest `agents_per_phase.debugging → android-debugger`).
+
+The agent assigned to each phase (and the on-demand agents) is documented in
+[`plugins/android-foundation/README.md`](../plugins/android-foundation/README.md#agent-roster).
+
+### Standard 5-phase pipeline (vanilla fallback)
+
+When no foundation matches, the platform-agnostic core runs its own 5-phase pipeline:
+
+```
+Phase 1: BA       → business-analyst (opus/high)
+          ↓ docs/plans/{slug}/01-business-analysis.md
+Phase 2: Dev      → [stack agent] (sonnet/medium)
+          ↓ docs/plans/{slug}/02-development.md
+Phase 3: QA       → qa-engineer (sonnet/medium, max 3 attempts)
+          ↓ docs/plans/{slug}/03-qa.md
+Phase 4: Security → security-analyst (opus/high, platform-neutral baseline)
+          ↓ docs/plans/{slug}/04-security.md
+Phase 5: Docs     → document-writer (haiku/low)
+          ↓ Pull Request
+```
+
+### Framework enrichment (additive)
+
+When a framework plugin's library is detected, its guidance joins the run without changing the pipeline shape. Example: on a project using Retrofit, `retrofit-plugin` adds its `retrofit-conventions` skill to the development phase and injects networking + TLS guidance into the `android-developer` and `android-security` prompts. No extra agent, no extra phase — the existing agents simply receive richer, library-specific instructions. Multiple frameworks compose: their injections concatenate deterministically.
 
 ## 3b. Project-local recipes & built-in intents
 

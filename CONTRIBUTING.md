@@ -26,9 +26,34 @@ A stack provider registers itself; it never edits the core. It contains:
 <stack>-plugin/
 ├── .claude-plugin/plugin.json   ← dependencies: ["sdlc"]
 ├── manifest.yaml                 ← kind: foundation — stack, priority, aspects, detect (validates against schemas/manifest.schema.json)
-├── agents/<stack>-*.md
+├── agents/<stack>-*.md           ← frontmatter: name, model, effort, color, tools
+├── workflows/                    ← optional: platform-specific recipes
 ├── skills/<name>/SKILL.md
 └── hooks/                        ← format-on-stop + guard-paths
+```
+
+### `manifest.yaml` example (`kind: foundation`)
+
+```yaml
+kind: foundation
+stack: kmp
+priority: 350
+aspects: [android]
+workflow: android-feature
+detect:
+  all:
+    - file_exists: settings.gradle.kts
+    - file_glob: "**/commonMain/**/*.kt"
+hosts_aspects: all
+framework_detection: [gradle/libs.versions.toml, "**/build.gradle.kts", "**/build.gradle"]
+agents_per_phase:
+  business_analysis: android-ba
+  development: android-developer
+  review: android-reviewer
+  security: android-security
+  test: android-tester
+  qa: android-qa
+  documentation: android-docs
 ```
 
 ## Adding or changing an additive framework plugin
@@ -37,10 +62,61 @@ An additive framework provider also registers itself without editing the core. I
 
 ```
 <framework>-plugin/
-├── .claude-plugin/plugin.json   ← dependencies: ["sdlc"]
+├── .claude-plugin/plugin.json   ← dependencies: ["sdlc"]  ← no sibling-plugin dep
 ├── manifest.yaml                 ← kind: framework — enriches_aspect, dependency (validates against schemas/manifest.schema.json)
-├── skills/<name>/SKILL.md        ← convention skill
+├── skills/<name>/SKILL.md        ← convention skill (defer to the aspect's conventions, don't restate)
 └── rules/snippets/               ← phase-prompt injections + ProGuard keep rules
+```
+
+### `manifest.yaml` example (`kind: framework`)
+
+```yaml
+kind: framework
+stack: room
+priority: 150
+enriches_aspect: persistence     # functional category — a foundation hosting `persistence` resolves me
+dependency: androidx.room        # just name the library — the foundation declares WHERE to look
+convention_skills:
+  - room-plugin:room-conventions
+phase_injections:
+  development: |
+    Room present: @Dao methods are suspend/Flow; …
+  security: |
+    Room: parameterize all @Query; no string concatenation; …
+post_pipeline_checks: []
+```
+
+> **The plugin only names the dependency; the FOUNDATION owns where to look.** A framework provider
+> declares `dependency: <coordinate>` (e.g. `androidx.room` or `com.squareup.retrofit2`) and ships **no**
+> detection rules. The foundation that hosts its `enriches_aspect` category declares the search order via
+> `framework_detection` — for Android Foundation: **version-catalog first** (`gradle/libs.versions.toml`),
+> then module build files (`**/build.gradle*`, gitignore-aware). The orchestrator executes that search,
+> so each plugin stays trivial. `dependency` may be a list (matches if any coordinate is found). A
+> hand-written `detect:` block remains available as an escape hatch for frameworks not identified by a
+> single Maven coordinate.
+
+> Framework manifests (`kind: framework`) **must not** declare `agents_per_phase`, `workflow`,
+> `hosts_aspects`, or `framework_detection` — the schema and the orchestrator both reject it.
+> `retrofit-plugin` is the reference implementation.
+
+## Verifying plugins locally
+
+Before opening a PR, run the deterministic verifier (schema + workflow-cycle + stack-detection checks):
+
+```bash
+npm ci --prefix tools/sdlc-lint
+node tools/sdlc-lint/cli.mjs all
+```
+
+CI runs the same `sdlc-lint all` plus `shellcheck` and the unit tests on every push/PR.
+
+You can also validate manifests and workflow recipes directly against their schemas:
+
+```bash
+# manifest.yaml (foundation + framework — same schema)
+npx check-jsonschema --schemafile schemas/manifest.schema.json plugins/*/manifest.yaml
+# workflow recipe
+npx check-jsonschema --schemafile schemas/workflow.schema.json workflows/your-feature.yaml
 ```
 
 ## Before opening a PR

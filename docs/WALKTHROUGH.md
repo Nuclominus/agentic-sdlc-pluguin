@@ -1,4 +1,4 @@
-# End-to-end walkthrough — Android
+# 🎬 End-to-end walkthrough — Android
 
 A complete run of the `android-feature` pipeline on a simple, realistic task. This traces every phase,
 the two-pass development gate, the review loop firing once, the parallel security/test group, and the
