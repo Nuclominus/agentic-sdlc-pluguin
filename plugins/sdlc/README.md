@@ -51,7 +51,7 @@ The full step text lives in `skills/pipeline-orchestrator/SKILL.md`; the visual 
 
 ## Model enforcement (Layer 2 hook)
 
-This plugin ships `hooks/enforce-agent-model.sh` (registered in `hooks/hooks.json`), a PreToolUse hook on `Agent` calls that corrects the model to each agent's declared tier. This is the second of the two enforcement layers described in the [root README](../../README.md#model-enforcement).
+This plugin ships `hooks/enforce-agent-model.sh` (registered in `hooks/hooks.json`), a PreToolUse hook on `Agent` calls that corrects the model to each agent's declared tier. This is the second of the two enforcement layers described in [Cost & Models](../../docs/COST-AND-MODELS.md#model-enforcement).
 
 ---
 
@@ -63,7 +63,7 @@ Declares `obra/superpowers` with `policy: warn`: if absent, the pipeline still r
 
 ## Project overrides
 
-The orchestrator honors a project-level `.claude/sdlc.local.yaml` (post-pipeline checks, phase command overrides, extra phase prompts, skipped phases, extra convention skills, and the `extensions.skills` Project Extension Manifest) — see [Local Overrides](../../README.md#local-overrides) in the root README.
+The orchestrator honors a project-level `.claude/sdlc.local.yaml` (post-pipeline checks, phase command overrides, extra phase prompts, skipped phases, extra convention skills, and the `extensions.skills` Project Extension Manifest) — see [Configuration & Local Overrides](../../docs/CONFIGURATION.md#local-overrides).
 
 ---
 
