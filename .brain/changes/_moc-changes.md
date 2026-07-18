@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-07-18 | #58 | `docs` | — | [[changes/2026-07-18-PR-58-slim-readme-into-a-front-door-migrate-detail-to-docs]] |
 | 2026-07-08 | #53 | `fix` | — | [[changes/2026-07-08-PR-53-no-op-first-turn-guard-loud-vault-absent-gate-1-4-0]] |
 | 2026-07-08 | #52 | `feat` | — | [[changes/2026-07-08-PR-52-resilient-transcript-cost-durable-aar-md-artifact-1-9-0]] |
 | 2026-07-08 | #50 | `feat` | — | [[changes/2026-07-08-PR-50-cache-pressure-signal-in-report-aar-1-8-0]] |
