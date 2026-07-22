@@ -61,8 +61,11 @@ test("signals panel surfaces QA and skip-rules", () => {
 
 test("touched-files section lists files, and is omitted when absent", () => {
   const withFiles = renderReport(tel);
-  assert.match(withFiles, /Touched files \(2\)/);
+  assert.match(withFiles, /Touched files/);
+  assert.match(withFiles, /· 2/);                 // count in the heading
   assert.match(withFiles, /SubscriptionRepository\.kt/);
+  assert.match(withFiles, /1 added/);            // status pill
+  assert.match(withFiles, /1 modified/);
 
   const { touched_files, ...noFiles } = tel; // omit the key
   const html = renderReport(noFiles);
@@ -124,7 +127,10 @@ test("cache-pressure signal: timeline subline + Signals flag for a flagged phase
     }],
   };
   const html = renderReport(t);
-  assert.match(html, /cache 71k\/turn · peak 101k ⚠/);        // subline in the token cell (2.78M/39 ≈ 71k)
+  assert.match(html, /high cache pressure/);                  // warn badge on the timeline row
+  assert.match(html, /71k\/turn/);                            // per-turn cache read in the detail line (2.78M/39 ≈ 71k)
+  assert.match(html, /peak ctx/);                             // peak-context bar rendered
+  assert.match(html, /101k/);                                 // peak value
   assert.match(html, /High cache-pressure:.*development.*peak 101k/); // Signals flag
 });
 
@@ -138,7 +144,8 @@ test("cache-pressure signal absent when a phase is under threshold", () => {
     }],
   };
   const html = renderReport(t);
-  assert.match(html, /cache 49k\/turn · peak 59k/);   // subline present (490k/10 = 49k)
-  assert.doesNotMatch(html, /⚠/);                      // no warning glyph
+  assert.match(html, /49k\/turn/);                     // per-turn cache read in the detail line (490k/10 = 49k)
+  assert.match(html, /59k/);                           // peak value present
+  assert.doesNotMatch(html, /high cache pressure/);    // no warn badge
   assert.doesNotMatch(html, /High cache-pressure/);    // no Signals flag
 });
