@@ -37,6 +37,7 @@ val Context.settingsStore: DataStore<Settings> by dataStore(
 @Serializable
 data class Settings(val theme: String = "system", val syncEnabled: Boolean = true)
 
+@OptIn(ExperimentalSerializationApi::class)
 object SettingsSerializer : Serializer<Settings> {
     override val defaultValue: Settings = Settings()
 
@@ -82,7 +83,9 @@ suspend fun setTheme(theme: String) {
   a safe default instead of crashing every subsequent read.
 - Migrate legacy `SharedPreferences` with `SharedPreferencesMigration`, or arbitrary prior state with a
   custom `DataMigration`, passed via the delegate's `produceMigrations` — migrations run once, before the
-  first `data` collection.
+  first `data` collection. For a typed `DataStore<T>`, use the `produceSharedPreferences` + `migrate`
+  overload (`(SharedPreferencesView, T) -> T`) — the 2-arg `SharedPreferencesMigration(context, name)`
+  overload returns `DataMigration<Preferences>` and only type-checks against `preferencesDataStore`.
 
 ```kotlin
 val Context.settingsStore: DataStore<Settings> by dataStore(
@@ -90,7 +93,15 @@ val Context.settingsStore: DataStore<Settings> by dataStore(
     serializer = SettingsSerializer,
     corruptionHandler = ReplaceFileCorruptionHandler(produceNewData = { Settings() }),
     produceMigrations = { context ->
-        listOf(SharedPreferencesMigration(context, "legacy_settings"))
+        listOf(
+            SharedPreferencesMigration(
+                produceSharedPreferences = {
+                    context.getSharedPreferences("legacy_settings", Context.MODE_PRIVATE)
+                },
+            ) { prefs: SharedPreferencesView, current: Settings ->
+                current.copy(theme = prefs.getString("theme", current.theme) ?: current.theme)
+            },
+        )
     },
 )
 ```
