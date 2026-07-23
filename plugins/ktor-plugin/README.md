@@ -53,12 +53,10 @@ frameworks:
 
 ## Coexistence with retrofit-plugin
 
-Ktor and [`retrofit-plugin`](../retrofit-plugin/README.md) both enrich the `network` aspect. A project
-uses one HTTP client, not both, so only the **detected** one activates — the orchestrator resolves
-`network` to whichever framework's `dependency` is present in the project (version catalog / build
-files), and its phase injections + conventions skill are the only ones merged into the run. There is no
-conflict-resolution step to configure: absence of `io.ktor` (or presence of
-`com.squareup.retrofit2` instead) simply means this plugin never activates.
+Both `retrofit-plugin` and `ktor-plugin` enrich the same `network` aspect. The orchestrator does not
+perform single-winner conflict resolution per aspect — if both dependencies (`com.squareup.retrofit2`
+and `io.ktor`) were detected in the same project, both would activate and inject their phase prompts.
+In practice a project uses one HTTP client, not both, so only the detected one activates.
 
 ## Boundary with the hosting foundation
 

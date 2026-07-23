@@ -51,7 +51,7 @@ frameworks:
 The foundation states only the **generic** DI principle (use the project's DI framework, constructor
 injection, deliberate scoping). The **Hilt/Dagger-specific** guidance lives here and activates only when
 `com.google.dagger` is detected. A project on a different DI framework (e.g. Koin) simply does not
-activate this plugin — a future `koin-plugin` would mirror this shape. This is how the marketplace avoids
+activate this plugin — the `koin-plugin` sibling mirrors this shape for Koin. This is how the marketplace avoids
 imposing a single DI framework.
 
 ## Boundary with the hosting foundation
