@@ -14,7 +14,7 @@ status: in-progress
 | B3 | (planned)                         | planned     | — |
 | B4 | `session-recorder` run journal + measured run clock | done | #35 |
 | C1 | AAR learning cycle `/sdlc:aar`    | done        | #27 |
-| C2 | WorkManager provider (background) | in-progress | #29 |
+| C2 | framework providers (WorkManager, Koin, Ktor, DataStore-Proto) | done | #29, #64 |
 | D  | HTML run-report artifact          | done        | #26 |
 | E  | pipeline cache/cost efficiency    | in-progress | #50 |
 | E6 | deterministic prefix ordering (prompt-cache) | planned | — |
@@ -25,7 +25,8 @@ status: in-progress
 | G1 | self-healing compiler/lint micro-loops | planned | — |
 | G2 | contextual AAR lesson classification | planned  | — |
 
-_Remaining: complete C2 (Koin / Ktor / kotlinx.serialization / DataStore-Proto), then B3._
+_Remaining: B3. (`kotlinx.serialization` deferred — needs a `serialization` aspect decision before
+it can land as a provider.)_
 
 **Track E — pipeline cache/cost efficiency.** Now that per-run cost is measured accurately
 (transcript-derived, #46; over-count fixed in #48), reduce the dominant cost driver: prompt-cache

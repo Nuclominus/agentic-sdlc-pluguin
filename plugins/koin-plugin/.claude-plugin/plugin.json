@@ -1,0 +1,22 @@
+{
+  "name": "koin-plugin",
+  "version": "1.0.0",
+  "description": "Additive framework provider for Koin dependency injection (io.insert-koin). Auto-detected by the orchestrator from the Gradle version catalog / build files; enriches the `di` aspect (enriches_aspect: di) via manifest.yaml (kind: framework) with the koin-conventions skill, development + security phase-prompt injections (module DSL, constructor get(), startKoin/androidContext, koinViewModel, deliberate scopes), and minimal R8/ProGuard notes. Ships NO agents — it specializes the existing development / security phase prompts.",
+  "author": {
+    "name": "Nuclominus",
+    "url": "https://github.com/Nuclominus"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/Nuclominus/Agentic-SDLC-Pluguin",
+  "keywords": [
+    "android",
+    "koin",
+    "dependency-injection",
+    "di",
+    "sdlc",
+    "framework-provider"
+  ],
+  "dependencies": [
+    "sdlc"
+  ]
+}

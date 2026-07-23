@@ -1,0 +1,4 @@
+{
+  "_comment": "Runtime plugin dependencies for datastore-proto-plugin, aggregated by pipeline-orchestrator Step 0a. datastore-proto-plugin is an additive framework provider with no external marketplace dependencies, so this stays empty.",
+  "dependencies": []
+}
