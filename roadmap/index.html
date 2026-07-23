@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SDLC Roadmap — Pipeline Board</title>
+<style>
+  :root {
+    --ink: #101320;
+    --surface: #171a29;
+    --column: #14172333;
+    --card: #1e2233;
+    --card-hover: #242940;
+    --line: #2c3145;
+    --text: #e8eaf4;
+    --muted: #8b90a8;
+    --faint: #5b6076;
+
+    --todo: #7488ad;
+    --progress: #e2a53c;
+    --review: #4fb3cc;
+    --done: #59c07d;
+    --priority: #f0c94b;
+
+    --radius: 12px;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background:
+      radial-gradient(1200px 600px at 15% -10%, #1b2033 0%, transparent 60%),
+      radial-gradient(1000px 500px at 100% 0%, #191c2e 0%, transparent 55%),
+      var(--ink);
+    color: var(--text);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    padding: 32px clamp(16px, 4vw, 48px) 64px;
+  }
+
+  /* ---- Masthead ---- */
+  header.mast { max-width: 1500px; margin: 0 auto 26px; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--faint);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .eyebrow::before {
+    content: "";
+    width: 26px; height: 1px; background: var(--line);
+  }
+  h1 {
+    font-size: clamp(26px, 4vw, 40px);
+    font-weight: 680;
+    letter-spacing: -0.02em;
+    margin: 10px 0 4px;
+    line-height: 1.05;
+  }
+  h1 .accent { color: var(--muted); font-weight: 400; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 62ch; line-height: 1.5; }
+
+  /* ---- Progress rail ---- */
+  .rail-wrap {
+    max-width: 1500px; margin: 22px auto 30px;
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  }
+  .rail {
+    flex: 1 1 320px; height: 8px; min-width: 240px;
+    background: #232840; border-radius: 99px; overflow: hidden;
+    display: flex;
+  }
+  .rail span { display: block; height: 100%; }
+  .rail .r-done { background: var(--done); }
+  .rail .r-review { background: var(--review); }
+  .rail .r-progress { background: var(--progress); }
+  .rail-meta { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .rail-meta b { color: var(--text); font-weight: 600; }
+
+  /* ---- Board ---- */
+  .board {
+    max-width: 1500px; margin: 0 auto;
+    display: grid; gap: 16px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  @media (max-width: 1080px) { .board { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 620px)  { .board { grid-template-columns: 1fr; } }
+
+  .col {
+    background: linear-gradient(180deg, #191d2e 0%, #15182600 40%), #15182699;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 4px;
+    display: flex; flex-direction: column;
+    min-height: 180px;
+  }
+  .col-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 14px 12px;
+    border-bottom: 1px solid var(--line);
+    position: relative;
+  }
+  .col-head::before {
+    content: ""; position: absolute; left: 14px; right: 14px; top: 0; height: 2px;
+    border-radius: 2px; background: var(--dot);
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--dot); box-shadow: 0 0 10px var(--dot); }
+  .col-title { font-size: 13px; font-weight: 640; letter-spacing: 0.02em; text-transform: uppercase; }
+  .count {
+    margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--muted);
+    background: #232840; border-radius: 6px; padding: 2px 8px; min-width: 26px; text-align: center;
+  }
+  .col[data-col="todo"]     { --dot: var(--todo); }
+  .col[data-col="progress"] { --dot: var(--progress); }
+  .col[data-col="review"]   { --dot: var(--review); }
+  .col[data-col="done"]     { --dot: var(--done); }
+
+  .col-body {
+    padding: 10px; display: flex; flex-direction: column; gap: 10px;
+    flex: 1; overflow-y: auto;
+  }
+  .empty {
+    color: var(--faint); font-family: var(--mono); font-size: 11px;
+    text-align: center; padding: 22px 0; letter-spacing: 0.04em;
+  }
+
+  /* ---- Card ---- */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--dot);
+    border-radius: 10px;
+    padding: 12px 12px 10px;
+    transition: background .15s, border-color .15s;
+  }
+  .card:hover { background: var(--card-hover); }
+  .card.pri { border-color: #4a4226; }
+
+  .card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .badge {
+    font-family: var(--mono); font-size: 11px; font-weight: 600;
+    color: var(--text); background: #2b3048; border: 1px solid var(--line);
+    border-radius: 6px; padding: 2px 7px; letter-spacing: 0.02em;
+  }
+  .track { font-family: var(--mono); font-size: 10px; color: var(--faint); letter-spacing: 0.14em; text-transform: uppercase; }
+  .star { margin-left: auto; color: var(--priority); font-size: 13px; line-height: 1; }
+  .card h3 { margin: 0 0 5px; font-size: 14px; font-weight: 580; line-height: 1.3; letter-spacing: -0.01em; }
+  .card p { margin: 0; font-size: 12px; line-height: 1.45; color: var(--muted); }
+
+  .card-foot { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
+  .pr {
+    font-family: var(--mono); font-size: 11px; color: var(--done);
+    text-decoration: none; border: 1px solid #2a4634; border-radius: 6px; padding: 1px 7px;
+  }
+  .pr:hover { background: #1c3226; }
+
+  footer.note {
+    max-width: 1500px; margin: 30px auto 0;
+    font-family: var(--mono); font-size: 11px; color: var(--faint); line-height: 1.7;
+  }
+  footer.note code { color: var(--muted); }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+  <header class="mast">
+    <div class="eyebrow">Agentic SDLC · .brain/planning/roadmap</div>
+    <h1>Pipeline Board <span class="accent">— roadmap state</span></h1>
+    <p class="sub">Program tracks across the delivery pipeline — a read-only snapshot of the Second Brain roadmap, scaling complex-task completion from ~70% toward 90%. Regenerated from the vault on each build.</p>
+  </header>
+
+  <div class="rail-wrap">
+    <div class="rail" id="rail" aria-hidden="true"></div>
+    <div class="rail-meta" id="railMeta"></div>
+  </div>
+
+  <main class="board" id="board" aria-label="Roadmap status board"></main>
+
+  <footer class="note">
+    Snapshot generated from <code>.brain/planning/roadmap.md</code> by <code>node roadmap/generate.mjs</code> · re-run after roadmap edits.<br>
+    ★ = highest-ROI next step per the Roadmap Development Plan.
+  </footer>
+
+<script>
+"use strict";
+
+// ---- Current roadmap snapshot (read-only) ----
+const COLUMNS = [
+  { key: "todo",     title: "To Do" },
+  { key: "progress", title: "In Progress" },
+  { key: "review",   title: "In Review" },
+  { key: "done",     title: "Done" },
+];
+
+const REPO = "https://github.com/Nuclominus/Agentic-SDLC-Pluguin";
+
+// <<SEED-START>> — generated by `node roadmap/generate.mjs` from .brain/planning/roadmap.md; do not hand-edit
+const SEED = [
+  { id: "A", track: "Track A", title: "Foundation retune", desc: "Baseline stack-provider foundation pass.", pr: 23, col: "done" },
+  { id: "B1", track: "Track B", title: "--resume checkpoints", desc: "Resume a pipeline run from its last checkpoint.", pr: 25, col: "done" },
+  { id: "B2", track: "Track B", title: "Cross-run rollup /sdlc:report", desc: "Aggregate cost/telemetry across all runs.", pr: 28, col: "done" },
+  { id: "B3", track: "Track B", title: "B3 (unscheduled)", desc: "Next Track B item — scope TBD after C2.", pr: null, col: "todo" },
+  { id: "B4", track: "Track B", title: "Session-recorder run journal + measured run clock", desc: "Cumulative journal + measured wall-clock run time.", pr: 35, col: "done" },
+  { id: "C1", track: "Track C", title: "AAR learning cycle /sdlc:aar", desc: "After Action Review captures lessons per run.", pr: 27, col: "done" },
+  { id: "C2", track: "Track C", title: "WorkManager provider (background)", desc: "Remaining: Koin / Ktor / kotlinx.serialization / DataStore-Proto.", pr: 29, col: "progress" },
+  { id: "D", track: "Track D", title: "HTML run-report artifact", desc: "Rendered per-run report from telemetry.", pr: 26, col: "done" },
+  { id: "E", track: "Track E", title: "Pipeline cache/cost efficiency", desc: "Cut prompt-cache reads (6.65M/run baseline). E5 shipped.", pr: 50, col: "progress" },
+  { id: "E6", track: "Track E", title: "Deterministic prefix ordering (prompt-cache)", desc: "Byte-identical stable prefix for max prompt-cache hits (plan §1.1).", pr: null, col: "todo" },
+  { id: "E7", track: "Track E", title: "Dynamic context pruning (review loops)", desc: "Haiku summarizes failed review-loop attempts before next Dev pass (§1.2).", pr: null, col: "todo" },
+  { id: "E8", track: "Track E", title: "Micro-task batching (3–5 bugfixes)", desc: "Auto-group 3–5 bugfixes into one session; amortize init cost (§1.3).", pr: null, col: "todo", pri: true },
+  { id: "F1", track: "Track F", title: "Speculative TDD (QA ∥ Dev)", desc: "Run QA test-writing concurrently with Dev after BA approval (§2.1).", pr: null, col: "todo" },
+  { id: "F2", track: "Track F", title: "Fast-track bugfix DAG (LOC-gated)", desc: "LOC-gated Dev→QA→Docs when change is trivial (§2.2).", pr: null, col: "todo" },
+  { id: "G1", track: "Track G", title: "Self-healing compiler/lint micro-loops", desc: "Feed compiler/lint stderr back to Dev, capped at 2 attempts (§3.1).", pr: null, col: "todo", pri: true },
+  { id: "G2", track: "Track G", title: "Contextual AAR lesson classification", desc: "Tag lessons; load only domain-relevant ones per phase (§3.2).", pr: null, col: "todo" },
+];
+// <<SEED-END>>
+
+// Read-only view: render the current roadmap snapshot exactly as seeded.
+const board = document.getElementById("board");
+
+function cardEl(c) {
+  const el = document.createElement("article");
+  el.className = "card" + (c.pri ? " pri" : "");
+  const pr = c.pr ? `<a class="pr" href="${REPO}/pull/${c.pr}" target="_blank" rel="noopener">#${c.pr}</a>` : "";
+  el.innerHTML = `
+    <div class="card-top">
+      <span class="badge">${c.id}</span>
+      <span class="track">${c.track}</span>
+      ${c.pri ? '<span class="star" title="Highest-ROI next step">★</span>' : ""}
+    </div>
+    <h3>${c.title}</h3>
+    ${c.desc ? `<p>${c.desc}</p>` : ""}
+    ${pr ? `<div class="card-foot">${pr}</div>` : ""}`;
+  return el;
+}
+
+function render() {
+  board.innerHTML = "";
+  for (const col of COLUMNS) {
+    const items = SEED.filter(c => c.col === col.key);
+    const el = document.createElement("section");
+    el.className = "col";
+    el.dataset.col = col.key;
+    el.innerHTML = `
+      <div class="col-head">
+        <span class="dot"></span>
+        <span class="col-title">${col.title}</span>
+        <span class="count">${items.length}</span>
+      </div>
+      <div class="col-body"></div>`;
+    const body = el.querySelector(".col-body");
+    if (!items.length) {
+      body.innerHTML = `<div class="empty">— empty —</div>`;
+    } else {
+      items.forEach(c => body.appendChild(cardEl(c)));
+    }
+    board.appendChild(el);
+  }
+  renderRail();
+}
+
+function renderRail() {
+  const total = SEED.length;
+  const n = k => SEED.filter(c => c.col === k).length;
+  const pct = k => (n(k) / total * 100).toFixed(2) + "%";
+  document.getElementById("rail").innerHTML =
+    `<span class="r-done" style="width:${pct("done")}"></span>` +
+    `<span class="r-review" style="width:${pct("review")}"></span>` +
+    `<span class="r-progress" style="width:${pct("progress")}"></span>`;
+  const donePct = Math.round(n("done") / total * 100);
+  document.getElementById("railMeta").innerHTML =
+    `<b>${n("done")}/${total}</b> done · ${donePct}% · ` +
+    `${n("progress")} active · ${n("review")} review · ${n("todo")} queued`;
+}
+
+render();
+</script>
+</body>
+</html>
