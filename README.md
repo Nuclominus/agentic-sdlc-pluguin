@@ -44,7 +44,7 @@ The README is the front door; each topic has a focused page under [`docs/`](docs
 | 📦 **Installation** — step-by-step install, optional deps, requirements | [`docs/INSTALLATION.md`](docs/INSTALLATION.md) |
 | 🤝 **Contributing** — authoring a foundation or framework plugin | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 
-This repo's own architecture, decisions, per-PR changes, and roadmap live in the **Second Brain** Obsidian vault at [`.brain/`](.brain/) — the engineering source of truth for how the marketplace works and evolves (see [`.brain/README.md`](.brain/README.md)).
+This repo's own architecture, decisions, per-PR changes, and roadmap live in the **Second Brain** Obsidian vault at [`.brain/`](.brain/) — the engineering source of truth for how the marketplace works and evolves (see [`.brain/README.md`](.brain/README.md)). For a rendered status view of the tracks, open the **Roadmap board** at [`roadmap/index.html`](roadmap/index.html) — a read-only snapshot regenerated from the vault with `node roadmap/generate.mjs`.
 
 **In one paragraph:** the core `pipeline-orchestrator` skill never changes — it has zero knowledge of any platform, library, or security standard. The **foundation** registers itself via `manifest.yaml` (`kind: foundation`) and declares detection rules, priority, agents-per-phase, and a default workflow. **Framework plugins** attach additively (`kind: framework`): they enrich existing phases with a convention skill + prompt injections + ProGuard rules, ship **no agents**, and auto-detect from the Gradle build. Everything — manifests, workflows, dependencies — is *discovered by glob*, never hardcoded. See [`docs/WORKFLOW.md`](docs/WORKFLOW.md) for the diagrams and the full contract.
 
