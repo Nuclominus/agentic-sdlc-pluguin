@@ -1,8 +1,8 @@
 # SDLC Marketplace for Claude Code — Android
 
-AI-assisted SDLC pipelines for **Android** development, built on the **Stack Provider Pattern**: a single platform-agnostic core orchestrator runs the pipeline; **Android Foundation** registers itself via a declarative `manifest.yaml` (`kind: foundation`) and drives the flow; **framework plugins** (Retrofit, Room, Dagger/Hilt, …) attach **additively** via `manifest.yaml` (`kind: framework`). No core overrides, no slot registries, no copy-paste.
+A collection of Claude Code plugins that run an AI-assisted development pipeline for **Android** projects. You describe a feature in plain language, and a team of specialized agents takes it through the full cycle: analyzing the requirements, writing the code, adding tests, running a security review, and opening a pull request.
 
-**v0.5.0** — a flat plugin set: 1 platform-agnostic core (`sdlc`) + the **Android Foundation** centerpiece + additive **framework plugins**. Cost-optimized (model tiering + per-subagent `effort`), with generic control flow (review-loops, parallel groups), cross-plugin workflow discovery, auto-detected framework enrichment, guaranteed per-agent model enforcement, `--resume` checkpoints, per-run HTML reports, a cross-run cost rollup, and an After Action Review learning cycle.
+Everything is built around one idea: a single core drives the pipeline, and plugins add the platform and library knowledge on top. **Android Foundation** teaches the pipeline how to build Android apps, and smaller **framework plugins** (Retrofit, Room, Dagger/Hilt, and more) add library-specific conventions — they activate automatically when your project uses that library. You never wire anything by hand; plugins are discovered and combined for you.
 
 ---
 
@@ -44,11 +44,23 @@ The README is the front door; each topic has a focused page under [`docs/`](docs
 | 📦 **Installation** — step-by-step install, optional deps, requirements | [`docs/INSTALLATION.md`](docs/INSTALLATION.md) |
 | 🤝 **Contributing** — authoring a foundation or framework plugin | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 
-This repo's own architecture, decisions, per-PR changes, and roadmap live in the **Second Brain** Obsidian vault at [`.brain/`](.brain/) — the engineering source of truth for how the marketplace works and evolves (see [`.brain/README.md`](.brain/README.md)). For a rendered status view of the tracks, open the **Roadmap board** at [`roadmap/index.html`](roadmap/index.html) — a read-only snapshot regenerated from the vault with `node roadmap/generate.mjs`.
-
-[![SDLC Roadmap board — a read-only snapshot of the Second Brain roadmap, rendered as a pipeline kanban](docs/assets/roadmap-board.jpg)](roadmap/index.html)
+This repo's own architecture, decisions, per-PR changes, and roadmap live in the **Second Brain** Obsidian vault at [`.brain/`](.brain/) — the engineering source of truth for how the marketplace works and evolves (see [`.brain/README.md`](.brain/README.md)).
 
 **In one paragraph:** the core `pipeline-orchestrator` skill never changes — it has zero knowledge of any platform, library, or security standard. The **foundation** registers itself via `manifest.yaml` (`kind: foundation`) and declares detection rules, priority, agents-per-phase, and a default workflow. **Framework plugins** attach additively (`kind: framework`): they enrich existing phases with a convention skill + prompt injections + ProGuard rules, ship **no agents**, and auto-detect from the Gradle build. Everything — manifests, workflows, dependencies — is *discovered by glob*, never hardcoded. See [`docs/WORKFLOW.md`](docs/WORKFLOW.md) for the diagrams and the full contract.
+
+---
+
+## Roadmap
+
+Top priorities right now:
+
+| Priority | Task | Status |
+| -------- | ---- | ------ |
+| 1 | Pipeline cache & cost efficiency | In progress |
+| 2 | Self-healing compiler/lint micro-loops | Planned |
+| 3 | Micro-task batching (3–5 bugfixes per run) | Planned |
+
+<a href="docs/assets/roadmap-board.jpg" target="_blank"><img src="docs/assets/roadmap-board.jpg" alt="SDLC Roadmap board" width="100%"></a>
 
 ---
 
