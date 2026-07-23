@@ -41,7 +41,7 @@ val featureModule = module {
 // Good — constructor injection, framework-agnostic and unit-testable
 class FeatureRepositoryImpl(
     private val api: FeatureApi,
-    @Named("io") private val io: CoroutineDispatcher,
+    private val io: CoroutineDispatcher,
 ) : FeatureRepository
 
 // Avoid — service location inside a domain/data class
