@@ -14,7 +14,7 @@ status: in-progress
 | B3 | (planned)                         | planned     | — |
 | B4 | `session-recorder` run journal + measured run clock | done | #35 |
 | C1 | AAR learning cycle `/sdlc:aar`    | done        | #27 |
-| C2 | framework providers (WorkManager, Koin, Ktor, DataStore-Proto) | done | #29, +this batch |
+| C2 | framework providers (WorkManager, Koin, Ktor, DataStore-Proto) | done | #29, #64 |
 | D  | HTML run-report artifact          | done        | #26 |
 | E  | pipeline cache/cost efficiency    | in-progress | #50 |
 | E6 | deterministic prefix ordering (prompt-cache) | planned | — |
