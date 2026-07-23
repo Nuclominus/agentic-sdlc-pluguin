@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-07-23 | #66 | `docs` | — | [[changes/2026-07-23-PR-66-clarify-intro-for-newcomers-dedicated-roadmap-topic]] |
 | 2026-07-23 | #64 | `feat` | — | [[changes/2026-07-23-PR-64-complete-c2-framework-providers-koin-ktor-datastore-proto]] |
 | 2026-07-23 | #62 | `docs` | — | [[changes/2026-07-23-PR-62-plan-derived-tracks-read-only-board]] |
 | 2026-07-22 | #60 | `feat` | — | [[changes/2026-07-22-PR-60-refresh-html-run-report-template-from-design-mock]] |
