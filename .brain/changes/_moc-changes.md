@@ -5,6 +5,7 @@
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
 | 2026-07-23 | #62 | `docs` | — | [[changes/2026-07-23-PR-62-plan-derived-tracks-read-only-board]] |
+| 2026-07-22 | #60 | `feat` | — | [[changes/2026-07-22-PR-60-refresh-html-run-report-template-from-design-mock]] |
 | 2026-07-18 | #58 | `docs` | — | [[changes/2026-07-18-PR-58-slim-readme-into-a-front-door-migrate-detail-to-docs]] |
 | 2026-07-08 | #56 | `fix` | — | [[changes/2026-07-08-PR-56-overhead-window-from-machine-anchor-not-llm-timestamps-1-9-1]] |
 | 2026-07-08 | #53 | `fix` | — | [[changes/2026-07-08-PR-53-no-op-first-turn-guard-loud-vault-absent-gate-1-4-0]] |

@@ -53,6 +53,21 @@
       "name": "workmanager-plugin",
       "source": "./plugins/workmanager-plugin",
       "description": "Additive framework provider for Android WorkManager deferrable background work (androidx.work). Auto-detected by the orchestrator from the Gradle version catalog / build files; enriches the `background` aspect (enriches_aspect: background) via manifest.yaml (kind: framework) with the workmanager-conventions skill, development + security phase-prompt injections (CoroutineWorker, unique enqueue + ExistingWorkPolicy, Constraints/backoff, WorkerFactory DI, idempotent doWork/Result, non-sensitive inputData, WorkInfo Flow), and R8/ProGuard keep rules. First provider of the `background` aspect. Ships NO agents — it specializes the existing development / security phase prompts."
+    },
+    {
+      "name": "koin-plugin",
+      "source": "./plugins/koin-plugin",
+      "description": "Additive framework provider for Koin dependency injection (io.insert-koin). Auto-detected by the orchestrator from the Gradle version catalog / build files; enriches the `di` aspect (enriches_aspect: di) via manifest.yaml (kind: framework) with the koin-conventions skill, development + security phase-prompt injections (module DSL, constructor get(), startKoin/androidContext, koinViewModel, deliberate scopes), and minimal R8/ProGuard notes. Coexists with dagger-plugin on the `di` aspect — only the detected provider activates. Ships NO agents — it specializes the existing development / security phase prompts."
+    },
+    {
+      "name": "ktor-plugin",
+      "source": "./plugins/ktor-plugin",
+      "description": "Additive framework provider for the Ktor client (io.ktor) networking. Auto-detected by the orchestrator from the Gradle version catalog / build files; enriches the `network` aspect (enriches_aspect: network) via manifest.yaml (kind: framework) with the ktor-conventions skill, development + security phase-prompt injections (single HttpClient, ContentNegotiation + kotlinx-json, DEBUG-gated Logging, HttpTimeout, expectSuccess, exception→Result mapping), and R8/ProGuard keep rules. Coexists with retrofit-plugin on the `network` aspect — only the detected provider activates. Ships NO agents — it specializes the existing development / security phase prompts."
+    },
+    {
+      "name": "datastore-proto-plugin",
+      "source": "./plugins/datastore-proto-plugin",
+      "description": "Additive framework provider for Proto DataStore (androidx.datastore) persistence. Auto-detected by the orchestrator from the Gradle version catalog / build files; enriches the `persistence` aspect (enriches_aspect: persistence) via manifest.yaml (kind: framework) with the datastore-conventions skill, development + security phase-prompt injections (one DataStore per file, typed Serializer + default, Flow reads, atomic updateData, corruption handler, migrations, no plaintext secrets), and R8/ProGuard keep rules. Coexists with room-plugin on the `persistence` aspect — only the detected provider activates. Ships NO agents — it specializes the existing development / security phase prompts."
     }
   ]
 }

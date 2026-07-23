@@ -1,0 +1,37 @@
+# Koin — SDLC manifest (kind: framework, additive).
+# Machine-read source the orchestrator consumes. Human docs live in README.md.
+
+kind: framework
+stack: koin
+priority: 150                       # documentational for frameworks — they never win an aspect
+enriches_aspect: di                # functional category; a foundation hosting `di` resolves me
+dependency: io.insert-koin         # covers koin-core/koin-android/koin-androidx-compose; the foundation declares WHERE to look
+
+convention_skills:
+  - koin-plugin:koin-conventions
+
+extra_phases: []
+pre_phase_commands: []
+
+phase_injections:
+  development: |
+    Koin is present. Declare bindings in the `module { }` DSL — `single` for singletons, `factory` for
+    new-each-time, `viewModel`/`viewModelOf` for ViewModels; resolve dependencies through constructor
+    parameters with `get()`, not by pulling from the container inside classes. Start the graph once in
+    `Application` via `startKoin { androidContext(this@App); modules(appModule, …) }`. In Compose, obtain
+    ViewModels with `koinViewModel()` and dependencies with `koinInject()`; do NOT make domain/data
+    classes implement `KoinComponent` to service-locate — inject through constructors so they stay
+    framework-agnostic and testable. Scope deliberately (`scope<T> { scoped { … } }`) instead of making
+    everything `single`. Organize modules by feature and compose them; expose dispatchers via
+    named/typed qualifiers per the hosting foundation's data-layer conventions. See the
+    koin-plugin:koin-conventions skill; layer/DI principles stay with the hosting foundation's
+    conventions (do not restate them).
+  security: |
+    Koin: do not hold security-sensitive material (decrypted keys, tokens, plaintext credentials) in
+    long-lived `single` definitions longer than needed — prefer `factory`/`scoped` for the narrowest
+    lifetime and clear it. Keep the `KoinComponent` service-locator escape hatch out of security-
+    sensitive code paths (it bypasses explicit wiring and hides what a class can reach). Koin core is
+    runtime/reflection-light and needs no special R8 keep rules; if the project uses Koin Annotations
+    (KSP), apply the notes in koin-plugin/rules/snippets/koin-proguard.md.
+
+post_pipeline_checks: []
