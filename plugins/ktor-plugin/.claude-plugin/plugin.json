@@ -1,0 +1,22 @@
+{
+  "name": "ktor-plugin",
+  "version": "1.0.0",
+  "description": "Additive framework provider for the Ktor client (io.ktor) networking. Auto-detected by the orchestrator from the Gradle version catalog / build files; enriches the `network` aspect (enriches_aspect: network) via manifest.yaml (kind: framework) with the ktor-conventions skill, development + security phase-prompt injections (single HttpClient, ContentNegotiation + kotlinx-json, DEBUG-gated Logging, HttpTimeout, expectSuccess, exception→Result mapping), and R8/ProGuard keep rules. Ships NO agents — it specializes the existing development / security phase prompts.",
+  "author": {
+    "name": "Nuclominus",
+    "url": "https://github.com/Nuclominus"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/Nuclominus/Agentic-SDLC-Pluguin",
+  "keywords": [
+    "android",
+    "ktor",
+    "networking",
+    "http-client",
+    "sdlc",
+    "framework-provider"
+  ],
+  "dependencies": [
+    "sdlc"
+  ]
+}
