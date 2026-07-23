@@ -1,0 +1,36 @@
+# Ktor client — SDLC manifest (kind: framework, additive).
+# Machine-read source the orchestrator consumes. Human docs live in README.md.
+
+kind: framework
+stack: ktor
+priority: 150                       # documentational for frameworks — they never win an aspect
+enriches_aspect: network           # functional category; a foundation hosting `network` resolves me
+dependency: io.ktor                # covers ktor-client-core/engine/content-negotiation/serialization; the foundation declares WHERE to look
+
+convention_skills:
+  - ktor-plugin:ktor-conventions
+
+extra_phases: []
+pre_phase_commands: []
+
+phase_injections:
+  development: |
+    Ktor client is present. Build **one** long-lived `HttpClient` with an explicit engine
+    (OkHttp/Android/CIO) and reuse it — do not new-up a client per request; `close()` it with its owner's
+    lifecycle. Install `ContentNegotiation` with kotlinx-serialization `json(...)`, `HttpTimeout`
+    (request/connect/socket), and `Logging` **gated on debug builds only** at a level that never emits
+    headers/bodies in release. Use `expectSuccess = true` and/or an `HttpResponseValidator` to turn
+    non-2xx into exceptions. Request functions are `suspend` and return DTOs or a domain `Result`; map
+    `ClientRequestException` (4xx), `ServerResponseException` (5xx), `ResponseException`, and
+    `IOException` to domain Results at the repository boundary — never leak Ktor types (`HttpResponse`,
+    exceptions) above the data layer. See the ktor-plugin:ktor-conventions skill; layer principles stay
+    with the hosting foundation's data-layer conventions (do not restate them).
+  security: |
+    Ktor (MASVS-NETWORK): all base URLs MUST be HTTPS — no cleartext; configure certificate/public-key
+    pinning where the threat model requires it (engine-level, e.g. OkHttp `CertificatePinner`). The
+    `Logging` plugin must be DEBUG-gated and must never log `Authorization` headers, cookies, tokens, or
+    request/response bodies in release. Do not disable TLS verification or install trust-all managers.
+    Apply the R8/ProGuard keep rules in ktor-plugin/rules/snippets/ktor-proguard.md when the project
+    ships R8 (Ktor engine reflection + kotlinx.serialization).
+
+post_pipeline_checks: []

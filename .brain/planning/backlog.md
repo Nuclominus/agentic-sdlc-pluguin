@@ -65,6 +65,82 @@ runs on opus and its own context re-reads cost ~$1.10/run; and confirm no opus i
 cache-heavy, low-reasoning phase. Low expected savings vs. E1–E3 — track but do not over-invest.
 Depends on the `config/models.json` pricing SSOT in [[components/sdlc]].
 
+### E6 — Deterministic prefix ordering for max prompt-cache hits *(structural; from plan §1.1)*
+Guarantee that every agent's stable prefix — harness system prompt, loaded Second Brain context,
+and framework rule injections (Retrofit/Room/etc.) — is assembled in a **byte-identical sequence**
+across all phases and runs, so the static bulk is served as cache hits rather than fresh input.
+Today AAR lessons are appended to the stable prefix; ordering elsewhere is not contractually fixed.
+This is the write-side complement to E5's read-side measurement and to E1's floor-trimming. **DoD:**
+a documented canonical prefix order enforced by the orchestrator; cache-hit ratio on a comparable
+run rises vs. the E5 baseline. Likely needs an ADR (defines the orchestrator↔subagent prefix
+contract) — see [[decisions/_moc-decisions]].
+
+### E7 — Dynamic context pruning in review loops *(guidance + code; from plan §1.2)*
+In `Review(⇄Dev ×N)` cycles the prompt grows every iteration with the full text of prior failed
+attempts. Insert a cheap intermediate step where a faster model (Haiku) **summarizes the previous
+failed attempt** — isolating the root cause and the distilled requirement — before the next Dev
+iteration, so the developer receives the lesson without the conversational noise. Targets the 73%
+growth component (complements E2/E3). **DoD:** peak-prefix inside a 3-iteration review loop drops
+materially with no regression in the eventual review/test verdict; the summarization step is itself
+cheap (Haiku-tiered). May warrant an ADR (changes the review-loop contract).
+
+### E8 — Micro-task batching (shared session for 3–5 bugfixes) *(feature; from plan §1.3)*
+Extend the existing `/sdlc:batch` parallel command with a mode that **auto-groups 3–5 trivial
+bugfixes into a single agent session**, so project context (system prompt + Second Brain load +
+framework rules) is initialized once and its cost amortized across every resolved ticket instead of
+paid per-ticket. Pairs with F2 (fast-track) for the trivial-change lane. **DoD:** a batch of N small
+fixes costs measurably less than N independent runs (init cost paid once); each fix still gets its
+own verification. Flagged in the plan summary as one of the two highest-ROI next steps.
+
+---
+
+## Track F — time optimization & parallelism
+
+Deeper concurrent workflows to cut **absolute** completion time, building on the shipped
+`[security ‖ test]` parallel group. Derived from the Roadmap Development Plan §2.
+
+### F1 — Speculative TDD (QA ∥ Dev) *(from plan §2.1)*
+Immediately after BA plan approval, launch the QA test-writing phase **concurrently** with the Dev
+implementation phase (leveraging the superpowers TDD capability), then merge and verify both outputs
+in the following step. Targets up to a ~40% cut in the Dev→QA lifecycle. Risk: tests and
+implementation may diverge from the same spec — the merge/verify step must reconcile them. **DoD:** a
+workflow recipe expressing `Dev ∥ QA` after BA; measured wall-clock reduction on a representative
+feature with review/test verdicts unchanged. Likely needs an ADR (new concurrency contract).
+
+### F2 — Fast-track bugfix DAG (LOC-gated) *(from plan §2.2)*
+An ultra-short micro-fix recipe that trims the pipeline DAG for trivial changes. The orchestrator
+uses telemetry (`/sdlc:doctor`, `LOC_TOUCHED`) to classify a change and, when
+`LOC_TOUCHED < 20 AND NO_ARCHITECTURE_CHANGES`, bypasses the heavy analytical phases and runs
+`Dev → QA → Docs`. Pairs with E8 (batching) and G1 (self-healing) for the trivial-change lane.
+**DoD:** a gated workflow recipe with an explicit, logged trigger threshold; trivial fixes skip
+BA/Security while non-trivial changes still take the full pipeline (no silent under-review).
+
+---
+
+## Track G — quality & autonomy
+
+Reduce human intervention and raise code quality without inflating prompt cost. Derived from the
+Roadmap Development Plan §3.
+
+### G1 — Self-healing compiler/lint micro-loops *(from plan §3.1)*
+Instead of a full, expensive Review-loop for mechanical compile/lint failures, add local build hooks:
+run build/lint validation, intercept `stderr` on failure, and feed the raw output **directly back to
+the Dev agent** — **hard-capped at 2 attempts** — escalating to the Reviewer only if self-healing
+fails. Flagged in the plan summary as the highest-ROI next step (eliminates trivial blockers).
+**DoD:** a build/detekt failure is auto-fixed within ≤2 Dev attempts without invoking the reviewer;
+the 2-attempt cap is enforced and logged; genuine logic failures still escalate. Aligns with the
+existing QA 3-attempt-cap discipline.
+
+### G2 — Contextual classification of AAR lessons *(from plan §3.2)*
+Prevent `.claude/sdlc-lessons.md` from bloating every prompt over time: the AAR agent applies a
+semantic tag (`[UI]`, `[Network]`, `[Security]`, …) to each new lesson, and at phase initialization
+the orchestrator **selectively loads only the lessons whose tags match the incoming task's domain**.
+Keeps contextual awareness concentrated and impactful, and directly reduces the fixed-floor cost E1
+targets. Extends Track C1 (AAR learning cycle). **DoD:** new lessons are tagged; a phase loads only
+domain-relevant lessons rather than the whole file; floor contribution of lessons scales sub-linearly
+with lesson count.
+
 ---
 
 _All other `CORE-TODO.md` sections are `DONE`/`DROPPED` — no legacy remainder to carry forward._
+_Tracks E6–E8, F, and G derive from the repo-root `Roadmap Development Plan.md`._

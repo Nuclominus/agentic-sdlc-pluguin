@@ -1,0 +1,35 @@
+# DataStore (Proto) — SDLC manifest (kind: framework, additive).
+# Machine-read source the orchestrator consumes. Human docs live in README.md.
+
+kind: framework
+stack: datastore-proto
+priority: 150                       # documentational for frameworks — they never win an aspect
+enriches_aspect: persistence       # functional category; a foundation hosting `persistence` resolves me
+dependency: androidx.datastore     # covers datastore/datastore-core; the foundation declares WHERE to look
+
+convention_skills:
+  - datastore-proto-plugin:datastore-conventions
+
+extra_phases: []
+pre_phase_commands: []
+
+phase_injections:
+  development: |
+    Proto DataStore is present. Create exactly **one** `DataStore<T>` instance per file — expose it as a
+    singleton (the `dataStore` delegate at file scope, or a DI singleton); never construct two for the
+    same file (it throws). Define a typed `Serializer<T>` with an explicit `defaultValue` and
+    `readFrom`/`writeTo` (kotlinx-serialization is the house serializer). Read state as `data: Flow<T>`
+    and write with atomic `updateData { current -> … }` (read-modify-write) — never partial blocking
+    writes. Handle corruption with a `ReplaceFileCorruptionHandler`; migrate legacy prefs with
+    `SharedPreferencesMigration`/`DataMigration`. DataStore manages its own IO dispatcher — don't wrap it.
+    Keep the proto/state type in the data layer and map to domain at the repository boundary. See the
+    datastore-proto-plugin:datastore-conventions skill; layer principles stay with the hosting
+    foundation's data-layer conventions (do not restate them).
+  security: |
+    Proto DataStore (MASVS-STORAGE): the backing file is **plaintext on disk** — never persist secrets,
+    tokens, or PII unencrypted. Encrypt sensitive fields (Keystore-backed) or keep them in secure storage
+    and persist only non-sensitive state here. Do not log the deserialized value if it can contain PII.
+    Apply the R8/ProGuard keep rules in datastore-proto-plugin/rules/snippets/datastore-proguard.md when
+    the project ships R8 (keep the serializer / protobuf-javalite types).
+
+post_pipeline_checks: []

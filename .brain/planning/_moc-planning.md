@@ -4,3 +4,4 @@
 
 - [[planning/roadmap]]
 - [[planning/backlog]]
+- [[planning/c2-framework-providers]] — C2 batch spec (Koin, Ktor, DataStore-Proto)
