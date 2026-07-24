@@ -2,6 +2,10 @@
 // it never runs at pipeline runtime, so unlike lib/usage.mjs it has no
 // mirrored copy under plugins/sdlc/tools/.
 
+import { readFileSync } from "node:fs";
+import { relative, resolve } from "node:path";
+import { globSync } from "tinyglobby";
+
 export const ANCHOR = "Read discipline:";
 export const PREFIX_START = "=== STABLE PREFIX ===";
 export const PREFIX_END = "=== PER-CALL CONTEXT ===";
@@ -64,4 +68,32 @@ export function scanAgentText(text) {
     }
   }
   return { ok: errors.length === 0, errors };
+}
+
+export const SKILL_PATH = "plugins/sdlc/skills/pipeline-orchestrator/SKILL.md";
+export const AGENT_GLOB = "plugins/*/agents/*.md";
+
+/**
+ * Check 1 + Check 2 over a repository root.
+ * @returns {Array<{file: string, ok: boolean, errors: string[], tool_error?: boolean}>}
+ */
+export function checkReadDiscipline(root = process.cwd()) {
+  const results = [];
+
+  const skillAbs = resolve(root, SKILL_PATH);
+  try {
+    results.push({ file: SKILL_PATH, ...checkAnchor(readFileSync(skillAbs, "utf8")) });
+  } catch (e) {
+    results.push({ file: SKILL_PATH, ok: false, tool_error: true, errors: [`read: ${e.message}`] });
+  }
+
+  for (const abs of globSync(AGENT_GLOB, { cwd: root, absolute: true }).sort()) {
+    const file = relative(root, abs);
+    try {
+      results.push({ file, ...scanAgentText(readFileSync(abs, "utf8")) });
+    } catch (e) {
+      results.push({ file, ok: false, tool_error: true, errors: [`read: ${e.message}`] });
+    }
+  }
+  return results;
 }

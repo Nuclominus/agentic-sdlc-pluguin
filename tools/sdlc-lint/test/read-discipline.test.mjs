@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
-import { checkAnchor, scanAgentText, PATTERNS } from "../lib/read-discipline.mjs";
+import { checkAnchor, scanAgentText, PATTERNS, checkReadDiscipline } from "../lib/read-discipline.mjs";
 
 const FIX = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "read-discipline");
 const fixture = (name) => readFileSync(join(FIX, name), "utf8");
@@ -57,4 +57,20 @@ test("patterns are narrow: plural 're-reads' does not match", () => {
 
 test("patterns are narrow: 'read the full stack trace' does not match", () => {
   assert.equal(PATTERNS.some((p) => p.test("Read the full stack trace")), false);
+});
+
+const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+
+test("driver returns one result row per agent file plus the skill", () => {
+  const rows = checkReadDiscipline(REPO);
+  assert.ok(rows.length > 5, `expected the skill + all agent files, got ${rows.length}`);
+  assert.ok(rows.some((r) => r.file.endsWith("pipeline-orchestrator/SKILL.md")));
+  assert.ok(rows.some((r) => r.file.endsWith("plugins/sdlc/agents/developer.md")));
+});
+
+test("a missing skill file is a tool error, not a violation", () => {
+  const rows = checkReadDiscipline(resolve(REPO, "tools/sdlc-lint/fixtures"));
+  const skill = rows.find((r) => r.file.endsWith("SKILL.md"));
+  assert.equal(skill.ok, false);
+  assert.equal(skill.tool_error, true);
 });

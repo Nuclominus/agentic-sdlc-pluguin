@@ -7,6 +7,7 @@ import { resolveFixture, listFixtures } from "./lib/detect.mjs";
 import { resolveWorkspace } from "./lib/resume.mjs";
 import { renderReportFile } from "./lib/report.mjs";
 import { rollupWorkspace } from "./lib/rollup.mjs";
+import { checkReadDiscipline } from "./lib/read-discipline.mjs";
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 
 const args = process.argv.slice(2);
@@ -34,6 +35,17 @@ function printCycles(results) {
     console.log(`cycles: ${results.length - failed.length}/${results.length} clean`);
   }
   return failed.length ? 1 : 0;
+}
+
+function printReadDiscipline(results) {
+  const failed = results.filter(r => !r.ok);
+  if (jsonOut) {
+    console.log(JSON.stringify({ command: "read-discipline", checked: results.length, failed: failed.length, failures: failed }));
+  } else {
+    for (const r of failed) console.error(`✗ ${r.file}\n    ${r.errors.join("\n    ")}`);
+    console.log(`read-discipline: ${results.length - failed.length}/${results.length} clean`);
+  }
+  return failed.some(r => r.tool_error) ? 2 : failed.length ? 1 : 0;
 }
 
 const FIX = resolve(dirname(fileURLToPath(import.meta.url)), "fixtures");
@@ -116,6 +128,7 @@ let code = 0;
 switch (cmd) {
   case "schema": code = printSchema(checkSchemas(root)); break;
   case "cycles": code = printCycles(checkAllWorkflows(root)); break;
+  case "read-discipline": code = printReadDiscipline(checkReadDiscipline(root)); break;
   case "detect": code = printDetect(); break;
   case "resume":
     code = args[1] && !args[1].startsWith("--") ? printResumeOne(resolve(root, args[1])) : printResumeFixtures();
@@ -155,7 +168,8 @@ switch (cmd) {
   case "all": code = runAll(); break;
   case undefined:
   case "--help":
-    console.log("Usage: sdlc-lint <schema|cycles|detect|resume|report|rollup|all> [--json]");
+    console.log("Usage: sdlc-lint <schema|cycles|detect|resume|report|rollup|read-discipline|all> [--json]");
+    console.log("  read-discipline   E2: contract present in the stable prefix; no re-read phrasing in agents");
     break;
   default:
     console.error(`unknown command: ${cmd}`);
