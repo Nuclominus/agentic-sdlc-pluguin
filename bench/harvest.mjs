@@ -193,9 +193,15 @@ function attemptEnrichment(dest, telDir, manifest) {
  * Locate the orchestrator session transcript for a scratch run.
  *
  * Claude Code encodes a session's cwd into its projects-dir name by replacing
- * every "/" with "-". `realpathSync` is required first: on macOS `/tmp` (and
- * hence `$TMPDIR`) resolves to `/private/var/...`, and the encoding is built
- * from the RESOLVED path, not the one this process was handed.
+ * every "/" AND every "_" with "-" (a macOS temp-dir realpath always contains
+ * at least one "_", e.g. ".../7wn2stn92dx8lyn_ppq_fq0w0000gp/T", so getting
+ * this wrong is not a corner case — it silently misses on every run and falls
+ * through to the "newest anywhere" fallback below, which then risks
+ * attaching the wrong session's transcript whenever more than one run's
+ * session lives under the same projects root). `realpathSync` is required
+ * first: on macOS `/tmp` (and hence `$TMPDIR`) resolves to `/private/var/...`,
+ * and the encoding is built from the RESOLVED path, not the one this process
+ * was handed.
  *
  * Falls back to the newest *.jsonl anywhere under projectsRoot when the
  * encoded directory does not exist (e.g. a differently-shaped test fixture,
@@ -205,7 +211,7 @@ function findSessionTranscript(dest, projectsRoot) {
   if (!existsSync(projectsRoot)) return null;
 
   let encoded;
-  try { encoded = realpathSync(dest).replace(/\//g, "-"); } catch { encoded = null; }
+  try { encoded = realpathSync(dest).replace(/[/_]/g, "-"); } catch { encoded = null; }
   if (encoded) {
     const sessionDir = join(projectsRoot, encoded);
     if (existsSync(sessionDir)) {
