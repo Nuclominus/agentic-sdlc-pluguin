@@ -143,9 +143,17 @@ Build the specimen's skeleton and, in the same task, the tool that decides wheth
 `bench/reference-app/settings.gradle.kts`:
 
 ```kotlin
+dependencyResolutionManagement {
+    repositories {
+        mavenCentral()
+    }
+}
+
 rootProject.name = "bench-orders"
 include(":app")
 ```
+
+Without the `dependencyResolutionManagement` block, `kotlin-stdlib` is unresolvable and the build fails.
 
 `bench/reference-app/gradle/libs.versions.toml` — deliberately declares **no** framework coordinates, so no additive SDLC framework provider activates:
 
