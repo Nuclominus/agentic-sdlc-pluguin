@@ -47,6 +47,12 @@ if (manifest.arm !== arm) {
 
 // Cross-check the recorded provenance against live state. Divergence means the
 // environment moved between prepare and harvest; neither value is preferred.
+//
+// This check can be disabled (BENCH_SKIP_LIVE_CHECK=1), but a skipped check
+// must never be silent: a run harvested without it is otherwise
+// byte-indistinguishable from a validated one, so its outcome is recorded in
+// the stored result as `live_check` and flagged loudly here.
+let liveCheck;
 if (process.env.BENCH_SKIP_LIVE_CHECK !== "1") {
   const git = (cwd, ...a) => { try { return execFileSync("git", ["-C", cwd, ...a], { encoding: "utf8" }).trim(); } catch { return ""; } };
   // Resolved by the SAME helpers prepare.mjs used — if the two ever diverged,
@@ -66,6 +72,11 @@ if (process.env.BENCH_SKIP_LIVE_CHECK !== "1") {
     die(`provenance diverged between prepare and harvest:\n  ${divergence.join("\n  ")}\n` +
         `Neither value can be trusted for this run. Discard it and re-run.`);
   }
+  liveCheck = "passed";
+} else {
+  liveCheck = "skipped";
+  console.error(`harvest: WARNING: BENCH_SKIP_LIVE_CHECK=1 — live provenance cross-check was skipped. ` +
+                `This result is UNVALIDATED against live state and is recorded as such (live_check: "skipped").`);
 }
 
 // Locate the single telemetry file the run produced.
@@ -97,7 +108,7 @@ for (const p of phases) {
 mkdirSync(resultsDir, { recursive: true });
 writeFileSync(
   join(resultsDir, `${arm}-${run}.json`),
-  JSON.stringify({ manifest, telemetry, flags, harvested_at: new Date().toISOString() }, null, 2) + "\n",
+  JSON.stringify({ manifest, telemetry, flags, live_check: liveCheck, harvested_at: new Date().toISOString() }, null, 2) + "\n",
 );
 
 console.log(`harvested arm ${arm} run ${run}${flags.length ? ` (FLAGGED: ${flags.join("; ")})` : ""}`);

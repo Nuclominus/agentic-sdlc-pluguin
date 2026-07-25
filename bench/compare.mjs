@@ -31,7 +31,51 @@ export function runMetrics(result) {
     peak_prefix: Math.max(0, ...m.by_phase.map((p) => p.peak_prefix_tokens)),
     turns: m.by_phase.reduce((n, p) => n + p.turns, 0),
     cost_usd: m.totals.cost_usd,
+    phase_count: m.by_phase.length,
   };
+}
+
+/**
+ * Per-arm provenance consistency: a "clean" run is only comparable with
+ * another run of the same arm if both actually came from the same build. With
+ * fewer than two runs there is nothing to disagree, so it is trivially
+ * consistent.
+ */
+export function checkProvenance(runs) {
+  if (runs.length < 2) return { consistent: true, versions: [], shas: [] };
+  const versions = [...new Set(runs.map((r) => r.manifest.plugin_version))];
+  const shas = [...new Set(runs.map((r) => r.manifest.marketplace_sha))];
+  return { consistent: versions.length <= 1 && shas.length <= 1, versions, shas };
+}
+
+/**
+ * True when clean runs, sorted by prepared_at, alternate arms throughout —
+ * i.e. no run-order block like A A A B B B, which would let anything that
+ * drifts over time (machine load, cache warmth, fatigue) masquerade as an
+ * arm effect.
+ */
+export function isInterleaved(runs) {
+  const sorted = [...runs].sort((a, b) => new Date(a.manifest.prepared_at) - new Date(b.manifest.prepared_at));
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i].manifest.arm === sorted[i - 1].manifest.arm) return false;
+  }
+  return true;
+}
+
+/** Count of loaded results harvested with the live provenance check turned off. */
+export function countSkippedLiveCheck(results) {
+  return results.filter((r) => r.live_check === "skipped").length;
+}
+
+/**
+ * The `--pilot` recommendation. Fewer than two clean runs means no spread was
+ * ever observed — that is absence of evidence, not perfect stability, and
+ * must not be rendered as a green light to proceed at N=3.
+ */
+export function pilotAdvice(cacheReads) {
+  if (cacheReads.length < 2) return { available: false, runs: cacheReads.length };
+  const s = spread(cacheReads);
+  return { available: true, spread: s, ...recommendN(s) };
 }
 
 /**
@@ -86,6 +130,12 @@ function main() {
 
   if (dropped.length) console.log(`dropped ${dropped.length} flagged run(s): ${dropped.map((r) => `${r.manifest.arm}-${r.manifest.run}`).join(", ")}`);
 
+  const skippedLiveCheck = countSkippedLiveCheck(all);
+  if (skippedLiveCheck) {
+    console.log(`WARNING: ${skippedLiveCheck} of ${all.length} loaded result(s) were harvested with the live ` +
+                `provenance check skipped (BENCH_SKIP_LIVE_CHECK=1) and are unvalidated against live state.`);
+  }
+
   for (const [name, rs] of [["a", A], ["b", B]]) {
     if (!rs.length) { console.log(`arm ${name}: no clean runs`); continue; }
     const cr = rs.map((m) => m.total_cache_read), pk = rs.map((m) => m.peak_prefix);
@@ -93,14 +143,43 @@ function main() {
     console.log(`  cache-read  median ${median(cr).toLocaleString()}  range ${Math.min(...cr).toLocaleString()}..${Math.max(...cr).toLocaleString()}  spread ${(spread(cr) * 100).toFixed(1)}%`);
     console.log(`  peak-prefix median ${median(pk).toLocaleString()}  range ${Math.min(...pk).toLocaleString()}..${Math.max(...pk).toLocaleString()}`);
     console.log(`  turns       median ${median(rs.map((m) => m.turns))}`);
+    console.log(`  phases      per-run ${rs.map((m) => m.phase_count).join(", ")} (a run count mismatch means the difference may be composition, not the thing under test)`);
   }
 
   const noise = Math.max(spread(A.map((m) => m.total_cache_read)), spread(B.map((m) => m.total_cache_read)));
 
   if (pilot) {
-    const rec = recommendN(spread(A.map((m) => m.total_cache_read)));
-    console.log(`\npilot: observed arm-a spread ${(spread(A.map((m) => m.total_cache_read)) * 100).toFixed(1)}% (a LOWER BOUND, not a point estimate)`);
-    console.log(`       ${rec.action}`);
+    const advice = pilotAdvice(A.map((m) => m.total_cache_read));
+    if (!advice.available) {
+      console.log(`\npilot: arm a has ${advice.runs} clean run(s) — no recommendation available. ` +
+                  `A spread needs at least two runs to observe; zero or one is absence of evidence, not stability.`);
+      return;
+    }
+    console.log(`\npilot: observed arm-a spread ${(advice.spread * 100).toFixed(1)}% (a LOWER BOUND, not a point estimate)`);
+    console.log(`       ${advice.action}`);
+    return;
+  }
+
+  // Provenance guards. A verdict is only as good as the claim that each arm's
+  // clean runs actually came from the same build, run in an order that does
+  // not let time confound arm.
+  let suppressVerdict = false;
+  for (const [name, rs] of [["a", byArm.a], ["b", byArm.b]]) {
+    const prov = checkProvenance(rs);
+    if (!prov.consistent) {
+      suppressVerdict = true;
+      console.log(`\nWARNING: arm ${name}'s clean runs do not share provenance — a mixed arm is not an arm.`);
+      if (prov.versions.length > 1) console.log(`  plugin_version varies: ${prov.versions.join(", ")}`);
+      if (prov.shas.length > 1) console.log(`  marketplace_sha varies: ${prov.shas.join(", ")}`);
+    }
+  }
+  if (clean.length > 1 && !isInterleaved(clean)) {
+    console.log(`\nWARNING: run order is not interleaved when sorted by prepared_at — arm is confounded ` +
+                `with time (machine load, cache warmth, drift). Treat the verdict below with corresponding suspicion.`);
+  }
+
+  if (suppressVerdict) {
+    console.log(`\nverdict suppressed: at least one arm's clean runs disagree on provenance — fix that before comparing.`);
     return;
   }
 

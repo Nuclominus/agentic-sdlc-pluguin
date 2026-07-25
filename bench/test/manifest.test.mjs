@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { MANIFEST_NAME, buildManifest, writeManifest, readManifest, diffManifest, resolveConfigDir, resolvePluginVersion } from "../lib/manifest.mjs";
@@ -69,4 +69,11 @@ test("an ambiguous plugin cache is a hard error, not a guess", () => {
 
 test("an absent plugin cache records an empty version rather than throwing", () => {
   assert.equal(resolvePluginVersion(join(tmpdir(), "definitely-not-there-12345")), "");
+});
+
+test("a Finder .DS_Store alongside one real version still resolves cleanly", () => {
+  const cache = mkdtempSync(join(tmpdir(), "cache-"));
+  mkdirSync(join(cache, "1.9.1"));
+  writeFileSync(join(cache, ".DS_Store"), "");
+  assert.equal(resolvePluginVersion(cache), "1.9.1");
 });

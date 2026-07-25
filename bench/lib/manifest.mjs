@@ -28,6 +28,10 @@ export function resolveConfigDir(env = process.env) {
 export function resolvePluginVersion(cacheDir) {
   let entries;
   try { entries = readdirSync(cacheDir); } catch { return ""; }
+  // Dotfiles (e.g. a Finder-created .DS_Store) are not installed versions —
+  // filter them before counting, or a macOS cache directory falsely reads as
+  // ambiguous and both prepare and harvest die on a version that was never there.
+  entries = entries.filter((e) => !e.startsWith("."));
   if (entries.length !== 1) {
     throw new Error(
       `expected exactly one installed sdlc version in ${cacheDir}, found ${entries.length}: ${entries.join(", ")}`);

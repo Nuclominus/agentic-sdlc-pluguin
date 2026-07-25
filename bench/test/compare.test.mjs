@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { median, spread, runMetrics, recommendN, verdict } from "../compare.mjs";
+import {
+  median, spread, runMetrics, recommendN, verdict,
+  pilotAdvice, checkProvenance, isInterleaved, countSkippedLiveCheck,
+} from "../compare.mjs";
 
 const result = (cacheRead, peak, flags = []) => ({
   manifest: { arm: "a", run: 1 },
@@ -36,6 +39,7 @@ test("runMetrics takes the sum for cache-read and the max for peak", () => {
   assert.equal(m.total_cache_read, 900000);
   assert.equal(m.peak_prefix, 74000);   // max across phases, not the last one
   assert.equal(m.turns, 15);
+  assert.equal(m.phase_count, 2);       // FIX 5: composition must be visible, not just totals
 });
 
 test("recommendN maps spread to N at the documented boundaries", () => {
@@ -70,4 +74,82 @@ test("verdict language never claims statistical significance", () => {
   for (const v of all) {
     assert.doesNotMatch(v.reason, /significant|p\s*[<=]|p-value/i);
   }
+});
+
+// --- FIX 1: --pilot must refuse to recommend on fewer than two clean runs ---
+
+test("pilotAdvice refuses to recommend with zero clean runs", () => {
+  const a = pilotAdvice([]);
+  assert.equal(a.available, false);
+  assert.equal(a.runs, 0);
+});
+
+test("pilotAdvice refuses to recommend with exactly one clean run", () => {
+  const a = pilotAdvice([900000]);
+  assert.equal(a.available, false);
+  assert.equal(a.runs, 1);
+});
+
+test("pilotAdvice recommends once at least two clean runs are observed", () => {
+  const a = pilotAdvice([100, 105]);
+  assert.equal(a.available, true);
+  assert.equal(a.n, 3);
+  assert.match(a.action, /N=3/);
+});
+
+// --- FIX 2: cross-run provenance guards ---
+
+const run = (over = {}) => ({
+  manifest: {
+    arm: "a", run: 1, plugin_version: "1.9.1", marketplace_sha: "abc123",
+    prepared_at: "2026-07-25T12:00:00.000Z", ...over,
+  },
+});
+
+test("checkProvenance is trivially consistent with fewer than two runs", () => {
+  assert.equal(checkProvenance([]).consistent, true);
+  assert.equal(checkProvenance([run()]).consistent, true);
+});
+
+test("checkProvenance flags an arm whose runs disagree on plugin_version", () => {
+  const p = checkProvenance([run({ run: 1 }), run({ run: 2, plugin_version: "1.10.0" })]);
+  assert.equal(p.consistent, false);
+  assert.deepEqual(p.versions.sort(), ["1.10.0", "1.9.1"]);
+});
+
+test("checkProvenance flags an arm whose runs disagree on marketplace_sha", () => {
+  const p = checkProvenance([run({ run: 1 }), run({ run: 2, marketplace_sha: "def456" })]);
+  assert.equal(p.consistent, false);
+  assert.deepEqual(p.shas.sort(), ["abc123", "def456"]);
+});
+
+test("checkProvenance is consistent when every run agrees", () => {
+  const p = checkProvenance([run({ run: 1 }), run({ run: 2 }), run({ run: 3 })]);
+  assert.equal(p.consistent, true);
+});
+
+test("isInterleaved is true for a properly alternating run order", () => {
+  const runs = [
+    run({ arm: "a", prepared_at: "2026-07-25T09:00:00.000Z" }),
+    run({ arm: "b", prepared_at: "2026-07-25T09:10:00.000Z" }),
+    run({ arm: "a", prepared_at: "2026-07-25T09:20:00.000Z" }),
+    run({ arm: "b", prepared_at: "2026-07-25T09:30:00.000Z" }),
+  ];
+  assert.equal(isInterleaved(runs), true);
+});
+
+test("isInterleaved is false for a blocked A A A B B B order, regardless of file order", () => {
+  const runs = [
+    run({ arm: "b", prepared_at: "2026-07-25T10:00:00.000Z" }),
+    run({ arm: "a", prepared_at: "2026-07-25T09:00:00.000Z" }),
+    run({ arm: "a", prepared_at: "2026-07-25T09:10:00.000Z" }),
+  ];
+  assert.equal(isInterleaved(runs), false);
+});
+
+// --- FIX 3: a skipped live check must be countable, not silent ---
+
+test("countSkippedLiveCheck counts only results harvested with the check off", () => {
+  const results = [{ live_check: "passed" }, { live_check: "skipped" }, { live_check: "skipped" }, {}];
+  assert.equal(countSkippedLiveCheck(results), 2);
 });

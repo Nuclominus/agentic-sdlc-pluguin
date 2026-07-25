@@ -2,9 +2,10 @@
 
 ## Step 0 — freeze the environment
 
-Verified 2026-07-25 (Task 1 of the benchmark-harness plan). This section is the
-reproducible, deterministic procedure for isolating and switching the two
-comparison arms. It writes no harness code — see later tasks for that.
+Verified 2026-07-25. This section is the reproducible, deterministic procedure
+for isolating and switching the two comparison arms. The rest of the harness
+(`prepare.mjs`, `harvest.mjs`, `compare.mjs`, further down this document)
+builds on it.
 
 ### Arms
 
@@ -122,8 +123,9 @@ tools/sdlc-lint/lib/read-discipline.mjs ... -->` comment that quotes the same ph
 literally (added by `tools/sdlc-lint` to keep the paragraph pinned in the stable
 prefix). This is real environment drift since the plan was written, not an error in
 this procedure — the grep still discriminates correctly (`0` vs. `>0`), it just isn't
-exactly `1`. **Downstream tasks (esp. Task 7) should test `grep -c ... | grep -qv
-'^0$'` or similar, not an exact-match on `1`.**
+exactly `1`. **Operator instruction: re-run this grep before each benchmark session
+and check `grep -c ... | grep -qv '^0$'` (non-zero), not an exact-match on `1` —
+expect `0` for arm A and non-zero for arm B.**
 
 Installed versions confirmed via `claude plugin list` under each `CLAUDE_CONFIG_DIR`:
 arm A → `sdlc@agentic-sdlc` v`1.9.1`; arm B → v`1.10.0`.
@@ -151,9 +153,9 @@ Arm isolation and deterministic switching are **verified working** via
 `CLAUDE_CONFIG_DIR`, with GitHub `owner/repo#branch` ref-pinning for the marketplace
 source and a hand-set `autoUpdate: false` in each arm's isolated `settings.json`. The
 user's real `~/.claude/` configuration was read-only throughout and was never
-modified. The rest of the harness (Task 7 runbook) can build on this procedure
-as-is, with one correction: the discriminating grep's expected arm-B count is `2`,
-not `1` — check for non-zero, not for an exact literal count of `1`.
+modified. The rest of the runbook below builds on this procedure as-is, with one
+correction: the discriminating grep's expected arm-B count is `2`, not `1` — check
+for non-zero, not for an exact literal count of `1`.
 
 ## Step 0.5 — power check
 
@@ -269,3 +271,18 @@ application in `.brain/planning/backlog.md` (Track E baseline) — that figure c
 a real 7-phase production run on a different codebase, measured by a different tool,
 for a different purpose. Never present this harness's output as if it validated or
 updated that number.
+
+## Closing step — record the caveat with the number
+
+`compare.mjs` ends with numbers printed to a terminal. A terminal scrolls away; the
+number does not carry its own caveat once it is copied into a chat message, a ticket,
+or someone's memory a month later. Before ending the session:
+
+- Copy `compare.mjs`'s output **verbatim** (including any `WARNING:` lines it printed
+  — mixed-provenance or non-interleaved-order warnings are part of the result, not
+  noise to trim) into that session's report.
+- Alongside it, record: **N per arm**, the **observed spread**, and the **run order**
+  actually used (e.g. `A B A B A B`).
+
+A number that outlives the caveat that qualified it becomes folklore — repeated
+without the conditions that made it true. Keep the two attached.

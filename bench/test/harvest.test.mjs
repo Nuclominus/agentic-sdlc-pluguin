@@ -43,6 +43,47 @@ test("stores a result with the manifest and telemetry", () => {
   assert.deepEqual(r.flags, []);
 });
 
+test("a skipped live check is recorded, not silent", () => {
+  // BENCH_SKIP_LIVE_CHECK=1 is forced by the harvest() helper here — this is
+  // the everyday hermetic-test path, and it must leave a trace in the result.
+  const { root } = scratchRun("telemetry-transcript.json", { run: 8 });
+  const out = mkdtempSync(join(tmpdir(), "results-"));
+  harvest(["--arm", "a", "--run", "8", "--results", out], { BENCH_SCRATCH_ROOT: root });
+  const r = JSON.parse(readFileSync(join(out, "a-8.json"), "utf8"));
+  assert.equal(r.live_check, "skipped");
+});
+
+test('records live_check: "passed" when the live cross-check actually runs and agrees', () => {
+  // Build a self-contained fake CLAUDE_CONFIG_DIR: one cached plugin version
+  // and a one-commit git repo standing in for the marketplace clone, so the
+  // live cross-check has something real to agree with — no ambient machine
+  // state involved.
+  const configDir = mkdtempSync(join(tmpdir(), "config-"));
+  const cacheDir = join(configDir, "plugins", "cache", "agentic-sdlc", "sdlc");
+  mkdirSync(join(cacheDir, "1.9.1"), { recursive: true });
+  const marketplaceDir = join(configDir, "plugins", "marketplaces", "agentic-sdlc");
+  mkdirSync(marketplaceDir, { recursive: true });
+  const git = (...a) => execFileSync("git", a, { cwd: marketplaceDir, encoding: "utf8" });
+  git("init", "-q");
+  git("config", "user.email", "bench@test.local");
+  git("config", "user.name", "bench-test");
+  writeFileSync(join(marketplaceDir, "README.md"), "x");
+  git("add", "README.md");
+  git("commit", "-q", "-m", "init");
+  const sha = git("rev-parse", "HEAD").trim();
+
+  const { root } = scratchRun("telemetry-transcript.json", {
+    arm: "a", run: 9, plugin_version: "1.9.1", marketplace_sha: sha, config_dir: configDir,
+  });
+  const out = mkdtempSync(join(tmpdir(), "results-"));
+  harvest(
+    ["--arm", "a", "--run", "9", "--results", out],
+    { BENCH_SCRATCH_ROOT: root, BENCH_SKIP_LIVE_CHECK: "0", CLAUDE_CONFIG_DIR: configDir },
+  );
+  const r = JSON.parse(readFileSync(join(out, "a-9.json"), "utf8"));
+  assert.equal(r.live_check, "passed");
+});
+
 test("rejects telemetry whose cost_basis is not transcript", () => {
   const { root } = scratchRun("telemetry-aggregate.json", { run: 2 });
   const out = mkdtempSync(join(tmpdir(), "results-"));
