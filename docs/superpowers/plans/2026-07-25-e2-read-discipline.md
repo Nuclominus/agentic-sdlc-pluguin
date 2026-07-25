@@ -669,7 +669,7 @@ From:
 To:
 
 ```markdown
-5. **Verify** what you wrote from the `Edit`/`Write` tool result — it echoes the applied change. Check that imports, types, and signatures align. Do not pull the file back into context to confirm the edit landed.
+5. **Verify** what you wrote: the `Edit`/`Write` result confirms the change landed — you do not need to pull the file back into context for that. What you do need is consistency beyond the hunk: grep the file for the imports, types, and signatures you touched and confirm they still line up.
 ```
 
 - [ ] **Step 3: Rewrite `security-analyst.md:36`**
@@ -697,7 +697,7 @@ From:
 To:
 
 ```markdown
-5. **Verify your fixes** from the `Edit` tool result and by reasoning about the attack path — confirm the change actually closes it. Do not pull the file back into context.
+5. **Verify your fixes** — the `Edit` result confirms the change landed. Then confirm the path is actually closed: grep for every other use of the same tainted value or sink in the file. A fix that closes one call site and misses a second is a false pass.
 ```
 
 - [ ] **Step 5: Rewrite `qa-engineer.md:59`**

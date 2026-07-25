@@ -125,8 +125,8 @@ already used at `SKILL.md:907` for resume semantics, pointing at the lint rule.
 |------|------|--------|
 | `qa-engineer.md` | 59 | Read changed files from the file system (not from the prompt); do not read the same file twice. Defer to the read-discipline contract rather than restating it. |
 | `security-analyst.md` | 36 | Same treatment as `qa-engineer.md:59`. |
-| `security-analyst.md` | 58 | Verify a fix from the `Edit` result and by reasoning about the path, not by reading the file back. |
-| `developer.md` | 47 | Verify imports/types/signatures from the `Edit` result, not by re-reading changed files. |
+| `security-analyst.md` | 58 | The `Edit` result confirms the change landed; then grep for other uses of the same tainted value or sink, so a second call site is not missed. |
+| `developer.md` | 47 | The `Edit` result confirms the change landed; then grep the file for the touched imports/types/signatures to confirm they still line up. |
 | `document-writer.md` | 36 | Read prior phase outputs with `offset/limit` / grep to the needed sections instead of reading all of them whole. |
 
 `document-writer` is the highest-value single edit: the `documentation` phase carries a ~21k floor,
