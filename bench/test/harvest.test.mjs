@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, cpSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, cpSync, realpathSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -123,6 +123,88 @@ test("archives the whole scratch tree", () => {
   const arch = mkdtempSync(join(tmpdir(), "archive-"));
   harvest(["--arm", "a", "--run", "4", "--results", out, "--archive", arch], { BENCH_SCRATCH_ROOT: root });
   assert.ok(existsSync(join(arch, "a-4.tar.gz")), "expected an archive tarball");
+});
+
+test('idempotent: already-transcript telemetry is not re-enriched, recorded as "already"', () => {
+  // Run 1's telemetry was already enriched (by a previous harvest, or by hand
+  // before this feature existed). Re-harvesting must not re-run enrichment —
+  // there is nothing to add, and doing so is the one behavior that must never
+  // change a value that downstream comparisons already trust.
+  const { root } = scratchRun("telemetry-transcript.json", { run: 10 });
+  const out = mkdtempSync(join(tmpdir(), "results-"));
+  const stdout = harvest(["--arm", "a", "--run", "10", "--results", out], { BENCH_SCRATCH_ROOT: root });
+  assert.match(stdout, /enrichment: already/);
+  const r = JSON.parse(readFileSync(join(out, "a-10.json"), "utf8"));
+  assert.equal(r.enriched, "already");
+  // Untouched: still exactly the fixture's numbers, not recomputed.
+  assert.equal(r.telemetry.total_cached_input_tokens, 900000);
+});
+
+test("enriches telemetry using the projects root derived from manifest.config_dir, not the live environment", () => {
+  // Build a scratch run whose telemetry has NOT been enriched yet (cost_basis
+  // is not "transcript"), plus a fake arm config dir containing exactly the
+  // projects/<encoded-cwd>/<session>.jsonl + .../subagents/agent-<id>.jsonl
+  // layout usage.mjs expects — but rooted at the RECORDED manifest.config_dir,
+  // not at any live CLAUDE_CONFIG_DIR. A deliberately bogus live
+  // CLAUDE_CONFIG_DIR (with no matching transcripts at all) is passed to the
+  // harvest process itself: if the implementation ever read live state instead
+  // of the manifest, this test would find nothing and fail.
+  const root = mkdtempSync(join(tmpdir(), "scratch-"));
+  const dest = join(root, "a-20");
+  mkdirSync(join(dest, "docs", "plans", "bench-validation"), { recursive: true });
+
+  const configDir = mkdtempSync(join(tmpdir(), "config-"));
+  writeManifest(dest, buildManifest(manifestFields({ run: 20, config_dir: configDir })));
+
+  const AGENT_ID = "abc123def456ab"; // 14 hex chars — matches usage.mjs's agent-id shape
+  const telemetry = {
+    task_slug: "bench-validation",
+    stack: "vanilla",
+    cost_basis: "subagent_aggregate",
+    completed_at: "2026-07-25T12:10:40.000Z",
+    phases: [
+      { phase: "development", agent: "developer", model: "claude-sonnet-5",
+        status: "completed", usage_source: "subagent_aggregate", agent_id: AGENT_ID,
+        turns: 1, input_tokens: 0, output_tokens: 0, cached_input_tokens: 0, cost_usd: null },
+    ],
+  };
+  writeFileSync(
+    join(dest, "docs", "plans", "bench-validation", "_telemetry.json"),
+    JSON.stringify(telemetry, null, 2),
+  );
+
+  // The encoding harvest.mjs must reproduce: realpath the scratch dir (macOS
+  // resolves the tmpdir under /private/var/...), then "/" -> "-".
+  const encoded = realpathSync(dest).replace(/\//g, "-");
+  const sessionDir = join(configDir, "projects", encoded);
+  const sessionId = "sess1";
+  mkdirSync(sessionDir, { recursive: true });
+  writeFileSync(join(sessionDir, `${sessionId}.jsonl`), "");
+  const subagentsDir = join(sessionDir, sessionId, "subagents");
+  mkdirSync(subagentsDir, { recursive: true });
+  writeFileSync(
+    join(subagentsDir, `agent-${AGENT_ID}.jsonl`),
+    JSON.stringify({
+      message: {
+        role: "assistant", model: "claude-sonnet-5", id: "resp-1",
+        usage: { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 900000, cache_creation_input_tokens: 0 },
+      },
+    }) + "\n",
+  );
+
+  const out = mkdtempSync(join(tmpdir(), "results-"));
+  const bogusLiveConfigDir = mkdtempSync(join(tmpdir(), "bogus-config-"));
+  const stdout = harvest(
+    ["--arm", "a", "--run", "20", "--results", out],
+    { BENCH_SCRATCH_ROOT: root, CLAUDE_CONFIG_DIR: bogusLiveConfigDir },
+  );
+
+  assert.match(stdout, /enrichment: performed/);
+  const r = JSON.parse(readFileSync(join(out, "a-20.json"), "utf8"));
+  assert.equal(r.enriched, "performed");
+  assert.equal(r.telemetry.cost_basis, "transcript");
+  assert.equal(r.telemetry.phases[0].cached_input_tokens, 900000);
+  assert.deepEqual(r.flags, []);
 });
 
 test("flags a run whose arm disagrees with its filename", () => {

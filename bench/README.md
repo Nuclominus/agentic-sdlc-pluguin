@@ -232,6 +232,22 @@ diverge), stop and investigate before trusting that run's numbers — it means t
 environment changed between `prepare` and `harvest` (e.g. the wrong arm was launched,
 or `CLAUDE_CONFIG_DIR` was not set for that shell).
 
+**Enrichment is automatic — `enriched: performed` is expected, not a problem.** A
+run's transcripts (the real per-turn cache-read tokens the whole experiment exists to
+measure) land under the arm's own `<config_dir>/projects/...`, because arms are
+isolated via `CLAUDE_CONFIG_DIR`. The pipeline's own cost-enrichment step
+(`plugins/sdlc/tools/usage/usage.mjs`) does **not** look there by default — it resolves
+transcripts from `homedir()`, i.e. the operator's real `~/.claude`. Left alone, every
+run would silently end up with `cost_basis: "subagent_aggregate"` (no
+`peak_prefix_tokens`, no `turns`) and get rejected by the gate above. `harvest.mjs`
+therefore performs the same enrichment itself, pointed at `manifest.config_dir` (the
+arm identity recorded at `prepare` time, not live environment state) — so every run is
+enriched identically instead of by hand. The stored result records which happened:
+`enriched: "already"` (telemetry was already transcript-based — nothing to do),
+`"performed"` (harvest enriched it just now), or `"unavailable"` (no transcript could
+be found; the `cost_basis` gate above rejects the run in that case). Seeing
+`"performed"` on every fresh run is the normal, expected outcome.
+
 While the Claude Code session runs, answer every approval gate and clarifying question
 with the scripted response from `bench/answers.md`, verbatim. For anything not covered
 there, answer with the single word `proceed` and note the deviation in that run's
