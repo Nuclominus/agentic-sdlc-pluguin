@@ -60,6 +60,30 @@ class CalculateShipping(
     private fun qualifiesForFreeShipping(order: Order): Boolean =
         order.appliedDiscount == FreeShippingDiscount || order.total.cents >= FREE_SHIPPING_THRESHOLD.cents
 
+    /**
+     * Quotes every [ShippingMethod] at once, for a checkout screen that
+     * wants to show the customer all their options and prices side by
+     * side rather than one quote at a time.
+     *
+     * @return [Result.Success] with a map from method to quoted cost, or
+     *   [Result.Failure] wrapping a [NotFoundError] if the order does not
+     *   exist.
+     */
+    fun quoteEveryMethod(
+        orderId: String,
+        destination: Address,
+        homeCountry: String = "US",
+    ): Result<Map<ShippingMethod, Money>> {
+        val quotes = ShippingMethod.entries.associateWith { method ->
+            val result = invoke(orderId, method, destination, homeCountry)
+            when (result) {
+                is Result.Success -> result.value
+                is Result.Failure -> return Result.Failure(result.error)
+            }
+        }
+        return Result.Success(quotes)
+    }
+
     companion object {
         private val FREE_SHIPPING_THRESHOLD = Money.ofUnits(75L)
         private val INTERNATIONAL_SURCHARGE = Money.ofUnits(15L)

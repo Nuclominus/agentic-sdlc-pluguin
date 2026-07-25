@@ -92,6 +92,36 @@ class CalculateShippingTest {
 
         assertIs<NotFoundError>((result as Result.Failure).error)
     }
+
+    @Test
+    fun `quoteEveryMethod returns a price for every shipping method`() {
+        val orders = InMemoryOrderRepository(seed = listOf(orderWorth(2000)))
+        val calculateShipping = CalculateShipping(orders)
+
+        val result = calculateShipping.quoteEveryMethod("ord-1", domesticAddress)
+
+        assertIs<Result.Success<Map<ShippingMethod, Money>>>(result)
+        assertEquals(setOf(ShippingMethod.STANDARD, ShippingMethod.EXPRESS, ShippingMethod.OVERNIGHT), result.value.keys)
+    }
+
+    @Test
+    fun `quoteEveryMethod quotes zero for every method once free shipping applies`() {
+        val orders = InMemoryOrderRepository(seed = listOf(orderWorth(Money.ofUnits(75L).cents)))
+        val calculateShipping = CalculateShipping(orders)
+
+        val result = calculateShipping.quoteEveryMethod("ord-1", domesticAddress) as Result.Success
+
+        assertTrue(result.value.values.all { it == Money.ZERO })
+    }
+
+    @Test
+    fun `quoteEveryMethod fails with NotFoundError for an unknown order id`() {
+        val calculateShipping = CalculateShipping(InMemoryOrderRepository())
+
+        val result = calculateShipping.quoteEveryMethod("ord-missing", domesticAddress)
+
+        assertIs<NotFoundError>((result as Result.Failure).error)
+    }
 }
 
 /** Covers [ShippingMethod] in isolation, kept next to [CalculateShippingTest] since the two are always used together. */
