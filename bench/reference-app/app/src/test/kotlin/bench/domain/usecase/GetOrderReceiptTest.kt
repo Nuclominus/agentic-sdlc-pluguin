@@ -141,4 +141,35 @@ class GetOrderReceiptTest {
         assertTrue(rendered.contains("ord-1"))
         assertTrue(!rendered.contains("ord-missing"))
     }
+
+    @Test
+    fun `oneLineSummary reports id, item count and total`() {
+        val orders = InMemoryOrderRepository(seed = listOf(order()))
+        val receipt = GetOrderReceipt(orders, InMemoryProductRepository(seed = catalog))
+
+        val result = receipt.oneLineSummary("ord-1")
+
+        assertIs<Result.Success<String>>(result)
+        assertEquals("ord-1: 2 items, 48.00", result.value)
+    }
+
+    @Test
+    fun `oneLineSummary uses the singular word for exactly one item`() {
+        val singleItemOrder = order().copy(lines = listOf(OrderLine("sku-1001", 1, Money.ofUnits(24L))))
+        val orders = InMemoryOrderRepository(seed = listOf(singleItemOrder))
+        val receipt = GetOrderReceipt(orders, InMemoryProductRepository(seed = catalog))
+
+        val result = receipt.oneLineSummary("ord-1") as Result.Success<String>
+
+        assertTrue(result.value.contains("1 item,"))
+    }
+
+    @Test
+    fun `oneLineSummary fails with NotFoundError for an unknown order id`() {
+        val receipt = GetOrderReceipt(InMemoryOrderRepository(), InMemoryProductRepository())
+
+        val result = receipt.oneLineSummary("ord-missing")
+
+        assertIs<NotFoundError>((result as Result.Failure).error)
+    }
 }

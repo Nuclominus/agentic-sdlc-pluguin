@@ -88,4 +88,20 @@ class GetOrderReceipt(
      */
     fun renderAll(orderIds: List<String>): String =
         orderIds.mapNotNull { (invoke(it) as? Result.Success)?.value }.joinToString(separator = "\n")
+
+    /**
+     * A one-line summary of an order — id, item count, and total — for a
+     * context (an order-history list, a notification) that wants a quick
+     * reference rather than the full [invoke] receipt.
+     *
+     * @return [Result.Success] with the summary line, or [Result.Failure]
+     *   wrapping a [NotFoundError] if the order does not exist.
+     */
+    fun oneLineSummary(orderId: String): Result<String> {
+        val order = orders.findById(orderId)
+            ?: return Result.Failure(NotFoundError("No order with id $orderId", orderId))
+
+        val itemWord = if (order.totalUnitCount() == 1) "item" else "items"
+        return Result.Success("${order.id}: ${order.totalUnitCount()} $itemWord, ${format(order.discountedTotal.cents)}")
+    }
 }
