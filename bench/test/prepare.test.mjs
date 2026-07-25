@@ -20,7 +20,13 @@ function specimen() {
 
 function run(args, env = {}) {
   return execFileSync("node", [PREPARE, ...args], {
-    cwd: REPO, encoding: "utf8", env: { ...process.env, ...env },
+    cwd: REPO,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      CLAUDE_CONFIG_DIR: mkdtempSync(join(tmpdir(), "cfg-")),
+      ...env,
+    },
   });
 }
 
@@ -75,5 +81,18 @@ test("rejects an unknown arm", () => {
   assert.throws(
     () => run(["--arm", "c", "--run", "1", "--specimen", specimen(), "--gap", "60"], { BENCH_SCRATCH_ROOT: scratchRoot }),
     (e) => e.status !== 0,
+  );
+});
+
+test("prepare refuses to run against an ambiguous plugin cache", () => {
+  const cfg = mkdtempSync(join(tmpdir(), "cfg-"));
+  const cache = join(cfg, "plugins", "cache", "agentic-sdlc", "sdlc");
+  mkdirSync(join(cache, "1.9.1"), { recursive: true });
+  mkdirSync(join(cache, "1.10.0"), { recursive: true });
+  const scratchRoot = mkdtempSync(join(tmpdir(), "scratch-"));
+  assert.throws(
+    () => run(["--arm", "a", "--run", "1", "--specimen", specimen(), "--gap", "60"],
+              { BENCH_SCRATCH_ROOT: scratchRoot, CLAUDE_CONFIG_DIR: cfg }),
+    (e) => /found 2:/.test(e.stderr ?? "") && e.status !== 0,
   );
 });
