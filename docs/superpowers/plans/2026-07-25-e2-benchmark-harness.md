@@ -758,8 +758,14 @@ test("writes a complete manifest", () => {
   assert.equal(m.arm, "b");
   assert.equal(m.run, 3);
   assert.equal(m.inter_run_gap_seconds, 900);
-  for (const k of ["plugin_version", "marketplace_sha", "config_dir", "task_sha256", "answers_sha256", "prepared_at"]) {
-    assert.ok(m[k] != null && m[k] !== "", `manifest.${k} must be populated, got ${JSON.stringify(m[k])}`);
+  // prepared_at has no external dependency — always populated.
+  assert.ok(m.prepared_at != null && m.prepared_at !== "", `manifest.prepared_at must be populated, got ${JSON.stringify(m.prepared_at)}`);
+  // plugin_version/marketplace_sha/config_dir depend on the live ~/.claude environment;
+  // task_sha256/answers_sha256 depend on bench/task.md and bench/answers.md, which are
+  // Task 7 deliverables and do not exist yet at Task 4. All five may legitimately be
+  // empty strings here — only their presence as keys is asserted.
+  for (const k of ["plugin_version", "marketplace_sha", "config_dir", "task_sha256", "answers_sha256"]) {
+    assert.ok(k in m, `manifest.${k} must be present`);
   }
 });
 
@@ -873,6 +879,13 @@ Run: `node --test bench/test/manifest.test.mjs bench/test/prepare.test.mjs`
 Expected: PASS — 12/12
 
 Note: `plugin_version`, `marketplace_sha` and `config_dir` may be empty strings in the test environment, which is why the manifest test asserts the keys are **present**, not that they hold particular values. Divergence detection is Task 5's job.
+
+PLAN DEFECT (implementer-found): `task_sha256`/`answers_sha256` hash `bench/task.md`/`bench/answers.md`,
+which are Task 7 deliverables — they do not exist yet when Task 4 runs, so `sha256()` returns `""` for
+both. The prepare test's "writes a complete manifest" case originally asserted all six fields non-empty,
+which cannot hold before Task 7. Corrected to assert presence only for the five environment-dependent
+fields (adding `task_sha256`/`answers_sha256` to the existing three); `prepared_at` has no external
+dependency and keeps its non-empty assertion.
 
 - [ ] **Step 9: Commit**
 
