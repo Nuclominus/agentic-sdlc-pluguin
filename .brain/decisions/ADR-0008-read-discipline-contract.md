@@ -44,7 +44,7 @@ written down.**
 2. **Mechanical enforcement of the contract's presence, not of runtime behaviour.** A new
    `read-discipline` verb in `tools/sdlc-lint` (`tools/sdlc-lint/lib/read-discipline.mjs`) checks
    the 1 orchestrator SKILL only for the anchor — is the contract present, and is it inside the
-   stable prefix — and scans all 18 agent definitions across `plugins/*/agents/*.md` for the
+   stable prefix — and scans all 18 agent definitions across `plugins/*/agents/**/*.md` for the
    anti-patterns the contract forbids, with an escape-hatch marker an agent author can use to
    justify a deliberate exception inline rather than the lint just being worked around silently.
    It is wired into `sdlc-lint all` and reports `19/19 clean`.
