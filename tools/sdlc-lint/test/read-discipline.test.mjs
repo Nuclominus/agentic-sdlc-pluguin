@@ -30,6 +30,10 @@ test("a file with no stable-prefix delimiters is a structural failure", () => {
   assert.match(errors.join(" "), /delimiter/);
 });
 
+test("a prose mention of the delimiter above the template does not confuse the check", () => {
+  assert.deepEqual(checkAnchor(fixture("skill-prose-mention.md")), { ok: true, errors: [] });
+});
+
 test("clean agent text passes — 'full stack trace' and 'no re-reads' are not violations", () => {
   assert.deepEqual(scanAgentText(fixture("agent-clean.md")), { ok: true, errors: [] });
 });

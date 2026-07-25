@@ -19,7 +19,11 @@ export const PREFIX_END = "=== PER-CALL CONTEXT ===";
 export function checkAnchor(text) {
   const errors = [];
   const start = text.indexOf(PREFIX_START);
-  const end = text.indexOf(PREFIX_END);
+  // Anchored to `start`: the real SKILL.md mentions PREFIX_END in prose (line 928)
+  // three lines ABOVE the actual template delimiter, so a bare indexOf would give
+  // end < start and report a malformed template forever. Search for the first
+  // PREFIX_END that follows PREFIX_START.
+  const end = text.indexOf(PREFIX_END, start);
   if (start === -1 || end === -1 || end < start) {
     errors.push(`missing or malformed prompt-template delimiter ('${PREFIX_START}' … '${PREFIX_END}')`);
     return { ok: false, errors };
