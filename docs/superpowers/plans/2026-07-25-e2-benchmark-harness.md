@@ -424,7 +424,7 @@ git commit -m "feat(bench): Kotlin/JVM specimen scaffold + corpus power check"
 The specimen must reach **≥ 63,000 estimated tokens** of Kotlin, or the experiment cannot see the effect it is looking for. This is the task that makes the instrument capable.
 
 **Files:**
-- Create: ~45-60 files under `bench/reference-app/app/src/main/kotlin/bench/` and `app/src/test/kotlin/bench/`
+- Create: at least 45 files under `bench/reference-app/app/src/main/kotlin/bench/` and `app/src/test/kotlin/bench/` (67 as built)
 
 **Interfaces:**
 - Consumes: `Result`, `DomainError`, `ValidationError`, `NotFoundError`, `Money` from Task 2; `corpusStats` for the gate.
@@ -557,7 +557,7 @@ Run:
 node -e "import('./bench/lib/corpus.mjs').then(m=>console.log(m.corpusStats('bench/reference-app')))"
 ```
 
-Expected: `ok: true`, `ratio >= 3`, `tokens >= 63000`, `files` between 45 and 60.
+Expected: `ok: true`, `ratio >= 3`, `tokens >= 63000`, and at least 45 files. The token ratio is the binding gate; the file count is only a proxy for "spread across enough files that an agent must navigate". As built the specimen has 67 files — reaching the ratio with real, tested code needed more than the original estimate assumed. Never delete or merge files to hit a count.
 
 If `ok` is false, **add more realistic code** — more use cases, richer models, more tests. Do not lower `FLOOR_TOKENS` or `MIN_CORPUS_RATIO`; those are pinned by test for exactly this reason.
 
@@ -1490,7 +1490,7 @@ git commit -m "docs(bench): runbook, reference task, scripted answers"
 - `node tools/sdlc-lint/cli.mjs all` exit 0 — the harness has not touched the CI gate.
 - `node tools/brain-sync/cli.mjs check --vault .brain` clean.
 - `cd bench/reference-app && ./gradlew test` green.
-- `corpusStats('bench/reference-app')` reports `ok: true`, `tokens >= 63000`, `files` 45-60.
+- `corpusStats('bench/reference-app')` reports `ok: true`, `tokens >= 63000`, and at least 45 files (67 as built).
 - Task 1's arm-isolation procedure is written down in `bench/README.md` and was **verified**, not assumed.
 
 **Explicitly NOT part of this plan:** running the benchmark. This plan builds the instrument. Spending money on runs is a separate decision, taken after Step 0 and the power check confirm the instrument can answer the question.

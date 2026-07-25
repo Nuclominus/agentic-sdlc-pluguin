@@ -132,8 +132,8 @@ corpus of an 18-file app             ≈ 27k tokens   → addressable ≈ 27/(21
 corpus target: ~3× floor             ≈ 60k tokens   → addressable ≈ 60/(21+60) ≈ 74%
 ```
 
-The original 18-file sketch was undersized. **Target ~45–60 Kotlin files, ~60k tokens of readable
-corpus** — an order library with several bounded contexts, not a toy. This is also the correct
+The original 18-file sketch was undersized. **Target ~60k tokens of readable corpus across at least
+45 files** (67 as built — the token ratio is the gate, the file count follows from writing real code) — an order library with several bounded contexts, not a toy. This is also the correct
 response to a noisy pilot: **enlarge the task, never shrink it.** Shrinking reduces the very effect
 being measured and yields a quiet benchmark that sees nothing.
 
