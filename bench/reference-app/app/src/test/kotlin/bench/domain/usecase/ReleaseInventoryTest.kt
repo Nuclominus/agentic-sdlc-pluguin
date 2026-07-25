@@ -12,6 +12,9 @@ class ReleaseInventoryTest {
     private fun stockOf(onHand: Int, reserved: Int) =
         InventoryItem("sku-1001", quantityOnHand = onHand, quantityReserved = reserved, reorderThreshold = 5)
 
+    private fun stockOf(productId: String, onHand: Int, reserved: Int) =
+        InventoryItem(productId, quantityOnHand = onHand, quantityReserved = reserved, reorderThreshold = 5)
+
     @Test
     fun `releases previously reserved stock`() {
         val inventory = InMemoryInventoryRepository(seed = listOf(stockOf(onHand = 50, reserved = 10)))
@@ -63,5 +66,44 @@ class ReleaseInventoryTest {
         releaseInventory("sku-1001", 10)
 
         assertEquals(0, inventory.findByProductId("sku-1001")?.quantityReserved)
+    }
+
+    @Test
+    fun `releaseAll releases every line in the map`() {
+        val inventory = InMemoryInventoryRepository(
+            seed = listOf(stockOf("sku-a", onHand = 50, reserved = 10), stockOf("sku-b", onHand = 30, reserved = 5)),
+        )
+        val releaseInventory = ReleaseInventory(inventory)
+
+        val result = releaseInventory.releaseAll(mapOf("sku-a" to 4, "sku-b" to 5))
+
+        assertIs<Result.Success<List<InventoryItem>>>(result)
+        assertEquals(6, inventory.findByProductId("sku-a")?.quantityReserved)
+        assertEquals(0, inventory.findByProductId("sku-b")?.quantityReserved)
+    }
+
+    @Test
+    fun `releaseAll fails with NotFoundError for an untracked product in the map`() {
+        val inventory = InMemoryInventoryRepository(
+            seed = listOf(stockOf("sku-a", onHand = 50, reserved = 10)),
+        )
+        val releaseInventory = ReleaseInventory(inventory)
+
+        val result = releaseInventory.releaseAll(mapOf("sku-a" to 1, "sku-missing" to 1))
+
+        assertIs<NotFoundError>((result as Result.Failure).error)
+    }
+
+    @Test
+    fun `releaseAll returns every updated record in its success value`() {
+        val inventory = InMemoryInventoryRepository(
+            seed = listOf(stockOf("sku-a", onHand = 50, reserved = 10)),
+        )
+        val releaseInventory = ReleaseInventory(inventory)
+
+        val result = releaseInventory.releaseAll(mapOf("sku-a" to 4)) as Result.Success<List<InventoryItem>>
+
+        assertEquals(1, result.value.size)
+        assertEquals(6, result.value.single().quantityReserved)
     }
 }

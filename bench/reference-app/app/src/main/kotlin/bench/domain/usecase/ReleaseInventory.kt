@@ -33,4 +33,31 @@ class ReleaseInventory(
 
         return Result.Success(inventory.save(item.withReleased(quantity)))
     }
+
+    /**
+     * Releases every line in [quantities] (keyed by product id), the
+     * counterpart to [ReserveInventory.reserveAllOrNothing] for undoing a
+     * whole order's worth of reservations at once — e.g. when
+     * [CancelOrder] cancels an order with several lines.
+     *
+     * Unlike the reservation side, this does not need an all-or-nothing
+     * check pass: releasing is never rejected for quantity reasons, so
+     * every line that refers to a tracked product succeeds independently
+     * of the others.
+     *
+     * @return [Result.Success] with every updated stock record, or
+     *   [Result.Failure] wrapping a [NotFoundError] for the first product
+     *   id in [quantities] that inventory does not track.
+     */
+    fun releaseAll(quantities: Map<String, Int>): Result<List<InventoryItem>> {
+        val released = mutableListOf<InventoryItem>()
+        for ((productId, quantity) in quantities) {
+            val result = invoke(productId, quantity)
+            when (result) {
+                is Result.Success -> released.add(result.value)
+                is Result.Failure -> return result
+            }
+        }
+        return Result.Success(released)
+    }
 }

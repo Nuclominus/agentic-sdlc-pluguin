@@ -3,7 +3,6 @@ package bench.domain.usecase
 import bench.domain.NotFoundError
 import bench.domain.Result
 import bench.domain.model.Customer
-import bench.domain.model.LoyaltyTier
 import bench.domain.repository.CustomerRepository
 import bench.domain.repository.OrderRepository
 
@@ -33,12 +32,11 @@ class PromoteCustomerTier(
             ?: return Result.Failure(NotFoundError("No customer with id $customerId", customerId))
 
         val spendResult = summariseCustomerSpend(customerId)
-        val totalSpend = when (spendResult) {
-            is Result.Success -> spendResult.value.totalSpend
+        val eligibleTier = when (spendResult) {
+            is Result.Success -> spendResult.value.eligibleTier()
             is Result.Failure -> return Result.Failure(spendResult.error)
         }
 
-        val eligibleTier = LoyaltyTier.qualifying(totalSpend)
         if (!eligibleTier.isAtLeast(customer.loyaltyTier)) {
             return Result.Success(customer)
         }

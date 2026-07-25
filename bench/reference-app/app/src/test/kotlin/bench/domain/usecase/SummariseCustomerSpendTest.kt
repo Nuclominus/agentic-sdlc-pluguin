@@ -5,6 +5,7 @@ import bench.data.InMemoryOrderRepository
 import bench.domain.NotFoundError
 import bench.domain.Result
 import bench.domain.model.Money
+import bench.domain.model.LoyaltyTier
 import bench.domain.model.Order
 import bench.domain.model.OrderLine
 import bench.domain.model.OrderStatus
@@ -92,5 +93,36 @@ class SummariseCustomerSpendTest {
         val result = summarise("cus-unknown")
 
         assertIs<NotFoundError>((result as Result.Failure).error)
+    }
+
+    @Test
+    fun `finds the smallest single order`() {
+        val orders = InMemoryOrderRepository(
+            seed = listOf(orderWorth("ord-1", 1000), orderWorth("ord-2", 4500), orderWorth("ord-3", 2200)),
+        )
+        val summarise = SummariseCustomerSpend(orders, InMemoryCustomerRepository())
+
+        val result = summarise("cus-1") as Result.Success<CustomerSpendSummary>
+
+        assertEquals(Money(1000), result.value.smallestOrder)
+    }
+
+    @Test
+    fun `eligibleTier reflects the total spend, independent of the recorded tier`() {
+        val orders = InMemoryOrderRepository(seed = listOf(orderWorth("ord-1", Money.ofUnits(1_500L).cents)))
+        val summarise = SummariseCustomerSpend(orders, InMemoryCustomerRepository())
+
+        val result = summarise("cus-1") as Result.Success<CustomerSpendSummary>
+
+        assertEquals(LoyaltyTier.GOLD, result.value.eligibleTier())
+    }
+
+    @Test
+    fun `eligibleTier is bronze for a customer with no qualifying spend`() {
+        val summarise = SummariseCustomerSpend(InMemoryOrderRepository(), InMemoryCustomerRepository())
+
+        val result = summarise("cus-1") as Result.Success<CustomerSpendSummary>
+
+        assertEquals(LoyaltyTier.BRONZE, result.value.eligibleTier())
     }
 }

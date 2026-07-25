@@ -2,6 +2,7 @@ package bench.domain.usecase
 
 import bench.domain.NotFoundError
 import bench.domain.Result
+import bench.domain.model.LoyaltyTier
 import bench.domain.model.Money
 import bench.domain.model.OrderStatus
 import bench.domain.repository.CustomerRepository
@@ -19,13 +20,23 @@ import bench.domain.repository.OrderRepository
  *   [Money.ZERO] if the customer has no qualifying orders.
  * @property largestOrder the highest single discounted total among the
  *   customer's orders, or [Money.ZERO] if there are none.
+ * @property smallestOrder the lowest single discounted total among the
+ *   customer's orders, or [Money.ZERO] if there are none.
  */
 data class CustomerSpendSummary(
     val orderCount: Int,
     val totalSpend: Money,
     val averageOrderValue: Money,
     val largestOrder: Money,
-)
+    val smallestOrder: Money,
+) {
+    /**
+     * The [LoyaltyTier] [totalSpend] currently qualifies for, independent
+     * of whatever tier is actually recorded on the customer — see
+     * [PromoteCustomerTier] for the use case that reconciles the two.
+     */
+    fun eligibleTier(): LoyaltyTier = LoyaltyTier.qualifying(totalSpend)
+}
 
 /**
  * Computes a [CustomerSpendSummary] for a customer.
@@ -56,12 +67,14 @@ class SummariseCustomerSpend(
                     totalSpend = Money.ZERO,
                     averageOrderValue = Money.ZERO,
                     largestOrder = Money.ZERO,
+                    smallestOrder = Money.ZERO,
                 ),
             )
         }
 
         val totalCents = qualifying.sumOf { it.discountedTotal.cents }
         val largestCents = qualifying.maxOf { it.discountedTotal.cents }
+        val smallestCents = qualifying.minOf { it.discountedTotal.cents }
         val averageCents = totalCents / qualifying.size
 
         return Result.Success(
@@ -70,6 +83,7 @@ class SummariseCustomerSpend(
                 totalSpend = Money(totalCents),
                 averageOrderValue = Money(averageCents),
                 largestOrder = Money(largestCents),
+                smallestOrder = Money(smallestCents),
             ),
         )
     }
