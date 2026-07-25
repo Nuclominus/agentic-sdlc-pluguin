@@ -32,6 +32,8 @@ class InMemoryOrderRepository(
     override fun findByStatus(status: OrderStatus): List<Order> =
         byId.values.filter { it.status == status }
 
+    override fun findByIds(ids: List<String>): List<Order> = ids.mapNotNull { byId[it] }
+
     /** The number of orders currently stored, mainly useful for test assertions. */
     fun size(): Int = byId.size
 

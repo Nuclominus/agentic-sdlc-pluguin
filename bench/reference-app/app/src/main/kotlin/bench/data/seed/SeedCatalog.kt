@@ -44,6 +44,18 @@ object SeedCatalog {
         Product("sku-1026", "Footrest, Adjustable", Money.ofUnits(38L), active = true),
         Product("sku-1027", "External DVD Drive", Money.ofUnits(28L), active = false),
         Product("sku-1028", "VGA-to-HDMI Adapter", Money.ofUnits(16L), active = false),
+        Product("sku-1029", "Mesh Office Chair", Money.ofUnits(199L), active = true),
+        Product("sku-1030", "Adjustable Monitor Stand", Money.ofUnits(42L), active = true),
+        Product("sku-1031", "USB-C to Ethernet Adapter", Money.ofUnits(21L), active = true),
+        Product("sku-1032", "4-Port USB 3.0 Hub", Money.ofUnits(17L), active = true),
+        Product("sku-1033", "Portable Monitor 15-inch", Money.ofUnits(189L), active = true),
+        Product("sku-1034", "Wireless Charging Stand", Money.ofUnits(34L), active = true),
+        Product("sku-1035", "HDMI Cable, 2m", Money.ofUnits(9L), active = true),
+        Product("sku-1036", "Surge Protector, 8-outlet", Money.ofUnits(26L), active = true),
+        Product("sku-1037", "Blue Light Glasses", Money.ofUnits(23L), active = true),
+        Product("sku-1038", "Desk Lamp, LED", Money.ofUnits(31L), active = true),
+        Product("sku-1039", "Legacy PS/2 Keyboard", Money.ofUnits(15L), active = false),
+        Product("sku-1040", "Parallel Port Adapter", Money.ofUnits(11L), active = false),
     )
 
     /**
@@ -82,6 +94,18 @@ object SeedCatalog {
         InventoryItem("sku-1026", quantityOnHand = 33, quantityReserved = 2, reorderThreshold = 8),
         InventoryItem("sku-1027", quantityOnHand = 3, quantityReserved = 0, reorderThreshold = 2),
         InventoryItem("sku-1028", quantityOnHand = 6, quantityReserved = 0, reorderThreshold = 2),
+        InventoryItem("sku-1029", quantityOnHand = 14, quantityReserved = 3, reorderThreshold = 4),
+        InventoryItem("sku-1030", quantityOnHand = 95, quantityReserved = 10, reorderThreshold = 20),
+        InventoryItem("sku-1031", quantityOnHand = 130, quantityReserved = 15, reorderThreshold = 25),
+        InventoryItem("sku-1032", quantityOnHand = 175, quantityReserved = 20, reorderThreshold = 35),
+        InventoryItem("sku-1033", quantityOnHand = 18, quantityReserved = 2, reorderThreshold = 5),
+        InventoryItem("sku-1034", quantityOnHand = 60, quantityReserved = 5, reorderThreshold = 12),
+        InventoryItem("sku-1035", quantityOnHand = 500, quantityReserved = 40, reorderThreshold = 100),
+        InventoryItem("sku-1036", quantityOnHand = 75, quantityReserved = 8, reorderThreshold = 15),
+        InventoryItem("sku-1037", quantityOnHand = 110, quantityReserved = 9, reorderThreshold = 20),
+        InventoryItem("sku-1038", quantityOnHand = 65, quantityReserved = 6, reorderThreshold = 14),
+        InventoryItem("sku-1039", quantityOnHand = 1, quantityReserved = 0, reorderThreshold = 1),
+        InventoryItem("sku-1040", quantityOnHand = 2, quantityReserved = 0, reorderThreshold = 1),
     )
 
     /** Convenience lookup for a seeded product by id, mainly used from tests. */

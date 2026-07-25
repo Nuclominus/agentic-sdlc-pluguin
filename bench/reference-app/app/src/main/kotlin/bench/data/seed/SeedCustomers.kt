@@ -127,6 +127,38 @@ object SeedCustomers {
             billingAddress = Address("500 Business Tower", "Montreal", "QC", "H3B", "CA"),
             loyaltyTier = LoyaltyTier.BRONZE,
         ),
+        Customer(
+            id = "cus-15",
+            name = "Priya Sharma",
+            email = "priya.sharma@example.com",
+            shippingAddress = Address("14 MG Road", "Bengaluru", "KA", "560001", "IN"),
+            billingAddress = Address("14 MG Road", "Bengaluru", "KA", "560001", "IN"),
+            loyaltyTier = LoyaltyTier.GOLD,
+        ),
+        Customer(
+            id = "cus-16",
+            name = "Marcus Johnson",
+            email = "marcus.johnson@example.com",
+            shippingAddress = Address("77 Peachtree Street", "Atlanta", "GA", "30303", "US"),
+            billingAddress = Address("77 Peachtree Street", "Atlanta", "GA", "30303", "US"),
+            loyaltyTier = LoyaltyTier.SILVER,
+        ),
+        Customer(
+            id = "cus-17",
+            name = "Yuki Tanaka",
+            email = "yuki.tanaka@example.com",
+            shippingAddress = Address("2 Shibuya Crossing", "Tokyo", null, "150-0002", "JP"),
+            billingAddress = Address("2 Shibuya Crossing", "Tokyo", null, "150-0002", "JP"),
+            loyaltyTier = LoyaltyTier.BRONZE,
+        ),
+        Customer(
+            id = "cus-18",
+            name = "Freya Larsen",
+            email = "freya.larsen@example.com",
+            shippingAddress = Address("9 Nyhavn", "Copenhagen", null, "1051", "DK"),
+            billingAddress = Address("9 Nyhavn", "Copenhagen", null, "1051", "DK"),
+            loyaltyTier = LoyaltyTier.PLATINUM,
+        ),
     )
 
     /** Convenience lookup for a seeded customer by id, mainly used from tests. */

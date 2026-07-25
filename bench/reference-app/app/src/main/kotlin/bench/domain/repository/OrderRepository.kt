@@ -37,4 +37,13 @@ interface OrderRepository {
      * orders stuck in processing longer than expected."
      */
     fun findByStatus(status: OrderStatus): List<Order>
+
+    /**
+     * Returns every order in [ids] that exists, silently omitting any id
+     * that does not match a stored order. Intended for
+     * [GetOrderReceipt.renderAll][bench.domain.usecase.GetOrderReceipt.renderAll]-style
+     * batch operations that already have a list of order ids in hand
+     * rather than a single one.
+     */
+    fun findByIds(ids: List<String>): List<Order>
 }

@@ -119,4 +119,25 @@ class InMemoryOrderRepositoryTest {
         assertEquals(0, repository.size())
         assertTrue(repository.all().isEmpty())
     }
+
+    @Test
+    fun `findByIds returns matching orders in one call`() {
+        val repository = InMemoryOrderRepository()
+        repository.save(sampleOrder("ord-1", "cus-1"))
+        repository.save(sampleOrder("ord-2", "cus-2"))
+
+        val found = repository.findByIds(listOf("ord-1", "ord-2"))
+
+        assertEquals(setOf("ord-1", "ord-2"), found.map { it.id }.toSet())
+    }
+
+    @Test
+    fun `findByIds silently omits ids that do not match a stored order`() {
+        val repository = InMemoryOrderRepository()
+        repository.save(sampleOrder("ord-1", "cus-1"))
+
+        val found = repository.findByIds(listOf("ord-1", "ord-missing"))
+
+        assertEquals(listOf("ord-1"), found.map { it.id })
+    }
 }
