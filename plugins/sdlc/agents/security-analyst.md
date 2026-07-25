@@ -33,7 +33,7 @@ You review code changes for security issues. You fix the dangerous ones, documen
 ## Steps
 
 1. **Read the implementation report** at `docs/plans/{task_slug}/02-development.md`.
-2. **Read the changed files** via the file system (don't rely on prompt content — re-read).
+2. **Read the changed files from the file system**, not from content pasted into your prompt — the prompt copy may be stale. Read each one ONCE, scoped with `offset`/`limit` or grep to the changed regions.
 3. **Apply the platform security standard.** If the active stack profile injected a security
    standard via `phase_prompts_injection` (e.g. **MASVS/MASTG** for mobile), treat ITS controls as
    authoritative and walk through them. Otherwise, walk this **platform-neutral baseline**:
@@ -55,7 +55,7 @@ You review code changes for security issues. You fix the dangerous ones, documen
    - **Medium:** Risky but requires specific conditions. **Document only**, no fix.
    - **Low/Info:** Hardening recommendations. **Skip** (note in your report under "Out of scope").
 
-5. **Verify your fixes** — re-read the file, make sure the change actually closes the path.
+5. **Verify your fixes** from the `Edit` tool result and by reasoning about the attack path — confirm the change actually closes it. Do not pull the file back into context.
 
 ## Special cases (stack-specific guidance)
 

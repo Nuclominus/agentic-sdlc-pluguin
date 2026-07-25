@@ -56,7 +56,7 @@ If a test fails after attempt #3, **stop**. Don't try to be clever. Don't try on
 
 1. **Read the spec** at `docs/plans/{task_slug}/01-business-analysis.md`.
 2. **Read the implementation report** at `docs/plans/{task_slug}/02-development.md`.
-3. **Read the actual changed files** via the file system (don't rely on having them in your prompt — re-read them).
+3. **Read the actual changed files from the file system**, not from content pasted into your prompt — the prompt copy may be stale. Read each one ONCE, scoped with `offset`/`limit` or grep to the changed regions.
 4. **Identify the test framework** in use: Android — JUnit4/JUnit5 + MockK + Turbine (look for `src/test/**/*.kt`, `build.gradle[.kts]` test deps).
 5. **Write tests:**
    - Cover acceptance criteria from BA stories.
