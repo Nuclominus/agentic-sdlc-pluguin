@@ -59,6 +59,26 @@ class ListOrders(
     }
 
     /**
+     * Lists only [customerId]'s orders currently in [status], still
+     * sorted most recent first.
+     *
+     * A thin convenience over [invoke] for a filtered view — "just my
+     * pending orders" — without the caller re-filtering the full list by
+     * hand every time.
+     *
+     * @return [Result.Success] with the matching orders, or
+     *   [Result.Failure] wrapping a [NotFoundError] if the customer itself
+     *   does not exist.
+     */
+    fun withStatus(customerId: String, status: OrderStatus): Result<List<Order>> {
+        val listed = invoke(customerId, includeArchived = true)
+        return when (listed) {
+            is Result.Success -> Result.Success(listed.value.filter { it.status == status })
+            is Result.Failure -> listed
+        }
+    }
+
+    /**
      * Extracts the trailing integer from an order id like "ord-42", or `0`
      * if the id does not follow that shape. Used only to derive a stable,
      * human-plausible sort order for display.

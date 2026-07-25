@@ -128,4 +128,37 @@ class ListOrdersTest {
 
         assertIs<NotFoundError>((result as Result.Failure).error)
     }
+
+    @Test
+    fun `withStatus returns only orders in that status`() {
+        val orders = InMemoryOrderRepository(
+            seed = listOf(orderFor("cus-1", 1, OrderStatus.PENDING), orderFor("cus-1", 2, OrderStatus.SHIPPED)),
+        )
+        val listOrders = ListOrders(orders, InMemoryCustomerRepository())
+
+        val result = listOrders.withStatus("cus-1", OrderStatus.SHIPPED)
+
+        assertIs<Result.Success<List<Order>>>(result)
+        assertEquals(listOf("ord-2"), result.value.map { it.id })
+    }
+
+    @Test
+    fun `withStatus includes archived orders when that is the requested status`() {
+        val orders = InMemoryOrderRepository(seed = listOf(orderFor("cus-1", 1, OrderStatus.ARCHIVED)))
+        val listOrders = ListOrders(orders, InMemoryCustomerRepository())
+
+        val result = listOrders.withStatus("cus-1", OrderStatus.ARCHIVED)
+
+        assertIs<Result.Success<List<Order>>>(result)
+        assertEquals(1, result.value.size)
+    }
+
+    @Test
+    fun `withStatus fails with NotFoundError for an unknown customer`() {
+        val listOrders = ListOrders(InMemoryOrderRepository(), InMemoryCustomerRepository())
+
+        val result = listOrders.withStatus("cus-unknown", OrderStatus.PENDING)
+
+        assertIs<NotFoundError>((result as Result.Failure).error)
+    }
 }
