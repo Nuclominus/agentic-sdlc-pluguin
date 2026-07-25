@@ -581,7 +581,7 @@ git commit -m "feat(bench): grow specimen corpus past the 3x floor power target"
 **Interfaces:**
 - Consumes: nothing from earlier tasks (the specimen path is a CLI argument).
 - Produces:
-  - `manifest.mjs`: `export const MANIFEST_NAME = "_bench-manifest.json"`; `export function buildManifest(fields): object`; `export function writeManifest(dir, manifest): void`; `export function readManifest(dir): object`; `export function diffManifest(recorded, live): string[]` — returns a list of human-readable divergence descriptions, empty when they agree.
+  - `manifest.mjs`: `export const MANIFEST_NAME = "_bench-manifest.json"`; `export function buildManifest(fields): object`; `export function writeManifest(dir, manifest): void`; `export function readManifest(dir): object`; `export function diffManifest(recorded, live): string[]` — returns a list of human-readable divergence descriptions, empty when they agree; `export function resolveConfigDir(env?): string`; `export function resolvePluginVersion(cacheDir): string` — throws on an ambiguous cache, returns `""` when the cache is absent.
   - `prepare.mjs` CLI: `node bench/prepare.mjs --arm <a|b> --run <n> --specimen bench/reference-app --gap <seconds>`, exit 0 on success, non-zero on refusal.
   - Scratch path convention: `${BENCH_SCRATCH_ROOT:-<os.tmpdir()>/sdlc-bench}/<arm>-<run>`.
 
@@ -592,10 +592,10 @@ git commit -m "feat(bench): grow specimen corpus past the 3x floor power target"
 ```js
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { MANIFEST_NAME, buildManifest, writeManifest, readManifest, diffManifest } from "../lib/manifest.mjs";
+import { MANIFEST_NAME, buildManifest, writeManifest, readManifest, diffManifest, resolveConfigDir, resolvePluginVersion } from "../lib/manifest.mjs";
 
 const base = {
   arm: "a", run: 1, plugin_version: "1.9.1", marketplace_sha: "9d1af30",
@@ -639,6 +639,29 @@ test("prepared_at and run are not divergence — they are recorded, not compared
 test("MANIFEST_NAME is the agreed filename", () => {
   assert.equal(MANIFEST_NAME, "_bench-manifest.json");
 });
+
+test("resolveConfigDir does not append .claude to CLAUDE_CONFIG_DIR", () => {
+  assert.equal(resolveConfigDir({ CLAUDE_CONFIG_DIR: "/tmp/arm-a" }), "/tmp/arm-a");
+  assert.equal(resolveConfigDir({ HOME: "/home/x" }), join("/home/x", ".claude"));
+});
+
+test("resolvePluginVersion returns the single installed version", () => {
+  const cache = mkdtempSync(join(tmpdir(), "cache-"));
+  mkdirSync(join(cache, "1.10.0"));
+  assert.equal(resolvePluginVersion(cache), "1.10.0");
+});
+
+test("an ambiguous plugin cache is a hard error, not a guess", () => {
+  const cache = mkdtempSync(join(tmpdir(), "cache-"));
+  mkdirSync(join(cache, "1.9.1"));
+  mkdirSync(join(cache, "1.10.0"));
+  // Lexicographic "latest" would pick 1.9.1 here — exactly the two arm versions.
+  assert.throws(() => resolvePluginVersion(cache), /found 2:/);
+});
+
+test("an absent plugin cache records an empty version rather than throwing", () => {
+  assert.equal(resolvePluginVersion(join(tmpdir(), "definitely-not-there-12345")), "");
+});
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -654,10 +677,37 @@ Expected: FAIL — `Cannot find module '../lib/manifest.mjs'`
 // reading provenance afterwards records the state that happened to be live
 // when someone got round to harvesting. That record is plausible and wrong —
 // the worst failure mode available here, because it looks verified.
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 export const MANIFEST_NAME = "_bench-manifest.json";
+
+/**
+ * CLAUDE_CONFIG_DIR, when set, IS the config directory — do not append
+ * ".claude". Shared by prepare and harvest: if the two ever resolved it
+ * differently, every run would report a false provenance divergence.
+ */
+export function resolveConfigDir(env = process.env) {
+  return env.CLAUDE_CONFIG_DIR || join(env.HOME || "", ".claude");
+}
+
+/**
+ * The design keeps exactly one plugin version per arm environment. Picking
+ * "the latest" from several would be a guess, and a wrong guess writes the
+ * wrong arm into the manifest — which harvest's cross-check cannot catch,
+ * because both sides would guess identically. So: absent cache (not an arm
+ * environment, e.g. under test) records an empty string; an ambiguous cache
+ * is a hard error naming what it found.
+ */
+export function resolvePluginVersion(cacheDir) {
+  let entries;
+  try { entries = readdirSync(cacheDir); } catch { return ""; }
+  if (entries.length !== 1) {
+    throw new Error(
+      `expected exactly one installed sdlc version in ${cacheDir}, found ${entries.length}: ${entries.join(", ")}`);
+  }
+  return entries[0];
+}
 
 /** Fields compared between the recorded manifest and live state at harvest. */
 const COMPARED = ["arm", "plugin_version", "marketplace_sha", "config_dir", "task_sha256", "answers_sha256"];
@@ -700,7 +750,7 @@ export function diffManifest(recorded, live) {
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `node --test bench/test/manifest.test.mjs`
-Expected: PASS — 7/7
+Expected: PASS — 11/11
 
 - [ ] **Step 5: Write the failing prepare test**
 
@@ -801,12 +851,12 @@ Expected: FAIL — prepare.mjs does not exist.
 // make it a real git repo (the pipeline's dev/QA/docs phases expect branches,
 // commits and diffs — a bare file tree would behave differently from real
 // use), and record provenance BEFORE the run.
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { buildManifest, writeManifest, MANIFEST_NAME } from "./lib/manifest.mjs";
+import { buildManifest, writeManifest, MANIFEST_NAME, resolveConfigDir, resolvePluginVersion } from "./lib/manifest.mjs";
 
 const arg = (name, fallback) => {
   const i = process.argv.indexOf(`--${name}`);
@@ -842,16 +892,12 @@ execFileSync("git", ["-C", dest, "-c", "user.name=bench", "-c", "user.email=benc
 const sha256 = (p) => existsSync(p) ? createHash("sha256").update(readFileSync(p)).digest("hex") : "";
 const git = (cwd, ...a) => { try { return execFileSync("git", ["-C", cwd, ...a], { encoding: "utf8" }).trim(); } catch { return ""; } };
 
-// CLAUDE_CONFIG_DIR, when set, IS the config directory — do not append ".claude" to it.
-const configDir = process.env.CLAUDE_CONFIG_DIR || join(process.env.HOME || "", ".claude");
+const configDir = resolveConfigDir();
 const marketplaceDir = join(configDir, "plugins", "marketplaces", "agentic-sdlc");
 const cacheDir = join(configDir, "plugins", "cache", "agentic-sdlc", "sdlc");
 
 let pluginVersion = "";
-try {
-  const versions = readdirSync(cacheDir).sort();
-  pluginVersion = versions[versions.length - 1] ?? "";
-} catch { /* recorded as empty; harvest will flag the divergence */ }
+try { pluginVersion = resolvePluginVersion(cacheDir); } catch (e) { die(e.message); }
 
 writeManifest(dest, buildManifest({
   arm, run,
@@ -876,7 +922,7 @@ console.log(`Answer any gates from bench/answers.md verbatim; anything not cover
 - [ ] **Step 8: Run the tests to verify they pass**
 
 Run: `node --test bench/test/manifest.test.mjs bench/test/prepare.test.mjs`
-Expected: PASS — 12/12
+Expected: PASS — 16/16
 
 Note: `plugin_version`, `marketplace_sha` and `config_dir` may be empty strings in the test environment, which is why the manifest test asserts the keys are **present**, not that they hold particular values. Divergence detection is Task 5's job.
 
@@ -1053,7 +1099,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, statSy
 import { execFileSync } from "node:child_process";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { readManifest, diffManifest, buildManifest } from "./lib/manifest.mjs";
+import { readManifest, diffManifest, buildManifest, resolveConfigDir, resolvePluginVersion } from "./lib/manifest.mjs";
 
 const arg = (name, fallback) => {
   const i = process.argv.indexOf(`--${name}`);
@@ -1085,11 +1131,12 @@ if (manifest.arm !== arm) {
 // environment moved between prepare and harvest; neither value is preferred.
 if (process.env.BENCH_SKIP_LIVE_CHECK !== "1") {
   const git = (cwd, ...a) => { try { return execFileSync("git", ["-C", cwd, ...a], { encoding: "utf8" }).trim(); } catch { return ""; } };
-  // Must resolve identically to prepare.mjs, or every run reports a false divergence.
-  const configDir = process.env.CLAUDE_CONFIG_DIR || join(process.env.HOME || "", ".claude");
+  // Resolved by the SAME helpers prepare.mjs used — if the two ever diverged,
+  // every run would report a false provenance divergence.
+  const configDir = resolveConfigDir();
   const cacheDir = join(configDir, "plugins", "cache", "agentic-sdlc", "sdlc");
   let pluginVersion = "";
-  try { const v = readdirSync(cacheDir).sort(); pluginVersion = v[v.length - 1] ?? ""; } catch { /* empty */ }
+  try { pluginVersion = resolvePluginVersion(cacheDir); } catch (e) { die(e.message); }
   const live = buildManifest({
     ...manifest,
     plugin_version: pluginVersion,
