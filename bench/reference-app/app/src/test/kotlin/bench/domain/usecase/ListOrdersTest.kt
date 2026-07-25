@@ -87,4 +87,45 @@ class ListOrdersTest {
         assertIs<Result.Success<List<Order>>>(result)
         assertEquals(listOf("ord-1"), result.value.map { it.id })
     }
+
+    @Test
+    fun `mostRecent returns the highest sequence number order`() {
+        val orders = InMemoryOrderRepository(seed = listOf(orderFor("cus-1", 1), orderFor("cus-1", 5)))
+        val listOrders = ListOrders(orders, InMemoryCustomerRepository())
+
+        val result = listOrders.mostRecent("cus-1")
+
+        assertIs<Result.Success<Order?>>(result)
+        assertEquals("ord-5", result.value?.id)
+    }
+
+    @Test
+    fun `mostRecent includes archived orders, unlike the default listing`() {
+        val orders = InMemoryOrderRepository(seed = listOf(orderFor("cus-1", 1, OrderStatus.ARCHIVED)))
+        val listOrders = ListOrders(orders, InMemoryCustomerRepository())
+
+        val result = listOrders.mostRecent("cus-1")
+
+        assertIs<Result.Success<Order?>>(result)
+        assertEquals("ord-1", result.value?.id)
+    }
+
+    @Test
+    fun `mostRecent is null for a customer with no orders`() {
+        val listOrders = ListOrders(InMemoryOrderRepository(), InMemoryCustomerRepository())
+
+        val result = listOrders.mostRecent("cus-1")
+
+        assertIs<Result.Success<Order?>>(result)
+        assertEquals(null, result.value)
+    }
+
+    @Test
+    fun `mostRecent fails with NotFoundError for an unknown customer`() {
+        val listOrders = ListOrders(InMemoryOrderRepository(), InMemoryCustomerRepository())
+
+        val result = listOrders.mostRecent("cus-unknown")
+
+        assertIs<NotFoundError>((result as Result.Failure).error)
+    }
 }

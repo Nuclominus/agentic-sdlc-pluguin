@@ -43,4 +43,18 @@ class CancelOrder(
         val cancelled = existing.withStatus(OrderStatus.CANCELLED)
         return Result.Success(orders.save(cancelled))
     }
+
+    /**
+     * A side-effect-free check for whether [orderId] could currently be
+     * cancelled, without actually attempting it.
+     *
+     * Intended for a UI that wants to grey out a "Cancel order" button
+     * ahead of time rather than let the customer click it and then show
+     * them a failure. Returns `false` both when the order does not exist
+     * and when it exists but is no longer cancellable, since a caller
+     * deciding whether to show the button does not need to tell those two
+     * cases apart.
+     */
+    fun canCancel(orderId: String): Boolean =
+        orders.findById(orderId)?.status?.canTransitionTo(OrderStatus.CANCELLED) ?: false
 }

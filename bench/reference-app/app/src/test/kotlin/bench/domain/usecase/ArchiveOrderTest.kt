@@ -80,4 +80,38 @@ class ArchiveOrderTest {
 
         assertEquals(OrderStatus.ARCHIVED, orders.findById("ord-1")?.status)
     }
+
+    @Test
+    fun `archiveAllIn archives every delivered order and leaves others alone`() {
+        val delivered1 = orderIn(OrderStatus.DELIVERED).copy(id = "ord-1")
+        val delivered2 = orderIn(OrderStatus.DELIVERED).copy(id = "ord-2")
+        val stillShipped = orderIn(OrderStatus.SHIPPED).copy(id = "ord-3")
+        val orders = InMemoryOrderRepository(seed = listOf(delivered1, delivered2, stillShipped))
+        val archiveOrder = ArchiveOrder(orders)
+
+        val archived = archiveOrder.archiveAllIn(OrderStatus.DELIVERED)
+
+        assertEquals(setOf("ord-1", "ord-2"), archived.map { it.id }.toSet())
+        assertEquals(OrderStatus.SHIPPED, orders.findById("ord-3")?.status)
+    }
+
+    @Test
+    fun `archiveAllIn persists every archived order to the repository`() {
+        val orders = InMemoryOrderRepository(
+            seed = listOf(orderIn(OrderStatus.CANCELLED).copy(id = "ord-1")),
+        )
+        val archiveOrder = ArchiveOrder(orders)
+
+        archiveOrder.archiveAllIn(OrderStatus.CANCELLED)
+
+        assertEquals(OrderStatus.ARCHIVED, orders.findById("ord-1")?.status)
+    }
+
+    @Test
+    fun `archiveAllIn returns an empty list when nothing matches the status`() {
+        val orders = InMemoryOrderRepository(seed = listOf(orderIn(OrderStatus.PENDING)))
+        val archiveOrder = ArchiveOrder(orders)
+
+        assertEquals(emptyList(), archiveOrder.archiveAllIn(OrderStatus.DELIVERED))
+    }
 }

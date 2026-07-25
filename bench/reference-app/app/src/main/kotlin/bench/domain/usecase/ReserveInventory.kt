@@ -41,4 +41,37 @@ class ReserveInventory(
 
         return Result.Success(inventory.save(item.withReserved(quantity)))
     }
+
+    /**
+     * Reserves every product in [quantities] (keyed by product id) as a
+     * single all-or-nothing operation: if any one line cannot be
+     * satisfied, nothing is reserved for any of them.
+     *
+     * This is the shape an order with several lines actually needs —
+     * reserving line one and then discovering line two is out of stock
+     * would leave a half-reserved order behind, which is worse than
+     * failing up front. The check pass and the apply pass are kept
+     * separate for exactly this reason: every line must be confirmed
+     * reservable before any stock record is actually mutated.
+     *
+     * @return [Result.Success] with every updated stock record, or the
+     *   first [Result.Failure] encountered while checking availability.
+     */
+    fun reserveAllOrNothing(quantities: Map<String, Int>): Result<List<InventoryItem>> {
+        for ((productId, quantity) in quantities) {
+            val item = inventory.findByProductId(productId)
+                ?: return Result.Failure(NotFoundError("No inventory record for product $productId", productId))
+            if (!item.canReserve(quantity)) {
+                return Result.Failure(
+                    ValidationError(
+                        "Only ${item.availableQuantity} of $productId available, cannot reserve $quantity",
+                        field = "quantity",
+                    ),
+                )
+            }
+        }
+
+        val updated = quantities.map { (productId, quantity) -> invoke(productId, quantity) }
+        return Result.Success(updated.map { (it as Result.Success).value })
+    }
 }

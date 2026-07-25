@@ -41,4 +41,20 @@ class ArchiveOrder(
 
         return Result.Success(orders.save(existing.withStatus(OrderStatus.ARCHIVED)))
     }
+
+    /**
+     * Archives every order currently in [status], skipping any that turn
+     * out not to be eligible (which should not normally happen for
+     * [OrderStatus.DELIVERED] or [OrderStatus.CANCELLED], but is checked
+     * anyway so this bulk path can never violate the same rule the
+     * single-order path enforces).
+     *
+     * A periodic housekeeping job is the intended caller: rather than it
+     * re-deriving "delivered a while ago" filtering logic, it simply hands
+     * this a status and gets back everything that was actually archived.
+     */
+    fun archiveAllIn(status: OrderStatus): List<Order> =
+        orders.findByStatus(status).mapNotNull { order ->
+            (invoke(order.id) as? Result.Success)?.value
+        }
 }

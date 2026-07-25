@@ -39,6 +39,26 @@ class ListOrders(
     }
 
     /**
+     * The single most recent order for [customerId], or `null` if they
+     * have none yet.
+     *
+     * A thin convenience over [invoke] for the common "show the customer
+     * their last order" case, so that call site does not need to fetch a
+     * whole list just to take its first element.
+     *
+     * @return [Result.Success] with the order (or `null`), or
+     *   [Result.Failure] wrapping a [NotFoundError] if the customer itself
+     *   does not exist.
+     */
+    fun mostRecent(customerId: String): Result<Order?> {
+        val listed = invoke(customerId, includeArchived = true)
+        return when (listed) {
+            is Result.Success -> Result.Success(listed.value.firstOrNull())
+            is Result.Failure -> listed
+        }
+    }
+
+    /**
      * Extracts the trailing integer from an order id like "ord-42", or `0`
      * if the id does not follow that shape. Used only to derive a stable,
      * human-plausible sort order for display.

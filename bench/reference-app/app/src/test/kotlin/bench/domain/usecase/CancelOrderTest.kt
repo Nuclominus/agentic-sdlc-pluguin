@@ -10,6 +10,7 @@ import bench.domain.model.OrderLine
 import bench.domain.model.OrderStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -103,5 +104,38 @@ class CancelOrderTest {
         cancelOrder("ord-1")
 
         assertTrue(orders.findById("ord-1")?.status == OrderStatus.DELIVERED)
+    }
+
+    @Test
+    fun `canCancel is true for a pending order`() {
+        val orders = InMemoryOrderRepository(seed = listOf(orderIn(OrderStatus.PENDING)))
+        val cancelOrder = CancelOrder(orders)
+
+        assertTrue(cancelOrder.canCancel("ord-1"))
+    }
+
+    @Test
+    fun `canCancel is false for a delivered order`() {
+        val orders = InMemoryOrderRepository(seed = listOf(orderIn(OrderStatus.DELIVERED)))
+        val cancelOrder = CancelOrder(orders)
+
+        assertFalse(cancelOrder.canCancel("ord-1"))
+    }
+
+    @Test
+    fun `canCancel is false for an unknown order id, same as a rejected cancellation`() {
+        val cancelOrder = CancelOrder(InMemoryOrderRepository())
+
+        assertFalse(cancelOrder.canCancel("ord-missing"))
+    }
+
+    @Test
+    fun `canCancel does not itself change any stored order`() {
+        val orders = InMemoryOrderRepository(seed = listOf(orderIn(OrderStatus.PENDING)))
+        val cancelOrder = CancelOrder(orders)
+
+        cancelOrder.canCancel("ord-1")
+
+        assertEquals(OrderStatus.PENDING, orders.findById("ord-1")?.status)
     }
 }
