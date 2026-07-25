@@ -34,4 +34,10 @@ class InMemoryOrderRepository(
 
     /** The number of orders currently stored, mainly useful for test assertions. */
     fun size(): Int = byId.size
+
+    /** Every order currently stored, across every customer and status. Mainly used by reporting-style tests. */
+    fun all(): List<Order> = byId.values.toList()
+
+    /** Removes every stored order, restoring the repository to the same state as a fresh instance. */
+    fun clear() = byId.clear()
 }

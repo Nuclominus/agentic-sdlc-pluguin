@@ -92,4 +92,32 @@ class InMemoryProductRepositoryTest {
 
         assertTrue(repository.findActive().size < repository.findAll().size)
     }
+
+    @Test
+    fun `remove drops the product and returns it`() {
+        val repository = InMemoryProductRepository()
+
+        val removed = repository.remove("sku-1001")
+
+        assertEquals("Wireless Mouse", removed?.name)
+        assertNull(repository.findById("sku-1001"))
+    }
+
+    @Test
+    fun `remove returns null for a product that was never present`() {
+        val repository = InMemoryProductRepository()
+
+        assertNull(repository.remove("sku-never-existed"))
+    }
+
+    @Test
+    fun `count reflects the number of products currently stored`() {
+        val repository = InMemoryProductRepository(seed = emptyList())
+
+        assertEquals(0, repository.count())
+
+        repository.upsert(Product("sku-x", "X", Money.ofUnits(1L), active = true))
+
+        assertEquals(1, repository.count())
+    }
 }

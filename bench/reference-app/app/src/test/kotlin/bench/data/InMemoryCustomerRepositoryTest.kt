@@ -69,4 +69,36 @@ class InMemoryCustomerRepositoryTest {
 
         assertEquals(LoyaltyTier.PLATINUM, repository.findById("cus-1")?.loyaltyTier)
     }
+
+    @Test
+    fun `findAtLeast includes customers above the given tier`() {
+        val repository = InMemoryCustomerRepository(
+            seed = listOf(
+                SeedCustomers.customer("cus-1").copy(loyaltyTier = LoyaltyTier.PLATINUM),
+                SeedCustomers.customer("cus-2").copy(id = "cus-2", loyaltyTier = LoyaltyTier.BRONZE),
+            ),
+        )
+
+        val goldAndUp = repository.findAtLeast(LoyaltyTier.GOLD)
+
+        assertEquals(listOf("cus-1"), goldAndUp.map { it.id })
+    }
+
+    @Test
+    fun `findAtLeast includes customers exactly at the given tier`() {
+        val repository = InMemoryCustomerRepository(
+            seed = listOf(SeedCustomers.customer("cus-1").copy(loyaltyTier = LoyaltyTier.GOLD)),
+        )
+
+        assertEquals(1, repository.findAtLeast(LoyaltyTier.GOLD).size)
+    }
+
+    @Test
+    fun `findAtLeast is empty when nobody qualifies`() {
+        val repository = InMemoryCustomerRepository(
+            seed = listOf(SeedCustomers.customer("cus-1").copy(loyaltyTier = LoyaltyTier.BRONZE)),
+        )
+
+        assertTrue(repository.findAtLeast(LoyaltyTier.PLATINUM).isEmpty())
+    }
 }

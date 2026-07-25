@@ -99,4 +99,24 @@ class InMemoryOrderRepositoryTest {
 
         assertTrue(delivered.isEmpty())
     }
+
+    @Test
+    fun `all returns every stored order regardless of customer or status`() {
+        val repository = InMemoryOrderRepository()
+        repository.save(sampleOrder("ord-1", "cus-1"))
+        repository.save(sampleOrder("ord-2", "cus-2").withStatus(OrderStatus.SHIPPED))
+
+        assertEquals(setOf("ord-1", "ord-2"), repository.all().map { it.id }.toSet())
+    }
+
+    @Test
+    fun `clear empties the repository`() {
+        val repository = InMemoryOrderRepository()
+        repository.save(sampleOrder("ord-1", "cus-1"))
+
+        repository.clear()
+
+        assertEquals(0, repository.size())
+        assertTrue(repository.all().isEmpty())
+    }
 }

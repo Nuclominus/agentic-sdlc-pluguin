@@ -34,4 +34,17 @@ class InMemoryProductRepository(
     fun upsert(product: Product) {
         byId[product.id] = product
     }
+
+    /**
+     * Removes the product with [id] entirely, returning it if it was
+     * present. Distinct from [Product.discontinue] — this actually drops
+     * the record, which a real catalog would only do for a product that
+     * was never sellable in the first place (e.g. an import mistake),
+     * since discontinuing is the normal end-of-life path that keeps
+     * historical order lines resolvable.
+     */
+    fun remove(id: String): Product? = byId.remove(id)
+
+    /** How many products the store currently holds. */
+    fun count(): Int = byId.size
 }

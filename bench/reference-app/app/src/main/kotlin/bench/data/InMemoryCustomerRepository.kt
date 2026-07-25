@@ -2,6 +2,7 @@ package bench.data
 
 import bench.data.seed.SeedCustomers
 import bench.domain.model.Customer
+import bench.domain.model.LoyaltyTier
 import bench.domain.repository.CustomerRepository
 
 /**
@@ -26,4 +27,13 @@ class InMemoryCustomerRepository(
         byId[customer.id] = customer
         return customer
     }
+
+    /**
+     * Every registered customer at or above [tier] in program standing,
+     * per [bench.domain.model.LoyaltyTier.isAtLeast]. Handy for a loyalty
+     * team wanting to message everyone eligible for a gold-and-up
+     * promotion, without them re-deriving the "at least" comparison.
+     */
+    fun findAtLeast(tier: LoyaltyTier): List<Customer> =
+        byId.values.filter { it.loyaltyTier.isAtLeast(tier) }
 }
