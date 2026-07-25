@@ -1,6 +1,7 @@
 package bench.domain.repository
 
 import bench.domain.model.Customer
+import bench.domain.model.LoyaltyTier
 
 /**
  * Read access to the registered customer directory.
@@ -32,4 +33,13 @@ interface CustomerRepository {
      * internals that are otherwise out of scope here.
      */
     fun save(customer: Customer): Customer
+
+    /**
+     * Every registered customer at or above [tier] in program standing,
+     * per [LoyaltyTier.isAtLeast]. Exposed on the interface (rather than
+     * left as an implementation-only extra) because it is exactly the
+     * kind of query a loyalty-program use case needs regardless of which
+     * concrete repository backs it.
+     */
+    fun findAtLeast(tier: LoyaltyTier): List<Customer>
 }

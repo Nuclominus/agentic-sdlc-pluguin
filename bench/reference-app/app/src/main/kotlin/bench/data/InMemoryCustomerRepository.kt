@@ -28,12 +28,6 @@ class InMemoryCustomerRepository(
         return customer
     }
 
-    /**
-     * Every registered customer at or above [tier] in program standing,
-     * per [bench.domain.model.LoyaltyTier.isAtLeast]. Handy for a loyalty
-     * team wanting to message everyone eligible for a gold-and-up
-     * promotion, without them re-deriving the "at least" comparison.
-     */
-    fun findAtLeast(tier: LoyaltyTier): List<Customer> =
+    override fun findAtLeast(tier: LoyaltyTier): List<Customer> =
         byId.values.filter { it.loyaltyTier.isAtLeast(tier) }
 }
