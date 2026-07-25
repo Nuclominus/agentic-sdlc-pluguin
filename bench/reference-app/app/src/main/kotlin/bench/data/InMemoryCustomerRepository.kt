@@ -21,4 +21,9 @@ class InMemoryCustomerRepository(
         byId.values.find { it.email.equals(email, ignoreCase = true) }
 
     override fun findAll(): List<Customer> = byId.values.toList()
+
+    override fun save(customer: Customer): Customer {
+        byId[customer.id] = customer
+        return customer
+    }
 }

@@ -1,6 +1,7 @@
 package bench.domain.repository
 
 import bench.domain.model.Order
+import bench.domain.model.OrderStatus
 
 /**
  * Persistence for [Order] aggregates.
@@ -27,4 +28,13 @@ interface OrderRepository {
      * recent first) should sort the result themselves.
      */
     fun findByCustomer(customerId: String): List<Order>
+
+    /**
+     * Returns every order currently in [status], across all customers.
+     *
+     * Useful for operational views that cut across customers rather than
+     * within a single one, such as "all orders awaiting shipment" or "all
+     * orders stuck in processing longer than expected."
+     */
+    fun findByStatus(status: OrderStatus): List<Order>
 }

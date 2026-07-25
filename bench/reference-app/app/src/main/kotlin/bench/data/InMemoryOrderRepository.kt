@@ -1,6 +1,7 @@
 package bench.data
 
 import bench.domain.model.Order
+import bench.domain.model.OrderStatus
 import bench.domain.repository.OrderRepository
 
 /**
@@ -27,6 +28,9 @@ class InMemoryOrderRepository(
 
     override fun findByCustomer(customerId: String): List<Order> =
         byId.values.filter { it.customerId == customerId }
+
+    override fun findByStatus(status: OrderStatus): List<Order> =
+        byId.values.filter { it.status == status }
 
     /** The number of orders currently stored, mainly useful for test assertions. */
     fun size(): Int = byId.size

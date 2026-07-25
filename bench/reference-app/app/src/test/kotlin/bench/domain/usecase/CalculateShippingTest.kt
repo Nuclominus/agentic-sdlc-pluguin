@@ -1,0 +1,93 @@
+package bench.domain.usecase
+
+import bench.data.InMemoryOrderRepository
+import bench.domain.NotFoundError
+import bench.domain.Result
+import bench.domain.model.Address
+import bench.domain.model.Discount
+import bench.domain.model.FreeShippingDiscount
+import bench.domain.model.Money
+import bench.domain.model.Order
+import bench.domain.model.OrderLine
+import bench.domain.model.OrderStatus
+import bench.domain.model.ShippingMethod
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
+
+class CalculateShippingTest {
+    private val domesticAddress = Address("12 Elm Street", "Portland", "OR", "97201", "US")
+    private val internationalAddress = Address("15 Via Roma", "Milan", null, "20121", "IT")
+
+    private fun orderWorth(cents: Long, discount: Discount? = null) = Order(
+        id = "ord-1",
+        customerId = "cus-1",
+        lines = listOf(OrderLine("sku-1001", 1, Money(cents))),
+        status = OrderStatus.PENDING,
+        appliedDiscount = discount,
+    )
+
+    @Test
+    fun `charges the method's base cost for a small domestic order`() {
+        val orders = InMemoryOrderRepository(seed = listOf(orderWorth(2000)))
+        val calculateShipping = CalculateShipping(orders)
+
+        val result = calculateShipping("ord-1", ShippingMethod.STANDARD, domesticAddress)
+
+        assertIs<Result.Success<Money>>(result)
+        assertEquals(ShippingMethod.STANDARD.baseCost, result.value)
+    }
+
+    @Test
+    fun `adds a surcharge for an international destination`() {
+        val orders = InMemoryOrderRepository(seed = listOf(orderWorth(2000)))
+        val calculateShipping = CalculateShipping(orders)
+
+        val result = calculateShipping("ord-1", ShippingMethod.STANDARD, internationalAddress)
+
+        assertIs<Result.Success<Money>>(result)
+        assertEquals(Money.ofUnits(20L), result.value)
+    }
+
+    @Test
+    fun `waives shipping once the order total clears the free-shipping threshold`() {
+        val orders = InMemoryOrderRepository(seed = listOf(orderWorth(Money.ofUnits(75L).cents)))
+        val calculateShipping = CalculateShipping(orders)
+
+        val result = calculateShipping("ord-1", ShippingMethod.EXPRESS, domesticAddress)
+
+        assertIs<Result.Success<Money>>(result)
+        assertEquals(Money.ZERO, result.value)
+    }
+
+    @Test
+    fun `waives shipping when the order carries a free-shipping discount regardless of total`() {
+        val orders = InMemoryOrderRepository(seed = listOf(orderWorth(500, discount = FreeShippingDiscount)))
+        val calculateShipping = CalculateShipping(orders)
+
+        val result = calculateShipping("ord-1", ShippingMethod.OVERNIGHT, internationalAddress)
+
+        assertIs<Result.Success<Money>>(result)
+        assertEquals(Money.ZERO, result.value)
+    }
+
+    @Test
+    fun `charges more for a faster method`() {
+        val orders = InMemoryOrderRepository(seed = listOf(orderWorth(2000)))
+        val calculateShipping = CalculateShipping(orders)
+
+        val standard = calculateShipping("ord-1", ShippingMethod.STANDARD, domesticAddress) as Result.Success
+        val overnight = calculateShipping("ord-1", ShippingMethod.OVERNIGHT, domesticAddress) as Result.Success
+
+        assertEquals(true, overnight.value.cents > standard.value.cents)
+    }
+
+    @Test
+    fun `fails with NotFoundError for an unknown order id`() {
+        val calculateShipping = CalculateShipping(InMemoryOrderRepository())
+
+        val result = calculateShipping("ord-missing", ShippingMethod.STANDARD, domesticAddress)
+
+        assertIs<NotFoundError>((result as Result.Failure).error)
+    }
+}

@@ -16,4 +16,14 @@ interface ProductRepository {
 
     /** Returns every product in the catalog, active or not. */
     fun findAll(): List<Product>
+
+    /**
+     * Returns every product currently sellable, i.e. every product with
+     * [Product.active] set to `true`.
+     *
+     * A convenience over filtering [findAll] by hand, since "products a
+     * customer can currently order" is one of the most common queries
+     * against the catalog.
+     */
+    fun findActive(): List<Product>
 }

@@ -22,4 +22,15 @@ interface InventoryRepository {
 
     /** Returns every tracked stock record. */
     fun findAll(): List<InventoryItem>
+
+    /**
+     * Returns every stock record whose [InventoryItem.needsReorder] is
+     * `true`, in no particular guaranteed order.
+     *
+     * This is the read path behind a restocking report: a warehouse
+     * manager (or an automated purchasing job) calls it periodically to
+     * decide what to reorder, rather than every caller re-filtering
+     * [findAll] by hand.
+     */
+    fun findNeedingReorder(): List<InventoryItem>
 }

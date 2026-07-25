@@ -22,4 +22,7 @@ class InMemoryInventoryRepository(
     }
 
     override fun findAll(): List<InventoryItem> = byProductId.values.toList()
+
+    override fun findNeedingReorder(): List<InventoryItem> =
+        byProductId.values.filter { it.needsReorder() }
 }

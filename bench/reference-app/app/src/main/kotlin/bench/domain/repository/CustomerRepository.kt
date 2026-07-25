@@ -22,4 +22,14 @@ interface CustomerRepository {
 
     /** Returns every registered customer. */
     fun findAll(): List<Customer>
+
+    /**
+     * Persists [customer], overwriting the existing record with the same
+     * id. Unlike [findById] and [findByEmail], this is not a pure read —
+     * it exists specifically so loyalty-program use cases (such as
+     * [PromoteCustomerTier][bench.domain.usecase.PromoteCustomerTier]) can
+     * save a tier change without reaching into account-management
+     * internals that are otherwise out of scope here.
+     */
+    fun save(customer: Customer): Customer
 }

@@ -4,10 +4,11 @@ package bench.domain.model
  * The lifecycle state of an [Order].
  *
  * Orders move through these states roughly in declaration order, though not
- * every transition is linear: an order can be [CANCELLED] from most
- * non-terminal states, and only a [CANCELLED] or [DELIVERED] order can be
- * [ARCHIVED]. [canTransitionTo] encodes exactly which moves are legal so
- * that use cases do not each re-derive the state machine by hand.
+ * every transition is linear: an order can move to [CANCELLED] from most
+ * non-terminal states, and a [CANCELLED] or [DELIVERED] order can move to
+ * [ARCHIVED] but nowhere else. [canTransitionTo] encodes exactly which moves
+ * are legal so that use cases do not each re-derive the state machine by
+ * hand.
  */
 enum class OrderStatus {
     /** Order has been created but not yet confirmed against inventory. */
@@ -41,17 +42,19 @@ enum class OrderStatus {
     /**
      * Whether an order in this status may legally move to [target].
      *
-     * The rules:
-     * - [ARCHIVED] and [CANCELLED] never transition anywhere.
-     * - Any non-terminal status may move to [CANCELLED].
-     * - [DELIVERED] or [CANCELLED] may move to [ARCHIVED].
+     * The rules, checked in order:
+     * - [ARCHIVED] never transitions anywhere, including to itself.
+     * - [DELIVERED] and [CANCELLED] may only move to [ARCHIVED]; no other
+     *   transition is legal once an order reaches either of them.
+     * - Any other status may move to [CANCELLED].
      * - Otherwise, forward progress must follow the natural pipeline order
      *   ([PENDING] -> [CONFIRMED] -> [PROCESSING] -> [SHIPPED] -> [DELIVERED]).
      */
     fun canTransitionTo(target: OrderStatus): Boolean {
-        if (this == ARCHIVED || this == CANCELLED) return false
+        if (this == ARCHIVED) return false
+        if (target == ARCHIVED) return this == DELIVERED || this == CANCELLED
+        if (isTerminal()) return false
         if (target == CANCELLED) return true
-        if (target == ARCHIVED) return this == DELIVERED
         val pipeline = listOf(PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED)
         val fromIndex = pipeline.indexOf(this)
         val toIndex = pipeline.indexOf(target)
