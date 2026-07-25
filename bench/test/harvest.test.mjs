@@ -63,6 +63,19 @@ test("fails when no telemetry exists", () => {
   );
 });
 
+test("archives even when the harvest is rejected", () => {
+  // The runs most worth inspecting are the ones that failed. Archiving must
+  // happen before any check that can abort.
+  const { root } = scratchRun("telemetry-aggregate.json", { run: 6 });
+  const out = mkdtempSync(join(tmpdir(), "results-"));
+  const arch = mkdtempSync(join(tmpdir(), "archive-"));
+  assert.throws(
+    () => harvest(["--arm", "a", "--run", "6", "--results", out, "--archive", arch], { BENCH_SCRATCH_ROOT: root }),
+    (e) => e.status !== 0,
+  );
+  assert.ok(existsSync(join(arch, "a-6.tar.gz")), "a rejected run must still be archived");
+});
+
 test("archives the whole scratch tree", () => {
   const { root } = scratchRun("telemetry-transcript.json", { run: 4 });
   const out = mkdtempSync(join(tmpdir(), "results-"));

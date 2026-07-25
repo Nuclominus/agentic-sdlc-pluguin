@@ -30,6 +30,13 @@ const scratchRoot = process.env.BENCH_SCRATCH_ROOT || join(tmpdir(), "sdlc-bench
 const dest = join(scratchRoot, `${arm}-${run}`);
 if (!existsSync(dest)) die(`scratch directory not found: ${dest}`);
 
+// Archive FIRST, before any validation can abort. Storage is far cheaper than a
+// repeat run, and the runs most worth inspecting are the ones that failed — an
+// aborted pipeline leaves the scratch tree as the only forensic evidence there
+// is. Archiving after the checks would discard exactly those.
+mkdirSync(archiveDir, { recursive: true });
+execFileSync("tar", ["-czf", join(archiveDir, `${arm}-${run}.tar.gz`), "-C", scratchRoot, `${arm}-${run}`]);
+
 let manifest;
 try { manifest = readManifest(dest); } catch (e) { die(e.message); }
 
@@ -76,13 +83,16 @@ if (telemetry.cost_basis !== "transcript") {
       `Aggregate telemetry has no meaningful peak_prefix_tokens; harvesting it would poison the median.`);
 }
 
+// A truncated run must not be indistinguishable from a clean one: a pipeline
+// that aborted early records fewer phases rather than failed ones, so counting
+// only non-completed phases would report flags: [] and let it into the median.
 const flags = [];
-for (const p of telemetry.phases ?? []) {
+const phases = telemetry.phases ?? [];
+if (!phases.length) flags.push("no phases recorded");
+if (!telemetry.completed_at) flags.push("no completed_at — run did not finish");
+for (const p of phases) {
   if (p.status && p.status !== "completed") flags.push(`phase ${p.phase} status=${p.status}`);
 }
-
-mkdirSync(archiveDir, { recursive: true });
-execFileSync("tar", ["-czf", join(archiveDir, `${arm}-${run}.tar.gz`), "-C", scratchRoot, `${arm}-${run}`]);
 
 mkdirSync(resultsDir, { recursive: true });
 writeFileSync(
