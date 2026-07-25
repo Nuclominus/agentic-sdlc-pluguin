@@ -1,5 +1,6 @@
 package bench.data
 
+import bench.domain.Result
 import bench.domain.model.Money
 import bench.domain.model.Order
 import bench.domain.model.OrderLine
@@ -41,5 +42,33 @@ class InMemoryDatabaseTest {
         first.productRepository.upsert(first.productRepository.findById("sku-1001")!!.copy(name = "Changed"))
 
         assertEquals("Wireless Mouse", second.productRepository.findById("sku-1001")?.name)
+    }
+
+    @Test
+    fun `useCases wires every use case to this database's own repositories`() {
+        val database = InMemoryDatabase()
+
+        val created = database.useCases.createOrder("cus-1", emptyList())
+
+        assertTrue(created is Result.Success)
+        assertEquals(1, database.orderRepository.size())
+    }
+
+    @Test
+    fun `useCases is the same instance on repeated access`() {
+        val database = InMemoryDatabase()
+
+        assertTrue(database.useCases === database.useCases)
+    }
+
+    @Test
+    fun `useCases from two different databases operate on independent state`() {
+        val first = InMemoryDatabase()
+        val second = InMemoryDatabase()
+
+        first.useCases.createOrder("cus-1", emptyList())
+
+        assertEquals(1, first.orderRepository.size())
+        assertEquals(0, second.orderRepository.size())
     }
 }

@@ -3,6 +3,7 @@ package bench.data
 import bench.domain.model.InventoryItem
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -74,5 +75,38 @@ class InMemoryInventoryRepositoryTest {
         )
 
         assertTrue(repository.findNeedingReorder().isEmpty())
+    }
+
+    @Test
+    fun `totalAvailableUnits sums available quantity across every tracked product`() {
+        val repository = InMemoryInventoryRepository(
+            seed = listOf(
+                InventoryItem("sku-a", quantityOnHand = 50, quantityReserved = 10, reorderThreshold = 5),
+                InventoryItem("sku-b", quantityOnHand = 30, quantityReserved = 5, reorderThreshold = 5),
+            ),
+        )
+
+        assertEquals(65, repository.totalAvailableUnits())
+    }
+
+    @Test
+    fun `totalAvailableUnits is zero for an empty repository`() {
+        val repository = InMemoryInventoryRepository(seed = emptyList())
+
+        assertEquals(0, repository.totalAvailableUnits())
+    }
+
+    @Test
+    fun `isTracked is true for a seeded product`() {
+        val repository = InMemoryInventoryRepository()
+
+        assertTrue(repository.isTracked("sku-1001"))
+    }
+
+    @Test
+    fun `isTracked is false for a product with no stock record`() {
+        val repository = InMemoryInventoryRepository(seed = emptyList())
+
+        assertFalse(repository.isTracked("sku-untracked"))
     }
 }

@@ -25,4 +25,15 @@ class InMemoryInventoryRepository(
 
     override fun findNeedingReorder(): List<InventoryItem> =
         byProductId.values.filter { it.needsReorder() }
+
+    /**
+     * The combined [InventoryItem.availableQuantity] across every tracked
+     * product — a rough proxy for "how much total stock is sitting in the
+     * warehouse right now," used by capacity-planning reports rather than
+     * any single-order flow.
+     */
+    fun totalAvailableUnits(): Int = byProductId.values.sumOf { it.availableQuantity }
+
+    /** Whether [productId] currently has a stock record at all. */
+    fun isTracked(productId: String): Boolean = byProductId.containsKey(productId)
 }
