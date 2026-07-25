@@ -105,8 +105,9 @@ what you pull into context costs on every subsequent turn, not once.
 - Locate before you load: Grep/Glob to find the region, then Read with offset/limit.
   Do not read a large file whole to find one symbol.
 - A file quoted or summarised in your prompt may be stale — open it yourself with
-  Read. Once you have Read it and have not edited it, you have its current contents;
-  do not Read it a second time.
+  Read. You then have the lines you read: do not read those same lines again unless
+  you or another agent may have written them since. A different region of the same
+  file is a new read, not a repeat — read it.
 - After an Edit/Write, trust the tool result. Do not read the file back to confirm
   the edit landed.
 - Keep verification output terse: targeted commands, tail the log. Never dump a full
@@ -147,7 +148,7 @@ inside the plugin payload. This one never does.
 that range → fail (it would land in the per-call trailer and lose cache stability). The body of the
 paragraph is free to be reworded; it cannot be deleted or displaced.
 
-**Check 2 — anti-pattern scan** over `plugins/*/agents/*.md`:
+**Check 2 — anti-pattern scan** over `plugins/*/agents/**/*.md`:
 
 ```js
 /\bre-?read\b/i
