@@ -57,4 +57,20 @@ class ArchiveOrder(
         orders.findByStatus(status).mapNotNull { order ->
             (invoke(order.id) as? Result.Success)?.value
         }
+
+    /**
+     * A side-effect-free check for whether [orderId] could currently be
+     * archived, without attempting it — the same "check before you show
+     * the button" pattern as [CancelOrder.canCancel].
+     */
+    fun canArchive(orderId: String): Boolean =
+        orders.findById(orderId)?.status?.canTransitionTo(OrderStatus.ARCHIVED) ?: false
+
+    /**
+     * Counts how many of [customerId]'s orders are currently eligible for
+     * archiving, without archiving any of them. Useful for a "you have N
+     * old orders you could clean up" hint in an account settings screen.
+     */
+    fun countArchivable(customerId: String): Int =
+        orders.findByCustomer(customerId).count { it.status.canTransitionTo(OrderStatus.ARCHIVED) }
 }

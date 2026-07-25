@@ -10,7 +10,9 @@ import bench.domain.model.OrderLine
 import bench.domain.model.OrderStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 class ArchiveOrderTest {
     private fun orderIn(status: OrderStatus) = Order(
@@ -113,5 +115,47 @@ class ArchiveOrderTest {
         val archiveOrder = ArchiveOrder(orders)
 
         assertEquals(emptyList(), archiveOrder.archiveAllIn(OrderStatus.DELIVERED))
+    }
+
+    @Test
+    fun `canArchive is true for a delivered order`() {
+        val orders = InMemoryOrderRepository(seed = listOf(orderIn(OrderStatus.DELIVERED)))
+        val archiveOrder = ArchiveOrder(orders)
+
+        assertTrue(archiveOrder.canArchive("ord-1"))
+    }
+
+    @Test
+    fun `canArchive is false for an order still in flight`() {
+        val orders = InMemoryOrderRepository(seed = listOf(orderIn(OrderStatus.SHIPPED)))
+        val archiveOrder = ArchiveOrder(orders)
+
+        assertFalse(archiveOrder.canArchive("ord-1"))
+    }
+
+    @Test
+    fun `canArchive is false for an unknown order id`() {
+        val archiveOrder = ArchiveOrder(InMemoryOrderRepository())
+
+        assertFalse(archiveOrder.canArchive("ord-missing"))
+    }
+
+    @Test
+    fun `countArchivable counts only the eligible orders for that customer`() {
+        val delivered = orderIn(OrderStatus.DELIVERED).copy(id = "ord-1")
+        val cancelled = orderIn(OrderStatus.CANCELLED).copy(id = "ord-2")
+        val stillPending = orderIn(OrderStatus.PENDING).copy(id = "ord-3")
+        val orders = InMemoryOrderRepository(seed = listOf(delivered, cancelled, stillPending))
+        val archiveOrder = ArchiveOrder(orders)
+
+        assertEquals(2, archiveOrder.countArchivable("cus-1"))
+    }
+
+    @Test
+    fun `countArchivable is zero for a customer with nothing archivable`() {
+        val orders = InMemoryOrderRepository(seed = listOf(orderIn(OrderStatus.PENDING)))
+        val archiveOrder = ArchiveOrder(orders)
+
+        assertEquals(0, archiveOrder.countArchivable("cus-1"))
     }
 }
