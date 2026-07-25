@@ -30,4 +30,14 @@ class InMemoryCustomerRepository(
 
     override fun findAtLeast(tier: LoyaltyTier): List<Customer> =
         byId.values.filter { it.loyaltyTier.isAtLeast(tier) }
+
+    /** How many customers the store currently has registered. */
+    fun count(): Int = byId.size
+
+    /**
+     * Whether [email] is already registered to some customer. A thin,
+     * intention-revealing wrapper over [findByEmail] for a sign-up flow
+     * that only cares about "taken or not," not who holds it.
+     */
+    fun isEmailTaken(email: String): Boolean = findByEmail(email) != null
 }

@@ -4,6 +4,7 @@ import bench.data.seed.SeedCustomers
 import bench.domain.model.LoyaltyTier
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -100,5 +101,30 @@ class InMemoryCustomerRepositoryTest {
         )
 
         assertTrue(repository.findAtLeast(LoyaltyTier.PLATINUM).isEmpty())
+    }
+
+    @Test
+    fun `count reflects the number of registered customers`() {
+        val repository = InMemoryCustomerRepository(seed = emptyList())
+
+        assertEquals(0, repository.count())
+
+        repository.save(SeedCustomers.customer("cus-1"))
+
+        assertEquals(1, repository.count())
+    }
+
+    @Test
+    fun `isEmailTaken is true for a registered email`() {
+        val repository = InMemoryCustomerRepository()
+
+        assertTrue(repository.isEmailTaken("ava.thompson@example.com"))
+    }
+
+    @Test
+    fun `isEmailTaken is false for an email nobody has registered`() {
+        val repository = InMemoryCustomerRepository()
+
+        assertFalse(repository.isEmailTaken("nobody@example.com"))
     }
 }
