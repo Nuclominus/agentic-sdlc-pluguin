@@ -78,3 +78,8 @@ test("a missing skill file is a tool error, not a violation", () => {
   assert.equal(skill.ok, false);
   assert.equal(skill.tool_error, true);
 });
+
+test("the real repository tree is clean", () => {
+  const failed = checkReadDiscipline(REPO).filter(r => !r.ok);
+  assert.equal(failed.length, 0, JSON.stringify(failed, null, 2));
+});

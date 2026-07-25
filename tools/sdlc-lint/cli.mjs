@@ -116,6 +116,7 @@ function runAll() {
   const codes = [
     printSchema(checkSchemas(root)),
     printCycles(checkAllWorkflows(root)),
+    printReadDiscipline(checkReadDiscipline(root)),
     printDetect2(detectRows()),
     printResumeFixtures(),
   ];
