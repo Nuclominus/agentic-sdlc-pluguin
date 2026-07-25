@@ -24,7 +24,17 @@ const arg = (name, fallback) => {
   const i = process.argv.indexOf(`--${name}`);
   return i === -1 ? fallback : process.argv[i + 1];
 };
-const die = (msg) => { console.error(`harvest: ${msg}`); process.exit(1); };
+// Set once the tarball has actually been written (see the archiving step
+// below). Every die() after that point must still tell the operator where it
+// landed — the archive is written unconditionally, before any check that can
+// abort, specifically so a failed run's forensic evidence is never lost; that
+// evidence is useless if its location is never printed.
+let archivedAt = null;
+const die = (msg) => {
+  console.error(`harvest: ${msg}`);
+  if (archivedAt) console.error(`harvest:   archive: ${archivedAt}`);
+  process.exit(1);
+};
 
 const arm = arg("arm");
 const run = Number(arg("run"));
@@ -44,6 +54,7 @@ if (!existsSync(dest)) die(`scratch directory not found: ${dest}`);
 // is. Archiving after the checks would discard exactly those.
 mkdirSync(archiveDir, { recursive: true });
 execFileSync("tar", ["-czf", join(archiveDir, `${arm}-${run}.tar.gz`), "-C", scratchRoot, `${arm}-${run}`]);
+archivedAt = join(archiveDir, `${arm}-${run}.tar.gz`);
 
 let manifest;
 try { manifest = readManifest(dest); } catch (e) { die(e.message); }

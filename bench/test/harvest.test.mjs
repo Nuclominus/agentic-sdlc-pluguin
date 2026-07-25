@@ -1,7 +1,10 @@
-import { test } from "node:test";
+import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, cpSync, realpathSync, utimesSync } from "node:fs";
+import {
+  mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, cpSync, realpathSync, utimesSync,
+  readdirSync, statSync,
+} from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -10,6 +13,36 @@ import { buildManifest, writeManifest } from "../lib/manifest.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..", "..");
 const HARVEST = join(REPO, "bench", "harvest.mjs");
+const REAL_ARCHIVE_DIR = join(REPO, "bench", "archive");
+const REAL_RESULTS_DIR = join(REPO, "bench", "results");
+
+// Snapshot filenames + sizes (not just names) so an in-place overwrite of a
+// real archive/result — the exact failure mode this guard exists to catch —
+// is caught even though the filename would be unchanged.
+const snapshotDir = (dir) =>
+  readdirSync(dir).sort().map((name) => `${name}:${statSync(join(dir, name)).size}`).join("\n");
+
+let archiveSnapshotBefore, resultsSnapshotBefore;
+before(() => {
+  archiveSnapshotBefore = snapshotDir(REAL_ARCHIVE_DIR);
+  resultsSnapshotBefore = snapshotDir(REAL_RESULTS_DIR);
+});
+
+after(() => {
+  // Every harvest() call in this suite is routed to fresh temp --results/
+  // --archive dirs (see the harvest() helper below). If any test ever
+  // regresses that and falls through to harvest.mjs's real defaults, this is
+  // the tripwire: it fails loudly instead of silently clobbering pilot
+  // evidence the way the original defect did.
+  assert.equal(
+    snapshotDir(REAL_ARCHIVE_DIR), archiveSnapshotBefore,
+    "a test wrote to the real bench/archive directory — this must never happen",
+  );
+  assert.equal(
+    snapshotDir(REAL_RESULTS_DIR), resultsSnapshotBefore,
+    "a test wrote to the real bench/results directory — this must never happen",
+  );
+});
 
 const manifestFields = (over = {}) => ({
   arm: "a", run: 1, plugin_version: "1.9.1", marketplace_sha: "9d1af30",
@@ -28,7 +61,18 @@ function scratchRun(fixture, over = {}) {
 }
 
 function harvest(args, env = {}) {
-  return execFileSync("node", [HARVEST, ...args], {
+  // Default --results/--archive to fresh temp dirs so no test can forget them
+  // and silently fall through to harvest.mjs's real defaults (bench/results,
+  // bench/archive) — that is exactly how earlier test runs clobbered a live
+  // pilot archive. Only add a default when the caller didn't already supply
+  // that flag, so an explicit per-test value (see the two tests that pass
+  // --archive themselves) still wins; harvest.mjs's own arg() resolves the
+  // FIRST occurrence of a flag, so an explicit value must never be paired
+  // with a default for the same flag.
+  const defaultArgs = [];
+  if (!args.includes("--results")) defaultArgs.push("--results", mkdtempSync(join(tmpdir(), "results-")));
+  if (!args.includes("--archive")) defaultArgs.push("--archive", mkdtempSync(join(tmpdir(), "archive-")));
+  return execFileSync("node", [HARVEST, ...defaultArgs, ...args], {
     cwd: REPO, encoding: "utf8", env: { ...process.env, BENCH_SKIP_LIVE_CHECK: "1", ...env },
   });
 }
