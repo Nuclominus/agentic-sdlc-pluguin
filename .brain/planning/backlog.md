@@ -27,6 +27,19 @@ addressable via agent behavior guidance.
 
 Ordered by leverage (measure first, then the two cheap high-impact guidance items, then structural):
 
+### Benchmark harness (`bench/`)
+
+The instrument that closes E2's deferred behavioural DoD lives in `bench/`: a Kotlin
+specimen, a corpus power check, and `prepare.mjs` / `harvest.mjs` / `compare.mjs`
+scripts driving a two-arm (before/after) comparison under isolated
+`CLAUDE_CONFIG_DIR` environments (procedure and runbook in `bench/README.md`). It is
+not E2-specific — E1, E3 and E4 are expected to reuse the same instrument to validate
+their own DoDs once implemented. Its output is medians, ranges and an engineering
+verdict over a **delta between the two arms of one experiment**; it is not a
+statistical result, and its numbers are not comparable to the 101k-token figure
+recorded above from the downstream Android application run — different codebase,
+different tool, different purpose.
+
 ### E5 — Cache-pressure signal in report + AAR *(enabler, low effort)*
 Add a per-phase **reads-per-turn** and **peak-prefix** signal to `tools/report` and surface it in
 the `sdlc:aar` findings, so cache regressions are visible and heavy phases get flagged. The report

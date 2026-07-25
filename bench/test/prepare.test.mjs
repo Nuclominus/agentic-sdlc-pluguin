@@ -57,12 +57,16 @@ test("writes a complete manifest", () => {
   assert.equal(m.inter_run_gap_seconds, 900);
   // prepared_at has no external dependency — always populated.
   assert.ok(m.prepared_at != null && m.prepared_at !== "", `manifest.prepared_at must be populated, got ${JSON.stringify(m.prepared_at)}`);
-  // plugin_version/marketplace_sha/config_dir depend on the live ~/.claude environment;
-  // task_sha256/answers_sha256 depend on bench/task.md and bench/answers.md, which are
-  // Task 7 deliverables and do not exist yet at Task 4. All five may legitimately be
-  // empty strings here — only their presence as keys is asserted.
-  for (const k of ["plugin_version", "marketplace_sha", "config_dir", "task_sha256", "answers_sha256"]) {
+  // plugin_version/marketplace_sha/config_dir depend on the live ~/.claude environment
+  // and are legitimately empty in a hermetic test environment — only presence is asserted.
+  for (const k of ["plugin_version", "marketplace_sha", "config_dir"]) {
     assert.ok(k in m, `manifest.${k} must be present`);
+  }
+  // task_sha256/answers_sha256 hash bench/task.md and bench/answers.md, which are real,
+  // committed files as of Task 7 — assert non-empty so a silent hashing failure (wrong
+  // path, swallowed read error) is caught rather than passing on an empty string.
+  for (const k of ["task_sha256", "answers_sha256"]) {
+    assert.ok(typeof m[k] === "string" && m[k].length > 0, `manifest.${k} must be non-empty, got ${JSON.stringify(m[k])}`);
   }
 });
 
