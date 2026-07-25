@@ -109,4 +109,22 @@ class InMemoryInventoryRepositoryTest {
 
         assertFalse(repository.isTracked("sku-untracked"))
     }
+
+    @Test
+    fun `findByProductIds returns matching stock records in one call`() {
+        val repository = InMemoryInventoryRepository()
+
+        val found = repository.findByProductIds(listOf("sku-1001", "sku-1002"))
+
+        assertEquals(setOf("sku-1001", "sku-1002"), found.map { it.productId }.toSet())
+    }
+
+    @Test
+    fun `findByProductIds silently omits ids with no stock record`() {
+        val repository = InMemoryInventoryRepository()
+
+        val found = repository.findByProductIds(listOf("sku-1001", "sku-untracked"))
+
+        assertEquals(listOf("sku-1001"), found.map { it.productId })
+    }
 }

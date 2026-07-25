@@ -26,6 +26,9 @@ class InMemoryInventoryRepository(
     override fun findNeedingReorder(): List<InventoryItem> =
         byProductId.values.filter { it.needsReorder() }
 
+    override fun findByProductIds(productIds: List<String>): List<InventoryItem> =
+        productIds.mapNotNull { byProductId[it] }
+
     /**
      * The combined [InventoryItem.availableQuantity] across every tracked
      * product — a rough proxy for "how much total stock is sitting in the

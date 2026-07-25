@@ -58,8 +58,10 @@ class ReserveInventory(
      *   first [Result.Failure] encountered while checking availability.
      */
     fun reserveAllOrNothing(quantities: Map<String, Int>): Result<List<InventoryItem>> {
+        val tracked = inventory.findByProductIds(quantities.keys.toList()).associateBy { it.productId }
+
         for ((productId, quantity) in quantities) {
-            val item = inventory.findByProductId(productId)
+            val item = tracked[productId]
                 ?: return Result.Failure(NotFoundError("No inventory record for product $productId", productId))
             if (!item.canReserve(quantity)) {
                 return Result.Failure(

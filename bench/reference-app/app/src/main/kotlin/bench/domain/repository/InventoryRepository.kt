@@ -33,4 +33,12 @@ interface InventoryRepository {
      * [findAll] by hand.
      */
     fun findNeedingReorder(): List<InventoryItem>
+
+    /**
+     * Returns the stock record for every id in [productIds] that is
+     * tracked, silently omitting any that are not. Lets a caller checking
+     * several products at once — an order with several lines, say — make
+     * one repository call instead of one [findByProductId] per line.
+     */
+    fun findByProductIds(productIds: List<String>): List<InventoryItem>
 }
