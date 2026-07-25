@@ -5,7 +5,6 @@ import bench.domain.Result
 import bench.domain.ValidationError
 import bench.domain.model.Discount
 import bench.domain.model.Order
-import bench.domain.model.OrderStatus
 import bench.domain.repository.OrderRepository
 
 /**
@@ -33,7 +32,7 @@ class ApplyDiscount(
         val existing = orders.findById(orderId)
             ?: return Result.Failure(NotFoundError("No order with id $orderId", orderId))
 
-        if (existing.isFinal() || existing.status == OrderStatus.PROCESSING) {
+        if (!existing.canAcceptDiscount()) {
             return Result.Failure(
                 ValidationError(
                     "Order $orderId can no longer accept a discount in status ${existing.status}",

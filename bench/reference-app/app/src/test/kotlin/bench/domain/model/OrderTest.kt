@@ -90,4 +90,80 @@ class OrderTest {
         assertEquals(sample.id, confirmed.id)
         assertEquals(sample.lines, confirmed.lines)
     }
+
+    @Test
+    fun `withStatus preserves an already-applied discount`() {
+        val sample = order(OrderLine("sku-1001", 1, Money.ofUnits(10L)), discount = PercentageDiscount(500))
+
+        val confirmed = sample.withStatus(OrderStatus.CONFIRMED)
+
+        assertEquals(sample.appliedDiscount, confirmed.appliedDiscount)
+    }
+
+    @Test
+    fun `discountedTotal reflects a fixed amount discount`() {
+        val sample = order(OrderLine("sku-1001", 1, Money.ofUnits(50L)), discount = FixedAmountDiscount(Money.ofUnits(20L)))
+
+        assertEquals(Money.ofUnits(30L), sample.discountedTotal)
+    }
+
+    @Test
+    fun `totalUnitCount is zero for an order with no lines`() {
+        assertEquals(0, order().totalUnitCount())
+    }
+
+    @Test
+    fun `containsProduct checks every line, not just the first`() {
+        val sample = order(
+            OrderLine("sku-1001", 1, Money.ofUnits(10L)),
+            OrderLine("sku-1002", 1, Money.ofUnits(10L)),
+            OrderLine("sku-1003", 1, Money.ofUnits(10L)),
+        )
+
+        assertTrue(sample.containsProduct("sku-1003"))
+    }
+
+    @Test
+    fun `highestValueLine picks the line with the largest subtotal`() {
+        val sample = order(
+            OrderLine("sku-1001", 1, Money.ofUnits(10L)),
+            OrderLine("sku-1002", 3, Money.ofUnits(50L)),
+            OrderLine("sku-1003", 2, Money.ofUnits(5L)),
+        )
+
+        assertEquals("sku-1002", sample.highestValueLine()?.productId)
+    }
+
+    @Test
+    fun `highestValueLine is null for an order with no lines`() {
+        assertEquals(null, order().highestValueLine())
+    }
+
+    @Test
+    fun `averageLineValue divides the total evenly across lines`() {
+        val sample = order(
+            OrderLine("sku-1001", 1, Money.ofUnits(30L)),
+            OrderLine("sku-1002", 1, Money.ofUnits(10L)),
+        )
+
+        assertEquals(Money.ofUnits(20L), sample.averageLineValue())
+    }
+
+    @Test
+    fun `averageLineValue is zero for an order with no lines`() {
+        assertEquals(Money.ZERO, order().averageLineValue())
+    }
+
+    @Test
+    fun `canAcceptDiscount is true while pending or confirmed`() {
+        assertTrue(order(status = OrderStatus.PENDING).canAcceptDiscount())
+        assertTrue(order(status = OrderStatus.CONFIRMED).canAcceptDiscount())
+    }
+
+    @Test
+    fun `canAcceptDiscount is false once processing has started or the order is final`() {
+        assertFalse(order(status = OrderStatus.PROCESSING).canAcceptDiscount())
+        assertFalse(order(status = OrderStatus.DELIVERED).canAcceptDiscount())
+        assertFalse(order(status = OrderStatus.CANCELLED).canAcceptDiscount())
+    }
 }

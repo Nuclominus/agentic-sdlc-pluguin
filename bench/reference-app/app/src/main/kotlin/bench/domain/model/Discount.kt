@@ -54,3 +54,20 @@ object FreeShippingDiscount : Discount {
 
     override fun describe(): String = "Free shipping"
 }
+
+/**
+ * Picks whichever of [discounts] leaves the customer with the smallest
+ * resulting total on [subtotal] — i.e. the best deal available to them.
+ *
+ * This exists because a real storefront often has more than one discount a
+ * customer could qualify for at once (a loyalty tier discount and a promo
+ * code, say); the two are not meant to stack, and the fair rule is to
+ * apply whichever is worth more on this particular purchase rather than
+ * always preferring one kind over the other.
+ *
+ * @return the best discount, or `null` if [discounts] is empty. Ties are
+ *   broken by keeping the first matching entry, so the result is
+ *   deterministic regardless of how the caller ordered the list.
+ */
+fun bestDiscountFor(discounts: List<Discount>, subtotal: Money): Discount? =
+    discounts.minByOrNull { it.apply(subtotal).cents }

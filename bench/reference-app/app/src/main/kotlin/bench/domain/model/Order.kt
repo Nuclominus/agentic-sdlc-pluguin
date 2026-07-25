@@ -39,4 +39,33 @@ data class Order(
 
     /** A copy of this order with its [status] moved to [next], with no other changes. */
     fun withStatus(next: OrderStatus): Order = copy(status = next)
+
+    /**
+     * The single line with the highest [OrderLine.subtotal], or `null` for
+     * an order with no lines.
+     *
+     * Ties are broken by keeping the first matching line in [lines], which
+     * makes the result deterministic without imposing any ordering
+     * requirement on the caller.
+     */
+    fun highestValueLine(): OrderLine? = lines.maxByOrNull { it.subtotal.cents }
+
+    /**
+     * The mean [OrderLine.subtotal] across every line, or [Money.ZERO] for
+     * an order with no lines. Integer division means the result rounds
+     * toward zero, matching how [Money] represents every other amount as
+     * whole cents.
+     */
+    fun averageLineValue(): Money {
+        if (lines.isEmpty()) return Money.ZERO
+        return Money(total.cents / lines.size)
+    }
+
+    /**
+     * Whether this order is eligible for a discount to be applied to it —
+     * see [ApplyDiscount][bench.domain.usecase.ApplyDiscount] for the
+     * precise rule. Exposed here so the model and the use case cannot
+     * silently drift apart on what "still eligible" means.
+     */
+    fun canAcceptDiscount(): Boolean = !isFinal() && status != OrderStatus.PROCESSING
 }

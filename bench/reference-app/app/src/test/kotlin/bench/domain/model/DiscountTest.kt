@@ -2,6 +2,7 @@ package bench.domain.model
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class DiscountTest {
     @Test
@@ -59,5 +60,42 @@ class DiscountTest {
     @Test
     fun `FreeShippingDiscount describe is a fixed label`() {
         assertEquals("Free shipping", FreeShippingDiscount.describe())
+    }
+
+    @Test
+    fun `PercentageDiscount of one hundred percent reduces the subtotal to zero`() {
+        val discount = PercentageDiscount(10_000)
+
+        assertEquals(Money.ZERO, discount.apply(Money.ofUnits(40L)))
+    }
+
+    @Test
+    fun `FixedAmountDiscount of exactly the subtotal reduces it to zero`() {
+        val discount = FixedAmountDiscount(Money.ofUnits(50L))
+
+        assertEquals(Money.ZERO, discount.apply(Money.ofUnits(50L)))
+    }
+
+    @Test
+    fun `bestDiscountFor picks the percentage discount when it saves more`() {
+        val discounts = listOf(PercentageDiscount(5000), FixedAmountDiscount(Money.ofUnits(10L)))
+
+        val best = bestDiscountFor(discounts, Money.ofUnits(100L))
+
+        assertEquals(PercentageDiscount(5000), best)
+    }
+
+    @Test
+    fun `bestDiscountFor picks the fixed discount when it saves more`() {
+        val discounts = listOf(PercentageDiscount(500), FixedAmountDiscount(Money.ofUnits(10L)))
+
+        val best = bestDiscountFor(discounts, Money.ofUnits(100L))
+
+        assertEquals(FixedAmountDiscount(Money.ofUnits(10L)), best)
+    }
+
+    @Test
+    fun `bestDiscountFor returns null for an empty list`() {
+        assertNull(bestDiscountFor(emptyList(), Money.ofUnits(100L)))
     }
 }
