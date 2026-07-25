@@ -54,6 +54,7 @@ Check 1 of 3. The token `Read discipline:` must appear in `SKILL.md` **between**
 - Create: `tools/sdlc-lint/fixtures/read-discipline/skill-ok.md`
 - Create: `tools/sdlc-lint/fixtures/read-discipline/skill-missing.md`
 - Create: `tools/sdlc-lint/fixtures/read-discipline/skill-displaced.md`
+- Create: `tools/sdlc-lint/fixtures/read-discipline/skill-prose-mention.md`
 - Create: `tools/sdlc-lint/test/read-discipline.test.mjs`
 
 **Interfaces:**
@@ -111,6 +112,25 @@ task_slug: {task_slug}
 Read discipline: your entire prompt prefix is re-read and billed on every turn.
 ```
 
+`tools/sdlc-lint/fixtures/read-discipline/skill-prose-mention.md` — reproduces the real `SKILL.md`, which explains the template in prose (quoting the delimiter) three lines above the template itself:
+
+```markdown
+# fixture: prose mentions the delimiter before the template block
+
+The prompt MUST be assembled in this exact order so the stable prefix (everything
+down to `=== PER-CALL CONTEXT ===`) is identical across runs.
+
+=== STABLE PREFIX ===
+
+Compact handoff contract: return ONLY a COMPACT summary.
+
+Read discipline: your entire prompt prefix is re-read and billed on every turn.
+
+=== PER-CALL CONTEXT ===
+
+task_slug: {task_slug}
+```
+
 - [ ] **Step 2: Write the failing test**
 
 `tools/sdlc-lint/test/read-discipline.test.mjs`:
@@ -147,6 +167,10 @@ test("a file with no stable-prefix delimiters is a structural failure", () => {
   assert.equal(ok, false);
   assert.match(errors.join(" "), /delimiter/);
 });
+
+test("a prose mention of the delimiter above the template does not confuse the check", () => {
+  assert.deepEqual(checkAnchor(fixture("skill-prose-mention.md")), { ok: true, errors: [] });
+});
 ```
 
 - [ ] **Step 3: Run the test to verify it fails**
@@ -176,7 +200,11 @@ export const PREFIX_END = "=== PER-CALL CONTEXT ===";
 export function checkAnchor(text) {
   const errors = [];
   const start = text.indexOf(PREFIX_START);
-  const end = text.indexOf(PREFIX_END);
+  // Anchored to `start`: the real SKILL.md mentions PREFIX_END in prose (line 928)
+  // three lines ABOVE the actual template delimiter, so a bare indexOf would give
+  // end < start and report a malformed template forever. Search for the first
+  // PREFIX_END that follows PREFIX_START.
+  const end = text.indexOf(PREFIX_END, start);
   if (start === -1 || end === -1 || end < start) {
     errors.push(`missing or malformed prompt-template delimiter ('${PREFIX_START}' … '${PREFIX_END}')`);
     return { ok: false, errors };
@@ -194,7 +222,7 @@ export function checkAnchor(text) {
 - [ ] **Step 5: Run the test to verify it passes**
 
 Run: `node --test tools/sdlc-lint/test/read-discipline.test.mjs`
-Expected: PASS — 4/4
+Expected: PASS — 5/5
 
 - [ ] **Step 6: Commit**
 
@@ -355,7 +383,7 @@ Note on the regex literals: `PATTERNS` carries no `/g` flag, so `.test()` is sta
 - [ ] **Step 5: Run the test to verify it passes**
 
 Run: `node --test tools/sdlc-lint/test/read-discipline.test.mjs`
-Expected: PASS — 10/10
+Expected: PASS — 11/11
 
 - [ ] **Step 6: Commit**
 
@@ -457,7 +485,7 @@ Move the two `import` lines to the top of the file alongside the existing ones �
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `node --test tools/sdlc-lint/test/read-discipline.test.mjs`
-Expected: PASS — 12/12
+Expected: PASS — 13/13
 
 - [ ] **Step 5: Add the CLI reporter and verb**
 
