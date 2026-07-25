@@ -1,5 +1,6 @@
 package bench.domain.usecase
 
+import bench.domain.NotFoundError
 import bench.domain.Result
 import bench.domain.model.Money
 import bench.domain.model.Product
@@ -39,5 +40,33 @@ class FindProducts(
             .toList()
 
         return Result.Success(matches)
+    }
+
+    /**
+     * Looks up a single product by id, for the product-detail page a
+     * search result links to.
+     *
+     * Unlike [invoke], this *can* fail: a search always returning
+     * "possibly zero results" is normal, but following a specific link to
+     * a specific product id that turns out not to exist is a genuine
+     * not-found case worth reporting distinctly.
+     *
+     * @return [Result.Success] with the product, or [Result.Failure]
+     *   wrapping a [NotFoundError] if no product has that id.
+     */
+    fun byId(productId: String): Result<Product> {
+        val product = products.findById(productId)
+            ?: return Result.Failure(NotFoundError("No product with id $productId", productId))
+        return Result.Success(product)
+    }
+
+    /**
+     * The cheapest currently-active product matching [query], or `null`
+     * if nothing matches. A thin convenience over [invoke] for a "show me
+     * your best deal on X" style prompt.
+     */
+    fun cheapestMatching(query: String): Product? {
+        val matches = invoke(query = query, onlyActive = true)
+        return (matches as Result.Success).value.minByOrNull { it.unitPrice.cents }
     }
 }

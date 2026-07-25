@@ -1,12 +1,14 @@
 package bench.domain.usecase
 
 import bench.data.InMemoryProductRepository
+import bench.domain.NotFoundError
 import bench.domain.Result
 import bench.domain.model.Money
 import bench.domain.model.Product
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class FindProductsTest {
@@ -132,5 +134,59 @@ class FindProductsTest {
     @Test
     fun `subtotalFor multiplies unit price by quantity`() {
         assertEquals(Money.ofUnits(48L), catalog[0].subtotalFor(2))
+    }
+
+    @Test
+    fun `byId returns the matching product`() {
+        val findProducts = FindProducts(InMemoryProductRepository(seed = catalog))
+
+        val result = findProducts.byId("sku-1")
+
+        assertIs<Result.Success<Product>>(result)
+        assertEquals("Wireless Mouse", result.value.name)
+    }
+
+    @Test
+    fun `byId fails with NotFoundError for an unknown id`() {
+        val findProducts = FindProducts(InMemoryProductRepository(seed = catalog))
+
+        val result = findProducts.byId("sku-missing")
+
+        assertIs<NotFoundError>((result as Result.Failure).error)
+    }
+
+    @Test
+    fun `byId can return an inactive product, unlike the default search`() {
+        val findProducts = FindProducts(InMemoryProductRepository(seed = catalog))
+
+        val result = findProducts.byId("sku-4")
+
+        assertIs<Result.Success<Product>>(result)
+    }
+
+    @Test
+    fun `cheapestMatching picks the lowest-priced active match`() {
+        val findProducts = FindProducts(InMemoryProductRepository(seed = catalog))
+
+        val cheapest = findProducts.cheapestMatching("mouse")
+
+        assertEquals("sku-2", cheapest?.id)
+    }
+
+    @Test
+    fun `cheapestMatching is null when nothing matches`() {
+        val findProducts = FindProducts(InMemoryProductRepository(seed = catalog))
+
+        assertNull(findProducts.cheapestMatching("nonexistent widget"))
+    }
+
+    @Test
+    fun `cheapestMatching ignores discontinued products`() {
+        val cheapDiscontinued = Product("sku-5", "Cheap Mouse Mat", Money.ofUnits(1L), active = false)
+        val findProducts = FindProducts(InMemoryProductRepository(seed = catalog + cheapDiscontinued))
+
+        val cheapest = findProducts.cheapestMatching("mouse")
+
+        assertEquals("sku-2", cheapest?.id)
     }
 }
