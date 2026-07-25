@@ -95,7 +95,7 @@ Launch Claude Code under each arm and confirm the loaded `sdlc` plugin version, 
 grep -c "Read discipline:" <arm-env>/plugins/cache/agentic-sdlc/sdlc/*/skills/pipeline-orchestrator/SKILL.md
 ```
 
-Expected: arm A → `0`, arm B → `1`. That single grep is the ground truth for which arm is loaded — the contract's presence is the entire independent variable.
+Expected: arm A → `0`, arm B → **non-zero**. Assert non-zero, not an exact count: arm B greps to `2`, because the `DRIFT GUARD` maintenance comment beside the contract also quotes the phrase. The discriminator is presence versus absence — that is the entire independent variable.
 
 - [ ] **Step 5: Prove the arms are stable**
 
