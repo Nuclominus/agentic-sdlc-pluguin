@@ -3,10 +3,37 @@
 // reading provenance afterwards records the state that happened to be live
 // when someone got round to harvesting. That record is plausible and wrong —
 // the worst failure mode available here, because it looks verified.
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 export const MANIFEST_NAME = "_bench-manifest.json";
+
+/**
+ * CLAUDE_CONFIG_DIR, when set, IS the config directory — do not append
+ * ".claude". Shared by prepare and harvest: if the two ever resolved it
+ * differently, every run would report a false provenance divergence.
+ */
+export function resolveConfigDir(env = process.env) {
+  return env.CLAUDE_CONFIG_DIR || join(env.HOME || "", ".claude");
+}
+
+/**
+ * The design keeps exactly one plugin version per arm environment. Picking
+ * "the latest" from several would be a guess, and a wrong guess writes the
+ * wrong arm into the manifest — which harvest's cross-check cannot catch,
+ * because both sides would guess identically. So: absent cache (not an arm
+ * environment, e.g. under test) records an empty string; an ambiguous cache
+ * is a hard error naming what it found.
+ */
+export function resolvePluginVersion(cacheDir) {
+  let entries;
+  try { entries = readdirSync(cacheDir); } catch { return ""; }
+  if (entries.length !== 1) {
+    throw new Error(
+      `expected exactly one installed sdlc version in ${cacheDir}, found ${entries.length}: ${entries.join(", ")}`);
+  }
+  return entries[0];
+}
 
 /** Fields compared between the recorded manifest and live state at harvest. */
 const COMPARED = ["arm", "plugin_version", "marketplace_sha", "config_dir", "task_sha256", "answers_sha256"];

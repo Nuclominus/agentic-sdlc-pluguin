@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { MANIFEST_NAME, buildManifest, writeManifest, readManifest, diffManifest } from "../lib/manifest.mjs";
+import { MANIFEST_NAME, buildManifest, writeManifest, readManifest, diffManifest, resolveConfigDir, resolvePluginVersion } from "../lib/manifest.mjs";
 
 const base = {
   arm: "a", run: 1, plugin_version: "1.9.1", marketplace_sha: "9d1af30",
@@ -46,4 +46,27 @@ test("prepared_at and run are not divergence — they are recorded, not compared
 
 test("MANIFEST_NAME is the agreed filename", () => {
   assert.equal(MANIFEST_NAME, "_bench-manifest.json");
+});
+
+test("resolveConfigDir does not append .claude to CLAUDE_CONFIG_DIR", () => {
+  assert.equal(resolveConfigDir({ CLAUDE_CONFIG_DIR: "/tmp/arm-a" }), "/tmp/arm-a");
+  assert.equal(resolveConfigDir({ HOME: "/home/x" }), join("/home/x", ".claude"));
+});
+
+test("resolvePluginVersion returns the single installed version", () => {
+  const cache = mkdtempSync(join(tmpdir(), "cache-"));
+  mkdirSync(join(cache, "1.10.0"));
+  assert.equal(resolvePluginVersion(cache), "1.10.0");
+});
+
+test("an ambiguous plugin cache is a hard error, not a guess", () => {
+  const cache = mkdtempSync(join(tmpdir(), "cache-"));
+  mkdirSync(join(cache, "1.9.1"));
+  mkdirSync(join(cache, "1.10.0"));
+  // Lexicographic "latest" would pick 1.9.1 here — exactly the two arm versions.
+  assert.throws(() => resolvePluginVersion(cache), /found 2:/);
+});
+
+test("an absent plugin cache records an empty version rather than throwing", () => {
+  assert.equal(resolvePluginVersion(join(tmpdir(), "definitely-not-there-12345")), "");
 });

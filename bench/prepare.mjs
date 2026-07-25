@@ -3,12 +3,12 @@
 // make it a real git repo (the pipeline's dev/QA/docs phases expect branches,
 // commits and diffs — a bare file tree would behave differently from real
 // use), and record provenance BEFORE the run.
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { buildManifest, writeManifest, MANIFEST_NAME } from "./lib/manifest.mjs";
+import { buildManifest, writeManifest, MANIFEST_NAME, resolveConfigDir, resolvePluginVersion } from "./lib/manifest.mjs";
 
 const arg = (name, fallback) => {
   const i = process.argv.indexOf(`--${name}`);
@@ -44,16 +44,12 @@ execFileSync("git", ["-C", dest, "-c", "user.name=bench", "-c", "user.email=benc
 const sha256 = (p) => existsSync(p) ? createHash("sha256").update(readFileSync(p)).digest("hex") : "";
 const git = (cwd, ...a) => { try { return execFileSync("git", ["-C", cwd, ...a], { encoding: "utf8" }).trim(); } catch { return ""; } };
 
-// CLAUDE_CONFIG_DIR, when set, IS the config directory — do not append ".claude" to it.
-const configDir = process.env.CLAUDE_CONFIG_DIR || join(process.env.HOME || "", ".claude");
+const configDir = resolveConfigDir();
 const marketplaceDir = join(configDir, "plugins", "marketplaces", "agentic-sdlc");
 const cacheDir = join(configDir, "plugins", "cache", "agentic-sdlc", "sdlc");
 
 let pluginVersion = "";
-try {
-  const versions = readdirSync(cacheDir).sort();
-  pluginVersion = versions[versions.length - 1] ?? "";
-} catch { /* recorded as empty; harvest will flag the divergence */ }
+try { pluginVersion = resolvePluginVersion(cacheDir); } catch (e) { die(e.message); }
 
 writeManifest(dest, buildManifest({
   arm, run,
