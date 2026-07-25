@@ -122,4 +122,45 @@ class RestockInventoryTest {
         assertTrue(updated.isEmpty())
         assertEquals(100, inventory.findByProductId("sku-healthy")?.quantityOnHand)
     }
+
+    @Test
+    fun `applyShipment restocks every line in the manifest`() {
+        val inventory = InMemoryInventoryRepository(
+            seed = listOf(
+                InventoryItem("sku-a", quantityOnHand = 10, quantityReserved = 0, reorderThreshold = 5),
+                InventoryItem("sku-b", quantityOnHand = 5, quantityReserved = 0, reorderThreshold = 5),
+            ),
+        )
+        val restockInventory = RestockInventory(inventory)
+
+        val result = restockInventory.applyShipment(mapOf("sku-a" to 20, "sku-b" to 15))
+
+        assertIs<Result.Success<List<InventoryItem>>>(result)
+        assertEquals(30, inventory.findByProductId("sku-a")?.quantityOnHand)
+        assertEquals(20, inventory.findByProductId("sku-b")?.quantityOnHand)
+    }
+
+    @Test
+    fun `applyShipment fails with NotFoundError for an untracked product in the manifest`() {
+        val inventory = InMemoryInventoryRepository(
+            seed = listOf(InventoryItem("sku-a", quantityOnHand = 10, quantityReserved = 0, reorderThreshold = 5)),
+        )
+        val restockInventory = RestockInventory(inventory)
+
+        val result = restockInventory.applyShipment(mapOf("sku-a" to 5, "sku-missing" to 5))
+
+        assertIs<NotFoundError>((result as Result.Failure).error)
+    }
+
+    @Test
+    fun `applyShipment rejects a manifest line with a non-positive quantity`() {
+        val inventory = InMemoryInventoryRepository(
+            seed = listOf(InventoryItem("sku-a", quantityOnHand = 10, quantityReserved = 0, reorderThreshold = 5)),
+        )
+        val restockInventory = RestockInventory(inventory)
+
+        val result = restockInventory.applyShipment(mapOf("sku-a" to 0))
+
+        assertIs<ValidationError>((result as Result.Failure).error)
+    }
 }

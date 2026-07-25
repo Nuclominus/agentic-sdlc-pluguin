@@ -79,4 +79,27 @@ class RestockInventory(
             val shortfall = item.shortfallToClearThreshold()
             if (shortfall <= 0) null else (invoke(item.productId, shortfall) as? Result.Success)?.value
         }
+
+    /**
+     * Applies a whole shipment's worth of deliveries at once, keyed by
+     * product id, stopping at the first line that fails rather than
+     * silently skipping it — unlike [restockEverythingLow] and
+     * [restockToClearThresholds], which are automated housekeeping and
+     * tolerate a partial result, a shipment manifest failing partway
+     * through most likely means a data entry mistake worth surfacing
+     * immediately rather than swallowing.
+     *
+     * @return [Result.Success] with every updated stock record, or the
+     *   first [Result.Failure] encountered.
+     */
+    fun applyShipment(receivedQuantities: Map<String, Int>): Result<List<InventoryItem>> {
+        val restocked = mutableListOf<InventoryItem>()
+        for ((productId, quantity) in receivedQuantities) {
+            when (val result = invoke(productId, quantity)) {
+                is Result.Success -> restocked.add(result.value)
+                is Result.Failure -> return result
+            }
+        }
+        return Result.Success(restocked)
+    }
 }
