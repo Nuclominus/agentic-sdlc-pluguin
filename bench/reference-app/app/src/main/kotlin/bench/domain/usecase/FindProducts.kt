@@ -30,10 +30,10 @@ class FindProducts(
         onlyActive: Boolean = true,
         maxPrice: Money? = null,
     ): Result<List<Product>> {
-        val matches = products.findAll()
+        val candidates = if (onlyActive) products.findActive() else products.findAll()
+        val matches = candidates
             .asSequence()
-            .filter { !onlyActive || it.active }
-            .filter { query.isNullOrBlank() || it.name.contains(query, ignoreCase = true) }
+            .filter { query.isNullOrBlank() || it.matchesName(query) }
             .filter { maxPrice == null || it.isPricedAtMost(maxPrice) }
             .sortedBy { it.name }
             .toList()

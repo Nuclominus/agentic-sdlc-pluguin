@@ -71,4 +71,48 @@ class InventoryItemTest {
 
         assertEquals(0, updated.quantityReserved)
     }
+
+    @Test
+    fun `healthPercent is 100 when available quantity exactly matches the threshold`() {
+        val sample = item(onHand = 5, reserved = 0, threshold = 5)
+
+        assertEquals(100.0, sample.healthPercent())
+    }
+
+    @Test
+    fun `healthPercent is above 100 when comfortably stocked`() {
+        val sample = item(onHand = 20, reserved = 0, threshold = 5)
+
+        assertEquals(400.0, sample.healthPercent())
+    }
+
+    @Test
+    fun `healthPercent handles a zero threshold without dividing by zero`() {
+        val stocked = item(onHand = 5, reserved = 0, threshold = 0)
+        val empty = item(onHand = 0, reserved = 0, threshold = 0)
+
+        assertEquals(100.0, stocked.healthPercent())
+        assertEquals(0.0, empty.healthPercent())
+    }
+
+    @Test
+    fun `shortfallToClearThreshold is zero once comfortably stocked`() {
+        val sample = item(onHand = 100, reserved = 0, threshold = 5)
+
+        assertEquals(0, sample.shortfallToClearThreshold())
+    }
+
+    @Test
+    fun `shortfallToClearThreshold reports how many more units are needed`() {
+        val sample = item(onHand = 3, reserved = 0, threshold = 5)
+
+        assertEquals(3, sample.shortfallToClearThreshold())
+    }
+
+    @Test
+    fun `isEmpty is true only when both on-hand and reserved are zero`() {
+        assertTrue(item(onHand = 0, reserved = 0).isEmpty())
+        assertFalse(item(onHand = 0, reserved = 3).isEmpty())
+        assertFalse(item(onHand = 5, reserved = 0).isEmpty())
+    }
 }

@@ -86,4 +86,51 @@ class FindProductsTest {
         assertIs<Result.Success<List<Product>>>(result)
         assertEquals(listOf("sku-2"), result.value.map { it.id })
     }
+
+    @Test
+    fun `withPrice replaces only the unit price`() {
+        val original = catalog[0]
+
+        val repriced = original.withPrice(Money.ofUnits(30L))
+
+        assertEquals(Money.ofUnits(30L), repriced.unitPrice)
+        assertEquals(original.name, repriced.name)
+        assertEquals(original.id, repriced.id)
+    }
+
+    @Test
+    fun `discontinue marks a product inactive without changing anything else`() {
+        val original = catalog[0]
+
+        val discontinued = original.discontinue()
+
+        assertEquals(false, discontinued.active)
+        assertEquals(original.unitPrice, discontinued.unitPrice)
+    }
+
+    @Test
+    fun `matchesName is case-insensitive`() {
+        assertTrue(catalog[0].matchesName("WIRELESS"))
+        assertTrue(catalog[0].matchesName("mouse"))
+    }
+
+    @Test
+    fun `matchesName is false when the query is not part of the name`() {
+        assertTrue(!catalog[0].matchesName("keyboard"))
+    }
+
+    @Test
+    fun `catalogLabel flags a discontinued product`() {
+        assertEquals("Old Mouse Pad (discontinued)", catalog[3].catalogLabel())
+    }
+
+    @Test
+    fun `catalogLabel is the plain name for an active product`() {
+        assertEquals("Wireless Mouse", catalog[0].catalogLabel())
+    }
+
+    @Test
+    fun `subtotalFor multiplies unit price by quantity`() {
+        assertEquals(Money.ofUnits(48L), catalog[0].subtotalFor(2))
+    }
 }

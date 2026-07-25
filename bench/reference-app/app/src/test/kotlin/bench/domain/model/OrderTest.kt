@@ -167,3 +167,49 @@ class OrderTest {
         assertFalse(order(status = OrderStatus.CANCELLED).canAcceptDiscount())
     }
 }
+
+/** Covers [OrderLine] in isolation, kept next to [OrderTest] since the two types are always used together. */
+class OrderLineTest {
+    @Test
+    fun `subtotal multiplies unit price by quantity`() {
+        val line = OrderLine("sku-1001", 3, Money.ofUnits(15L))
+
+        assertEquals(Money.ofUnits(45L), line.subtotal)
+    }
+
+    @Test
+    fun `isMultiUnit is false for a single unit`() {
+        assertFalse(OrderLine("sku-1001", 1, Money.ofUnits(10L)).isMultiUnit())
+    }
+
+    @Test
+    fun `isMultiUnit is true for more than one unit`() {
+        assertTrue(OrderLine("sku-1001", 2, Money.ofUnits(10L)).isMultiUnit())
+    }
+
+    @Test
+    fun `withAdditionalQuantity increases quantity and recomputes the subtotal`() {
+        val line = OrderLine("sku-1001", 2, Money.ofUnits(10L))
+
+        val updated = line.withAdditionalQuantity(3)
+
+        assertEquals(5, updated.quantity)
+        assertEquals(Money.ofUnits(50L), updated.subtotal)
+    }
+
+    @Test
+    fun `withAdditionalQuantity keeps the originally agreed unit price`() {
+        val line = OrderLine("sku-1001", 1, Money.ofUnits(10L))
+
+        val updated = line.withAdditionalQuantity(1)
+
+        assertEquals(Money.ofUnits(10L), updated.unitPrice)
+    }
+
+    @Test
+    fun `describe renders quantity and product id`() {
+        val line = OrderLine("sku-1001", 4, Money.ofUnits(10L))
+
+        assertEquals("4 x sku-1001", line.describe())
+    }
+}

@@ -23,4 +23,16 @@ data class OrderLine(
 
     /** Whether this line represents more than a single unit. */
     fun isMultiUnit(): Boolean = quantity > 1
+
+    /**
+     * A copy of this line with [additional] more units added to
+     * [quantity], keeping the originally agreed [unitPrice] unchanged.
+     * This is how a "increase quantity" cart edit is modeled: as a new
+     * line value, since [OrderLine] itself has no mutable state to update
+     * in place.
+     */
+    fun withAdditionalQuantity(additional: Int): OrderLine = copy(quantity = quantity + additional)
+
+    /** A short label like "2 x sku-1001", suitable for a compact list view or log line. */
+    fun describe(): String = "$quantity x $productId"
 }

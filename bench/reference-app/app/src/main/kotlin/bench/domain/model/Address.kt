@@ -49,6 +49,34 @@ data class Address(
      */
     fun shortLabel(): String = "$city, $country"
 
+    /**
+     * Whether [region] is present and non-blank.
+     *
+     * Useful for form-rendering code that needs to decide whether to show a
+     * state/province field at all, rather than showing an empty one for
+     * every address in a country that does not use the concept.
+     */
+    fun hasRegion(): Boolean = !region.isNullOrBlank()
+
+    /**
+     * A copy of this address with [country] replaced, leaving every other
+     * field untouched.
+     *
+     * Exists mainly for tests and seed data that want to derive a foreign
+     * variant of an otherwise-identical address without re-typing every
+     * field, but it is a plain, real method rather than a test-only helper:
+     * a "move to a different country" flow in a real storefront would use
+     * exactly this.
+     */
+    fun withCountry(newCountry: String): Address = copy(country = newCountry)
+
+    /**
+     * Whether this address and [other] are in the same country, ignoring
+     * every other field. Useful for shipping logic that only cares about
+     * the international/domestic boundary, not the exact city or street.
+     */
+    fun sameCountryAs(other: Address): Boolean = country.equals(other.country, ignoreCase = true)
+
     companion object {
         /**
          * A placeholder address used by tests and seed data where the exact

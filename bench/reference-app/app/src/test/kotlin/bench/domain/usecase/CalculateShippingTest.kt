@@ -13,7 +13,9 @@ import bench.domain.model.OrderStatus
 import bench.domain.model.ShippingMethod
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 class CalculateShippingTest {
     private val domesticAddress = Address("12 Elm Street", "Portland", "OR", "97201", "US")
@@ -89,5 +91,46 @@ class CalculateShippingTest {
         val result = calculateShipping("ord-missing", ShippingMethod.STANDARD, domesticAddress)
 
         assertIs<NotFoundError>((result as Result.Failure).error)
+    }
+}
+
+/** Covers [ShippingMethod] in isolation, kept next to [CalculateShippingTest] since the two are always used together. */
+class ShippingMethodTest {
+    @Test
+    fun `isExpedited is false only for standard shipping`() {
+        assertFalse(ShippingMethod.STANDARD.isExpedited())
+        assertTrue(ShippingMethod.EXPRESS.isExpedited())
+        assertTrue(ShippingMethod.OVERNIGHT.isExpedited())
+    }
+
+    @Test
+    fun `estimatedDeliveryDays adds processing time on top of transit time`() {
+        assertEquals(6, ShippingMethod.STANDARD.estimatedDeliveryDays(processingDays = 1))
+        assertEquals(2, ShippingMethod.OVERNIGHT.estimatedDeliveryDays(processingDays = 1))
+    }
+
+    @Test
+    fun `displayLabel pluralizes business days correctly`() {
+        assertEquals("Overnight (1 business day)", ShippingMethod.OVERNIGHT.displayLabel())
+        assertEquals("Standard (5 business days)", ShippingMethod.STANDARD.displayLabel())
+    }
+
+    @Test
+    fun `fastestWithin picks the quickest method affordable within budget`() {
+        val fastest = ShippingMethod.fastestWithin(Money.ofUnits(12L))
+
+        assertEquals(ShippingMethod.EXPRESS, fastest)
+    }
+
+    @Test
+    fun `fastestWithin returns overnight when the whole budget allows it`() {
+        val fastest = ShippingMethod.fastestWithin(Money.ofUnits(100L))
+
+        assertEquals(ShippingMethod.OVERNIGHT, fastest)
+    }
+
+    @Test
+    fun `fastestWithin returns null when nothing fits the budget`() {
+        assertEquals(null, ShippingMethod.fastestWithin(Money.ofUnits(1L)))
     }
 }

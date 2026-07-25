@@ -27,4 +27,20 @@ enum class ShippingMethod(val baseCost: Money, val transitDays: Int) {
 
     /** Whether this method is fast enough to be marketed as "express" or better. */
     fun isExpedited(): Boolean = this != STANDARD
+
+    /**
+     * A customer-facing label combining the method's name and its typical
+     * transit time, e.g. "Overnight (1 business day)".
+     */
+    fun displayLabel(): String {
+        val unit = if (transitDays == 1) "business day" else "business days"
+        val name = name.lowercase().replaceFirstChar { it.uppercase() }
+        return "$name ($transitDays $unit)"
+    }
+
+    companion object {
+        /** The fastest method whose [baseCost] does not exceed [budget], or `null` if none qualifies. */
+        fun fastestWithin(budget: Money): ShippingMethod? =
+            entries.filter { it.baseCost.cents <= budget.cents }.minByOrNull { it.transitDays }
+    }
 }

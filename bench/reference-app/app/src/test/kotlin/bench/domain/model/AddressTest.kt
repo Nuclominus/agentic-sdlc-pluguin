@@ -47,4 +47,47 @@ class AddressTest {
 
         assertTrue(address.singleLine().isNotBlank())
     }
+
+    @Test
+    fun `hasRegion is true when a non-blank region is present`() {
+        val address = Address("12 Elm Street", "Portland", "OR", "97201", "US")
+
+        assertTrue(address.hasRegion())
+    }
+
+    @Test
+    fun `hasRegion is false when the region is null or blank`() {
+        val withoutRegion = Address("77 Harbour Road", "Dublin", null, "D02", "IE")
+        val blankRegion = withoutRegion.copy(region = "  ")
+
+        assertFalse(withoutRegion.hasRegion())
+        assertFalse(blankRegion.hasRegion())
+    }
+
+    @Test
+    fun `withCountry replaces only the country field`() {
+        val address = Address("12 Elm Street", "Portland", "OR", "97201", "US")
+
+        val moved = address.withCountry("CA")
+
+        assertEquals("CA", moved.country)
+        assertEquals(address.street, moved.street)
+        assertEquals(address.city, moved.city)
+    }
+
+    @Test
+    fun `sameCountryAs is true regardless of city or street`() {
+        val first = Address("12 Elm Street", "Portland", "OR", "97201", "US")
+        val second = Address("500 Other Ave", "Miami", "FL", "33101", "us")
+
+        assertTrue(first.sameCountryAs(second))
+    }
+
+    @Test
+    fun `sameCountryAs is false for different countries`() {
+        val first = Address("12 Elm Street", "Portland", "OR", "97201", "US")
+        val second = Address("15 Via Roma", "Milan", null, "20121", "IT")
+
+        assertFalse(first.sameCountryAs(second))
+    }
 }

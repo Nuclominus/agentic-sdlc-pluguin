@@ -33,4 +33,22 @@ data class Product(
 
     /** Whether this product's price is at or below [ceiling]. */
     fun isPricedAtMost(ceiling: Money): Boolean = unitPrice.cents <= ceiling.cents
+
+    /**
+     * A copy of this product with [unitPrice] replaced, leaving every
+     * other field untouched. A real catalog-pricing job would use exactly
+     * this to react to a supplier cost change, rather than reconstructing
+     * the whole product by hand and risking a typo in an unrelated field.
+     */
+    fun withPrice(newPrice: Money): Product = copy(unitPrice = newPrice)
+
+    /**
+     * A copy of this product marked inactive, i.e. removed from sale while
+     * remaining in the catalog for historical order lines to reference.
+     * See [active] for why this is a soft flag rather than deletion.
+     */
+    fun discontinue(): Product = copy(active = false)
+
+    /** Whether [name] contains [query], matched case-insensitively. Used by catalog search. */
+    fun matchesName(query: String): Boolean = name.contains(query, ignoreCase = true)
 }
