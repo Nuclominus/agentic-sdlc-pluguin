@@ -62,4 +62,21 @@ class RestockInventory(
                 (invoke(item.productId, shortfall) as? Result.Success)?.value
             }
         }
+
+    /**
+     * Restocks every low-stock product by exactly enough to clear its own
+     * [reorderThreshold][InventoryItem.reorderThreshold] by one unit,
+     * rather than topping every product up to the same flat
+     * [targetQuantity] like [restockEverythingLow] does.
+     *
+     * This is the more realistic ordering strategy of the two: a
+     * fast-moving product with a high threshold and a slow-moving one
+     * with a low threshold should not receive the same restock amount just
+     * because both happened to dip low at the same time.
+     */
+    fun restockToClearThresholds(): List<InventoryItem> =
+        inventory.findNeedingReorder().mapNotNull { item ->
+            val shortfall = item.shortfallToClearThreshold()
+            if (shortfall <= 0) null else (invoke(item.productId, shortfall) as? Result.Success)?.value
+        }
 }

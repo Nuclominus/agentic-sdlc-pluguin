@@ -93,4 +93,33 @@ class RestockInventoryTest {
 
         assertTrue(updated.isEmpty())
     }
+
+    @Test
+    fun `restockToClearThresholds tops up each item by its own shortfall`() {
+        val inventory = InMemoryInventoryRepository(
+            seed = listOf(
+                InventoryItem("sku-low", quantityOnHand = 2, quantityReserved = 0, reorderThreshold = 5),
+                InventoryItem("sku-lower", quantityOnHand = 0, quantityReserved = 0, reorderThreshold = 10),
+            ),
+        )
+        val restockInventory = RestockInventory(inventory)
+
+        restockInventory.restockToClearThresholds()
+
+        assertEquals(6, inventory.findByProductId("sku-low")?.quantityOnHand)
+        assertEquals(11, inventory.findByProductId("sku-lower")?.quantityOnHand)
+    }
+
+    @Test
+    fun `restockToClearThresholds leaves healthy stock untouched`() {
+        val inventory = InMemoryInventoryRepository(
+            seed = listOf(InventoryItem("sku-healthy", quantityOnHand = 100, quantityReserved = 0, reorderThreshold = 5)),
+        )
+        val restockInventory = RestockInventory(inventory)
+
+        val updated = restockInventory.restockToClearThresholds()
+
+        assertTrue(updated.isEmpty())
+        assertEquals(100, inventory.findByProductId("sku-healthy")?.quantityOnHand)
+    }
 }
