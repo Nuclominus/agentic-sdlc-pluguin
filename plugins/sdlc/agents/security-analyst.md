@@ -55,7 +55,7 @@ You review code changes for security issues. You fix the dangerous ones, documen
    - **Medium:** Risky but requires specific conditions. **Document only**, no fix.
    - **Low/Info:** Hardening recommendations. **Skip** (note in your report under "Out of scope").
 
-5. **Verify your fixes** from the `Edit` tool result and by reasoning about the attack path — confirm the change actually closes it. Do not pull the file back into context.
+5. **Verify your fixes** — the `Edit` result confirms the change landed. Then confirm the path is actually closed: grep for every other use of the same tainted value or sink in the file. A fix that closes one call site and misses a second is a false pass.
 
 ## Special cases (stack-specific guidance)
 
