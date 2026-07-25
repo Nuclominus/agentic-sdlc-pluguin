@@ -60,4 +60,24 @@ class ReleaseInventory(
         }
         return Result.Success(released)
     }
+
+    /**
+     * Releases every unit currently reserved for [productId], regardless
+     * of how many that turns out to be, rather than requiring the caller
+     * to already know the exact quantity to release.
+     *
+     * Useful when the caller has lost track of exactly how much it
+     * reserved (or never tracked it precisely to begin with) and simply
+     * wants the product back to fully available.
+     *
+     * @return [Result.Success] with the updated stock record, or
+     *   [Result.Failure] wrapping a [NotFoundError] if the product is not
+     *   tracked in inventory.
+     */
+    fun releaseEverythingReserved(productId: String): Result<InventoryItem> {
+        val item = inventory.findByProductId(productId)
+            ?: return Result.Failure(NotFoundError("No inventory record for product $productId", productId))
+
+        return invoke(productId, item.quantityReserved)
+    }
 }

@@ -106,4 +106,35 @@ class ReleaseInventoryTest {
         assertEquals(1, result.value.size)
         assertEquals(6, result.value.single().quantityReserved)
     }
+
+    @Test
+    fun `releaseEverythingReserved zeroes out the reserved counter`() {
+        val inventory = InMemoryInventoryRepository(seed = listOf(stockOf(onHand = 50, reserved = 12)))
+        val releaseInventory = ReleaseInventory(inventory)
+
+        val result = releaseInventory.releaseEverythingReserved("sku-1001")
+
+        assertIs<Result.Success<InventoryItem>>(result)
+        assertEquals(0, result.value.quantityReserved)
+    }
+
+    @Test
+    fun `releaseEverythingReserved is a no-op when nothing was reserved`() {
+        val inventory = InMemoryInventoryRepository(seed = listOf(stockOf(onHand = 50, reserved = 0)))
+        val releaseInventory = ReleaseInventory(inventory)
+
+        val result = releaseInventory.releaseEverythingReserved("sku-1001")
+
+        assertIs<Result.Success<InventoryItem>>(result)
+        assertEquals(0, result.value.quantityReserved)
+    }
+
+    @Test
+    fun `releaseEverythingReserved fails with NotFoundError when the product is not tracked`() {
+        val releaseInventory = ReleaseInventory(InMemoryInventoryRepository(seed = emptyList()))
+
+        val result = releaseInventory.releaseEverythingReserved("sku-untracked")
+
+        assertIs<NotFoundError>((result as Result.Failure).error)
+    }
 }
