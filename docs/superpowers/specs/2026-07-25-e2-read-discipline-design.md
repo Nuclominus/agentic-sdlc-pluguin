@@ -104,9 +104,9 @@ Read discipline: your entire prompt prefix is re-read and billed on every turn, 
 what you pull into context costs on every subsequent turn, not once.
 - Locate before you load: Grep/Glob to find the region, then Read with offset/limit.
   Do not read a large file whole to find one symbol.
-- Read from the file system rather than trusting content pasted into your prompt
-  (it may be stale) — but read it ONCE. If a file is already in your context and you
-  have not changed it, do not read it again.
+- A file quoted or summarised in your prompt may be stale — open it yourself with
+  Read. Once you have Read it and have not edited it, you have its current contents;
+  do not Read it a second time.
 - After an Edit/Write, trust the tool result. Do not read the file back to confirm
   the edit landed.
 - Keep verification output terse: targeted commands, tail the log. Never dump a full
