@@ -5,6 +5,8 @@ import bench.domain.NotFoundError
 import bench.domain.Result
 import bench.domain.ValidationError
 import bench.domain.model.InventoryItem
+import bench.domain.model.Money
+import bench.domain.model.OrderLine
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -114,5 +116,51 @@ class ReserveInventoryTest {
         val result = reserveInventory.reserveAllOrNothing(mapOf("sku-a" to 1, "sku-missing" to 1))
 
         assertIs<NotFoundError>((result as Result.Failure).error)
+    }
+
+    @Test
+    fun `reserveForOrder reserves stock for every line`() {
+        val inventory = InMemoryInventoryRepository(
+            seed = listOf(stockOf("sku-a", available = 10), stockOf("sku-b", available = 20)),
+        )
+        val reserveInventory = ReserveInventory(inventory)
+        val lines = listOf(
+            OrderLine("sku-a", 3, Money.ofUnits(10L)),
+            OrderLine("sku-b", 5, Money.ofUnits(20L)),
+        )
+
+        val result = reserveInventory.reserveForOrder(lines)
+
+        assertIs<Result.Success<List<InventoryItem>>>(result)
+        assertEquals(3, inventory.findByProductId("sku-a")?.quantityReserved)
+        assertEquals(5, inventory.findByProductId("sku-b")?.quantityReserved)
+    }
+
+    @Test
+    fun `reserveForOrder combines quantities from multiple lines for the same product`() {
+        val inventory = InMemoryInventoryRepository(seed = listOf(stockOf("sku-a", available = 10)))
+        val reserveInventory = ReserveInventory(inventory)
+        val lines = listOf(
+            OrderLine("sku-a", 2, Money.ofUnits(10L)),
+            OrderLine("sku-a", 3, Money.ofUnits(10L)),
+        )
+
+        reserveInventory.reserveForOrder(lines)
+
+        assertEquals(5, inventory.findByProductId("sku-a")?.quantityReserved)
+    }
+
+    @Test
+    fun `reserveForOrder rejects the whole order when combined quantity exceeds availability`() {
+        val inventory = InMemoryInventoryRepository(seed = listOf(stockOf("sku-a", available = 4)))
+        val reserveInventory = ReserveInventory(inventory)
+        val lines = listOf(
+            OrderLine("sku-a", 2, Money.ofUnits(10L)),
+            OrderLine("sku-a", 3, Money.ofUnits(10L)),
+        )
+
+        val result = reserveInventory.reserveForOrder(lines)
+
+        assertIs<ValidationError>((result as Result.Failure).error)
     }
 }

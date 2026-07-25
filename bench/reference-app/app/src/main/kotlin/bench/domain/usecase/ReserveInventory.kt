@@ -4,6 +4,7 @@ import bench.domain.NotFoundError
 import bench.domain.Result
 import bench.domain.ValidationError
 import bench.domain.model.InventoryItem
+import bench.domain.model.OrderLine
 import bench.domain.repository.InventoryRepository
 
 /**
@@ -75,5 +76,21 @@ class ReserveInventory(
 
         val updated = quantities.map { (productId, quantity) -> invoke(productId, quantity) }
         return Result.Success(updated.map { (it as Result.Success).value })
+    }
+
+    /**
+     * Reserves stock for a whole order's [lines] at once, as an
+     * all-or-nothing operation — see [reserveAllOrNothing].
+     *
+     * Multiple lines for the same product (see
+     * [OrderLine.withAdditionalQuantity]-style edits, or simply two
+     * separate lines that happen to reference the same product) have
+     * their quantities combined before checking availability, so a
+     * product does not need to be reservable twice over just because it
+     * appears on two lines.
+     */
+    fun reserveForOrder(lines: List<OrderLine>): Result<List<InventoryItem>> {
+        val quantities = lines.groupBy { it.productId }.mapValues { (_, group) -> group.sumOf { it.quantity } }
+        return reserveAllOrNothing(quantities)
     }
 }
