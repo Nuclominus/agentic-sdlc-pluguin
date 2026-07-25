@@ -71,4 +71,40 @@ class CreateOrderTest {
 
         assertEquals("ord-1", forOtherCustomer.value.id)
     }
+
+    @Test
+    fun `keeps every line, including multiple lines for the same product`() {
+        val createOrder = CreateOrder(InMemoryOrderRepository(), InMemoryProductRepository())
+        val lines = listOf(
+            OrderLine("sku-1001", 1, Money.ofUnits(10L)),
+            OrderLine("sku-1001", 2, Money.ofUnits(10L)),
+            OrderLine("sku-1002", 1, Money.ofUnits(20L)),
+        )
+
+        val result = createOrder("cus-1", lines) as Result.Success<Order>
+
+        assertEquals(3, result.value.lineCount())
+    }
+
+    @Test
+    fun `the created order's total reflects its lines`() {
+        val createOrder = CreateOrder(InMemoryOrderRepository(), InMemoryProductRepository())
+        val lines = listOf(
+            OrderLine("sku-1001", 2, Money.ofUnits(10L)),
+            OrderLine("sku-1002", 1, Money.ofUnits(30L)),
+        )
+
+        val result = createOrder("cus-1", lines) as Result.Success<Order>
+
+        assertEquals(Money.ofUnits(50L), result.value.total)
+    }
+
+    @Test
+    fun `attaches no discount to a freshly created order`() {
+        val createOrder = CreateOrder(InMemoryOrderRepository(), InMemoryProductRepository())
+
+        val result = createOrder("cus-1", emptyList()) as Result.Success<Order>
+
+        assertEquals(null, result.value.appliedDiscount)
+    }
 }

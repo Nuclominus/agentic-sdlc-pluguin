@@ -105,4 +105,60 @@ class PromoteCustomerTierTest {
 
         assertIs<NotFoundError>((result as Result.Failure).error)
     }
+
+    @Test
+    fun `ignores cancelled orders when computing eligibility`() {
+        val customers = InMemoryCustomerRepository(seed = listOf(bronzeCustomer()))
+        val orders = InMemoryOrderRepository(
+            seed = listOf(
+                deliveredOrderWorth("ord-1", "cus-1", Money.ofUnits(5_000L).cents).withStatus(OrderStatus.CANCELLED),
+            ),
+        )
+        val promote = PromoteCustomerTier(customers, orders)
+
+        val result = promote("cus-1")
+
+        assertIs<Result.Success<Customer>>(result)
+        assertEquals(LoyaltyTier.BRONZE, result.value.loyaltyTier)
+    }
+
+    @Test
+    fun `sums spend across multiple orders to decide eligibility`() {
+        val customers = InMemoryCustomerRepository(seed = listOf(bronzeCustomer()))
+        val orders = InMemoryOrderRepository(
+            seed = listOf(
+                deliveredOrderWorth("ord-1", "cus-1", Money.ofUnits(150L).cents),
+                deliveredOrderWorth("ord-2", "cus-1", Money.ofUnits(100L).cents),
+            ),
+        )
+        val promote = PromoteCustomerTier(customers, orders)
+
+        val result = promote("cus-1")
+
+        assertIs<Result.Success<Customer>>(result)
+        assertEquals(LoyaltyTier.SILVER, result.value.loyaltyTier)
+    }
+
+    @Test
+    fun `does not persist anything when the tier is unchanged`() {
+        val customers = InMemoryCustomerRepository(seed = listOf(bronzeCustomer()))
+        val orders = InMemoryOrderRepository(
+            seed = listOf(deliveredOrderWorth("ord-1", "cus-1", Money.ofUnits(10L).cents)),
+        )
+        val promote = PromoteCustomerTier(customers, orders)
+
+        promote("cus-1")
+
+        assertEquals(LoyaltyTier.BRONZE, customers.findById("cus-1")?.loyaltyTier)
+    }
+
+    @Test
+    fun `a customer with no orders at all is never promoted`() {
+        val customers = InMemoryCustomerRepository(seed = listOf(bronzeCustomer()))
+        val promote = PromoteCustomerTier(customers, InMemoryOrderRepository())
+
+        val result = promote("cus-1") as Result.Success<Customer>
+
+        assertEquals(LoyaltyTier.BRONZE, result.value.loyaltyTier)
+    }
 }

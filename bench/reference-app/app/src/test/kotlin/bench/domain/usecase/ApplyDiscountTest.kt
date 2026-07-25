@@ -5,6 +5,7 @@ import bench.domain.NotFoundError
 import bench.domain.Result
 import bench.domain.ValidationError
 import bench.domain.model.FixedAmountDiscount
+import bench.domain.model.FreeShippingDiscount
 import bench.domain.model.Money
 import bench.domain.model.Order
 import bench.domain.model.OrderLine
@@ -95,5 +96,46 @@ class ApplyDiscountTest {
         applyDiscount("ord-1", PercentageDiscount(1000))
 
         assertEquals(PercentageDiscount(1000), orders.findById("ord-1")?.appliedDiscount)
+    }
+
+    @Test
+    fun `still accepts a discount on a shipped order, unlike a processing one`() {
+        val orders = InMemoryOrderRepository(seed = listOf(orderIn(OrderStatus.SHIPPED)))
+        val applyDiscount = ApplyDiscount(orders)
+
+        val result = applyDiscount("ord-1", PercentageDiscount(1000))
+
+        assertIs<Result.Success<Order>>(result)
+    }
+
+    @Test
+    fun `fails to apply a discount to a cancelled order`() {
+        val orders = InMemoryOrderRepository(seed = listOf(orderIn(OrderStatus.CANCELLED)))
+        val applyDiscount = ApplyDiscount(orders)
+
+        val result = applyDiscount("ord-1", PercentageDiscount(1000))
+
+        assertIs<ValidationError>((result as Result.Failure).error)
+    }
+
+    @Test
+    fun `does not persist a rejected discount`() {
+        val orders = InMemoryOrderRepository(seed = listOf(orderIn(OrderStatus.CANCELLED)))
+        val applyDiscount = ApplyDiscount(orders)
+
+        applyDiscount("ord-1", PercentageDiscount(1000))
+
+        assertEquals(null, orders.findById("ord-1")?.appliedDiscount)
+    }
+
+    @Test
+    fun `a free shipping discount attaches without changing the subtotal`() {
+        val orders = InMemoryOrderRepository(seed = listOf(orderIn(OrderStatus.PENDING)))
+        val applyDiscount = ApplyDiscount(orders)
+
+        val result = applyDiscount("ord-1", FreeShippingDiscount)
+
+        assertIs<Result.Success<Order>>(result)
+        assertEquals(Money.ofUnits(100L), result.value.discountedTotal)
     }
 }
