@@ -135,7 +135,8 @@ Build the specimen's skeleton and, in the same task, the tool that decides wheth
 - Produces:
   - `export const FLOOR_TOKENS = 21_000`
   - `export const MIN_CORPUS_RATIO = 3`
-  - `export function estimateTokens(text: string): number` — `Math.ceil(text.length / 4)`
+  - `export function estimateTokensFromLength(chars: number): number` — `Math.ceil(chars / 4)`, the single definition of the formula
+  - `export function estimateTokens(text: string): number` — `estimateTokensFromLength(text.length)`
   - `export function corpusStats(rootDir: string): { files: number, chars: number, tokens: number, ratio: number, ok: boolean }` — walks `**/*.kt` under `rootDir`
 
 - [ ] **Step 1: Write the Gradle scaffold**
@@ -271,7 +272,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { estimateTokens, corpusStats, FLOOR_TOKENS, MIN_CORPUS_RATIO } from "../lib/corpus.mjs";
+import { estimateTokens, estimateTokensFromLength, corpusStats, FLOOR_TOKENS, MIN_CORPUS_RATIO } from "../lib/corpus.mjs";
 
 test("estimateTokens uses 4 chars per token, rounded up", () => {
   assert.equal(estimateTokens(""), 0);
@@ -310,6 +311,23 @@ test("a corpus at exactly 3x the floor is ok", () => {
   assert.equal(s.ok, true);
   assert.equal(s.ratio, MIN_CORPUS_RATIO);
 });
+
+test("generated and cached .kt are not counted toward the corpus", () => {
+  const root = mkdtempSync(join(tmpdir(), "corpus-"));
+  mkdirSync(join(root, "src"), { recursive: true });
+  mkdirSync(join(root, "build", "generated"), { recursive: true });
+  mkdirSync(join(root, ".gradle"), { recursive: true });
+  writeFileSync(join(root, "src", "A.kt"), "x".repeat(400));
+  writeFileSync(join(root, "build", "generated", "Gen.kt"), "y".repeat(999_999));
+  writeFileSync(join(root, ".gradle", "Cached.kt"), "z".repeat(999_999));
+  const s = corpusStats(root);
+  assert.equal(s.files, 1, "only hand-authored source counts");
+  assert.equal(s.chars, 400);
+});
+
+test("estimateTokens and estimateTokensFromLength agree", () => {
+  assert.equal(estimateTokens("abcde"), estimateTokensFromLength(5));
+});
 ```
 
 - [ ] **Step 5: Run the test to verify it fails**
@@ -336,13 +354,27 @@ export const FLOOR_TOKENS = 21_000;
 /** Corpus must be at least this many times the floor to have detection power. */
 export const MIN_CORPUS_RATIO = 3;
 
-/** Rough token estimate. 4 chars/token is the usual working approximation. */
-export function estimateTokens(text) {
-  return Math.ceil(text.length / 4);
+/** Rough token estimate from a character count. 4 chars/token is the usual approximation. */
+export function estimateTokensFromLength(chars) {
+  return Math.ceil(chars / 4);
 }
+
+/** Rough token estimate for a string. */
+export function estimateTokens(text) {
+  return estimateTokensFromLength(text.length);
+}
+
+/**
+ * Directories that never hold hand-authored source. Generated Kotlin counted
+ * toward the corpus would report a false `ok: true` — the instrument lying in
+ * the reassuring direction, which is the failure this whole check exists to
+ * prevent. Dot-directories (.gradle, .kotlin, .git) are skipped by prefix.
+ */
+const SKIP_DIRS = new Set(["build", "out", "node_modules"]);
 
 function walk(dir, out = []) {
   for (const entry of readdirSync(dir)) {
+    if (entry.startsWith(".") || SKIP_DIRS.has(entry)) continue;
     const abs = join(dir, entry);
     if (statSync(abs).isDirectory()) walk(abs, out);
     else if (extname(abs) === ".kt") out.push(abs);
@@ -357,7 +389,7 @@ function walk(dir, out = []) {
 export function corpusStats(rootDir) {
   const files = walk(rootDir);
   const chars = files.reduce((n, f) => n + readFileSync(f, "utf8").length, 0);
-  const tokens = estimateTokens("x".repeat(chars));
+  const tokens = estimateTokensFromLength(chars); // no throwaway allocation
   const ratio = tokens / FLOOR_TOKENS;
   return { files: files.length, chars, tokens, ratio, ok: ratio >= MIN_CORPUS_RATIO };
 }
@@ -366,7 +398,7 @@ export function corpusStats(rootDir) {
 - [ ] **Step 7: Run the test to verify it passes**
 
 Run: `node --test bench/test/corpus.test.mjs`
-Expected: PASS — 5/5
+Expected: PASS — 7/7
 
 - [ ] **Step 8: Report the current (deliberately insufficient) corpus size**
 
