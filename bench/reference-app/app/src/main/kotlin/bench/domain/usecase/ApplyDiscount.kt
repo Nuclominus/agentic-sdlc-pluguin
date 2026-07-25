@@ -44,4 +44,31 @@ class ApplyDiscount(
         val updated = existing.copy(appliedDiscount = discount)
         return Result.Success(orders.save(updated))
     }
+
+    /**
+     * A side-effect-free check for whether [orderId] could currently
+     * accept a discount, without attempting to apply one.
+     *
+     * Mirrors [CancelOrder.canCancel]'s reasoning: a checkout UI can grey
+     * out a "Add promo code" field ahead of time instead of letting the
+     * customer submit a code that is guaranteed to be rejected.
+     */
+    fun canApply(orderId: String): Boolean = orders.findById(orderId)?.canAcceptDiscount() ?: false
+
+    /**
+     * Removes any discount currently attached to [orderId], without
+     * requiring the caller to know what the discount was. A no-op — not a
+     * failure — if the order has no discount attached, since "make sure
+     * there is no discount" trivially succeeds either way.
+     *
+     * @return [Result.Success] with the updated order, or [Result.Failure]
+     *   wrapping a [NotFoundError] if no such order exists.
+     */
+    fun remove(orderId: String): Result<Order> {
+        val existing = orders.findById(orderId)
+            ?: return Result.Failure(NotFoundError("No order with id $orderId", orderId))
+
+        if (existing.appliedDiscount == null) return Result.Success(existing)
+        return Result.Success(orders.save(existing.copy(appliedDiscount = null)))
+    }
 }

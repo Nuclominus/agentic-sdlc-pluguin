@@ -138,4 +138,60 @@ class ApplyDiscountTest {
         assertIs<Result.Success<Order>>(result)
         assertEquals(Money.ofUnits(100L), result.value.discountedTotal)
     }
+
+    @Test
+    fun `canApply is true for a pending order`() {
+        val orders = InMemoryOrderRepository(seed = listOf(orderIn(OrderStatus.PENDING)))
+        val applyDiscount = ApplyDiscount(orders)
+
+        assertEquals(true, applyDiscount.canApply("ord-1"))
+    }
+
+    @Test
+    fun `canApply is false for a cancelled order`() {
+        val orders = InMemoryOrderRepository(seed = listOf(orderIn(OrderStatus.CANCELLED)))
+        val applyDiscount = ApplyDiscount(orders)
+
+        assertEquals(false, applyDiscount.canApply("ord-1"))
+    }
+
+    @Test
+    fun `canApply is false for an unknown order id`() {
+        val applyDiscount = ApplyDiscount(InMemoryOrderRepository())
+
+        assertEquals(false, applyDiscount.canApply("ord-missing"))
+    }
+
+    @Test
+    fun `remove clears a previously applied discount`() {
+        val orders = InMemoryOrderRepository(
+            seed = listOf(orderIn(OrderStatus.PENDING).copy(appliedDiscount = PercentageDiscount(1000))),
+        )
+        val applyDiscount = ApplyDiscount(orders)
+
+        val result = applyDiscount.remove("ord-1")
+
+        assertIs<Result.Success<Order>>(result)
+        assertEquals(null, result.value.appliedDiscount)
+    }
+
+    @Test
+    fun `remove is a no-op when there is no discount to remove`() {
+        val orders = InMemoryOrderRepository(seed = listOf(orderIn(OrderStatus.PENDING)))
+        val applyDiscount = ApplyDiscount(orders)
+
+        val result = applyDiscount.remove("ord-1")
+
+        assertIs<Result.Success<Order>>(result)
+        assertEquals(null, result.value.appliedDiscount)
+    }
+
+    @Test
+    fun `remove fails with NotFoundError for an unknown order id`() {
+        val applyDiscount = ApplyDiscount(InMemoryOrderRepository())
+
+        val result = applyDiscount.remove("ord-missing")
+
+        assertIs<NotFoundError>((result as Result.Failure).error)
+    }
 }
