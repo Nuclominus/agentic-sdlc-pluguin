@@ -36,6 +36,16 @@ data class CustomerSpendSummary(
      * [PromoteCustomerTier] for the use case that reconciles the two.
      */
     fun eligibleTier(): LoyaltyTier = LoyaltyTier.qualifying(totalSpend)
+
+    /**
+     * How far [totalSpend] is above or below [averageOrderValue] scaled by
+     * [orderCount] — always zero by construction, but expressed as its own
+     * method so a caller sanity-checking a summary (e.g. in a test or a
+     * support tool) has a named way to ask "does this add up?" instead of
+     * re-deriving the arithmetic inline.
+     */
+    fun isInternallyConsistent(): Boolean =
+        orderCount == 0 || totalSpend.cents / orderCount == averageOrderValue.cents
 }
 
 /**
@@ -86,5 +96,26 @@ class SummariseCustomerSpend(
                 smallestOrder = Money(smallestCents),
             ),
         )
+    }
+
+    /**
+     * Sums [CustomerSpendSummary.totalSpend] across every customer in
+     * [customerIds] — for a household or company account that wants one
+     * combined figure rather than adding up several individual summaries
+     * by hand.
+     *
+     * @return [Result.Success] with the combined total, or the first
+     *   [Result.Failure] encountered for a customer id that does not
+     *   exist.
+     */
+    fun totalSpendAcross(customerIds: List<String>): Result<Money> {
+        var totalCents = 0L
+        for (customerId in customerIds) {
+            when (val result = invoke(customerId)) {
+                is Result.Success -> totalCents += result.value.totalSpend.cents
+                is Result.Failure -> return result
+            }
+        }
+        return Result.Success(Money(totalCents))
     }
 }

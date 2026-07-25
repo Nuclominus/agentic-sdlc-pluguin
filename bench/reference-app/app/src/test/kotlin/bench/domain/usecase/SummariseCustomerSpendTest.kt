@@ -21,6 +21,13 @@ class SummariseCustomerSpendTest {
         status = status,
     )
 
+    private fun orderWorth(id: String, customerId: String, cents: Long) = Order(
+        id = id,
+        customerId = customerId,
+        lines = listOf(OrderLine("sku-1001", 1, Money(cents))),
+        status = OrderStatus.DELIVERED,
+    )
+
     @Test
     fun `sums the discounted total across every qualifying order`() {
         val orders = InMemoryOrderRepository(
@@ -124,5 +131,48 @@ class SummariseCustomerSpendTest {
         val result = summarise("cus-1") as Result.Success<CustomerSpendSummary>
 
         assertEquals(LoyaltyTier.BRONZE, result.value.eligibleTier())
+    }
+
+    @Test
+    fun `isInternallyConsistent is true for a freshly computed summary`() {
+        val orders = InMemoryOrderRepository(
+            seed = listOf(orderWorth("ord-1", 1000), orderWorth("ord-2", 3000)),
+        )
+        val summarise = SummariseCustomerSpend(orders, InMemoryCustomerRepository())
+
+        val result = summarise("cus-1") as Result.Success<CustomerSpendSummary>
+
+        assertEquals(true, result.value.isInternallyConsistent())
+    }
+
+    @Test
+    fun `isInternallyConsistent is true for a customer with no orders`() {
+        val summarise = SummariseCustomerSpend(InMemoryOrderRepository(), InMemoryCustomerRepository())
+
+        val result = summarise("cus-1") as Result.Success<CustomerSpendSummary>
+
+        assertEquals(true, result.value.isInternallyConsistent())
+    }
+
+    @Test
+    fun `totalSpendAcross sums spend for every customer in the list`() {
+        val orders = InMemoryOrderRepository(
+            seed = listOf(orderWorth("ord-1", "cus-1", 1000), orderWorth("ord-2", "cus-2", 2000)),
+        )
+        val summarise = SummariseCustomerSpend(orders, InMemoryCustomerRepository())
+
+        val result = summarise.totalSpendAcross(listOf("cus-1", "cus-2"))
+
+        assertIs<Result.Success<Money>>(result)
+        assertEquals(Money(3000), result.value)
+    }
+
+    @Test
+    fun `totalSpendAcross fails with NotFoundError for any unknown customer in the list`() {
+        val summarise = SummariseCustomerSpend(InMemoryOrderRepository(), InMemoryCustomerRepository())
+
+        val result = summarise.totalSpendAcross(listOf("cus-1", "cus-unknown"))
+
+        assertIs<NotFoundError>((result as Result.Failure).error)
     }
 }
