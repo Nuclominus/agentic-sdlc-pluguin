@@ -12,11 +12,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
 /**
- * Covers [CreateOrder]'s current, documented behaviour only: sequential id
- * assignment and the initial [OrderStatus.PENDING] status. It intentionally
- * does not test input validation, because `CreateOrder` does not perform
- * any yet — that is a deliberate gap left for a later change, not an
- * oversight in this test suite.
+ * Covers [CreateOrder]'s id assignment, initial status, and line pass-through.
  */
 class CreateOrderTest {
     @Test
