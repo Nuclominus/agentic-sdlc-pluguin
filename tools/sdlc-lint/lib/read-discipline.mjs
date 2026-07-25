@@ -49,6 +49,11 @@ export const PATTERNS = [
 
 export const OK_MARKER = "<!-- read-discipline: ok";
 
+// A bare marker is not a justification: require a stated reason after `ok`.
+// The lookahead keeps the closing `-->` from being mistaken for a one-character
+// reason (its leading `-` would otherwise satisfy a bare `\S`).
+const OK_MARKER_RE = /<!--\s*read-discipline:\s*ok\s*—\s*(?!-->)\S/;
+
 /**
  * Check 2 — no agent contract instructs a re-read or a whole-file read,
  * unless the line (or the line above it) carries an explicit, reasoned
@@ -61,8 +66,8 @@ export function scanAgentText(text) {
   const errors = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (line.includes(OK_MARKER)) continue;
-    if (i > 0 && lines[i - 1].includes(OK_MARKER)) continue;
+    if (OK_MARKER_RE.test(line)) continue;
+    if (i > 0 && OK_MARKER_RE.test(lines[i - 1])) continue;
     for (const p of PATTERNS) {
       const m = line.match(p);
       if (m) {
@@ -75,7 +80,7 @@ export function scanAgentText(text) {
 }
 
 export const SKILL_PATH = "plugins/sdlc/skills/pipeline-orchestrator/SKILL.md";
-export const AGENT_GLOB = "plugins/*/agents/*.md";
+export const AGENT_GLOB = "plugins/*/agents/**/*.md";
 
 /**
  * Check 1 + Check 2 over a repository root.

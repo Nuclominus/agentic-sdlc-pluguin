@@ -35,7 +35,7 @@ Final phase of the pipeline. You take the structured outputs from prior phases a
 
 1. **Pull what you need from the prior phase outputs** — grep or `offset`/`limit` to the
    sections you will actually cite, not the whole file (see the read-discipline contract
-   in your prompt). Sources:
+   in your orchestrator prompt, if present). Sources:
    - `docs/plans/{task_slug}/_brief.md`
    - `docs/plans/{task_slug}/01-business-analysis.md`
    - `docs/plans/{task_slug}/02-development.md`

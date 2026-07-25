@@ -55,6 +55,14 @@ test("marker on the preceding line suppresses it", () => {
   assert.equal(scanAgentText(fixture("agent-suppressed-prev-line.md")).ok, true);
 });
 
+test("a bare marker with no stated reason does not suppress", () => {
+  assert.equal(scanAgentText(fixture("agent-bare-marker.md")).ok, false);
+});
+
+test("a marker with an em dash but no reason after it does not suppress", () => {
+  assert.equal(scanAgentText(fixture("agent-marker-empty-reason.md")).ok, false);
+});
+
 test("patterns are narrow: plural 're-reads' does not match", () => {
   assert.equal(PATTERNS.some((p) => p.test("no re-reads of the same file")), false);
 });

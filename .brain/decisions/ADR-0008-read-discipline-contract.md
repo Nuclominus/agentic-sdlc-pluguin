@@ -42,11 +42,12 @@ written down.**
    "read the same file twice in one phase" or "pull a whole file when a narrower read would do" is
    **forbidden** (a pure cost concern with no correctness benefit).
 2. **Mechanical enforcement of the contract's presence, not of runtime behaviour.** A new
-   `read-discipline` verb in `tools/sdlc-lint` (`tools/sdlc-lint/lib/read-discipline.mjs`) scans
-   every agent-shaped `.md` — the 1 orchestrator SKILL plus all 18 agent definitions across
-   `plugins/*/agents/*.md` — for the anti-patterns the contract forbids, with an escape-hatch marker
-   an agent author can use to justify a deliberate exception inline rather than the lint just being
-   worked around silently. It is wired into `sdlc-lint all` and reports `19/19 clean`.
+   `read-discipline` verb in `tools/sdlc-lint` (`tools/sdlc-lint/lib/read-discipline.mjs`) checks
+   the 1 orchestrator SKILL only for the anchor — is the contract present, and is it inside the
+   stable prefix — and scans all 18 agent definitions across `plugins/*/agents/*.md` for the
+   anti-patterns the contract forbids, with an escape-hatch marker an agent author can use to
+   justify a deliberate exception inline rather than the lint just being worked around silently.
+   It is wired into `sdlc-lint all` and reports `19/19 clean`.
    `plugins/android-foundation/agents/*.md` was scanned as part of this and needed no changes — it
    was already clean.
 3. **Four agent contracts de-contradicted.** `developer.md`, `qa-engineer.md`,
