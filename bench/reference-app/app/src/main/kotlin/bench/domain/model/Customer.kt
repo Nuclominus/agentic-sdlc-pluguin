@@ -38,4 +38,29 @@ data class Customer(
      * Useful for checkout flows that offer a "same as shipping" shortcut.
      */
     fun hasUnifiedAddress(): Boolean = shippingAddress == billingAddress
+
+    /**
+     * Uppercase initials derived from [name], e.g. "Ava Thompson" -> "AT".
+     * Used by avatar placeholders in place of a profile photo.
+     */
+    fun initials(): String = name
+        .split(" ")
+        .filter { it.isNotBlank() }
+        .mapNotNull { it.firstOrNull()?.uppercaseChar() }
+        .joinToString(separator = "")
+
+    /**
+     * A copy of this customer with [shippingAddress] set to [address] and,
+     * when [alsoUpdateBilling] is `true` (the default), [billingAddress]
+     * moved to match it too — the common "moved house" case where both
+     * addresses should track together unless the customer says otherwise.
+     */
+    fun movedTo(address: Address, alsoUpdateBilling: Boolean = true): Customer =
+        copy(
+            shippingAddress = address,
+            billingAddress = if (alsoUpdateBilling) address else billingAddress,
+        )
+
+    /** Whether [candidate] matches [email], compared case-insensitively. */
+    fun hasEmail(candidate: String): Boolean = email.equals(candidate, ignoreCase = true)
 }

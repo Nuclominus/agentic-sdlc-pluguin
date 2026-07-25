@@ -53,6 +53,50 @@ class CustomerTest {
 
         assertFalse(sample.hasUnifiedAddress())
     }
+
+    @Test
+    fun `initials takes the first letter of each word in the name`() {
+        val sample = customer(LoyaltyTier.BRONZE).copy(name = "Ava Thompson")
+
+        assertEquals("AT", sample.initials())
+    }
+
+    @Test
+    fun `initials ignores extra whitespace between words`() {
+        val sample = customer(LoyaltyTier.BRONZE).copy(name = "  Mia   Alvarez  ")
+
+        assertEquals("MA", sample.initials())
+    }
+
+    @Test
+    fun `movedTo updates both addresses by default`() {
+        val sample = customer(LoyaltyTier.BRONZE)
+        val newAddress = Address("9 New Street", "Chicago", "IL", "60601", "US")
+
+        val moved = sample.movedTo(newAddress)
+
+        assertEquals(newAddress, moved.shippingAddress)
+        assertEquals(newAddress, moved.billingAddress)
+    }
+
+    @Test
+    fun `movedTo can leave billing address untouched`() {
+        val sample = customer(LoyaltyTier.BRONZE)
+        val newAddress = Address("9 New Street", "Chicago", "IL", "60601", "US")
+
+        val moved = sample.movedTo(newAddress, alsoUpdateBilling = false)
+
+        assertEquals(newAddress, moved.shippingAddress)
+        assertEquals(sample.billingAddress, moved.billingAddress)
+    }
+
+    @Test
+    fun `hasEmail matches case-insensitively`() {
+        val sample = customer(LoyaltyTier.BRONZE).copy(email = "test@example.com")
+
+        assertTrue(sample.hasEmail("TEST@EXAMPLE.COM"))
+        assertFalse(sample.hasEmail("other@example.com"))
+    }
 }
 
 /**
