@@ -161,4 +161,44 @@ class PromoteCustomerTierTest {
 
         assertEquals(LoyaltyTier.BRONZE, result.value.loyaltyTier)
     }
+
+    @Test
+    fun `previewEligibleTier reports the tier without persisting anything`() {
+        val customers = InMemoryCustomerRepository(seed = listOf(bronzeCustomer()))
+        val orders = InMemoryOrderRepository(
+            seed = listOf(deliveredOrderWorth("ord-1", "cus-1", Money.ofUnits(1_500L).cents)),
+        )
+        val promote = PromoteCustomerTier(customers, orders)
+
+        val result = promote.previewEligibleTier("cus-1")
+
+        assertIs<Result.Success<LoyaltyTier>>(result)
+        assertEquals(LoyaltyTier.GOLD, result.value)
+        assertEquals(LoyaltyTier.BRONZE, customers.findById("cus-1")?.loyaltyTier)
+    }
+
+    @Test
+    fun `previewEligibleTier never previews a demotion`() {
+        val customers = InMemoryCustomerRepository(
+            seed = listOf(bronzeCustomer().copy(loyaltyTier = LoyaltyTier.PLATINUM)),
+        )
+        val orders = InMemoryOrderRepository(
+            seed = listOf(deliveredOrderWorth("ord-1", "cus-1", Money.ofUnits(1L).cents)),
+        )
+        val promote = PromoteCustomerTier(customers, orders)
+
+        val result = promote.previewEligibleTier("cus-1")
+
+        assertIs<Result.Success<LoyaltyTier>>(result)
+        assertEquals(LoyaltyTier.PLATINUM, result.value)
+    }
+
+    @Test
+    fun `previewEligibleTier fails with NotFoundError for an unknown customer`() {
+        val promote = PromoteCustomerTier(InMemoryCustomerRepository(), InMemoryOrderRepository())
+
+        val result = promote.previewEligibleTier("cus-unknown")
+
+        assertIs<NotFoundError>((result as Result.Failure).error)
+    }
 }
