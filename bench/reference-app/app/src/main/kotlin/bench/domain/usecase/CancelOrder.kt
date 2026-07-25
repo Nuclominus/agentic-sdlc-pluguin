@@ -57,4 +57,17 @@ class CancelOrder(
      */
     fun canCancel(orderId: String): Boolean =
         orders.findById(orderId)?.status?.canTransitionTo(OrderStatus.CANCELLED) ?: false
+
+    /**
+     * Cancels every one of [customerId]'s orders that is currently
+     * cancellable, skipping any that are not (rather than failing the
+     * whole batch), and returns the ones actually cancelled.
+     *
+     * Intended for an account-closure flow, where every open order needs
+     * to be wound down at once rather than one at a time.
+     */
+    fun cancelAllForCustomer(customerId: String): List<Order> =
+        orders.findByCustomer(customerId)
+            .filter { it.status.canTransitionTo(OrderStatus.CANCELLED) }
+            .mapNotNull { (invoke(it.id) as? Result.Success)?.value }
 }

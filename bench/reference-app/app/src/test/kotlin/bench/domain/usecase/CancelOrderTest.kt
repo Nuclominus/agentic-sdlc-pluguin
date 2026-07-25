@@ -138,4 +138,35 @@ class CancelOrderTest {
 
         assertEquals(OrderStatus.PENDING, orders.findById("ord-1")?.status)
     }
+
+    @Test
+    fun `cancelAllForCustomer cancels every cancellable order and skips the rest`() {
+        val cancellable = orderIn(OrderStatus.PENDING).copy(id = "ord-1")
+        val alreadyDelivered = orderIn(OrderStatus.DELIVERED).copy(id = "ord-2")
+        val orders = InMemoryOrderRepository(seed = listOf(cancellable, alreadyDelivered))
+        val cancelOrder = CancelOrder(orders)
+
+        val cancelled = cancelOrder.cancelAllForCustomer("cus-1")
+
+        assertEquals(listOf("ord-1"), cancelled.map { it.id })
+        assertEquals(OrderStatus.DELIVERED, orders.findById("ord-2")?.status)
+    }
+
+    @Test
+    fun `cancelAllForCustomer persists every cancellation`() {
+        val orders = InMemoryOrderRepository(seed = listOf(orderIn(OrderStatus.CONFIRMED).copy(id = "ord-1")))
+        val cancelOrder = CancelOrder(orders)
+
+        cancelOrder.cancelAllForCustomer("cus-1")
+
+        assertEquals(OrderStatus.CANCELLED, orders.findById("ord-1")?.status)
+    }
+
+    @Test
+    fun `cancelAllForCustomer is empty for a customer with no cancellable orders`() {
+        val orders = InMemoryOrderRepository(seed = listOf(orderIn(OrderStatus.DELIVERED).copy(id = "ord-1")))
+        val cancelOrder = CancelOrder(orders)
+
+        assertEquals(emptyList(), cancelOrder.cancelAllForCustomer("cus-1"))
+    }
 }
