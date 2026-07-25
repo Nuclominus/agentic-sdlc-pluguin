@@ -97,4 +97,48 @@ class GetOrderReceiptTest {
 
         assertIs<NotFoundError>((result as Result.Failure).error)
     }
+
+    @Test
+    fun `shows a customer-facing status label rather than the raw enum name`() {
+        val orders = InMemoryOrderRepository(seed = listOf(order()))
+        val receipt = GetOrderReceipt(orders, InMemoryProductRepository(seed = catalog))
+
+        val result = receipt("ord-1") as Result.Success<String>
+
+        assertTrue(result.value.contains("Order received"))
+    }
+
+    @Test
+    fun `shows the total unit count across every line`() {
+        val orders = InMemoryOrderRepository(seed = listOf(order()))
+        val receipt = GetOrderReceipt(orders, InMemoryProductRepository(seed = catalog))
+
+        val result = receipt("ord-1") as Result.Success<String>
+
+        assertTrue(result.value.contains("Items: 2"))
+    }
+
+    @Test
+    fun `renderAll joins every order's receipt`() {
+        val orders = InMemoryOrderRepository(
+            seed = listOf(order(), order().copy(id = "ord-2")),
+        )
+        val receipt = GetOrderReceipt(orders, InMemoryProductRepository(seed = catalog))
+
+        val rendered = receipt.renderAll(listOf("ord-1", "ord-2"))
+
+        assertTrue(rendered.contains("ord-1"))
+        assertTrue(rendered.contains("ord-2"))
+    }
+
+    @Test
+    fun `renderAll skips an order id that cannot be rendered`() {
+        val orders = InMemoryOrderRepository(seed = listOf(order()))
+        val receipt = GetOrderReceipt(orders, InMemoryProductRepository(seed = catalog))
+
+        val rendered = receipt.renderAll(listOf("ord-1", "ord-missing"))
+
+        assertTrue(rendered.contains("ord-1"))
+        assertTrue(!rendered.contains("ord-missing"))
+    }
 }

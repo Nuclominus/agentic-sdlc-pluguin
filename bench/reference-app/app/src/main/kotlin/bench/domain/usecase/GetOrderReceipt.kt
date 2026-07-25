@@ -32,7 +32,8 @@ class GetOrderReceipt(
         val builder = StringBuilder()
         builder.appendLine("Receipt for order ${order.id}")
         builder.appendLine("Customer: ${order.customerId}")
-        builder.appendLine("Status: ${order.status}")
+        builder.appendLine("Status: ${order.status.customerFacingLabel()}")
+        builder.appendLine("Items: ${order.totalUnitCount()}")
         builder.appendLine("-".repeat(40))
 
         for (line in order.lines) {
@@ -68,4 +69,17 @@ class GetOrderReceipt(
         val remainder = (cents % 100).toString().padStart(2, '0')
         return "$dollars.$remainder"
     }
+
+    /**
+     * Renders receipts for every order [customerId] has placed, joined by
+     * a blank line — useful for an "email me all my receipts" support
+     * request without the caller having to loop over [invoke] itself.
+     *
+     * Any order id that fails to render (which should not normally happen
+     * for an id sourced from the customer's own order history) is simply
+     * skipped rather than aborting the whole batch, since one bad receipt
+     * should not deny the customer every other one.
+     */
+    fun renderAll(orderIds: List<String>): String =
+        orderIds.mapNotNull { (invoke(it) as? Result.Success)?.value }.joinToString(separator = "\n")
 }

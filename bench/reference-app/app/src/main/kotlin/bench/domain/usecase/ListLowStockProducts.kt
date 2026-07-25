@@ -18,7 +18,10 @@ import bench.domain.repository.ProductRepository
 data class LowStockEntry(
     val product: Product,
     val inventory: InventoryItem,
-)
+) {
+    /** How many units to order to clear the reorder threshold by one, per [InventoryItem.shortfallToClearThreshold]. */
+    fun suggestedReorderQuantity(): Int = inventory.shortfallToClearThreshold()
+}
 
 /**
  * Produces a warehouse restocking report: every product whose stock has
@@ -34,15 +37,21 @@ class ListLowStockProducts(
     private val products: ProductRepository,
 ) {
     /**
+     * @param includeDiscontinued whether to include products that are no
+     *   longer [active][Product.active]. Defaults to `false`: there is
+     *   nothing to purchase for a product the store has stopped selling,
+     *   so surfacing it on a purchasing report would just be noise for
+     *   the manager reading it.
      * @return [Result.Success] with the low-stock entries, sorted most
-     *   urgent first. A product no longer present in the catalog (as
-     *   opposed to merely deactivated) is silently skipped, since there is
-     *   nothing meaningful to report a name for.
+     *   urgent first. A product no longer present in the catalog at all
+     *   (as opposed to merely deactivated) is silently skipped, since
+     *   there is nothing meaningful to report a name for.
      */
-    operator fun invoke(): Result<List<LowStockEntry>> {
+    operator fun invoke(includeDiscontinued: Boolean = false): Result<List<LowStockEntry>> {
         val entries = inventory.findNeedingReorder()
             .mapNotNull { item ->
                 val product = products.findById(item.productId) ?: return@mapNotNull null
+                if (!includeDiscontinued && !product.active) return@mapNotNull null
                 LowStockEntry(product, item)
             }
             .sortedBy { urgency(it.inventory) }

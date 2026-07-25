@@ -84,4 +84,42 @@ class ListLowStockProductsTest {
 
         assertTrue(result.value.isEmpty())
     }
+
+    @Test
+    fun `excludes a discontinued product by default`() {
+        val discontinued = Product("sku-d", "Widget D", Money.ofUnits(40L), active = false)
+        val inventory = InMemoryInventoryRepository(
+            seed = listOf(InventoryItem("sku-d", quantityOnHand = 0, quantityReserved = 0, reorderThreshold = 5)),
+        )
+        val listLowStock = ListLowStockProducts(inventory, InMemoryProductRepository(seed = catalog + discontinued))
+
+        val result = listLowStock() as Result.Success<List<LowStockEntry>>
+
+        assertTrue(result.value.isEmpty())
+    }
+
+    @Test
+    fun `includes a discontinued product when explicitly requested`() {
+        val discontinued = Product("sku-d", "Widget D", Money.ofUnits(40L), active = false)
+        val inventory = InMemoryInventoryRepository(
+            seed = listOf(InventoryItem("sku-d", quantityOnHand = 0, quantityReserved = 0, reorderThreshold = 5)),
+        )
+        val listLowStock = ListLowStockProducts(inventory, InMemoryProductRepository(seed = catalog + discontinued))
+
+        val result = listLowStock(includeDiscontinued = true) as Result.Success<List<LowStockEntry>>
+
+        assertEquals(listOf("sku-d"), result.value.map { it.product.id })
+    }
+
+    @Test
+    fun `suggestedReorderQuantity reports the shortfall to clear the threshold`() {
+        val inventory = InMemoryInventoryRepository(
+            seed = listOf(InventoryItem("sku-a", quantityOnHand = 2, quantityReserved = 0, reorderThreshold = 5)),
+        )
+        val listLowStock = ListLowStockProducts(inventory, InMemoryProductRepository(seed = catalog))
+
+        val result = listLowStock() as Result.Success<List<LowStockEntry>>
+
+        assertEquals(4, result.value.single().suggestedReorderQuantity())
+    }
 }
