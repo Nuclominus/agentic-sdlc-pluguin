@@ -212,4 +212,33 @@ class OrderLineTest {
 
         assertEquals("4 x sku-1001", line.describe())
     }
+
+    @Test
+    fun `repriced changes the unit price without touching quantity`() {
+        val line = OrderLine("sku-1001", 3, Money.ofUnits(10L))
+
+        val updated = line.repriced(Money.ofUnits(15L))
+
+        assertEquals(Money.ofUnits(15L), updated.unitPrice)
+        assertEquals(3, updated.quantity)
+    }
+
+    @Test
+    fun `isFor matches on product id alone`() {
+        val line = OrderLine("sku-1001", 1, Money.ofUnits(10L))
+
+        assertTrue(line.isFor("sku-1001"))
+        assertFalse(line.isFor("sku-9999"))
+    }
+
+    @Test
+    fun `singleUnitOf builds a one-unit line at the product's catalog price`() {
+        val product = Product("sku-1001", "Wireless Mouse", Money.ofUnits(24L), active = true)
+
+        val line = OrderLine.singleUnitOf(product)
+
+        assertEquals(1, line.quantity)
+        assertEquals(Money.ofUnits(24L), line.unitPrice)
+        assertEquals("sku-1001", line.productId)
+    }
 }

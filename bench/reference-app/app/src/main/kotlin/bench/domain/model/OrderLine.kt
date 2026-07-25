@@ -35,4 +35,24 @@ data class OrderLine(
 
     /** A short label like "2 x sku-1001", suitable for a compact list view or log line. */
     fun describe(): String = "$quantity x $productId"
+
+    /**
+     * A copy of this line re-priced at [newUnitPrice], keeping [quantity]
+     * unchanged. Distinct from [withAdditionalQuantity], which changes
+     * quantity but not price — this is the "the catalog price changed
+     * before checkout, re-quote the line" case instead.
+     */
+    fun repriced(newUnitPrice: Money): OrderLine = copy(unitPrice = newUnitPrice)
+
+    /** Whether this line refers to [otherProductId], for merging or grouping identical lines. */
+    fun isFor(otherProductId: String): Boolean = productId == otherProductId
+
+    companion object {
+        /**
+         * Builds an [OrderLine] for one unit of [product] at its current
+         * catalog price, the common case at checkout where the price
+         * being agreed to *is* today's catalog price.
+         */
+        fun singleUnitOf(product: Product): OrderLine = OrderLine(product.id, quantity = 1, unitPrice = product.unitPrice)
+    }
 }
