@@ -115,4 +115,25 @@ class InventoryItemTest {
         assertFalse(item(onHand = 0, reserved = 3).isEmpty())
         assertFalse(item(onHand = 5, reserved = 0).isEmpty())
     }
+
+    @Test
+    fun `reservationRate expresses reserved as a fraction of on-hand`() {
+        val sample = item(onHand = 100, reserved = 25)
+
+        assertEquals(0.25, sample.reservationRate())
+    }
+
+    @Test
+    fun `reservationRate is zero when nothing is on hand`() {
+        val sample = item(onHand = 0, reserved = 0)
+
+        assertEquals(0.0, sample.reservationRate())
+    }
+
+    @Test
+    fun `reservationRate is 1 when everything on hand is reserved`() {
+        val sample = item(onHand = 40, reserved = 40)
+
+        assertEquals(1.0, sample.reservationRate())
+    }
 }

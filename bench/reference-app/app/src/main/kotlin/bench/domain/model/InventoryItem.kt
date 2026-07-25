@@ -70,4 +70,14 @@ data class InventoryItem(
 
     /** Whether this record currently tracks any stock at all, on hand or reserved. */
     fun isEmpty(): Boolean = quantityOnHand == 0 && quantityReserved == 0
+
+    /**
+     * What fraction of [quantityOnHand] is currently reserved, from 0.0 to
+     * 1.0. Returns 0.0 when nothing is on hand, since "no stock, no
+     * reservations" is not a meaningful ratio to report as anything else.
+     */
+    fun reservationRate(): Double {
+        if (quantityOnHand == 0) return 0.0
+        return quantityReserved.toDouble() / quantityOnHand.toDouble()
+    }
 }
