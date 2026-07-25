@@ -2,10 +2,14 @@ package bench.domain.usecase
 
 import bench.domain.NotFoundError
 import bench.domain.Result
+import bench.domain.map
 import bench.domain.model.ShippingMethod
 import bench.domain.repository.OrderRepository
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.util.Locale
 
 /**
  * Estimates when an order will reach the customer.
@@ -48,8 +52,18 @@ class EstimateDeliveryDate(
         else -> date
     }
 
+    /**
+     * The same estimate as [invoke], rendered as a customer-facing
+     * sentence like "Estimated delivery: Tuesday, August 11, 2026" rather
+     * than a bare [LocalDate] the caller would have to format itself.
+     */
+    fun describeEstimate(orderId: String, method: ShippingMethod, from: LocalDate = LocalDate.now()): Result<String> =
+        invoke(orderId, method, from).map { date -> "Estimated delivery: ${FORMATTER.format(date)}" }
+
     companion object {
         /** Fixed warehouse pick-and-pack time, in business days, before a parcel is handed to the carrier. */
         private const val PROCESSING_DAYS = 1
+
+        private val FORMATTER = DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL).withLocale(Locale.US)
     }
 }

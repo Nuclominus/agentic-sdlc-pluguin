@@ -77,4 +77,24 @@ class EstimateDeliveryDateTest {
 
         assertIs<NotFoundError>((result as Result.Failure).error)
     }
+
+    @Test
+    fun `describeEstimate renders a customer-facing sentence`() {
+        val orders = InMemoryOrderRepository(seed = listOf(sampleOrder))
+        val estimate = EstimateDeliveryDate(orders)
+
+        val result = estimate.describeEstimate("ord-1", ShippingMethod.STANDARD, from = monday)
+
+        assertIs<Result.Success<String>>(result)
+        assertEquals(true, result.value.startsWith("Estimated delivery:"))
+    }
+
+    @Test
+    fun `describeEstimate fails with NotFoundError for an unknown order id`() {
+        val estimate = EstimateDeliveryDate(InMemoryOrderRepository())
+
+        val result = estimate.describeEstimate("ord-missing", ShippingMethod.STANDARD, from = monday)
+
+        assertIs<NotFoundError>((result as Result.Failure).error)
+    }
 }

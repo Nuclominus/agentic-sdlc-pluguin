@@ -66,4 +66,55 @@ class PreviewLoyaltyDiscountTest {
 
         assertIs<NotFoundError>((result as Result.Failure).error)
     }
+
+    @Test
+    fun `savingsRatio expresses savings as a fraction of the subtotal`() {
+        val customers = InMemoryCustomerRepository(seed = listOf(customerAt(LoyaltyTier.GOLD)))
+        val preview = PreviewLoyaltyDiscount(customers)
+
+        val result = preview("cus-1", Money.ofUnits(200L)) as Result.Success<LoyaltyDiscountPreview>
+
+        assertEquals(0.05, result.value.savingsRatio())
+    }
+
+    @Test
+    fun `savingsRatio is zero for a zero subtotal`() {
+        val customers = InMemoryCustomerRepository(seed = listOf(customerAt(LoyaltyTier.PLATINUM)))
+        val preview = PreviewLoyaltyDiscount(customers)
+
+        val result = preview("cus-1", Money.ZERO) as Result.Success<LoyaltyDiscountPreview>
+
+        assertEquals(0.0, result.value.savingsRatio())
+    }
+
+    @Test
+    fun `nextTierAdditionalSavings shows the extra savings one tier up`() {
+        val customers = InMemoryCustomerRepository(seed = listOf(customerAt(LoyaltyTier.SILVER)))
+        val preview = PreviewLoyaltyDiscount(customers)
+
+        val result = preview.nextTierAdditionalSavings("cus-1", Money.ofUnits(100L))
+
+        assertIs<Result.Success<Money>>(result)
+        assertEquals(Money(250L), result.value)
+    }
+
+    @Test
+    fun `nextTierAdditionalSavings is zero at the top tier`() {
+        val customers = InMemoryCustomerRepository(seed = listOf(customerAt(LoyaltyTier.PLATINUM)))
+        val preview = PreviewLoyaltyDiscount(customers)
+
+        val result = preview.nextTierAdditionalSavings("cus-1", Money.ofUnits(100L))
+
+        assertIs<Result.Success<Money>>(result)
+        assertEquals(Money.ZERO, result.value)
+    }
+
+    @Test
+    fun `nextTierAdditionalSavings fails with NotFoundError for an unknown customer`() {
+        val preview = PreviewLoyaltyDiscount(InMemoryCustomerRepository())
+
+        val result = preview.nextTierAdditionalSavings("cus-unknown", Money.ofUnits(50L))
+
+        assertIs<NotFoundError>((result as Result.Failure).error)
+    }
 }
