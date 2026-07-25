@@ -63,4 +63,33 @@ enum class OrderStatus {
 
     /** Whether this order can still be reported on as "active" business. */
     fun isActive(): Boolean = !isTerminal()
+
+    /**
+     * A customer-facing label for this status, e.g. [PROCESSING] renders
+     * as "Being prepared" rather than the raw enum name. Kept as a `when`
+     * over the fixed set of statuses (no `else`) so that adding a new
+     * status without updating this method is a compile error, not a
+     * silent fallback to a generic label.
+     */
+    fun customerFacingLabel(): String = when (this) {
+        PENDING -> "Order received"
+        CONFIRMED -> "Payment confirmed"
+        PROCESSING -> "Being prepared"
+        SHIPPED -> "On its way"
+        DELIVERED -> "Delivered"
+        CANCELLED -> "Cancelled"
+        ARCHIVED -> "Closed"
+    }
+
+    /**
+     * How many steps of the [PENDING]-to-[DELIVERED] pipeline remain, or
+     * `null` for a status not on that pipeline at all ([CANCELLED] or
+     * [ARCHIVED]) — there is no meaningful "steps remaining" for an order
+     * that will never reach [DELIVERED] through the normal flow.
+     */
+    fun stepsUntilDelivered(): Int? {
+        val pipeline = listOf(PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED)
+        val index = pipeline.indexOf(this)
+        return if (index < 0) null else pipeline.lastIndex - index
+    }
 }

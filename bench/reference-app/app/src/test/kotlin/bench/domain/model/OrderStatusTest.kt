@@ -1,7 +1,9 @@
 package bench.domain.model
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class OrderStatusTest {
@@ -57,5 +59,32 @@ class OrderStatusTest {
     fun `isActive is the opposite of isTerminal`() {
         assertTrue(OrderStatus.PROCESSING.isActive())
         assertFalse(OrderStatus.ARCHIVED.isActive())
+    }
+
+    @Test
+    fun `customerFacingLabel gives every status a readable label`() {
+        assertEquals("Order received", OrderStatus.PENDING.customerFacingLabel())
+        assertEquals("Being prepared", OrderStatus.PROCESSING.customerFacingLabel())
+        assertEquals("On its way", OrderStatus.SHIPPED.customerFacingLabel())
+        assertEquals("Delivered", OrderStatus.DELIVERED.customerFacingLabel())
+    }
+
+    @Test
+    fun `customerFacingLabel covers cancelled and archived too`() {
+        assertEquals("Cancelled", OrderStatus.CANCELLED.customerFacingLabel())
+        assertEquals("Closed", OrderStatus.ARCHIVED.customerFacingLabel())
+    }
+
+    @Test
+    fun `stepsUntilDelivered counts down to zero at delivered`() {
+        assertEquals(4, OrderStatus.PENDING.stepsUntilDelivered())
+        assertEquals(1, OrderStatus.SHIPPED.stepsUntilDelivered())
+        assertEquals(0, OrderStatus.DELIVERED.stepsUntilDelivered())
+    }
+
+    @Test
+    fun `stepsUntilDelivered is null for statuses off the normal pipeline`() {
+        assertNull(OrderStatus.CANCELLED.stepsUntilDelivered())
+        assertNull(OrderStatus.ARCHIVED.stepsUntilDelivered())
     }
 }
