@@ -120,4 +120,29 @@ class InMemoryProductRepositoryTest {
 
         assertEquals(1, repository.count())
     }
+
+    @Test
+    fun `findByIds returns matching products in one call`() {
+        val repository = InMemoryProductRepository()
+
+        val found = repository.findByIds(listOf("sku-1001", "sku-1002"))
+
+        assertEquals(setOf("sku-1001", "sku-1002"), found.map { it.id }.toSet())
+    }
+
+    @Test
+    fun `findByIds silently omits ids that do not match a product`() {
+        val repository = InMemoryProductRepository()
+
+        val found = repository.findByIds(listOf("sku-1001", "sku-missing"))
+
+        assertEquals(listOf("sku-1001"), found.map { it.id })
+    }
+
+    @Test
+    fun `findByIds returns an empty list for an empty input`() {
+        val repository = InMemoryProductRepository()
+
+        assertTrue(repository.findByIds(emptyList()).isEmpty())
+    }
 }

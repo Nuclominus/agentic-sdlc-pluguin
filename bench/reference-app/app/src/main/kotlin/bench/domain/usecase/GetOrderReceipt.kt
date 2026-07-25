@@ -4,6 +4,7 @@ import bench.domain.NotFoundError
 import bench.domain.Result
 import bench.domain.model.Order
 import bench.domain.model.OrderLine
+import bench.domain.model.Product
 import bench.domain.repository.OrderRepository
 import bench.domain.repository.ProductRepository
 
@@ -29,6 +30,8 @@ class GetOrderReceipt(
         val order = orders.findById(orderId)
             ?: return Result.Failure(NotFoundError("No order with id $orderId", orderId))
 
+        val catalog = products.findByIds(order.lines.map { it.productId }).associateBy { it.id }
+
         val builder = StringBuilder()
         builder.appendLine("Receipt for order ${order.id}")
         builder.appendLine("Customer: ${order.customerId}")
@@ -37,7 +40,7 @@ class GetOrderReceipt(
         builder.appendLine("-".repeat(40))
 
         for (line in order.lines) {
-            builder.appendLine(renderLine(line))
+            builder.appendLine(renderLine(line, catalog))
         }
 
         builder.appendLine("-".repeat(40))
@@ -54,12 +57,15 @@ class GetOrderReceipt(
 
     /**
      * Renders one order line, preferring the current catalog name for
-     * [OrderLine.productId] when it is still known, and falling back to
-     * the raw id for a product that has since been removed entirely from
-     * the catalog (as opposed to merely deactivated).
+     * [OrderLine.productId] when it is present in [catalog] (a single
+     * batched lookup done once per receipt via
+     * [ProductRepository.findByIds], rather than one repository call per
+     * line), and falling back to the raw id for a product that has since
+     * been removed entirely from the catalog (as opposed to merely
+     * deactivated).
      */
-    private fun renderLine(line: OrderLine): String {
-        val label = products.findById(line.productId)?.name ?: line.productId
+    private fun renderLine(line: OrderLine, catalog: Map<String, Product>): String {
+        val label = catalog[line.productId]?.name ?: line.productId
         return "  ${line.quantity} x $label @ ${format(line.unitPrice.cents)} = ${format(line.subtotal.cents)}"
     }
 

@@ -25,6 +25,8 @@ class InMemoryProductRepository(
 
     override fun findActive(): List<Product> = byId.values.filter { it.active }
 
+    override fun findByIds(ids: List<String>): List<Product> = ids.mapNotNull { byId[it] }
+
     /**
      * Inserts or replaces [product] in the store. Not part of
      * [ProductRepository] — catalog edits are out of scope for the

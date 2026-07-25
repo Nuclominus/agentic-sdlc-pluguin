@@ -26,4 +26,13 @@ interface ProductRepository {
      * against the catalog.
      */
     fun findActive(): List<Product>
+
+    /**
+     * Returns every product in [ids] that exists in the catalog, in no
+     * particular guaranteed order and silently omitting any id that does
+     * not match a product. Exists so a caller with several product ids in
+     * hand (e.g. every line on an order) can look them all up in one call
+     * instead of one [findById] per id.
+     */
+    fun findByIds(ids: List<String>): List<Product>
 }
