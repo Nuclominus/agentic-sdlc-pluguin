@@ -1057,6 +1057,19 @@ test("fails when no telemetry exists", () => {
   );
 });
 
+test("archives even when the harvest is rejected", () => {
+  // The runs most worth inspecting are the ones that failed. Archiving must
+  // happen before any check that can abort.
+  const { root } = scratchRun("telemetry-aggregate.json", { run: 6 });
+  const out = mkdtempSync(join(tmpdir(), "results-"));
+  const arch = mkdtempSync(join(tmpdir(), "archive-"));
+  assert.throws(
+    () => harvest(["--arm", "a", "--run", "6", "--results", out, "--archive", arch], { BENCH_SCRATCH_ROOT: root }),
+    (e) => e.status !== 0,
+  );
+  assert.ok(existsSync(join(arch, "a-6.tar.gz")), "a rejected run must still be archived");
+});
+
 test("archives the whole scratch tree", () => {
   const { root } = scratchRun("telemetry-transcript.json", { run: 4 });
   const out = mkdtempSync(join(tmpdir(), "results-"));
@@ -1119,6 +1132,13 @@ const scratchRoot = process.env.BENCH_SCRATCH_ROOT || join(tmpdir(), "sdlc-bench
 const dest = join(scratchRoot, `${arm}-${run}`);
 if (!existsSync(dest)) die(`scratch directory not found: ${dest}`);
 
+// Archive FIRST, before any validation can abort. Storage is far cheaper than a
+// repeat run, and the runs most worth inspecting are the ones that failed — an
+// aborted pipeline leaves the scratch tree as the only forensic evidence there
+// is. Archiving after the checks would discard exactly those.
+mkdirSync(archiveDir, { recursive: true });
+execFileSync("tar", ["-czf", join(archiveDir, `${arm}-${run}.tar.gz`), "-C", scratchRoot, `${arm}-${run}`]);
+
 let manifest;
 try { manifest = readManifest(dest); } catch (e) { die(e.message); }
 
@@ -1165,13 +1185,16 @@ if (telemetry.cost_basis !== "transcript") {
       `Aggregate telemetry has no meaningful peak_prefix_tokens; harvesting it would poison the median.`);
 }
 
+// A truncated run must not be indistinguishable from a clean one: a pipeline
+// that aborted early records fewer phases rather than failed ones, so counting
+// only non-completed phases would report flags: [] and let it into the median.
 const flags = [];
-for (const p of telemetry.phases ?? []) {
+const phases = telemetry.phases ?? [];
+if (!phases.length) flags.push("no phases recorded");
+if (!telemetry.completed_at) flags.push("no completed_at — run did not finish");
+for (const p of phases) {
   if (p.status && p.status !== "completed") flags.push(`phase ${p.phase} status=${p.status}`);
 }
-
-mkdirSync(archiveDir, { recursive: true });
-execFileSync("tar", ["-czf", join(archiveDir, `${arm}-${run}.tar.gz`), "-C", scratchRoot, `${arm}-${run}`]);
 
 mkdirSync(resultsDir, { recursive: true });
 writeFileSync(
@@ -1187,7 +1210,7 @@ console.log(`  archive: ${join(archiveDir, `${arm}-${run}.tar.gz`)}`);
 - [ ] **Step 5: Run the test to verify it passes**
 
 Run: `node --test bench/test/harvest.test.mjs`
-Expected: PASS — 5/5
+Expected: PASS — 6/6
 
 - [ ] **Step 6: Add the directories and gitignore rule**
 
