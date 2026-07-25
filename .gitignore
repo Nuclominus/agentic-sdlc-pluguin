@@ -4,3 +4,6 @@ docs/plans/_*.json
 docs/plans/_*.log
 node_modules/
 docs/plans/**/.checkpoint/
+
+# Benchmark run archives are large binaries; the JSON results beside them are the evidence and stay tracked.
+bench/archive/*.tar.gz

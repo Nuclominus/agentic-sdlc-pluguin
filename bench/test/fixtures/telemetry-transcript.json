@@ -1,0 +1,22 @@
+{
+  "task_slug": "bench-validation",
+  "stack": "android",
+  "cost_basis": "transcript",
+  "total_input_tokens": 12000,
+  "total_output_tokens": 8000,
+  "total_cached_input_tokens": 900000,
+  "total_cache_creation_tokens": 40000,
+  "total_subagent_tokens": 20000,
+  "total_cost_usd": 1.85,
+  "wall_clock_seconds": 640,
+  "phases": [
+    { "phase": "development", "agent": "android-developer", "model": "claude-sonnet-5",
+      "status": "completed", "usage_source": "transcript", "turns": 30,
+      "input_tokens": 6000, "output_tokens": 5000, "cached_input_tokens": 600000,
+      "cache_creation_tokens": 25000, "peak_prefix_tokens": 74000, "cost_usd": 1.2 },
+    { "phase": "documentation", "agent": "android-docs", "model": "claude-haiku-4-5-20251001",
+      "status": "completed", "usage_source": "transcript", "turns": 20,
+      "input_tokens": 6000, "output_tokens": 3000, "cached_input_tokens": 300000,
+      "cache_creation_tokens": 15000, "peak_prefix_tokens": 41000, "cost_usd": 0.65 }
+  ]
+}
