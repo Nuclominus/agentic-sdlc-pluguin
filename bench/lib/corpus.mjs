@@ -12,13 +12,27 @@ export const FLOOR_TOKENS = 21_000;
 /** Corpus must be at least this many times the floor to have detection power. */
 export const MIN_CORPUS_RATIO = 3;
 
-/** Rough token estimate. 4 chars/token is the usual working approximation. */
-export function estimateTokens(text) {
-  return Math.ceil(text.length / 4);
+/** Rough token estimate from a character count. 4 chars/token is the usual approximation. */
+export function estimateTokensFromLength(chars) {
+  return Math.ceil(chars / 4);
 }
+
+/** Rough token estimate for a string. */
+export function estimateTokens(text) {
+  return estimateTokensFromLength(text.length);
+}
+
+/**
+ * Directories that never hold hand-authored source. Generated Kotlin counted
+ * toward the corpus would report a false `ok: true` — the instrument lying in
+ * the reassuring direction, which is the failure this whole check exists to
+ * prevent. Dot-directories (.gradle, .kotlin, .git) are skipped by prefix.
+ */
+const SKIP_DIRS = new Set(["build", "out", "node_modules"]);
 
 function walk(dir, out = []) {
   for (const entry of readdirSync(dir)) {
+    if (entry.startsWith(".") || SKIP_DIRS.has(entry)) continue;
     const abs = join(dir, entry);
     if (statSync(abs).isDirectory()) walk(abs, out);
     else if (extname(abs) === ".kt") out.push(abs);
@@ -33,7 +47,7 @@ function walk(dir, out = []) {
 export function corpusStats(rootDir) {
   const files = walk(rootDir);
   const chars = files.reduce((n, f) => n + readFileSync(f, "utf8").length, 0);
-  const tokens = estimateTokens("x".repeat(chars));
+  const tokens = estimateTokensFromLength(chars); // no throwaway allocation
   const ratio = tokens / FLOOR_TOKENS;
   return { files: files.length, chars, tokens, ratio, ok: ratio >= MIN_CORPUS_RATIO };
 }

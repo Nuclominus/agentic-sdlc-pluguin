@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { estimateTokens, corpusStats, FLOOR_TOKENS, MIN_CORPUS_RATIO } from "../lib/corpus.mjs";
+import { estimateTokens, estimateTokensFromLength, corpusStats, FLOOR_TOKENS, MIN_CORPUS_RATIO } from "../lib/corpus.mjs";
 
 test("estimateTokens uses 4 chars per token, rounded up", () => {
   assert.equal(estimateTokens(""), 0);
@@ -41,4 +41,21 @@ test("a corpus at exactly 3x the floor is ok", () => {
   const s = corpusOf(FLOOR_TOKENS * 4 * MIN_CORPUS_RATIO);
   assert.equal(s.ok, true);
   assert.equal(s.ratio, MIN_CORPUS_RATIO);
+});
+
+test("generated and cached .kt are not counted toward the corpus", () => {
+  const root = mkdtempSync(join(tmpdir(), "corpus-"));
+  mkdirSync(join(root, "src"), { recursive: true });
+  mkdirSync(join(root, "build", "generated"), { recursive: true });
+  mkdirSync(join(root, ".gradle"), { recursive: true });
+  writeFileSync(join(root, "src", "A.kt"), "x".repeat(400));
+  writeFileSync(join(root, "build", "generated", "Gen.kt"), "y".repeat(999_999));
+  writeFileSync(join(root, ".gradle", "Cached.kt"), "z".repeat(999_999));
+  const s = corpusStats(root);
+  assert.equal(s.files, 1, "only hand-authored source counts");
+  assert.equal(s.chars, 400);
+});
+
+test("estimateTokens and estimateTokensFromLength agree", () => {
+  assert.equal(estimateTokens("abcde"), estimateTokensFromLength(5));
 });
