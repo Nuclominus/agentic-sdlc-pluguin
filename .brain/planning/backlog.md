@@ -58,7 +58,7 @@ Turns E1–E3 from guesswork into a tracked, regression-testable metric. Connect
 (report). **DoD:** report shows reads/turn + peak-prefix per phase; AAR flags any phase whose
 reads/turn exceeds a threshold. No ADR needed.
 
-### E2 — Surgical reads + terse tool output *(guidance, targets the 73% growth)*
+### E2 — Surgical reads + terse tool output *(guidance, targets the 73% growth)* — **done, 1.10.0**
 Instruct pipeline agents (in their `.md` and/or the orchestrator brief) to: read with `offset/limit`
 and grep-first instead of whole large files; never re-read a file already in context; keep Bash/
 verification output terse. Growth is 73% of reads and the prefix balloons to 100k+ when agents pull
@@ -66,15 +66,23 @@ whole files; flattening growth is the single biggest lever. **DoD:** peak-prefix
 drops (target <60k from 101k); no quality regression in review/test/qa verdicts. Guidance-only, no
 code. May warrant an ADR if it changes agent contracts materially.
 
-**Status: shipped in #68 ([[decisions/ADR-0008-read-discipline-contract]]), UNVALIDATED.** The
-20-run A/B could not demonstrate the win: cache-read median −10.65% against a 64.2% within-arm
-spread, sign reversing four times as n grew. **The DoD as written is dead** — both arms met
-`<60k peak`, arm A's worst run being 58,184 *without* the contract, so the threshold never
-discriminated on a specimen this size. The contract itself costs ~230 tokens re-read every turn,
-≈1.4% of a median run. It merged on engineering judgement (never worse on any metric; the specimen
-gave read discipline the least surface to act on), not on evidence. Any re-test needs a corpus with
-5–10× the fixed floor, must measure **peak prefix** rather than totals, and must wait on issue #70.
-See [[architecture/benchmark-e2-read-discipline]].
+**Landed in 1.10.0:** the read-discipline contract now lives once in the orchestrator's
+`=== STABLE PREFIX ===` rather than per-agent prose, enforced by `sdlc-lint read-discipline`
+(19/19 clean across the orchestrator SKILL + all agent `.md` files); see
+[[decisions/ADR-0008-read-discipline-contract]].
+
+**Measured 2026-07-26 — UNVALIDATED.** The behavioural half of the DoD is no longer deferred; it
+was A/B-tested over 20 runs and **the win could not be demonstrated**: cache-read median −10.65%
+against a 64.2% within-arm spread, sign reversing four times as n grew. **The DoD as written is
+dead** — both arms met `<60k peak`, arm A's worst run reaching 58,184 *without* the contract, so
+the threshold never discriminated on a specimen this size. The contract itself costs ~230 tokens
+re-read every turn, ≈1.4% of a median run. It stays merged on engineering judgement (never worse
+on any metric measured; the specimen gave read discipline the least surface to act on), not on
+evidence. Any re-test needs a corpus with 5–10× the fixed floor, must measure **peak prefix**
+rather than totals, and must wait on issue #70. The original 101k peak / 6.65M cache-read /
+117-turn baseline still lives in a downstream Android project's run history, not this repo, and
+remains the only production-scale reference point. Full record:
+[[architecture/benchmark-e2-read-discipline]].
 
 ### E1 — Trim the addressable fixed prefix (floor) *(structural)*
 Shrink what rides in **every** subagent turn: agent `.md` verbosity, and the `_brief`/prior-phase

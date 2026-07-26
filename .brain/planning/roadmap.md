@@ -36,8 +36,12 @@ boilerplate floor** re-read every turn, **~73% accumulated context**. Sub-items 
 [[planning/backlog]]; promote here when scheduled.
 
 **E5 (cache-pressure signal) shipped in #50 (1.8.0):** per-phase `reads/turn` +
-`peak_prefix_tokens` in the report and `cache_pressure_phases` in the AAR. Remaining: E2
-(surgical reads), E1 (trim floor), E3 (fewer turns), E4 (routing).
+`peak_prefix_tokens` in the report and `cache_pressure_phases` in the AAR.
+**E2 (surgical reads) landed in 1.10.0** — read-discipline contract in the orchestrator stable
+prefix, four agent contracts de-contradicted, enforced by `sdlc-lint read-discipline`
+([[decisions/ADR-0008-read-discipline-contract]]). Its behavioural half is **landed but unmeasured**:
+`peak_prefix_tokens` < 60k (from the 101k baseline) is verified on the next real downstream run.
+Remaining: E1 (trim floor), E3 (fewer turns), E4 (routing).
 
 **Next evolutionary phase — from the Roadmap Development Plan (repo-root `Roadmap Development
 Plan.md`).** Goal: scale complex-task completion from ~70% → 90%, with cost/throughput wins on
