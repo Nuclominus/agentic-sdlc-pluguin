@@ -87,8 +87,8 @@ written down.**
 
 The contract was A/B-tested against its own absence with a purpose-built harness
 (`bench/`, #69): **20 headless runs, 10 per arm, strictly alternating, $7.55**. Arm A = `sdlc@1.9.1`
-(no contract), arm B = `sdlc@1.10.0` (this ADR). Full record: `bench/RESULTS.md` and the campaign
-note in `architecture/` (both land with #69).
+(no contract), arm B = `sdlc@1.10.0` (this ADR). Full record: `bench/RESULTS.md` and
+[[architecture/benchmark-e2-read-discipline]].
 
 **Result: no measurable effect.** Corrected for composition, arm B's cache-read median was −10.65%
 against a **64.2% within-arm spread**. As runs accumulated the reading was −22.7 → +22.6 → −5.5 →
@@ -123,3 +123,4 @@ issue #70 fixed. Until then, ADR-0008 is landed-but-unvalidated.
 
 ## Related
 - Relates to: [[decisions/ADR-0007-overhead-window-authoritative-anchor]] / [[components/sdlc]] / [[planning/backlog]]
+- Validated (negatively) by: [[architecture/benchmark-e2-read-discipline]]
