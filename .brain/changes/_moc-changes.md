@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-07-26 | #75 | `docs` | — | [[changes/2026-07-26-PR-75-bilingual-visual-report-for-the-e2-campaign]] |
 | 2026-07-26 | #73 | `fix` | — | [[changes/2026-07-26-PR-73-resolve-plugin-paths-from-the-running-install-not-70]] |
 | 2026-07-26 | #69 | `feat` | — | [[changes/2026-07-26-PR-69-e2-benchmark-harness-reference-task-for-cache-read-measureme]] |
 | 2026-07-26 | #68 | `feat` | — | [[changes/2026-07-26-PR-68-read-discipline-contract-lint-guard-e2-1-10-0]] |
