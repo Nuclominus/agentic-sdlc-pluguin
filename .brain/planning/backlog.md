@@ -35,13 +35,21 @@ Turns E1–E3 from guesswork into a tracked, regression-testable metric. Connect
 (report). **DoD:** report shows reads/turn + peak-prefix per phase; AAR flags any phase whose
 reads/turn exceeds a threshold. No ADR needed.
 
-### E2 — Surgical reads + terse tool output *(guidance, targets the 73% growth)*
+### E2 — Surgical reads + terse tool output *(guidance, targets the 73% growth)* — **done, 1.10.0**
 Instruct pipeline agents (in their `.md` and/or the orchestrator brief) to: read with `offset/limit`
 and grep-first instead of whole large files; never re-read a file already in context; keep Bash/
 verification output terse. Growth is 73% of reads and the prefix balloons to 100k+ when agents pull
 whole files; flattening growth is the single biggest lever. **DoD:** peak-prefix on a comparable run
 drops (target <60k from 101k); no quality regression in review/test/qa verdicts. Guidance-only, no
 code. May warrant an ADR if it changes agent contracts materially.
+
+**Landed in 1.10.0:** the read-discipline contract now lives once in the orchestrator's
+`=== STABLE PREFIX ===` rather than per-agent prose, enforced by `sdlc-lint read-discipline`
+(19/19 clean across the orchestrator SKILL + all agent `.md` files); see
+[[decisions/ADR-0008-read-discipline-contract]]. The behavioural half of the DoD —
+`peak_prefix_tokens` dropping below 60k — is **deferred and unmeasured**: the 101k peak / 6.65M
+cache-read / 117-turn baseline lives in a downstream Android project's run history, not this repo,
+so the comparison can only be made on that project's next real SDLC run.
 
 ### E1 — Trim the addressable fixed prefix (floor) *(structural)*
 Shrink what rides in **every** subagent turn: agent `.md` verbosity, and the `_brief`/prior-phase

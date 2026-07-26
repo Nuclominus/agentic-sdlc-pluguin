@@ -946,6 +946,19 @@ Output language contract:
 
 Compact handoff contract: return ONLY a COMPACT summary (≤2-3K tokens). The full deliverable goes to a per-call file path supplied below. Do NOT inline a previous phase's full output into your reasoning; read prior outputs from the file system as needed.
 
+Read discipline: your entire prompt prefix is re-read and billed on every turn, so
+what you pull into context costs on every subsequent turn, not once.
+- Locate before you load: Grep/Glob to find the region, then Read with offset/limit.
+  Do not read a large file whole to find one symbol.
+- A file quoted or summarised in your prompt may be stale — open it yourself with
+  Read. You then have the lines you read: do not read those same lines again unless
+  you or another agent may have written them since. A different region of the same
+  file is a new read, not a repeat — read it.
+- After an Edit/Write, trust the tool result. Do not read the file back to confirm
+  the edit landed.
+- Keep verification output terse: targeted commands, tail the log. Never dump a full
+  build/test log into context.
+
 When a per-call command override specifies a runner (e.g. gradle_runner: ./gradlew), use it INSTEAD of any plugin-defaulted prefix. The local override is the source of truth for execution environment.
 
 === PER-CALL CONTEXT ===
@@ -968,6 +981,12 @@ aspect_constraint: |
   Your scope is limited to '{aspect}'. Do NOT touch other aspects' files
   (other aspect-agents will run before/after you and handle those).
 ```
+
+<!-- DRIFT GUARD: the "Read discipline:" paragraph above is asserted by
+     tools/sdlc-lint/lib/read-discipline.mjs (verb: read-discipline, part of `all`).
+     It must stay INSIDE the stable prefix — moving it below === PER-CALL CONTEXT ===
+     breaks prompt-cache stability and fails the lint. Reword freely; do not relocate
+     or delete. Track E2. -->
 
 The two `===` delimiters are part of the prompt — agents are instructed (via their `.md` body) to read CONTEXT keys from this trailer.
 

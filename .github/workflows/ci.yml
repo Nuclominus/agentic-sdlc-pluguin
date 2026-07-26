@@ -14,7 +14,7 @@ jobs:
           node-version: "20"
       - name: Install sdlc-lint deps
         run: npm ci --prefix tools/sdlc-lint
-      - name: sdlc-lint (schema + cycles + detect)
+      - name: sdlc-lint all
         run: node tools/sdlc-lint/cli.mjs all --json
       - name: sdlc-lint unit tests
         run: npm test --prefix tools/sdlc-lint

@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import {
   loadRegistry, extractUsage, priceUsage, priceTranscripts,
   findAgentTranscript, sessionSubagentsDir, deriveDispatchMap, enrichTelemetry,
+  CACHE_PRESSURE_PEAK_TOKENS,
 } from "../lib/usage.mjs";
 
 const REGISTRY = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "plugins", "sdlc", "config", "models.json");
@@ -279,6 +280,48 @@ test("enrichTelemetry flags cache_pressure=false when peak stays under the thres
   assert.equal(dev.turns, 1);
   assert.equal(dev.peak_prefix_tokens, 60000);
   assert.equal(dev.cache_pressure, false);
+});
+
+test("cache-pressure budget is pinned at 80k", () => {
+  // A documented budget, not an incidental constant: moving it changes which
+  // phases the report and AAR flag, and breaks cross-run comparability.
+  assert.equal(CACHE_PRESSURE_PEAK_TOKENS, 80_000);
+});
+
+// Build a one-phase run whose single turn has an exact peak cache-read, and
+// return the enriched phase. Mirrors the self-contained pattern used by the
+// "flags cache_pressure=false" test above.
+function enrichWithPeak(agentId, peak) {
+  const root = mkdtempSync(join(tmpdir(), "run-"));
+  const sub = join(root, "proj", "sess", "subagents");
+  writeAgent(sub, agentId, [
+    turn("claude-sonnet-5", { input_tokens: 10, output_tokens: 20, cache_read_input_tokens: peak }),
+  ]);
+  const runDir = join(root, "plan");
+  mkdirSync(runDir, { recursive: true });
+  writeFileSync(join(runDir, "_telemetry.json"), JSON.stringify({
+    task_slug: "boundary", started_at: "2026-07-07T13:28:00Z", completed_at: "2026-07-07T14:16:00Z",
+    phases: [
+      { phase: "development", agent: "x-dev", model: "claude-sonnet-5", status: "completed",
+        agent_id: agentId, subagent_tokens: 100, usage_source: "subagent_aggregate", cost_usd: null },
+    ],
+    total_subagent_tokens: 100, total_cost_usd: null, cache_hit_ratio: null,
+  }));
+  enrichTelemetry(runDir, { registry: reg, projectsRoot: join(root, "proj") });
+  const tel = JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8"));
+  return tel.phases[0];
+}
+
+test("one token under the budget is not flagged", () => {
+  assert.equal(enrichWithPeak("aaaa11112222", CACHE_PRESSURE_PEAK_TOKENS - 1).cache_pressure, false);
+});
+
+test("exactly at the budget is not flagged (strict greater-than)", () => {
+  assert.equal(enrichWithPeak("bbbb22223333", CACHE_PRESSURE_PEAK_TOKENS).cache_pressure, false);
+});
+
+test("one token over the budget is flagged", () => {
+  assert.equal(enrichWithPeak("cccc33334444", CACHE_PRESSURE_PEAK_TOKENS + 1).cache_pressure, true);
 });
 
 test("priceUsage tolerates a bracketed context suffix and a dated snapshot id", () => {
