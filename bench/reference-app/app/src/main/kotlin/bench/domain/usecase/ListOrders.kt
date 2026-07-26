@@ -1,0 +1,88 @@
+package bench.domain.usecase
+
+import bench.domain.NotFoundError
+import bench.domain.Result
+import bench.domain.model.Order
+import bench.domain.model.OrderStatus
+import bench.domain.repository.CustomerRepository
+import bench.domain.repository.OrderRepository
+
+/**
+ * Lists a customer's orders, most recently created first.
+ *
+ * Ordering is derived from the numeric suffix of the order id (as produced
+ * by [CreateOrder]) rather than an explicit "created at" timestamp, since
+ * this specimen's [Order] model has no such field; a production system
+ * would sort by an actual timestamp instead.
+ */
+class ListOrders(
+    private val orders: OrderRepository,
+    private val customers: CustomerRepository,
+) {
+    /**
+     * @param customerId the customer whose orders to list.
+     * @param includeArchived whether [archived][bench.domain.model.OrderStatus.ARCHIVED]
+     *   orders should be included. Defaults to `false` since archived
+     *   orders are usually noise in a customer-facing order history.
+     * @return [Result.Success] with the matching orders (possibly empty),
+     *   or [Result.Failure] wrapping a [NotFoundError] if the customer
+     *   itself does not exist.
+     */
+    operator fun invoke(customerId: String, includeArchived: Boolean = false): Result<List<Order>> {
+        customers.findById(customerId)
+            ?: return Result.Failure(NotFoundError("No customer with id $customerId", customerId))
+
+        val all = orders.findByCustomer(customerId)
+        val filtered = if (includeArchived) all else all.filterNot { it.status == OrderStatus.ARCHIVED }
+        val sorted = filtered.sortedByDescending { orderSequenceNumber(it.id) }
+        return Result.Success(sorted)
+    }
+
+    /**
+     * The single most recent order for [customerId], or `null` if they
+     * have none yet.
+     *
+     * A thin convenience over [invoke] for the common "show the customer
+     * their last order" case, so that call site does not need to fetch a
+     * whole list just to take its first element.
+     *
+     * @return [Result.Success] with the order (or `null`), or
+     *   [Result.Failure] wrapping a [NotFoundError] if the customer itself
+     *   does not exist.
+     */
+    fun mostRecent(customerId: String): Result<Order?> {
+        val listed = invoke(customerId, includeArchived = true)
+        return when (listed) {
+            is Result.Success -> Result.Success(listed.value.firstOrNull())
+            is Result.Failure -> listed
+        }
+    }
+
+    /**
+     * Lists only [customerId]'s orders currently in [status], still
+     * sorted most recent first.
+     *
+     * A thin convenience over [invoke] for a filtered view — "just my
+     * pending orders" — without the caller re-filtering the full list by
+     * hand every time.
+     *
+     * @return [Result.Success] with the matching orders, or
+     *   [Result.Failure] wrapping a [NotFoundError] if the customer itself
+     *   does not exist.
+     */
+    fun withStatus(customerId: String, status: OrderStatus): Result<List<Order>> {
+        val listed = invoke(customerId, includeArchived = true)
+        return when (listed) {
+            is Result.Success -> Result.Success(listed.value.filter { it.status == status })
+            is Result.Failure -> listed
+        }
+    }
+
+    /**
+     * Extracts the trailing integer from an order id like "ord-42", or `0`
+     * if the id does not follow that shape. Used only to derive a stable,
+     * human-plausible sort order for display.
+     */
+    private fun orderSequenceNumber(orderId: String): Int =
+        orderId.substringAfterLast('-').toIntOrNull() ?: 0
+}

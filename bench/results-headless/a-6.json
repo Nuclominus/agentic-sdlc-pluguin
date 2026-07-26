@@ -1,0 +1,232 @@
+{
+  "manifest": {
+    "arm": "a",
+    "run": 6,
+    "plugin_version": "1.9.1",
+    "marketplace_sha": "9d1af30dd2e82937d608445399283bf33f1b0de7",
+    "config_dir": "/Users/roman/bench-env/arm-a",
+    "task_sha256": "2ba79777b0a5e8d1b948806f0daf24296f16beaf276b588078d2990260e5b12f",
+    "answers_sha256": "170e77f369c30c7e01cb22124c6fbd8b60a6fc1b1f18b7431b46a687bb98e439",
+    "inter_run_gap_seconds": 60,
+    "prepared_at": "2026-07-25T22:30:19.937Z"
+  },
+  "telemetry": {
+    "task_slug": "add-input-validation-to-createorder",
+    "stack": "vanilla",
+    "primary_profile": "vanilla",
+    "active_profiles": {
+      "backend": "vanilla",
+      "frontend": "vanilla",
+      "database": "vanilla",
+      "infra": "vanilla",
+      "testing": "vanilla"
+    },
+    "additive_profiles": [],
+    "profile_source": "sdlc/1.9.1/manifest.yaml",
+    "active_workflow": "default",
+    "narrative_language": "en",
+    "headless_mode": false,
+    "started_at": "2026-07-25T22:31:31Z",
+    "completed_at": "2026-07-25T22:44:18Z",
+    "wall_clock_seconds": 767,
+    "model_enforcement_corrections": 0,
+    "stack_detection_note": "android-foundation (priority 300) matched detection and was announced first, but it is present only in the plugin CACHE and absent from installed_plugins.json — none of its agents (android-ba, android-developer, android-reviewer, android-security, android-tester, android-qa, android-docs) are registered or dispatchable. Fell back to the vanilla foundation, whose agents are installed. Workflow correspondingly fell back from android-feature to default (the android-feature review/test phases have no vanilla agent binding).",
+    "phases": [
+      {
+        "phase": "business_analysis",
+        "aspect": null,
+        "agent": "business-analyst",
+        "model": "claude-opus-4-8",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": "a0fbafb22b7d1a2a7",
+        "subagent_tokens": 31693,
+        "usage_source": "transcript",
+        "cost_usd": null,
+        "compact_summary_chars": 4820,
+        "compact_handoff_violation": true,
+        "input_tokens": 12,
+        "output_tokens": 17,
+        "cached_input_tokens": 74958,
+        "cache_creation_tokens": 28537,
+        "billed_tokens": 103524,
+        "turns": 6,
+        "peak_prefix_tokens": 26892,
+        "cache_pressure": false
+      },
+      {
+        "phase": "development",
+        "aspect": null,
+        "agent": "developer",
+        "model": "claude-sonnet-5",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": [
+          "a2ee4f25fb4bc2c2c",
+          "a7a1744600bfb0b92"
+        ],
+        "subagent_tokens": 22702,
+        "usage_source": "transcript",
+        "cost_usd": 0.15,
+        "compact_summary_chars": 1180,
+        "compact_handoff_violation": false,
+        "input_tokens": 22,
+        "output_tokens": 2119,
+        "cached_input_tokens": 180990,
+        "cache_creation_tokens": 36981,
+        "billed_tokens": 220112,
+        "turns": 12,
+        "peak_prefix_tokens": 20663,
+        "cache_pressure": false
+      },
+      {
+        "phase": "qa",
+        "aspect": null,
+        "agent": "qa-engineer",
+        "model": "claude-sonnet-5",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": "a71d986ac25f045fc",
+        "qa_iterations_used": 1,
+        "qa_status": "completed",
+        "subagent_tokens": 34832,
+        "usage_source": "transcript",
+        "cost_usd": 0.17,
+        "compact_summary_chars": 480,
+        "compact_handoff_violation": false,
+        "input_tokens": 27,
+        "output_tokens": 2280,
+        "cached_input_tokens": 367434,
+        "cache_creation_tokens": 28249,
+        "billed_tokens": 397990,
+        "turns": 14,
+        "peak_prefix_tokens": 32751,
+        "cache_pressure": false
+      },
+      {
+        "phase": "security",
+        "aspect": null,
+        "agent": "security-analyst",
+        "model": "claude-opus-4-8",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": "a473a1e33ab1b847b",
+        "subagent_tokens": 44439,
+        "usage_source": "transcript",
+        "cost_usd": null,
+        "compact_summary_chars": 3180,
+        "compact_handoff_violation": true,
+        "input_tokens": 22,
+        "output_tokens": 1548,
+        "cached_input_tokens": 233253,
+        "cache_creation_tokens": 42961,
+        "billed_tokens": 277784,
+        "turns": 11,
+        "peak_prefix_tokens": 36052,
+        "cache_pressure": false
+      },
+      {
+        "phase": "documentation",
+        "aspect": null,
+        "agent": "document-writer",
+        "model": "claude-haiku-4-5-20251001",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": "a7ada8d9c951a0265",
+        "subagent_tokens": 25472,
+        "usage_source": "transcript",
+        "cost_usd": 0.04,
+        "compact_summary_chars": 1240,
+        "compact_handoff_violation": false,
+        "input_tokens": 41,
+        "output_tokens": 11,
+        "cached_input_tokens": 66037,
+        "cache_creation_tokens": 24976,
+        "billed_tokens": 91065,
+        "turns": 5,
+        "peak_prefix_tokens": 21136,
+        "cache_pressure": false
+      }
+    ],
+    "skip_rules_applied": [],
+    "post_pipeline_checks": [
+      {
+        "command": "./gradlew test",
+        "exit_code": 0,
+        "note": "374 tests, 0 failures"
+      },
+      {
+        "command": "./gradlew detekt",
+        "exit_code": null,
+        "note": "skipped — task not present in this project"
+      },
+      {
+        "command": "./gradlew testDebugUnitTest",
+        "exit_code": null,
+        "note": "skipped — Android task, not present (Kotlin/JVM project)"
+      },
+      {
+        "command": "./gradlew compileDebugKotlin",
+        "exit_code": null,
+        "note": "skipped — Android task, not present (Kotlin/JVM project)"
+      }
+    ],
+    "total_subagent_tokens": 159138,
+    "total_cost_usd": 0.38,
+    "cost_basis": "transcript",
+    "cache_hit_ratio": 1,
+    "cost_cap_usd": null,
+    "cap_status": "within",
+    "deps_preflight": {
+      "superpowers": {
+        "status": "available",
+        "missing_skills": [],
+        "source": "cache"
+      }
+    },
+    "touched_files": [
+      {
+        "status": "M",
+        "path": "app/src/main/kotlin/bench/domain/usecase/CreateOrder.kt"
+      },
+      {
+        "status": "M",
+        "path": "app/src/test/kotlin/bench/domain/usecase/CreateOrderTest.kt"
+      }
+    ],
+    "orchestration_overhead": {
+      "cost_usd": 0.02,
+      "main_loop": {
+        "model": "claude-opus-5",
+        "input_tokens": 52,
+        "output_tokens": 21328,
+        "cached_input_tokens": 3032041,
+        "cache_creation_tokens": 37503,
+        "turns": 28,
+        "cost_usd": null
+      },
+      "nested_subagents": {
+        "model": "claude-haiku-4-5-20251001",
+        "input_tokens": 34,
+        "output_tokens": 7,
+        "cached_input_tokens": 31652,
+        "cache_creation_tokens": 13943,
+        "cache_write_5m_tokens": 13943,
+        "cache_write_1h_tokens": 0,
+        "billed_tokens": 45636,
+        "turns": 4,
+        "peak_prefix_tokens": 12552,
+        "cost_usd": 0.02,
+        "unpriced_models": 0
+      }
+    },
+    "total_input_tokens": 124,
+    "total_output_tokens": 5975,
+    "total_cached_input_tokens": 922672,
+    "total_cache_creation_tokens": 161704
+  },
+  "flags": [],
+  "live_check": "passed",
+  "enriched": "performed",
+  "harvested_at": "2026-07-25T22:45:43.180Z"
+}

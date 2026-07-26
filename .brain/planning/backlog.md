@@ -27,6 +27,29 @@ addressable via agent behavior guidance.
 
 Ordered by leverage (measure first, then the two cheap high-impact guidance items, then structural):
 
+### Benchmark harness (`bench/`)
+
+The instrument that closes E2's deferred behavioural DoD lives in `bench/`: a Kotlin
+specimen, a corpus power check, and `prepare.mjs` / `harvest.mjs` / `compare.mjs`
+scripts driving a two-arm (before/after) comparison under isolated
+`CLAUDE_CONFIG_DIR` environments (procedure and runbook in `bench/README.md`). It is
+not E2-specific — E1, E3 and E4 are expected to reuse the same instrument to validate
+their own DoDs once implemented. Its output is medians, ranges and an engineering
+verdict over a **delta between the two arms of one experiment**; it is not a
+statistical result, and its numbers are not comparable to the 101k-token figure
+recorded above from the downstream Android application run — different codebase,
+different tool, different purpose.
+
+**Measured noise floor (2026-07-26, 20 runs) — read this before designing any Track E
+experiment.** Within-arm, identical-configuration run-to-run spread on total cache-read is
+**55.6%–64.2%**; peak prefix varies 33%–92%; turn count runs 46–64 on the same 5-phase
+pipeline. Therefore: a single run proves nothing, and **any improvement below ~50% is
+unverifiable by this instrument at n≈10**. Check the expected effect against that bar before
+spending. `compare.mjs`'s `recommendN` ladder (<10% → N=3, <25% → N=4, ≥25% → STOP) is
+miscalibrated — reality exceeded its STOP threshold by 2.5× — so treat its STOP as real and the
+rungs below it as fiction. Full campaign record:
+[[architecture/benchmark-e2-read-discipline]].
+
 ### E5 — Cache-pressure signal in report + AAR *(enabler, low effort)*
 Add a per-phase **reads-per-turn** and **peak-prefix** signal to `tools/report` and surface it in
 the `sdlc:aar` findings, so cache regressions are visible and heavy phases get flagged. The report
@@ -46,10 +69,20 @@ code. May warrant an ADR if it changes agent contracts materially.
 **Landed in 1.10.0:** the read-discipline contract now lives once in the orchestrator's
 `=== STABLE PREFIX ===` rather than per-agent prose, enforced by `sdlc-lint read-discipline`
 (19/19 clean across the orchestrator SKILL + all agent `.md` files); see
-[[decisions/ADR-0008-read-discipline-contract]]. The behavioural half of the DoD —
-`peak_prefix_tokens` dropping below 60k — is **deferred and unmeasured**: the 101k peak / 6.65M
-cache-read / 117-turn baseline lives in a downstream Android project's run history, not this repo,
-so the comparison can only be made on that project's next real SDLC run.
+[[decisions/ADR-0008-read-discipline-contract]].
+
+**Measured 2026-07-26 — UNVALIDATED.** The behavioural half of the DoD is no longer deferred; it
+was A/B-tested over 20 runs and **the win could not be demonstrated**: cache-read median −10.65%
+against a 64.2% within-arm spread, sign reversing four times as n grew. **The DoD as written is
+dead** — both arms met `<60k peak`, arm A's worst run reaching 58,184 *without* the contract, so
+the threshold never discriminated on a specimen this size. The contract itself costs ~230 tokens
+re-read every turn, ≈1.4% of a median run. It stays merged on engineering judgement (never worse
+on any metric measured; the specimen gave read discipline the least surface to act on), not on
+evidence. Any re-test needs a corpus with 5–10× the fixed floor, must measure **peak prefix**
+rather than totals, and must wait on issue #70. The original 101k peak / 6.65M cache-read /
+117-turn baseline still lives in a downstream Android project's run history, not this repo, and
+remains the only production-scale reference point. Full record:
+[[architecture/benchmark-e2-read-discipline]].
 
 ### E1 — Trim the addressable fixed prefix (floor) *(structural)*
 Shrink what rides in **every** subagent turn: agent `.md` verbosity, and the `_brief`/prior-phase

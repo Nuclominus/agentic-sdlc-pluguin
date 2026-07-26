@@ -1,0 +1,254 @@
+{
+  "manifest": {
+    "arm": "a",
+    "run": 10,
+    "plugin_version": "1.9.1",
+    "marketplace_sha": "9d1af30dd2e82937d608445399283bf33f1b0de7",
+    "config_dir": "/Users/roman/bench-env/arm-a",
+    "task_sha256": "2ba79777b0a5e8d1b948806f0daf24296f16beaf276b588078d2990260e5b12f",
+    "answers_sha256": "170e77f369c30c7e01cb22124c6fbd8b60a6fc1b1f18b7431b46a687bb98e439",
+    "inter_run_gap_seconds": 60,
+    "prepared_at": "2026-07-26T05:19:23.021Z"
+  },
+  "telemetry": {
+    "task_slug": "add-input-validation-to-createorder",
+    "stack": "android",
+    "primary_profile": "android",
+    "active_profiles": {
+      "android": "android"
+    },
+    "additive_profiles": [],
+    "profile_source": "android-foundation/manifest.yaml",
+    "narrative_language": "en",
+    "headless_mode": false,
+    "started_at": "2026-07-26T05:20:38Z",
+    "completed_at": "2026-07-26T05:33:26Z",
+    "wall_clock_seconds": 768,
+    "model_enforcement_corrections": 0,
+    "degradations": [
+      {
+        "kind": "agent_roster_unavailable",
+        "detail": "android-foundation won stack detection but none of its agents (android-ba, android-developer, android-reviewer, android-security, android-tester, android-qa, android-docs) are registered as dispatchable subagent types; only the core sdlc:* roster is available.",
+        "resolution": "Fell back to the vanilla agent map. The android-feature workflow's 'review' (loop) and 'test' (parallel) phases have no vanilla equivalent, so the workflow was downgraded from android-feature (6 slots) to default (5 phases). android-foundation phase_injections and post_pipeline_checks were retained."
+      },
+      {
+        "kind": "post_checks_capability_gated",
+        "detail": "2 of 3 inherited post_pipeline_checks are Android-only Gradle tasks absent from this Kotlin/JVM project (testDebugUnitTest, compileDebugKotlin); the detekt/ktlint check is a no-op because neither plugin is configured.",
+        "resolution": "Recorded as skips; ./gradlew test and ./gradlew compileKotlin run as substitutes, both exit 0."
+      },
+      {
+        "kind": "approval_gate_auto_approved",
+        "detail": "The development phase's plan/implement approval gate could not be presented interactively in this session.",
+        "resolution": "Auto-approved under a stated assumption after the orchestrator verified the plan added no scope beyond the brief."
+      },
+      {
+        "kind": "ba_agent_lacks_write_tool",
+        "detail": "sdlc:business-analyst is granted Read/Glob/Grep/WebSearch/WebFetch only, so it could not write 01-business-analysis.md itself.",
+        "resolution": "Orchestrator persisted the agent's returned deliverable to the workspace verbatim."
+      }
+    ],
+    "workflow_requested": "android-feature",
+    "active_workflow": "default",
+    "phases": [
+      {
+        "phase": "business_analysis",
+        "aspect": null,
+        "agent": "sdlc:business-analyst",
+        "model": "claude-opus-4-8",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": "a4f4e88a025e07bb7",
+        "subagent_tokens": 39688,
+        "usage_source": "transcript",
+        "cost_usd": null,
+        "compact_summary_chars": 4870,
+        "compact_handoff_violation": true,
+        "input_tokens": 24,
+        "output_tokens": 272,
+        "cached_input_tokens": 279116,
+        "cache_creation_tokens": 36755,
+        "billed_tokens": 316167,
+        "turns": 12,
+        "peak_prefix_tokens": 35822,
+        "cache_pressure": false
+      },
+      {
+        "phase": "development",
+        "aspect": null,
+        "agent": "sdlc:developer",
+        "model": "claude-sonnet-5",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": [
+          "a907cb073ceebc9d7",
+          "ab5eb5cea2406edec"
+        ],
+        "subagent_tokens": 47288,
+        "usage_source": "transcript",
+        "cost_usd": 0.18,
+        "compact_summary_chars": 1180,
+        "compact_handoff_violation": false,
+        "input_tokens": 34,
+        "output_tokens": 2994,
+        "cached_input_tokens": 287300,
+        "cache_creation_tokens": 38319,
+        "billed_tokens": 328647,
+        "turns": 17,
+        "peak_prefix_tokens": 23207,
+        "cache_pressure": false
+      },
+      {
+        "phase": "qa",
+        "aspect": null,
+        "agent": "sdlc:qa-engineer",
+        "model": "claude-sonnet-5",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": "a5d7132b3bd303d92",
+        "qa_iterations_used": 1,
+        "qa_status": "completed",
+        "subagent_tokens": 30265,
+        "usage_source": "transcript",
+        "cost_usd": 0.11,
+        "compact_summary_chars": 1090,
+        "compact_handoff_violation": false,
+        "input_tokens": 20,
+        "output_tokens": 748,
+        "cached_input_tokens": 215105,
+        "cache_creation_tokens": 23435,
+        "billed_tokens": 239308,
+        "turns": 10,
+        "peak_prefix_tokens": 27925,
+        "cache_pressure": false
+      },
+      {
+        "phase": "security",
+        "aspect": null,
+        "agent": "sdlc:security-analyst",
+        "model": "claude-opus-4-8",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": "a44900f93dc1d60b1",
+        "subagent_tokens": 39215,
+        "usage_source": "transcript",
+        "cost_usd": null,
+        "compact_summary_chars": 2960,
+        "compact_handoff_violation": false,
+        "input_tokens": 28,
+        "output_tokens": 1500,
+        "cached_input_tokens": 266352,
+        "cache_creation_tokens": 38019,
+        "billed_tokens": 305899,
+        "turns": 14,
+        "peak_prefix_tokens": 31045,
+        "cache_pressure": false
+      },
+      {
+        "phase": "documentation",
+        "aspect": null,
+        "agent": "sdlc:document-writer",
+        "model": "claude-haiku-4-5-20251001",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": "a44e403b8279dd64c",
+        "subagent_tokens": 23083,
+        "usage_source": "transcript",
+        "cost_usd": 0.03,
+        "compact_summary_chars": 1720,
+        "compact_handoff_violation": false,
+        "input_tokens": 34,
+        "output_tokens": 4,
+        "cached_input_tokens": 42047,
+        "cache_creation_tokens": 22541,
+        "billed_tokens": 64626,
+        "turns": 4,
+        "peak_prefix_tokens": 19328,
+        "cache_pressure": false
+      }
+    ],
+    "skip_rules_applied": [],
+    "post_pipeline_checks": [
+      {
+        "command": "sh -c './gradlew detekt 2>/dev/null || ./gradlew ktlintCheck 2>/dev/null || true'",
+        "exit_code": 0,
+        "note": "skipped — no lint plugin configured"
+      },
+      {
+        "command": "sh -c './gradlew testDebugUnitTest'",
+        "exit_code": null,
+        "note": "skipped — Android-only task absent in this Kotlin/JVM project"
+      },
+      {
+        "command": "sh -c './gradlew compileDebugKotlin'",
+        "exit_code": null,
+        "note": "skipped — Android-only task absent in this Kotlin/JVM project"
+      },
+      {
+        "command": "./gradlew test",
+        "exit_code": 0,
+        "note": "substitute — 375 tests, 0 failures"
+      },
+      {
+        "command": "./gradlew compileKotlin",
+        "exit_code": 0,
+        "note": "substitute"
+      }
+    ],
+    "total_input_tokens": 140,
+    "total_output_tokens": 5518,
+    "total_cached_input_tokens": 1089920,
+    "total_subagent_tokens": 179539,
+    "total_cost_usd": 0.34,
+    "cost_basis": "transcript",
+    "cost_cap_usd": null,
+    "cap_status": "within",
+    "cache_hit_ratio": 1,
+    "deps_preflight": {
+      "superpowers": {
+        "status": "available",
+        "missing_skills": []
+      }
+    },
+    "touched_files": [
+      {
+        "status": "M",
+        "path": "app/src/main/kotlin/bench/domain/usecase/CreateOrder.kt"
+      },
+      {
+        "status": "M",
+        "path": "app/src/test/kotlin/bench/domain/usecase/CreateOrderTest.kt"
+      }
+    ],
+    "orchestration_overhead": {
+      "cost_usd": 0.02,
+      "main_loop": {
+        "model": "claude-opus-5",
+        "input_tokens": 36,
+        "output_tokens": 22175,
+        "cached_input_tokens": 2244302,
+        "cache_creation_tokens": 42537,
+        "turns": 20,
+        "cost_usd": null
+      },
+      "nested_subagents": {
+        "model": "claude-haiku-4-5-20251001",
+        "input_tokens": 34,
+        "output_tokens": 7,
+        "cached_input_tokens": 35509,
+        "cache_creation_tokens": 14981,
+        "cache_write_5m_tokens": 14981,
+        "cache_write_1h_tokens": 0,
+        "billed_tokens": 50531,
+        "turns": 4,
+        "peak_prefix_tokens": 14537,
+        "cost_usd": 0.02,
+        "unpriced_models": 0
+      }
+    },
+    "total_cache_creation_tokens": 159069
+  },
+  "flags": [],
+  "live_check": "passed",
+  "enriched": "performed",
+  "harvested_at": "2026-07-26T05:34:55.751Z"
+}

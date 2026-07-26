@@ -1,0 +1,228 @@
+{
+  "manifest": {
+    "arm": "a",
+    "run": 1,
+    "plugin_version": "1.9.1",
+    "marketplace_sha": "9d1af30dd2e82937d608445399283bf33f1b0de7",
+    "config_dir": "/Users/roman/bench-env/arm-a",
+    "task_sha256": "2ba79777b0a5e8d1b948806f0daf24296f16beaf276b588078d2990260e5b12f",
+    "answers_sha256": "170e77f369c30c7e01cb22124c6fbd8b60a6fc1b1f18b7431b46a687bb98e439",
+    "inter_run_gap_seconds": 60,
+    "prepared_at": "2026-07-25T18:35:38.264Z"
+  },
+  "telemetry": {
+    "task_slug": "add-input-validation-to-createorder",
+    "stack": "vanilla",
+    "primary_profile": "vanilla",
+    "active_profiles": {
+      "backend": "vanilla",
+      "frontend": "vanilla",
+      "database": "vanilla",
+      "infra": "vanilla",
+      "testing": "vanilla",
+      "messaging": "vanilla"
+    },
+    "additive_profiles": [],
+    "profile_source": "sdlc/manifest.yaml",
+    "active_workflow": "default",
+    "workflow_autoselected": false,
+    "narrative_language": "en",
+    "headless_mode": false,
+    "started_at": "2026-07-25T18:37:27Z",
+    "completed_at": "2026-07-25T18:50:21Z",
+    "wall_clock_seconds": 774,
+    "model_enforcement_corrections": 0,
+    "stack_detection_note": "android-foundation (priority 300) matched the cache glob but is NOT in installed_plugins.json and none of its agents are dispatchable; resolution fell back to vanilla.",
+    "phases": [
+      {
+        "phase": "business_analysis",
+        "aspect": null,
+        "agent": "business-analyst",
+        "model": "claude-opus-4-8",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": "a7ec45112ff09dc88",
+        "subagent_tokens": 34545,
+        "usage_source": "transcript",
+        "cost_usd": null,
+        "compact_summary_chars": 4912,
+        "compact_handoff_violation": true,
+        "input_tokens": 16,
+        "output_tokens": 21,
+        "cached_input_tokens": 112628,
+        "cache_creation_tokens": 30548,
+        "billed_tokens": 143213,
+        "turns": 8,
+        "peak_prefix_tokens": 28794,
+        "cache_pressure": false
+      },
+      {
+        "phase": "development",
+        "aspect": null,
+        "agent": "developer",
+        "model": "claude-sonnet-5",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": [
+          "aa83906ea119b114c",
+          "a09c90bcb1697711f"
+        ],
+        "subagent_tokens": 59527,
+        "usage_source": "transcript",
+        "cost_usd": 0.24,
+        "compact_summary_chars": 1712,
+        "compact_handoff_violation": false,
+        "note": "two-pass (plan + implement); plan approved without an interactive gate — session is non-interactive",
+        "input_tokens": 40,
+        "output_tokens": 3175,
+        "cached_input_tokens": 417782,
+        "cache_creation_tokens": 50172,
+        "billed_tokens": 471169,
+        "turns": 21,
+        "peak_prefix_tokens": 28688,
+        "cache_pressure": false
+      },
+      {
+        "phase": "qa",
+        "aspect": null,
+        "agent": "qa-engineer",
+        "model": "claude-sonnet-5",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": "a76d9e1d838100bc7",
+        "qa_iterations_used": 1,
+        "qa_status": "completed",
+        "subagent_tokens": 27798,
+        "usage_source": "transcript",
+        "cost_usd": 0.11,
+        "compact_summary_chars": 895,
+        "compact_handoff_violation": false,
+        "input_tokens": 23,
+        "output_tokens": 811,
+        "cached_input_tokens": 227622,
+        "cache_creation_tokens": 21029,
+        "billed_tokens": 249485,
+        "turns": 12,
+        "peak_prefix_tokens": 25420,
+        "cache_pressure": false
+      },
+      {
+        "phase": "security",
+        "aspect": null,
+        "agent": "security-analyst",
+        "model": "claude-opus-4-8",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": "ad0df8f33dfadc078",
+        "subagent_tokens": 36081,
+        "usage_source": "transcript",
+        "cost_usd": null,
+        "compact_summary_chars": 3204,
+        "compact_handoff_violation": true,
+        "findings": {
+          "critical": 0,
+          "high": 0,
+          "medium": 3,
+          "low": 2
+        },
+        "input_tokens": 22,
+        "output_tokens": 7290,
+        "cached_input_tokens": 180853,
+        "cache_creation_tokens": 34682,
+        "billed_tokens": 222847,
+        "turns": 11,
+        "peak_prefix_tokens": 30366,
+        "cache_pressure": false
+      },
+      {
+        "phase": "documentation",
+        "aspect": null,
+        "agent": "document-writer",
+        "model": "claude-haiku-4-5-20251001",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": "a5b72a6bc17b10d98",
+        "subagent_tokens": 22958,
+        "usage_source": "transcript",
+        "cost_usd": 0.03,
+        "compact_summary_chars": 1583,
+        "compact_handoff_violation": false,
+        "pr_url": null,
+        "pr_blocked_reason": "repository has no git remote; no branch/commit/push was authorized",
+        "input_tokens": 33,
+        "output_tokens": 6,
+        "cached_input_tokens": 40935,
+        "cache_creation_tokens": 22364,
+        "billed_tokens": 63338,
+        "turns": 4,
+        "peak_prefix_tokens": 18583,
+        "cache_pressure": false
+      }
+    ],
+    "skip_rules_applied": [],
+    "post_pipeline_checks": [
+      {
+        "command": "./gradlew test --rerun-tasks",
+        "exit_code": 0,
+        "note": "not profile-declared (vanilla list is empty); run by the orchestrator as independent verification. 375 tests, 0 failures, 0 errors, 0 skipped."
+      }
+    ],
+    "total_input_tokens": 134,
+    "total_output_tokens": 11303,
+    "total_cached_input_tokens": 979820,
+    "total_subagent_tokens": 180909,
+    "total_cost_usd": 0.4,
+    "cost_basis": "transcript",
+    "cost_cap_usd": null,
+    "cap_status": "within",
+    "cache_hit_ratio": 1,
+    "deps_preflight": {
+      "superpowers": {
+        "status": "available",
+        "missing_skills": [],
+        "source": "cache"
+      }
+    },
+    "touched_files": [
+      {
+        "status": "M",
+        "path": "app/src/main/kotlin/bench/domain/usecase/CreateOrder.kt"
+      },
+      {
+        "status": "M",
+        "path": "app/src/test/kotlin/bench/domain/usecase/CreateOrderTest.kt"
+      }
+    ],
+    "orchestration_overhead": {
+      "cost_usd": 0.02,
+      "main_loop": {
+        "model": "claude-opus-5",
+        "input_tokens": 37,
+        "output_tokens": 18735,
+        "cached_input_tokens": 2303025,
+        "cache_creation_tokens": 28446,
+        "turns": 20,
+        "cost_usd": null
+      },
+      "nested_subagents": {
+        "model": "claude-haiku-4-5-20251001",
+        "input_tokens": 33,
+        "output_tokens": 9,
+        "cached_input_tokens": 31955,
+        "cache_creation_tokens": 13437,
+        "cache_write_5m_tokens": 13437,
+        "cache_write_1h_tokens": 0,
+        "billed_tokens": 45434,
+        "turns": 4,
+        "peak_prefix_tokens": 12767,
+        "cost_usd": 0.02,
+        "unpriced_models": 0
+      }
+    },
+    "total_cache_creation_tokens": 158795
+  },
+  "flags": [],
+  "live_check": "passed",
+  "enriched": "performed",
+  "harvested_at": "2026-07-25T18:51:50.778Z"
+}

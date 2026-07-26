@@ -1,0 +1,52 @@
+package bench.data
+
+import bench.data.seed.SeedCatalog
+import bench.domain.model.Product
+import bench.domain.repository.ProductRepository
+
+/**
+ * A map-backed [ProductRepository], seeded from [SeedCatalog] by default.
+ *
+ * There is no thread-safety story here on purpose: this specimen models a
+ * single-request-at-a-time console/test harness, not a concurrent server,
+ * so a plain [LinkedHashMap] keeps the implementation easy to read without
+ * pretending to guarantees the surrounding project does not need.
+ */
+class InMemoryProductRepository(
+    seed: List<Product> = SeedCatalog.products,
+) : ProductRepository {
+    private val byId = LinkedHashMap<String, Product>().apply {
+        seed.forEach { put(it.id, it) }
+    }
+
+    override fun findById(id: String): Product? = byId[id]
+
+    override fun findAll(): List<Product> = byId.values.toList()
+
+    override fun findActive(): List<Product> = byId.values.filter { it.active }
+
+    override fun findByIds(ids: List<String>): List<Product> = ids.mapNotNull { byId[it] }
+
+    /**
+     * Inserts or replaces [product] in the store. Not part of
+     * [ProductRepository] — catalog edits are out of scope for the
+     * order-processing use cases, but tests find it convenient to seed or
+     * mutate a single product without rebuilding the whole repository.
+     */
+    fun upsert(product: Product) {
+        byId[product.id] = product
+    }
+
+    /**
+     * Removes the product with [id] entirely, returning it if it was
+     * present. Distinct from [Product.discontinue] — this actually drops
+     * the record, which a real catalog would only do for a product that
+     * was never sellable in the first place (e.g. an import mistake),
+     * since discontinuing is the normal end-of-life path that keeps
+     * historical order lines resolvable.
+     */
+    fun remove(id: String): Product? = byId.remove(id)
+
+    /** How many products the store currently holds. */
+    fun count(): Int = byId.size
+}

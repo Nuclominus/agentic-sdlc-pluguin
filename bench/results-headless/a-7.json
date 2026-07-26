@@ -1,0 +1,215 @@
+{
+  "manifest": {
+    "arm": "a",
+    "run": 7,
+    "plugin_version": "1.9.1",
+    "marketplace_sha": "9d1af30dd2e82937d608445399283bf33f1b0de7",
+    "config_dir": "/Users/roman/bench-env/arm-a",
+    "task_sha256": "2ba79777b0a5e8d1b948806f0daf24296f16beaf276b588078d2990260e5b12f",
+    "answers_sha256": "170e77f369c30c7e01cb22124c6fbd8b60a6fc1b1f18b7431b46a687bb98e439",
+    "inter_run_gap_seconds": 60,
+    "prepared_at": "2026-07-25T23:05:17.764Z"
+  },
+  "telemetry": {
+    "task_slug": "add-input-validation-to-the-createorder",
+    "stack": "vanilla",
+    "primary_profile": "vanilla",
+    "active_profiles": {
+      "backend": "vanilla",
+      "testing": "vanilla"
+    },
+    "additive_profiles": [],
+    "profile_source": "sdlc/1.9.1/manifest.yaml",
+    "stack_detection_note": "android-foundation (priority 300) matched its detect rules (settings.gradle.kts + **/*.kt) but was demoted by the orchestrator: its phase agents are not registered as dispatchable subagent types in this session, and its post_pipeline_checks (testDebugUnitTest, compileDebugKotlin) do not exist in this plain Kotlin/JVM build. Fell back to vanilla.",
+    "active_workflow": "default",
+    "workflow_autoselected": false,
+    "narrative_language": "en",
+    "headless_mode": false,
+    "started_at": "2026-07-25T23:07:22Z",
+    "completed_at": "2026-07-25T23:21:02Z",
+    "wall_clock_seconds": 820,
+    "model_enforcement_corrections": 0,
+    "phases": [
+      {
+        "phase": "business_analysis",
+        "aspect": null,
+        "agent": "business-analyst",
+        "model": "claude-opus-4-8",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": "a4b1b18ddb49b8e77",
+        "subagent_tokens": 38816,
+        "usage_source": "transcript",
+        "cost_usd": null,
+        "compact_summary_chars": 11480,
+        "compact_handoff_violation": true,
+        "input_tokens": 12,
+        "output_tokens": 16,
+        "cached_input_tokens": 81548,
+        "cache_creation_tokens": 32374,
+        "billed_tokens": 113950,
+        "turns": 6,
+        "peak_prefix_tokens": 29784,
+        "cache_pressure": false
+      },
+      {
+        "phase": "development",
+        "aspect": null,
+        "agent": "developer",
+        "model": "claude-sonnet-5",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": [
+          "adcba734cb6d0c02f",
+          "a6160e8c70faa7f86"
+        ],
+        "subagent_tokens": 31612,
+        "usage_source": "transcript",
+        "cost_usd": 0.24,
+        "compact_summary_chars": 1180,
+        "compact_handoff_violation": false,
+        "input_tokens": 30,
+        "output_tokens": 5879,
+        "cached_input_tokens": 306598,
+        "cache_creation_tokens": 49094,
+        "billed_tokens": 361601,
+        "turns": 16,
+        "peak_prefix_tokens": 28627,
+        "cache_pressure": false
+      },
+      {
+        "phase": "qa",
+        "aspect": null,
+        "agent": "qa-engineer",
+        "model": "claude-sonnet-5",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": "afca08eaddd61c060",
+        "qa_iterations_used": 1,
+        "qa_status": "completed",
+        "subagent_tokens": 36485,
+        "usage_source": "transcript",
+        "cost_usd": 0.15,
+        "compact_summary_chars": 720,
+        "compact_handoff_violation": false,
+        "input_tokens": 27,
+        "output_tokens": 528,
+        "cached_input_tokens": 340714,
+        "cache_creation_tokens": 29851,
+        "billed_tokens": 371120,
+        "turns": 14,
+        "peak_prefix_tokens": 34513,
+        "cache_pressure": false
+      },
+      {
+        "phase": "security",
+        "aspect": null,
+        "agent": "security-analyst",
+        "model": "claude-opus-4-8",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": "a4e3b35efcfdeabaa",
+        "subagent_tokens": 35331,
+        "usage_source": "transcript",
+        "cost_usd": null,
+        "compact_summary_chars": 2460,
+        "compact_handoff_violation": false,
+        "input_tokens": 20,
+        "output_tokens": 1536,
+        "cached_input_tokens": 176387,
+        "cache_creation_tokens": 34304,
+        "billed_tokens": 212247,
+        "turns": 10,
+        "peak_prefix_tokens": 29284,
+        "cache_pressure": false
+      },
+      {
+        "phase": "documentation",
+        "aspect": null,
+        "agent": "document-writer",
+        "model": "claude-haiku-4-5-20251001",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": "a5810e3e199599150",
+        "subagent_tokens": 22845,
+        "usage_source": "transcript",
+        "cost_usd": 0.04,
+        "compact_summary_chars": 880,
+        "compact_handoff_violation": false,
+        "input_tokens": 57,
+        "output_tokens": 14,
+        "cached_input_tokens": 102803,
+        "cache_creation_tokens": 22473,
+        "billed_tokens": 125347,
+        "turns": 7,
+        "peak_prefix_tokens": 21690,
+        "cache_pressure": false
+      }
+    ],
+    "skip_rules_applied": [],
+    "post_pipeline_checks": [
+      {
+        "command": "./gradlew cleanTest test",
+        "exit_code": 0,
+        "note": "vanilla declares no post_pipeline_checks; orchestrator ran the project's only verification command as a final check. 376 tests, 0 failures, 0 errors, 0 skipped."
+      }
+    ],
+    "total_input_tokens": 146,
+    "total_output_tokens": 7973,
+    "total_cached_input_tokens": 1008050,
+    "total_subagent_tokens": 165089,
+    "total_cost_usd": 0.45,
+    "cost_basis": "transcript",
+    "cost_cap_usd": null,
+    "cap_status": "within",
+    "cache_hit_ratio": 1,
+    "deps_preflight": {
+      "superpowers": {
+        "status": "available",
+        "missing_skills": [],
+        "source": "cache"
+      }
+    },
+    "touched_files": [
+      {
+        "status": "M",
+        "path": "app/src/main/kotlin/bench/domain/usecase/CreateOrder.kt"
+      },
+      {
+        "status": "M",
+        "path": "app/src/test/kotlin/bench/domain/usecase/CreateOrderTest.kt"
+      }
+    ],
+    "orchestration_overhead": {
+      "cost_usd": 0.02,
+      "main_loop": {
+        "model": "claude-opus-5",
+        "input_tokens": 31,
+        "output_tokens": 24637,
+        "cached_input_tokens": 1968290,
+        "cache_creation_tokens": 41106,
+        "turns": 17,
+        "cost_usd": null
+      },
+      "nested_subagents": {
+        "model": "claude-haiku-4-5-20251001",
+        "input_tokens": 41,
+        "output_tokens": 8,
+        "cached_input_tokens": 41753,
+        "cache_creation_tokens": 13615,
+        "cache_write_5m_tokens": 13615,
+        "cache_write_1h_tokens": 0,
+        "billed_tokens": 55417,
+        "turns": 5,
+        "peak_prefix_tokens": 12673,
+        "cost_usd": 0.02,
+        "unpriced_models": 0
+      }
+    },
+    "total_cache_creation_tokens": 168096
+  },
+  "flags": [],
+  "live_check": "passed",
+  "enriched": "performed",
+  "harvested_at": "2026-07-25T23:22:30.544Z"
+}
