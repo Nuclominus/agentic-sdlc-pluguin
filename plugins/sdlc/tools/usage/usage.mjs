@@ -14,7 +14,7 @@
 // aggregate also badly understates real billed usage because it ignores the
 // per-turn cache READS that dominate a long agent run). The real split lives in
 // each subagent's own transcript at
-//   ~/.claude/projects/<encoded-cwd>/<sessionId>/subagents/agent-<agentId>.jsonl
+//   <config-dir>/projects/<encoded-cwd>/<sessionId>/subagents/agent-<agentId>.jsonl
 // Every assistant turn there carries a `message.usage` block
 // (`input_tokens` = uncached input, `cache_read_input_tokens`,
 // `cache_creation_input_tokens` with an `ephemeral_5m`/`ephemeral_1h` split, and
@@ -24,9 +24,27 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, dirname, basename } from "node:path";
 import { homedir } from "node:os";
 
+// ── config dir ──────────────────────────────────────────────────────────────
+
+/**
+ * The active Claude config dir. NEVER assume the home default: under a custom
+ * `CLAUDE_CONFIG_DIR` (CI containers, per-project configs, the bench harness)
+ * the home tree belongs to a different install, and reading it silently mixes
+ * two plugin trees in one run — issue #70. See plugins/sdlc/PLUGIN-PATHS.md.
+ */
+export function claudeConfigDir(env = process.env) {
+  const explicit = env.CLAUDE_CONFIG_DIR;
+  if (explicit) return explicit;
+  // The running plugin's own root is ground truth when the harness exported it.
+  const root = env.CLAUDE_PLUGIN_ROOT;
+  const at = root ? root.indexOf("/plugins/cache/") : -1;
+  if (at > 0) return root.slice(0, at);
+  return join(homedir(), ".claude");
+}
+
 // ── registry ────────────────────────────────────────────────────────────────
 
-const DEFAULT_REGISTRY = join(homedir(), ".claude", "plugins", "cache");
+const defaultRegistry = () => join(claudeConfigDir(), "plugins", "cache");
 
 /** Load the model registry (models.json). Returns { byId, multipliers, raw }. */
 export function loadRegistry(explicitPath) {
@@ -43,7 +61,7 @@ function findRegistry() {
   // Prefer the shipped copy next to this file's plugin, then the plugin cache.
   const local = join(dirname(dirname(new URL(".", import.meta.url).pathname)), "config", "models.json");
   if (existsSync(local)) return local;
-  const hits = globJsonl(DEFAULT_REGISTRY, /\/sdlc\/config\/models\.json$/);
+  const hits = globJsonl(defaultRegistry(), /\/sdlc\/config\/models\.json$/);
   return hits[0] || null;
 }
 
@@ -202,8 +220,9 @@ export function priceTranscripts(paths, registry) {
 /**
  * Resolve a subagent transcript for an agentId. Searches, in order:
  *   1. an explicit subagentsDir
- *   2. ~/.claude/projects/<cwd>/<session>/subagents/agent-<id>.jsonl (session-nested)
- *   3. ~/.claude/projects/<cwd>/subagents/agent-<id>.jsonl (flat)
+ *   2. <config-dir>/projects/<cwd>/<session>/subagents/agent-<id>.jsonl (session-nested)
+ *   3. <config-dir>/projects/<cwd>/subagents/agent-<id>.jsonl (flat)
+ * where <config-dir> is claudeConfigDir() — NOT unconditionally the home default.
  */
 export function findAgentTranscript(agentId, { subagentsDir, projectsRoot } = {}) {
   const name = `agent-${agentId}.jsonl`;
@@ -211,7 +230,7 @@ export function findAgentTranscript(agentId, { subagentsDir, projectsRoot } = {}
     const p = join(subagentsDir, name);
     if (existsSync(p)) return p;
   }
-  const root = projectsRoot || join(homedir(), ".claude", "projects");
+  const root = projectsRoot || join(claudeConfigDir(), "projects");
   const hits = globJsonl(root, new RegExp(`/subagents/${name.replace(/[.]/g, "\\.")}$`));
   return hits[0] || null;
 }

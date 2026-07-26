@@ -18,15 +18,16 @@ it never runs the pipeline.
 
 2. **`--list` fast path.** If `$ARGUMENTS` contains `--list`: `Glob <repo_root>/.claude/sdlc-workflows/*.yaml`,
    read each, and print a table (`recipe │ phases │ shadows-plugin?`). Cross-reference each `name`
-   against plugin recipes (`Glob ~/.claude/plugins/cache/**/workflows/*.yaml`) to flag which project
+   against plugin recipes (`Glob {PLUGIN_CACHE_ROOT}/**/workflows/*.yaml`, the cache root resolved
+   per `plugins/sdlc/PLUGIN-PATHS.md` — never a literal `~`) to flag which project
    recipes shadow a plugin recipe. If none exist, print `No project-local workflows configured.` and stop.
 
 3. **Discover valid choices** (so the user picks from real names, not free text):
    - **Existing project recipes:** `Glob <repo_root>/.claude/sdlc-workflows/*.yaml` (for editing/shadow warnings).
-   - **Plugin recipe names** (reserved / shadow detection): `Glob ~/.claude/plugins/cache/**/workflows/*.yaml`
+   - **Plugin recipe names** (reserved / shadow detection): `Glob {PLUGIN_CACHE_ROOT}/**/workflows/*.yaml`
      → collect each file's `name`.
    - **Available phase names:** read the ACTIVE stack's `manifest.yaml` (reuse Step 0b detection from
-     `pipeline-orchestrator/SKILL.md`, or `Glob ~/.claude/plugins/cache/**/manifest.yaml`) and offer the
+     `pipeline-orchestrator/SKILL.md`, or `Glob {PLUGIN_CACHE_ROOT}/**/manifest.yaml`) and offer the
      **keys of `agents_per_phase`** as the valid phase palette (e.g. Android: `business_analysis`,
      `debugging`, `development`, `review`, `security`, `test`, `qa`, `documentation`; vanilla:
      `business_analysis`, `development`, `qa`, `security`, `documentation`). A phase name that no active

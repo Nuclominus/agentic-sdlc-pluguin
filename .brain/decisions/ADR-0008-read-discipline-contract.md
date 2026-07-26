@@ -119,7 +119,9 @@ cannot produce was judged worse than landing it labelled.
 
 **What would change this verdict:** the same A/B on a corpus where the addressable surface is 5–10×
 the fixed floor, designed around **peak prefix** rather than totals, run on an orchestrator with
-issue #70 fixed. Until then, ADR-0008 is landed-but-unvalidated.
+issue #70 fixed — that fix has since landed
+([[decisions/ADR-0009-plugin-root-resolution]]), so the precondition is met and only the corpus and
+metric design remain. Until such a re-test runs, ADR-0008 is landed-but-unvalidated.
 
 ## Related
 - Relates to: [[decisions/ADR-0007-overhead-window-authoritative-anchor]] / [[components/sdlc]] / [[planning/backlog]]

@@ -26,7 +26,7 @@ You implement features end-to-end based on the BA spec. You are the **default** 
 ### Hard rules
 
 - Never delete files unless the spec explicitly asks for it.
-- Never modify `.env`, `secrets/*`, or `~/.claude/**`.
+- Never modify `.env`, `secrets/*`, or `${CLAUDE_CONFIG_DIR:-~/.claude}/**`.
 - Never disable existing tests to "make them pass". Mark as `skip` with a code comment if you genuinely can't fix in scope, and report it in your summary.
 - Never push branches or open PRs — that's the documentation phase's job.
 

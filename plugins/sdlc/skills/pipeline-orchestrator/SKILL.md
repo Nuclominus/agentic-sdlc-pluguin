@@ -27,7 +27,7 @@ You are the SDLC Pipeline Orchestrator. You coordinate specialist agents to deli
 
 - `$ARGUMENTS` — feature description from `/sdlc:start`. May contain `--stack=NAME` override.
 - Current project working directory.
-- Installed plugins under `~/.claude/plugins/cache/**`.
+- Installed plugins under `{PLUGIN_CACHE_ROOT}/**` — resolved in Step 0, never a literal `~`.
 
 ---
 
@@ -49,6 +49,34 @@ This single rule replaces the per-agent bilingual trigger keywords that were use
 
 ## Algorithm — 8 Steps
 
+### Step 0 — Resolve the plugin roots (FIRST — before any plugin read)
+
+Every plugin path below is expressed as `{SDLC_PLUGIN_ROOT}`, `{PLUGIN_CACHE_ROOT}` or
+`{CONFIG_DIR}`. Resolve all three **once**, with a single `Bash` call, before Step 0a:
+
+```bash
+CFG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+case "${CLAUDE_PLUGIN_ROOT:-}" in
+  */plugins/cache/*) CFG="${CLAUDE_PLUGIN_ROOT%%/plugins/cache/*}" ;;
+esac
+SDLC="${CLAUDE_PLUGIN_ROOT:-}"
+if [ -z "$SDLC" ]; then   # harness did not export it — find the newest cached sdlc
+  M=$(find "$CFG/plugins/cache" -path '*/sdlc/*config/models.json' 2>/dev/null | sort -V | tail -1)
+  [ -n "$M" ] && SDLC=$(dirname "$(dirname "$M")")
+fi
+printf 'CONFIG_DIR=%s\nPLUGIN_CACHE_ROOT=%s/plugins/cache\nSDLC_PLUGIN_ROOT=%s\n' "$CFG" "$CFG" "$SDLC"
+```
+
+Store the three values in `CONTEXT` and substitute them literally into every later `Glob`/`Read`
+path — `Glob` does not expand environment variables, so it must receive the resolved absolute path.
+
+Which root for which read, and why a hard-coded `~` is a bug (issue #70), is specified once in
+`plugins/sdlc/PLUGIN-PATHS.md`. Short form:
+
+- **self-referential** (`config/models.json`, `config/aspects.yaml`, `tools/**`) → `{SDLC_PLUGIN_ROOT}`;
+- **cross-plugin discovery** (`**/manifest.yaml`, `**/workflows/*.yaml`) → `{PLUGIN_CACHE_ROOT}`;
+- **session/user state** (preflight stamp, `projects/**` transcripts) → `{CONFIG_DIR}`.
+
 ### Step 0a — External plugin dependency preflight
 
 Aggregate runtime dependencies from **every installed plugin's `runtime-dependencies.json`**, not just core. This allows framework plugins to declare their own external skill needs.
@@ -57,12 +85,12 @@ Aggregate runtime dependencies from **every installed plugin's `runtime-dependen
 
 **Algorithm (with cache fast-path):**
 
-The preflight result is cached in `~/.claude/.sdlc-deps-preflight.json` to avoid repeating 11+ tool calls on every `/sdlc:start` invocation.
+The preflight result is cached in `{CONFIG_DIR}/.sdlc-deps-preflight.json` to avoid repeating 11+ tool calls on every `/sdlc:start` invocation. It is keyed to the config dir on purpose: a stamp written under one `CLAUDE_CONFIG_DIR` must never be read under another.
 
 **Fast-path (cache hit):**
 
 1. If `$ARGUMENTS` contains `--force-preflight`, skip to full scan below.
-2. Read `~/.claude/.sdlc-deps-preflight.json` (1 tool call).
+2. Read `{CONFIG_DIR}/.sdlc-deps-preflight.json` (1 tool call).
 3. If the file exists AND `all_satisfied == true`:
    - Load `results` into `CONTEXT` (set `CONTEXT.{plugin}_unavailable = true` for any `"missing"` entries).
    - Print: `🔧 Dependency preflight: cached (all satisfied)`
@@ -74,13 +102,13 @@ The preflight result is cached in `~/.claude/.sdlc-deps-preflight.json` to avoid
 
 **Full scan (cache miss):**
 
-1. Use `Glob ~/.claude/plugins/cache/**/runtime-dependencies.json` to find all declarations.
+1. Use `Glob {PLUGIN_CACHE_ROOT}/**/runtime-dependencies.json` to find all declarations.
 2. Read each file. Parse the `dependencies` array. Skip files with empty arrays silently.
 3. Merge declarations across plugins. If two plugins declare the same external dep with different policies, the strictest wins (`block` > `warn` > `graceful-degrade`).
 
 **Write cache stamp** (after full scan completes without `block` abort):
 
-Write `~/.claude/.sdlc-deps-preflight.json`:
+Write `{CONFIG_DIR}/.sdlc-deps-preflight.json`:
 
 ```json
 {
@@ -112,7 +140,7 @@ Try `mcp__skills__list_skills` first. If unavailable or it errors:
 AVAILABLE_SKILLS = set()
 For each entry in runtime-dependencies.json#dependencies:
   For each skill_name in entry.skills_used:
-    skill_path = ~/.claude/plugins/cache/{entry.name}/skills/{skill_name}/SKILL.md
+    skill_path = {PLUGIN_CACHE_ROOT}/**/{entry.name}/**/skills/{skill_name}/SKILL.md
     if Glob finds skill_path: AVAILABLE_SKILLS.add("{entry.name}:{skill_name}")
 ```
 
@@ -198,13 +226,13 @@ tree honest by handling the two kinds in separate steps.
 **0b-0. Load the shared aspect vocabulary** (once, used for `hosts_aspects: all` expansion and validation):
 
 ```
-TAXONOMY = parse(Glob("~/.claude/plugins/cache/**/sdlc/config/aspects.yaml"))   # { platform: [...], functional: [...] }
+TAXONOMY = parse(Read("{SDLC_PLUGIN_ROOT}/config/aspects.yaml"))   # { platform: [...], functional: [...] }
 ```
 
 **0b-1. Glob every manifest and split by `kind`:**
 
 ```
-manifests = [ parse(f) for f in Glob("~/.claude/plugins/cache/**/manifest.yaml") ]
+manifests = [ parse(f) for f in Glob("{PLUGIN_CACHE_ROOT}/**/manifest.yaml") ]
 FOUNDATIONS         = [ m for m in manifests if m.kind == "foundation" ]
 FRAMEWORK_MANIFESTS = [ m for m in manifests if m.kind == "framework" ]   # set aside; resolved in 0b-frameworks
 ```
@@ -595,7 +623,7 @@ Summary:
    When auto-selection fires, **MUST print** verbatim (CSV = the satisfied condition keys):
    `🧭 Auto-selected workflow '{name}' — matched: {csv of satisfied condition keys}. Override with --workflow=NAME or --no-auto-workflow.`
    Find the recipe — discovered across ALL plugins (core + platform plugins) via
-   `Glob ~/.claude/plugins/cache/**/workflows/{WORKFLOW_NAME}.yaml` AND from
+   `Glob {PLUGIN_CACHE_ROOT}/**/workflows/{WORKFLOW_NAME}.yaml` AND from
    `<project>/.claude/sdlc-workflows/{WORKFLOW_NAME}.yaml` (project-local recipes take highest
    precedence and shadow a plugin recipe of the same name). Ambiguous/missing → HALT per RESOLVER.md Step 1.
    If not found → HALT with the error message specified in RESOLVER.md Step 1.
@@ -654,7 +682,7 @@ files; a unit is done only when its checkpoint status ∈ {completed, skipped}).
 **1. Load the model registry** for pricing exactly as Step 3d-0 does:
 
 ```
-MODELS = parse(Glob("~/.claude/plugins/cache/**/sdlc/config/models.json"))
+MODELS = parse(Read("{SDLC_PLUGIN_ROOT}/config/models.json"))
 ```
 
 **2. Expand `CONTEXT.resolved_phases[]` into a flat list of dispatch rows.** Do NOT
@@ -1107,7 +1135,7 @@ Agent({
 **3d-0. Load the model registry** (once per run) — read the tag→model-ID map from the single source of truth:
 
 ```
-MODELS = parse(Glob("~/.claude/plugins/cache/**/sdlc/config/models.json"))   # { pipeline_tiers: [...], models: [ { tag, model_id, pricing: { input, cached_input, output } }, ... ] }
+MODELS = parse(Read("{SDLC_PLUGIN_ROOT}/config/models.json"))   # { pipeline_tiers: [...], models: [ { tag, model_id, pricing: { input, cached_input, output } }, ... ] }
 ```
 
 Resolve a tier to its concrete model ID via the `models[]` entry whose `tag` equals the declared tier. This registry is the single source of truth for model IDs **and pricing** — never hardcode either here.
@@ -1118,7 +1146,7 @@ Resolve a tier to its concrete model ID via the `models[]` entry whose `tag` equ
 2. **Aggregate only** — when the envelope exposes only a single aggregate count (this harness's shape: `<usage>subagent_tokens: N, tool_uses, duration_ms</usage>`) and NOT the split triple, record `subagent_tokens: N` **verbatim** on the phase entry and set `usage_source: "subagent_aggregate"`. Do NOT fabricate an `input_tokens`/`output_tokens`/`cached_input_tokens` split from it — leave those keys unset so real (unsplit) usage survives instead of being silently zeroed. `cost_usd` is left `null` **here**, but is filled in at Step 5b from the phase's subagent transcript (see below) — the aggregate count badly understates real billed usage because it ignores per-turn cache reads, so it is a fallback only.
 3. **No usage data** — estimate from prompt + summary character length / 4 and set `usage_source: "estimated"`.
 
-**Always** record `agent_id` on the phase entry — the subagent id from the Agent result envelope (e.g. `agentId: a1b2c3…`). For a multi-pass phase (e.g. dev plan + implement), record the list of ids. This is what Step 5b uses to locate each phase's subagent transcript (`~/.claude/projects/<encoded-cwd>/<session>/subagents/agent-<id>.jsonl`) and compute the **real** input/output/cache split and cost. It is the primary cost path; the shapes above are the live/fallback capture.
+**Always** record `agent_id` on the phase entry — the subagent id from the Agent result envelope (e.g. `agentId: a1b2c3…`). For a multi-pass phase (e.g. dev plan + implement), record the list of ids. This is what Step 5b uses to locate each phase's subagent transcript (`{CONFIG_DIR}/projects/<encoded-cwd>/<session>/subagents/agent-<id>.jsonl`) and compute the **real** input/output/cache split and cost. It is the primary cost path; the shapes above are the live/fallback capture.
 
 > **This is REQUIRED, not best-effort.** A phase whose `agent_id` is absent from `_telemetry.json` loses its real cost (the whole run then reads as aggregate/`$—`). Write the id verbatim into **both** the checkpoint (Step 3d-3) **and** the `phases[]` entry. Step 5b now recovers a missing id from `.checkpoint/<phase>.json` as a safety net, but do not rely on the net — record it here.
 
@@ -1421,7 +1449,7 @@ unless the user passed `--no-report` or the effective profile sets `report: fals
    a. **Resolve this run's session transcript (best-effort)** so the tool can derive the
       phase→`agent_id` map deterministically and price orchestration overhead even when a phase's
       `agent_id` never reached `_telemetry.json`. Encode the project cwd (`/`→`-`) and pick the
-      newest `~/.claude/projects/<encoded-cwd>/*.jsonl` (this session). Pass it as `--session`.
+      newest `{CONFIG_DIR}/projects/<encoded-cwd>/*.jsonl` (this session). Pass it as `--session`.
    b. Run via `Bash`:
       `node "${CLAUDE_PLUGIN_ROOT}/tools/usage/cli.mjs" enrich {task_slug}` — appending
       `--session "<path>"` when step (a) resolved one.
@@ -1684,7 +1712,7 @@ You **never**:
 - Run more than the post-pipeline checks via Bash. Delegate to agents.
 - Skip phases except per Step 0c skip-rules.
 - Continue past a failed phase validation without user input.
-- Modify files inside `~/.claude/plugins/cache/**`.
+- Modify files inside `{PLUGIN_CACHE_ROOT}/**`.
 
 You **always**:
 - Use file paths under `docs/plans/{task_slug}/` for inter-phase data.
@@ -1721,5 +1749,5 @@ Hard rules:
 | Agent does not exist (referenced in profile) | Halt. Print error: `Agent '{name}' referenced by {profile} not installed`. |
 | Agent fails (exception in subagent) | Mark phase as failed in telemetry. Ask user: retry / skip / abort. |
 | Post-pipeline check fails | Report; do not retry. The user decides next steps. |
-| `mcp__skills__list_skills` unavailable | Use FS fallback: check `~/.claude/plugins/cache/{plugin}/skills/{skill}/SKILL.md` exists. |
+| `mcp__skills__list_skills` unavailable | Use FS fallback: check `{PLUGIN_CACHE_ROOT}/**/{plugin}/**/skills/{skill}/SKILL.md` exists. |
 | Token budget exceeded | Halt at next phase boundary. Report partial telemetry. |

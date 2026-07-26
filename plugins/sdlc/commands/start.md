@@ -55,7 +55,7 @@ If any phase fails fatally (e.g. agent crashes, post-validation impossible to sa
 (For your reference — the skill itself contains the authoritative algorithm.)
 
 1. **Step 0a** — dependency preflight (reads `runtime-dependencies.json`, checks superpowers etc.).
-2. **Step 0b** — stack detection via Glob `~/.claude/plugins/cache/**/manifest.yaml` (split by `kind`). Picks highest-priority foundation. Prints `🎯 Detected stack: ...` (MANDATORY).
+2. **Step 0b** — stack detection via Glob `{PLUGIN_CACHE_ROOT}/**/manifest.yaml` (split by `kind`; the cache root is resolved in Step 0 from the running install, never a literal `~`). Picks highest-priority foundation. Prints `🎯 Detected stack: ...` (MANDATORY).
 3. **Step 0c** — skip-rules for trivial changes.
 4. **Step 1-2** — parse profile, generate `task_slug`, create `docs/plans/{task_slug}/`.
 5. **Step 3** — execute each phase (BA → Dev → [extras] → QA → Sec → Docs) via specialist agents. Compact handoffs.

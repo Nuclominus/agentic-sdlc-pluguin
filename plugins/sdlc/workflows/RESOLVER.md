@@ -24,8 +24,11 @@ used for `manifest.yaml` and `runtime-dependencies.json`). Glob both:
 
 ```text
 <project>/.claude/sdlc-workflows/{WORKFLOW_NAME}.yaml   # project-local (highest precedence)
-~/.claude/plugins/cache/**/workflows/{WORKFLOW_NAME}.yaml   # all plugins (core + platform)
+{PLUGIN_CACHE_ROOT}/**/workflows/{WORKFLOW_NAME}.yaml   # all plugins (core + platform)
 ```
+
+`{PLUGIN_CACHE_ROOT}` is the resolved cache root of the **active** config dir, not a literal `~` —
+resolve it per `plugins/sdlc/PLUGIN-PATHS.md` (orchestrator Step 0) before globbing.
 
 The plugin glob covers core (`sdlc/workflows/`) and every plugin that ships a `workflows/` directory
 (e.g. `<platform>-plugin/workflows/<recipe>.yaml`). Resolution:
@@ -56,7 +59,7 @@ If no file is found → **HALT**:
 ```text
 ❌ Workflow '{WORKFLOW_NAME}' not found.
    Searched: <project>/.claude/sdlc-workflows/{WORKFLOW_NAME}.yaml
-             ~/.claude/plugins/cache/**/workflows/{WORKFLOW_NAME}.yaml
+             {PLUGIN_CACHE_ROOT}/**/workflows/{WORKFLOW_NAME}.yaml
    Available: {list all *.yaml found via Glob of <project>/.claude/sdlc-workflows/*.yaml
               AND **/workflows/, excluding test-fixtures/ — annotate project-local ones as "(project)"}
    Omit --workflow=NAME to use the default workflow.

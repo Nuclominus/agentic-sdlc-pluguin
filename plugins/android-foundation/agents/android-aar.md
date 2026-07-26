@@ -32,7 +32,7 @@ When used as the `aar_analyst` override, the skill passes you:
  from `docs/plans/{slug}/_telemetry.json`. **Use these numbers verbatim. Never
  recompute costs from the transcript.**
 - ONE transcript file path
- (`~/.claude/projects/<encoded-cwd>/<session>.jsonl`). Read it by streaming/parsing
+ (`${CLAUDE_CONFIG_DIR:-~/.claude}/projects/<encoded-cwd>/<session>.jsonl`). Read it by streaming/parsing
  with a small Bash + Python script — do NOT load raw JSONL into your reasoning
  context; distill it.
 

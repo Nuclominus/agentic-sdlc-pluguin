@@ -20,10 +20,11 @@ runs the pipeline.
    the current `extensions.skills` rows as a table (`skill │ agents │ policy │ when`), and stop. If the
    file or block is absent, print `No extensions configured.` and stop.
 
-3. **Discover valid choices** (so the user picks from real names, not free text):
-   - **Agents:** `Glob ~/.claude/plugins/cache/**/agents/*.md`; the agent name is each file's
+3. **Discover valid choices** (so the user picks from real names, not free text). Resolve
+   `{PLUGIN_CACHE_ROOT}` first per `plugins/sdlc/PLUGIN-PATHS.md` — never glob a literal `~`:
+   - **Agents:** `Glob {PLUGIN_CACHE_ROOT}/**/agents/*.md`; the agent name is each file's
      frontmatter `name:` (fall back to the filename without `.md`). Also offer the literal `"all"`.
-   - **Skills:** `Glob ~/.claude/plugins/cache/**/skills/*/SKILL.md`; the id is
+   - **Skills:** `Glob {PLUGIN_CACHE_ROOT}/**/skills/*/SKILL.md`; the id is
      `{plugin_dir}:{skill_dir}`. If `mcp__skills__list_skills` is available, prefer it and normalize to
      the same `{plugin}:{skill}` form. De-duplicate and sort both lists.
 

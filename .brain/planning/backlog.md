@@ -79,7 +79,8 @@ the threshold never discriminated on a specimen this size. The contract itself c
 re-read every turn, ≈1.4% of a median run. It stays merged on engineering judgement (never worse
 on any metric measured; the specimen gave read discipline the least surface to act on), not on
 evidence. Any re-test needs a corpus with 5–10× the fixed floor, must measure **peak prefix**
-rather than totals, and must wait on issue #70. The original 101k peak / 6.65M cache-read /
+rather than totals, and must run on an orchestrator with issue #70 fixed — now landed, see
+[[decisions/ADR-0009-plugin-root-resolution]], so that precondition is met. The original 101k peak / 6.65M cache-read /
 117-turn baseline still lives in a downstream Android project's run history, not this repo, and
 remains the only production-scale reference point. Full record:
 [[architecture/benchmark-e2-read-discipline]].
@@ -180,6 +181,25 @@ Keeps contextual awareness concentrated and impactful, and directly reduces the 
 targets. Extends Track C1 (AAR learning cycle). **DoD:** new lessons are tagged; a phase loads only
 domain-relevant lessons rather than the whole file; floor contribution of lessons scales sub-linearly
 with lesson count.
+
+---
+
+## Track H — plugin discovery correctness
+
+### H1 — Filter foundation discovery to *enabled* plugins
+[[decisions/ADR-0009-plugin-root-resolution]] fixed **which tree** gets globbed (issue #70), but
+discovery still reads the plugin **cache**, which holds every plugin ever installed under that
+config dir — enabled or not. `enabledPlugins` in the config is never consulted, so a cached but
+disabled foundation can still satisfy its `detect` block, outscore the vanilla default on
+`priority`, and change the pipeline's phase composition, agent set and cost. The #70 fix bounds the
+blast radius to one config tree; it does not close this.
+
+Open design questions, which is why it is not folded into the fix: where enablement lives
+(`plugins/installed_plugins.json` vs. per-project settings), whether a plugin the project
+legitimately detects but has not enabled should warn rather than be skipped, and what a
+development checkout (plugin loaded from a local path, never "installed") should mean.
+**DoD:** foundation selection considers only plugins enabled for the active config dir; a detected
+but disabled foundation is reported, not silently used; a local-path development plugin still works.
 
 ---
 

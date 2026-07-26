@@ -31,3 +31,9 @@ test("`all` runs read-discipline and stays green", () => {
   assert.match(out, /"command":"read-discipline"/);
   assert.match(out, /"command":"all","ok":true/);
 });
+
+test("`all` runs plugin-paths and stays green", () => {
+  const out = execFileSync("node", [CLI, "all", "--json"], { cwd: REPO, encoding: "utf8" });
+  assert.match(out, /"command":"plugin-paths"/);
+  assert.match(out, /"command":"all","ok":true/);
+});

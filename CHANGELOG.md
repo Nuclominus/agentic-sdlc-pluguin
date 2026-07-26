@@ -4,6 +4,48 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+`sdlc` → `1.10.1`. Design in ADR-0009.
+
+### Fixed
+
+- **Orchestrator read the wrong plugin tree, ignoring `CLAUDE_CONFIG_DIR` (#70).** Plugin
+  discovery globbed a literal `~/.claude/plugins/cache/**` — 27 occurrences across 10 shipped
+  files, covering foundation detection, workflow recipe lookup, the model registry (tiers *and*
+  pricing), runtime-dependency declarations, skill-path fallbacks and the deps-preflight stamp.
+  Under a custom `CLAUDE_CONFIG_DIR` the pipeline therefore read the **operator's real home** while
+  running under a different config tree. Caught in the E2 benchmark harness: of nine identical
+  headless runs against a plain Kotlin/JVM specimen, one selected `android-foundation` — a plugin
+  enabled in **neither** arm — and ran its 7-phase pipeline instead of the 5-phase vanilla one.
+  Nondeterministic at ~1 in 9, so two runs of the same command on the same project could take
+  different pipelines. Every path now resolves from the running install via the three roots defined
+  in `plugins/sdlc/PLUGIN-PATHS.md` (`SDLC_PLUGIN_ROOT` / `PLUGIN_CACHE_ROOT` / `CONFIG_DIR`),
+  computed in a new orchestrator **Step 0** from `${CLAUDE_PLUGIN_ROOT}` with a
+  `${CLAUDE_CONFIG_DIR:-…}` fallback. Affects any non-default config dir — CI containers,
+  per-project configs, multi-version testing — not just the benchmark.
+- **Model registry could come from a different install than the one running.** The cache holds
+  several versions of one plugin side by side (`sdlc/1.9.0/`, `sdlc/1.10.0/`), so the
+  `**/sdlc/config/models.json` glob matched more than one registry and picked arbitrarily. The
+  registry and `config/aspects.yaml` are now `Read` from `{SDLC_PLUGIN_ROOT}` directly.
+- **`usage.mjs` hard-coded `homedir()`** for both the model registry and the `projects/**`
+  transcript root, giving transcript-derived cost the same defect in code. New exported
+  `claudeConfigDir()` resolves `CLAUDE_CONFIG_DIR` → `CLAUDE_PLUGIN_ROOT` → `$HOME`.
+
+### Added
+
+- **`sdlc-lint plugin-paths` drift guard.** Scans all shipped plugin text for home-anchored
+  `.claude` paths in every spelling (`~`, `$HOME`, `${HOME}`), allowing only
+  `${CLAUDE_CONFIG_DIR:-…}` (where a custom config dir still wins) plus an inline escape-hatch
+  marker that requires a stated reason; also asserts the orchestrator still references the path
+  contract. Wired into `sdlc-lint all` (`143/143 clean`) and CI. Same shape as the ADR-0008
+  `read-discipline` guard.
+
+### Known gap
+
+- Discovery still globs the **cache**, which holds every plugin installed under that config dir,
+  enabled or not — so a cached-but-disabled plugin can still win foundation selection. This fix
+  bounds the blast radius to one config tree; filtering to enabled plugins is tracked separately in
+  `.brain/planning/backlog.md`.
+
 ## [1.9.1] — 2026-07-08
 
 `sdlc` → `1.9.1` (other plugins unchanged). Point-fix to the transcript-derived

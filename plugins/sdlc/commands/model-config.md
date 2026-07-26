@@ -20,11 +20,14 @@ frontmatter → sonnet`. This command only edits config — it never runs the pi
    and print `default` plus the `agents` map as a table (`agent │ tier`). If the file is absent,
    print `No model overrides configured.` and stop.
 
-3. **Discover valid choices** (so the user picks from real names/tiers, not free text):
-   - **Tiers:** read `plugins/sdlc/config/models.json` (via `Glob ~/.claude/plugins/cache/**/sdlc/config/models.json`).
+3. **Discover valid choices** (so the user picks from real names/tiers, not free text). Resolve
+   `{SDLC_PLUGIN_ROOT}` / `{PLUGIN_CACHE_ROOT}` first per `plugins/sdlc/PLUGIN-PATHS.md` — never
+   glob a literal `~`:
+   - **Tiers:** `Read {SDLC_PLUGIN_ROOT}/config/models.json` (the running install's own registry —
+     a `**` glob would also match other cached versions of this plugin).
      Offer each tag in `pipeline_tiers`, annotated with its `model_id` and `pricing`
      (e.g. `haiku → claude-haiku-4-5-20251001  ($1/$5 per MTok)`).
-   - **Agents:** `Glob ~/.claude/plugins/cache/**/agents/*.md`; the agent name is each file's
+   - **Agents:** `Glob {PLUGIN_CACHE_ROOT}/**/agents/*.md`; the agent name is each file's
      frontmatter `name:` (fall back to filename without `.md`); record its frontmatter `model:` as
      the current default tier. De-duplicate and sort.
 

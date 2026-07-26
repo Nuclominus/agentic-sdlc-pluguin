@@ -131,7 +131,9 @@ a different tool for a different purpose.
   discipline the least room to act on; a null here does not transfer to a 500k-token codebase.
 - Measure **peak prefix**, not totals — that is where the only structure appeared, and it is what
   the contract actually targets.
-- Fix issue #70 first, or arm isolation is not isolation.
+- Fix issue #70 first, or arm isolation is not isolation. **Done** —
+  [[decisions/ADR-0009-plugin-root-resolution]]; the numbers above predate the fix and are not
+  comparable to anything measured after it.
 - Budget for the noise floor above when choosing N, instead of trusting `recommendN`.
 
 ## Related

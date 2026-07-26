@@ -190,7 +190,7 @@ the one-off tier bump is intentional, not accidental.
 - A read-only `aar` analyst subagent reads the deterministic metrics dashboard
   (`tools/aar/metrics.mjs` over `docs/plans/{slug}/_telemetry.json`) for cost
   accounting and parses the session transcript JSONL
-  (`~/.claude/projects/<encoded-cwd>/<session>.jsonl`) for cooperation signals —
+  (`${CLAUDE_CONFIG_DIR:-~/.claude}/projects/<encoded-cwd>/<session>.jsonl`) for cooperation signals —
   the only durable record of the run, since handoff envelopes are not persisted.
 - Produces findings bucketed into **agents / rules / settings / vault docs**, each
   with transcript evidence and a concrete proposed edit.
