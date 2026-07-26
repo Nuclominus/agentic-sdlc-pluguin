@@ -140,3 +140,5 @@ a different tool for a different purpose.
 - Validates (negatively): [[decisions/ADR-0008-read-discipline-contract]]
 - Instrument: [[planning/backlog]] (Track E — benchmark harness)
 - Touches: [[architecture/pipeline-orchestrator]] / [[components/sdlc]]
+- Visual twin: `bench/report/e2.html` (#75) — bilingual chart report rebuilt from the raw runs,
+  assertion-checked against `bench/RESULTS.md` at build time
