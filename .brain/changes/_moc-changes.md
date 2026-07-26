@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-07-26 | #69 | `feat` | — | [[changes/2026-07-26-PR-69-e2-benchmark-harness-reference-task-for-cache-read-measureme]] |
 | 2026-07-26 | #68 | `feat` | — | [[changes/2026-07-26-PR-68-read-discipline-contract-lint-guard-e2-1-10-0]] |
 | 2026-07-23 | #66 | `docs` | — | [[changes/2026-07-23-PR-66-clarify-intro-for-newcomers-dedicated-roadmap-topic]] |
 | 2026-07-23 | #64 | `feat` | — | [[changes/2026-07-23-PR-64-complete-c2-framework-providers-koin-ktor-datastore-proto]] |
