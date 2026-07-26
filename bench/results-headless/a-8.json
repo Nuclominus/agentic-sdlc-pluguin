@@ -1,0 +1,223 @@
+{
+  "manifest": {
+    "arm": "a",
+    "run": 8,
+    "plugin_version": "1.9.1",
+    "marketplace_sha": "9d1af30dd2e82937d608445399283bf33f1b0de7",
+    "config_dir": "/Users/roman/bench-env/arm-a",
+    "task_sha256": "2ba79777b0a5e8d1b948806f0daf24296f16beaf276b588078d2990260e5b12f",
+    "answers_sha256": "170e77f369c30c7e01cb22124c6fbd8b60a6fc1b1f18b7431b46a687bb98e439",
+    "inter_run_gap_seconds": 60,
+    "prepared_at": "2026-07-26T03:51:26.919Z"
+  },
+  "telemetry": {
+    "task_slug": "add-input-validation-to-createorder",
+    "stack": "vanilla",
+    "primary_profile": "vanilla",
+    "active_profiles": {},
+    "additive_profiles": [],
+    "profile_source": "sdlc/1.9.1/manifest.yaml",
+    "profile_fallback": {
+      "detected_profile": "android",
+      "detected_priority": 300,
+      "reason": "android-foundation matched detection (settings.gradle.kts + **/*.kt) but its agent roster (android-ba, android-developer, android-reviewer, android-security, android-tester, android-qa, android-docs) is not registered in this session; detection was also a false positive (plain Kotlin/JVM module, no Android SDK). Fell back to the vanilla foundation, whose agents are all available."
+    },
+    "narrative_language": "en",
+    "headless_mode": false,
+    "active_workflow": "default",
+    "workflow_autoselected": false,
+    "started_at": "2026-07-26T03:53:17Z",
+    "completed_at": "2026-07-26T04:22:08Z",
+    "wall_clock_seconds": 1731,
+    "model_enforcement_corrections": 0,
+    "phases": [
+      {
+        "phase": "business_analysis",
+        "aspect": null,
+        "agent": "sdlc:business-analyst",
+        "model": "claude-sonnet-5",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": "a0ad3eeb0d454e048",
+        "subagent_tokens": 31354,
+        "usage_source": "transcript",
+        "cost_usd": null,
+        "compact_summary_chars": 5924,
+        "compact_handoff_violation": true,
+        "input_tokens": 12,
+        "output_tokens": 14,
+        "cached_input_tokens": 72106,
+        "cache_creation_tokens": 28523,
+        "billed_tokens": 100655,
+        "turns": 6,
+        "peak_prefix_tokens": 25788,
+        "cache_pressure": false
+      },
+      {
+        "phase": "development",
+        "aspect": null,
+        "agent": "sdlc:developer",
+        "model": "claude-sonnet-5",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": [
+          "aa64df6597a332d1a",
+          "abc08809424f8dd17"
+        ],
+        "subagent_tokens": 27894,
+        "usage_source": "transcript",
+        "cost_usd": 0.19,
+        "compact_summary_chars": 1704,
+        "compact_handoff_violation": false,
+        "input_tokens": 30,
+        "output_tokens": 3115,
+        "cached_input_tokens": 266597,
+        "cache_creation_tokens": 43365,
+        "billed_tokens": 313107,
+        "turns": 15,
+        "peak_prefix_tokens": 25566,
+        "cache_pressure": false
+      },
+      {
+        "phase": "qa",
+        "aspect": null,
+        "agent": "sdlc:qa-engineer",
+        "model": "claude-sonnet-5",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": "a77b9ea9be525c490",
+        "qa_iterations_used": 1,
+        "qa_status": "completed",
+        "subagent_tokens": 23737,
+        "usage_source": "transcript",
+        "cost_usd": 0.08,
+        "compact_summary_chars": 1198,
+        "compact_handoff_violation": false,
+        "input_tokens": 18,
+        "output_tokens": 966,
+        "cached_input_tokens": 151556,
+        "cache_creation_tokens": 16885,
+        "billed_tokens": 169425,
+        "turns": 9,
+        "peak_prefix_tokens": 21324,
+        "cache_pressure": false
+      },
+      {
+        "phase": "security",
+        "aspect": null,
+        "agent": "sdlc:security-analyst",
+        "model": "claude-sonnet-5",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": "af156e4c4a996b849",
+        "subagent_tokens": 67562,
+        "usage_source": "transcript",
+        "cost_usd": null,
+        "compact_summary_chars": 2287,
+        "compact_handoff_violation": false,
+        "input_tokens": 36,
+        "output_tokens": 1677,
+        "cached_input_tokens": 592812,
+        "cache_creation_tokens": 79446,
+        "billed_tokens": 673971,
+        "turns": 18,
+        "peak_prefix_tokens": 58184,
+        "cache_pressure": false
+      },
+      {
+        "phase": "documentation",
+        "aspect": null,
+        "agent": "sdlc:document-writer",
+        "model": "claude-sonnet-5",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": "a539f0f222a74d7bc",
+        "subagent_tokens": 23563,
+        "usage_source": "transcript",
+        "cost_usd": 0.04,
+        "compact_summary_chars": 1793,
+        "compact_handoff_violation": false,
+        "input_tokens": 42,
+        "output_tokens": 9,
+        "cached_input_tokens": 66224,
+        "cache_creation_tokens": 23040,
+        "billed_tokens": 89315,
+        "turns": 5,
+        "peak_prefix_tokens": 22824,
+        "cache_pressure": false
+      }
+    ],
+    "out_of_band_dispatches": [
+      {
+        "reason": "scope-correction",
+        "agent": "sdlc:developer",
+        "agent_id": "a3bde862576e85dbd",
+        "subagent_tokens": 22874,
+        "note": "Reverted three out-of-scope production guards added during the security phase (negative unitPrice, unit-count overflow, total-value overflow) and re-ran the suite, which the security agent could not do (no shell tool in its roster)."
+      },
+      {
+        "reason": "failed-dispatch",
+        "agent": "android-ba",
+        "note": "Agent type not found; triggered the vanilla fallback recorded in profile_fallback. No tokens consumed."
+      }
+    ],
+    "skip_rules_applied": [],
+    "post_pipeline_checks": [],
+    "total_input_tokens": 138,
+    "total_output_tokens": 5781,
+    "total_cached_input_tokens": 1149295,
+    "total_subagent_tokens": 197084,
+    "total_cost_usd": 0.42,
+    "cost_basis": "transcript",
+    "cost_cap_usd": null,
+    "cap_status": "within",
+    "cache_hit_ratio": 1,
+    "deps_preflight": {
+      "superpowers": {
+        "status": "available",
+        "missing_skills": []
+      }
+    },
+    "touched_files": [
+      {
+        "status": "M",
+        "path": "app/src/main/kotlin/bench/domain/usecase/CreateOrder.kt"
+      },
+      {
+        "status": "M",
+        "path": "app/src/test/kotlin/bench/domain/usecase/CreateOrderTest.kt"
+      }
+    ],
+    "orchestration_overhead": {
+      "cost_usd": 0.11,
+      "main_loop": {
+        "model": "claude-opus-5",
+        "input_tokens": 34,
+        "output_tokens": 22008,
+        "cached_input_tokens": 2054990,
+        "cache_creation_tokens": 34481,
+        "turns": 19,
+        "cost_usd": null
+      },
+      "nested_subagents": {
+        "model": "claude-haiku-4-5-20251001, claude-sonnet-5",
+        "input_tokens": 52,
+        "output_tokens": 1584,
+        "cached_input_tokens": 153847,
+        "cache_creation_tokens": 33273,
+        "cache_write_5m_tokens": 33273,
+        "cache_write_1h_tokens": 0,
+        "billed_tokens": 188756,
+        "turns": 13,
+        "peak_prefix_tokens": 21255,
+        "cost_usd": 0.11,
+        "unpriced_models": 0
+      }
+    },
+    "total_cache_creation_tokens": 191259
+  },
+  "flags": [],
+  "live_check": "passed",
+  "enriched": "performed",
+  "harvested_at": "2026-07-26T04:23:46.645Z"
+}

@@ -1,0 +1,232 @@
+{
+  "manifest": {
+    "arm": "b",
+    "run": 1,
+    "plugin_version": "1.10.0",
+    "marketplace_sha": "5770fb5945adb9f829590883a460ff7275c165f7",
+    "config_dir": "/Users/roman/bench-env/arm-b",
+    "task_sha256": "2ba79777b0a5e8d1b948806f0daf24296f16beaf276b588078d2990260e5b12f",
+    "answers_sha256": "170e77f369c30c7e01cb22124c6fbd8b60a6fc1b1f18b7431b46a687bb98e439",
+    "inter_run_gap_seconds": 60,
+    "prepared_at": "2026-07-25T18:52:51.624Z"
+  },
+  "telemetry": {
+    "task_slug": "add-input-validation-to-createorder",
+    "stack": "vanilla",
+    "primary_profile": "vanilla",
+    "active_profiles": {
+      "backend": "vanilla",
+      "frontend": "vanilla",
+      "database": "vanilla",
+      "infra": "vanilla",
+      "testing": "vanilla"
+    },
+    "additive_profiles": [],
+    "profile_source": "sdlc/1.10.0/manifest.yaml",
+    "stack_detection_note": "android-foundation (priority 300) matched declaratively (settings.gradle.kts + **/*.kt) but was NOT used: none of its agents (android-ba, android-developer, ...) are registered as dispatchable agent types in this session, and the project is a plain kotlin-jvm module with no Android plugin, manifest, or Compose. Fell back to the vanilla foundation, whose agents are all available. Re-run with --stack=android to override.",
+    "active_workflow": "default",
+    "workflow_autoselected": false,
+    "narrative_language": "en",
+    "headless_mode": false,
+    "started_at": "2026-07-25T18:54:57Z",
+    "completed_at": "2026-07-25T19:21:17Z",
+    "wall_clock_seconds": 1580,
+    "model_enforcement_corrections": 0,
+    "phases": [
+      {
+        "phase": "business_analysis",
+        "aspect": null,
+        "agent": "business-analyst",
+        "model": "claude-opus-4-8",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": "a5199da875b2e09c9",
+        "subagent_tokens": 33649,
+        "usage_source": "transcript",
+        "cost_usd": null,
+        "compact_summary_chars": 4520,
+        "compact_handoff_violation": true,
+        "input_tokens": 20,
+        "output_tokens": 257,
+        "cached_input_tokens": 197511,
+        "cache_creation_tokens": 31160,
+        "billed_tokens": 228948,
+        "turns": 10,
+        "peak_prefix_tokens": 30937,
+        "cache_pressure": false
+      },
+      {
+        "phase": "development",
+        "aspect": null,
+        "agent": "developer",
+        "model": "claude-sonnet-5",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": [
+          "aadcb92b6381149c3",
+          "a967292433a85a532"
+        ],
+        "subagent_tokens": 21018,
+        "usage_source": "transcript",
+        "cost_usd": 0.12,
+        "compact_summary_chars": 1180,
+        "compact_handoff_violation": false,
+        "input_tokens": 22,
+        "output_tokens": 895,
+        "cached_input_tokens": 156315,
+        "cache_creation_tokens": 31418,
+        "billed_tokens": 188650,
+        "turns": 12,
+        "peak_prefix_tokens": 19451,
+        "cache_pressure": false
+      },
+      {
+        "phase": "qa",
+        "aspect": null,
+        "agent": "qa-engineer",
+        "model": "claude-sonnet-5",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": "a04185ca8ffa4b82b",
+        "qa_iterations_used": 1,
+        "qa_status": "completed",
+        "subagent_tokens": 28116,
+        "usage_source": "transcript",
+        "cost_usd": 0.12,
+        "compact_summary_chars": 880,
+        "compact_handoff_violation": false,
+        "input_tokens": 23,
+        "output_tokens": 1914,
+        "cached_input_tokens": 228541,
+        "cache_creation_tokens": 21380,
+        "billed_tokens": 251858,
+        "turns": 12,
+        "peak_prefix_tokens": 26436,
+        "cache_pressure": false
+      },
+      {
+        "phase": "security",
+        "aspect": null,
+        "agent": "security-analyst",
+        "model": "claude-opus-4-8",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": "a7d02aa42b3b0480d",
+        "subagent_tokens": 30573,
+        "usage_source": "transcript",
+        "cost_usd": null,
+        "compact_summary_chars": 2200,
+        "compact_handoff_violation": false,
+        "input_tokens": 20,
+        "output_tokens": 1053,
+        "cached_input_tokens": 161946,
+        "cache_creation_tokens": 29597,
+        "billed_tokens": 192616,
+        "turns": 10,
+        "peak_prefix_tokens": 25624,
+        "cache_pressure": false
+      },
+      {
+        "phase": "documentation",
+        "aspect": null,
+        "agent": "document-writer",
+        "model": "claude-haiku-4-5-20251001",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": "a22ff599726a7ca60",
+        "subagent_tokens": 17249,
+        "usage_source": "transcript",
+        "cost_usd": 0.03,
+        "compact_summary_chars": 940,
+        "compact_handoff_violation": false,
+        "input_tokens": 25,
+        "output_tokens": 3,
+        "cached_input_tokens": 13563,
+        "cache_creation_tokens": 23663,
+        "billed_tokens": 37254,
+        "turns": 3,
+        "peak_prefix_tokens": 13563,
+        "cache_pressure": false
+      }
+    ],
+    "dev_plan_pass": {
+      "agent_id": "aadcb92b6381149c3",
+      "model": "claude-sonnet-5",
+      "status": "approved",
+      "approval": "auto-approved by orchestrator (non-interactive run; small, fully-specified change)",
+      "subagent_tokens": 19115
+    },
+    "skip_rules_applied": [],
+    "skip_rules_note": "git has no origin/main (single-commit repo on master, no remote) — all Step 0c diff signals set to safe defaults, so no skip-rule fired.",
+    "post_pipeline_checks": [
+      {
+        "command": "./gradlew test",
+        "exit_code": 0
+      }
+    ],
+    "phase_validation_deviations": [
+      {
+        "phase": "documentation",
+        "rule": "must contain a PR URL or commit hash",
+        "outcome": "neither produced — the repository has no git remote, so `gh pr create` is impossible. The PR description was written to 05-pr.md instead, with a suggested branch name and commit message. No git history was mutated."
+      }
+    ],
+    "total_input_tokens": 110,
+    "total_output_tokens": 4122,
+    "total_cached_input_tokens": 757876,
+    "total_subagent_tokens": 130605,
+    "total_cost_usd": 0.29,
+    "cost_basis": "transcript",
+    "cost_cap_usd": null,
+    "cap_status": "within",
+    "cache_hit_ratio": 1,
+    "deps_preflight": {
+      "superpowers": {
+        "status": "available",
+        "missing_skills": [],
+        "source": "cache"
+      }
+    },
+    "touched_files": [
+      {
+        "status": "M",
+        "path": "app/src/main/kotlin/bench/domain/usecase/CreateOrder.kt"
+      },
+      {
+        "status": "M",
+        "path": "app/src/test/kotlin/bench/domain/usecase/CreateOrderTest.kt"
+      }
+    ],
+    "orchestration_overhead": {
+      "cost_usd": 0.02,
+      "main_loop": {
+        "model": "claude-opus-5",
+        "input_tokens": 31,
+        "output_tokens": 18576,
+        "cached_input_tokens": 1778492,
+        "cache_creation_tokens": 26279,
+        "turns": 17,
+        "cost_usd": null
+      },
+      "nested_subagents": {
+        "model": "claude-haiku-4-5-20251001",
+        "input_tokens": 41,
+        "output_tokens": 5,
+        "cached_input_tokens": 41075,
+        "cache_creation_tokens": 13195,
+        "cache_write_5m_tokens": 13195,
+        "cache_write_1h_tokens": 0,
+        "billed_tokens": 54316,
+        "turns": 5,
+        "peak_prefix_tokens": 12198,
+        "cost_usd": 0.02,
+        "unpriced_models": 0
+      }
+    },
+    "total_cache_creation_tokens": 137218
+  },
+  "flags": [],
+  "live_check": "passed",
+  "enriched": "performed",
+  "harvested_at": "2026-07-25T19:23:08.831Z"
+}

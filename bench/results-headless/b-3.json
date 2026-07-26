@@ -1,0 +1,236 @@
+{
+  "manifest": {
+    "arm": "b",
+    "run": 3,
+    "plugin_version": "1.10.0",
+    "marketplace_sha": "5770fb5945adb9f829590883a460ff7275c165f7",
+    "config_dir": "/Users/roman/bench-env/arm-b",
+    "task_sha256": "2ba79777b0a5e8d1b948806f0daf24296f16beaf276b588078d2990260e5b12f",
+    "answers_sha256": "170e77f369c30c7e01cb22124c6fbd8b60a6fc1b1f18b7431b46a687bb98e439",
+    "inter_run_gap_seconds": 60,
+    "prepared_at": "2026-07-25T20:55:53.512Z"
+  },
+  "telemetry": {
+    "task_slug": "add-input-validation-createorder",
+    "stack": "android",
+    "primary_profile": "android",
+    "active_profiles": {},
+    "additive_profiles": [],
+    "profile_source": "android-foundation/manifest.yaml",
+    "agent_roster_fallback": "vanilla — android-foundation agents (android-ba, android-developer, android-reviewer, android-tester, android-qa, android-docs, android-security) are not installed as dispatchable subagent types in this session",
+    "active_workflow": "default",
+    "workflow_fallback_reason": "android-feature recipe requires review/test phase agents that are not installed; fell back to the core 5-phase default recipe",
+    "narrative_language": "en",
+    "headless_mode": false,
+    "started_at": "2026-07-25T20:57:34Z",
+    "completed_at": "2026-07-25T21:13:07Z",
+    "wall_clock_seconds": 933,
+    "model_enforcement_corrections": 0,
+    "phases": [
+      {
+        "phase": "business_analysis",
+        "aspect": null,
+        "agent": "business-analyst",
+        "model": "claude-opus-4-8",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": "a5076d3d90e6c3f4a",
+        "subagent_tokens": 35223,
+        "usage_source": "transcript",
+        "cost_usd": null,
+        "compact_summary_chars": 3980,
+        "compact_handoff_violation": true,
+        "note": "agent has no write-capable tool; artifact persisted by the orchestrator from its returned deliverable",
+        "input_tokens": 20,
+        "output_tokens": 86,
+        "cached_input_tokens": 202764,
+        "cache_creation_tokens": 33022,
+        "billed_tokens": 235892,
+        "turns": 10,
+        "peak_prefix_tokens": 32335,
+        "cache_pressure": false
+      },
+      {
+        "phase": "development",
+        "aspect": null,
+        "agent": "developer",
+        "model": "claude-sonnet-5",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": [
+          "a5274c0defe2c8434",
+          "a8df353b8d1e05172"
+        ],
+        "subagent_tokens": 73832,
+        "usage_source": "transcript",
+        "cost_usd": 0.22,
+        "compact_summary_chars": 1520,
+        "compact_handoff_violation": false,
+        "note": "three dispatches: plan pass, implement pass, and a scope-revert pass removing the security phase's out-of-scope unitPrice guards",
+        "input_tokens": 40,
+        "output_tokens": 1524,
+        "cached_input_tokens": 395627,
+        "cache_creation_tokens": 48716,
+        "billed_tokens": 445907,
+        "turns": 20,
+        "peak_prefix_tokens": 29519,
+        "cache_pressure": false
+      },
+      {
+        "phase": "qa",
+        "aspect": null,
+        "agent": "qa-engineer",
+        "model": "claude-sonnet-5",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": "a710e6b199dffb815",
+        "qa_iterations_used": 1,
+        "qa_status": "completed",
+        "subagent_tokens": 26544,
+        "usage_source": "transcript",
+        "cost_usd": 0.09,
+        "compact_summary_chars": 940,
+        "compact_handoff_violation": false,
+        "input_tokens": 18,
+        "output_tokens": 778,
+        "cached_input_tokens": 169780,
+        "cache_creation_tokens": 19796,
+        "billed_tokens": 190372,
+        "turns": 9,
+        "peak_prefix_tokens": 24694,
+        "cache_pressure": false
+      },
+      {
+        "phase": "security",
+        "aspect": null,
+        "agent": "security-analyst",
+        "model": "claude-opus-4-8",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": "a0955396a3d05f3f9",
+        "subagent_tokens": 43129,
+        "usage_source": "transcript",
+        "cost_usd": null,
+        "compact_summary_chars": 1980,
+        "compact_handoff_violation": false,
+        "note": "agent has no Bash tool but edited production code; it could not verify its own change. Orchestrator re-ran tests and reverted the out-of-scope unitPrice fix.",
+        "input_tokens": 22,
+        "output_tokens": 1066,
+        "cached_input_tokens": 238593,
+        "cache_creation_tokens": 42103,
+        "billed_tokens": 281784,
+        "turns": 11,
+        "peak_prefix_tokens": 37191,
+        "cache_pressure": false
+      },
+      {
+        "phase": "documentation",
+        "aspect": null,
+        "agent": "document-writer",
+        "model": "claude-haiku-4-5-20251001",
+        "status": "completed",
+        "origin": "fresh",
+        "agent_id": "ab8e1ad7666dcd462",
+        "subagent_tokens": 18010,
+        "usage_source": "transcript",
+        "cost_usd": 0.02,
+        "compact_summary_chars": 1080,
+        "compact_handoff_violation": false,
+        "note": "no PR created — repository has no git remote and publishing was not authorized",
+        "input_tokens": 26,
+        "output_tokens": 6,
+        "cached_input_tokens": 22748,
+        "cache_creation_tokens": 17679,
+        "billed_tokens": 40459,
+        "turns": 3,
+        "peak_prefix_tokens": 15841,
+        "cache_pressure": false
+      }
+    ],
+    "skip_rules_applied": [],
+    "skip_rules_note": "git diff origin/main...HEAD failed (no remote, single-commit repo) — conservative defaults applied, no rule fired",
+    "post_pipeline_checks": [
+      {
+        "command": "sh -c './gradlew detekt 2>/dev/null || ./gradlew ktlintCheck 2>/dev/null || true'",
+        "exit_code": null,
+        "status": "skipped (task not configured on this project)"
+      },
+      {
+        "command": "sh -c './gradlew testDebugUnitTest'",
+        "exit_code": null,
+        "status": "skipped (Android-only task absent — plain JVM project)"
+      },
+      {
+        "command": "sh -c './gradlew compileDebugKotlin'",
+        "exit_code": null,
+        "status": "skipped (Android-only task absent — plain JVM project)"
+      },
+      {
+        "command": "./gradlew test",
+        "exit_code": 0,
+        "status": "373 tests, 0 failures, 0 skipped"
+      },
+      {
+        "command": "./gradlew compileKotlin compileTestKotlin",
+        "exit_code": 0
+      }
+    ],
+    "total_subagent_tokens": 196738,
+    "total_cost_usd": 0.43,
+    "cost_basis": "transcript",
+    "cache_hit_ratio": 1,
+    "cost_cap_usd": null,
+    "cap_status": "within",
+    "deps_preflight": {
+      "superpowers": {
+        "status": "available",
+        "missing_skills": [],
+        "source": "cache"
+      }
+    },
+    "touched_files": [
+      {
+        "status": "M",
+        "path": "app/src/main/kotlin/bench/domain/usecase/CreateOrder.kt"
+      },
+      {
+        "status": "M",
+        "path": "app/src/test/kotlin/bench/domain/usecase/CreateOrderTest.kt"
+      }
+    ],
+    "orchestration_overhead": {
+      "cost_usd": 0.1,
+      "main_loop": {
+        "model": "claude-opus-5",
+        "input_tokens": 42,
+        "output_tokens": 24323,
+        "cached_input_tokens": 2681922,
+        "cache_creation_tokens": 44967,
+        "turns": 23,
+        "cost_usd": null
+      },
+      "nested_subagents": {
+        "model": "claude-haiku-4-5-20251001, claude-sonnet-5",
+        "input_tokens": 54,
+        "output_tokens": 1906,
+        "cached_input_tokens": 144088,
+        "cache_creation_tokens": 29370,
+        "cache_write_5m_tokens": 29370,
+        "cache_write_1h_tokens": 0,
+        "billed_tokens": 175418,
+        "turns": 14,
+        "peak_prefix_tokens": 15051,
+        "cost_usd": 0.1,
+        "unpriced_models": 0
+      }
+    },
+    "total_input_tokens": 126,
+    "total_output_tokens": 3460,
+    "total_cached_input_tokens": 1029512,
+    "total_cache_creation_tokens": 161316
+  },
+  "flags": [],
+  "live_check": "passed",
+  "enriched": "performed",
+  "harvested_at": "2026-07-25T21:14:56.182Z"
+}
