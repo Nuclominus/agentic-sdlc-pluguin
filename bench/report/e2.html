@@ -1,0 +1,982 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>E2 read-discipline benchmark — campaign report</title>
+<style>
+  :root {
+    --page: #f9f9f7; --surface: #fcfcfb;
+    --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,.10);
+    --arm-a: #2a78d6; --arm-b: #eb6834;
+    --arm-a-soft: rgba(42,120,214,.09); --arm-b-soft: rgba(235,104,52,.09);
+    --arm-a-mid: rgba(42,120,214,.35); --arm-b-mid: rgba(235,104,52,.35);
+    --good: #0ca30c; --warn: #fab219; --serious: #ec835a; --critical: #d03b3b;
+    --chip-good-ink: #006300; --chip-serious-ink: #9c3a13; --chip-warn-ink: #8a6100;
+    --tint: rgba(137,135,129,.10);
+    --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --page: #0d0d0d; --surface: #1a1a19;
+      --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+      --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10);
+      --arm-a: #3987e5; --arm-b: #d95926;
+      --arm-a-soft: rgba(57,135,229,.14); --arm-b-soft: rgba(217,89,38,.14);
+      --arm-a-mid: rgba(57,135,229,.45); --arm-b-mid: rgba(217,89,38,.45);
+      --chip-good-ink: #0ca30c; --chip-serious-ink: #ec835a; --chip-warn-ink: #fab219;
+      --tint: rgba(137,135,129,.14);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --page: #0d0d0d; --surface: #1a1a19;
+    --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10);
+    --arm-a: #3987e5; --arm-b: #d95926;
+    --arm-a-soft: rgba(57,135,229,.14); --arm-b-soft: rgba(217,89,38,.14);
+    --arm-a-mid: rgba(57,135,229,.45); --arm-b-mid: rgba(217,89,38,.45);
+    --chip-good-ink: #0ca30c; --chip-serious-ink: #ec835a; --chip-warn-ink: #fab219;
+    --tint: rgba(137,135,129,.14);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--ink);
+    font: 16px/1.6 var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 56px 24px 96px; }
+
+  /* ---------- language toggle ---------- */
+  body[data-lang="uk"] .en { display: none !important; }
+  body:not([data-lang="uk"]) .uk { display: none !important; }
+  .langbar { display: flex; gap: 6px; justify-content: flex-end; margin-bottom: -8px; }
+  .lbtn {
+    font: 600 11.5px/1 var(--mono); letter-spacing: .08em;
+    color: var(--ink-2); background: var(--surface);
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 7px 14px; cursor: pointer;
+  }
+  .lbtn[aria-pressed="true"] { color: var(--page); background: var(--ink); border-color: var(--ink); }
+  .lbtn:focus-visible { outline: 2px solid var(--arm-a); outline-offset: 2px; }
+
+  /* ---------- typography ---------- */
+  h1 { font-size: 34px; line-height: 1.15; font-weight: 700; letter-spacing: -.015em; margin: 10px 0 8px; text-wrap: balance; }
+  h2 { font-size: 22px; line-height: 1.25; font-weight: 650; letter-spacing: -.01em; margin: 0 0 6px; text-wrap: balance; }
+  p  { max-width: 70ch; margin: 10px 0; color: var(--ink-2); }
+  p strong, li strong { color: var(--ink); font-weight: 600; }
+  section { margin-top: 72px; }
+  .eyebrow {
+    font: 600 11.5px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 12px;
+  }
+  .mono { font-family: var(--mono); }
+  code { font: 13px/1.5 var(--mono); background: var(--tint); padding: 1px 5px; border-radius: 4px; color: var(--ink-2); }
+  ul.lessons { max-width: 74ch; color: var(--ink-2); padding-left: 20px; }
+  ul.lessons li { margin: 10px 0; }
+
+  /* ---------- header ---------- */
+  header .datemeta { color: var(--muted); font: 13px/1.5 var(--mono); }
+  .armchips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+  .armchip {
+    display: inline-flex; align-items: center; gap: 8px;
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 5px 14px 5px 10px; font: 500 13px/1.4 var(--sans); color: var(--ink-2);
+    background: var(--surface);
+  }
+  .swatch { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .swatch.a { background: var(--arm-a); } .swatch.b { background: var(--arm-b); }
+
+  /* ---------- verdict hero ---------- */
+  .verdict-line { font-size: 40px; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; margin: 4px 0 10px; text-wrap: balance; }
+  .verdict-tag {
+    display: inline-block; margin: 6px 0 22px; padding: 6px 12px;
+    border: 1px solid var(--border); border-radius: 6px; background: var(--surface);
+    font: 500 12.5px/1.5 var(--mono); color: var(--ink-2);
+  }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .tile {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 18px 14px;
+  }
+  .tile .lbl { font: 500 12px/1.4 var(--sans); color: var(--muted); }
+  .tile .val { font-size: 27px; font-weight: 650; letter-spacing: -.01em; margin-top: 2px; }
+  .tile .sub { font: 400 12px/1.45 var(--sans); color: var(--muted); margin-top: 4px; }
+  .tile.fused { grid-column: span 2; display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; position: relative; }
+  .tile.fused .cell + .cell { border-left: 1px solid var(--border); padding-left: 18px; }
+  .tile.fused .bridge { grid-column: span 2; font: 400 12px/1.45 var(--sans); color: var(--ink-2); margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; }
+  @media (max-width: 760px) {
+    .tiles { grid-template-columns: 1fr 1fr; }
+    .tile.fused { grid-column: span 2; }
+    .verdict-line { font-size: 30px; }
+    h1 { font-size: 27px; }
+  }
+
+  /* ---------- method grid ---------- */
+  .factgrid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px;
+    background: var(--border); border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+    margin: 18px 0;
+  }
+  .fact { background: var(--surface); padding: 12px 16px; }
+  .fact .k { font: 500 11px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .fact .v { font-size: 14.5px; color: var(--ink); margin-top: 2px; }
+  @media (max-width: 700px) { .factgrid { grid-template-columns: 1fr 1fr; } .fact:last-child { grid-column: span 2; } }
+
+  /* ---------- chart cards ---------- */
+  .chart-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 18px 10px; margin: 22px 0 8px;
+  }
+  .chart-card h3 { font-size: 15.5px; font-weight: 600; margin: 0 0 2px; }
+  .chart-card .sub { font-size: 13px; color: var(--muted); margin: 0 0 10px; max-width: 80ch; }
+  .legend { display: flex; gap: 18px; align-items: center; font: 500 12.5px/1 var(--sans); color: var(--ink-2); margin: 4px 0 6px; }
+  .legend span.key { display: inline-flex; align-items: center; gap: 7px; }
+  .scrollx { overflow-x: auto; }
+  .scrollx svg { display: block; min-width: 700px; width: 100%; height: auto; }
+  figure { margin: 0; }
+  figcaption { font-size: 12.5px; color: var(--muted); padding: 8px 2px 6px; max-width: 84ch; line-height: 1.55; }
+
+  /* svg text/token classes */
+  svg text { font-family: var(--sans); }
+  .t-axis  { font: 400 11px var(--mono); fill: var(--muted); }
+  .t-lbl   { font: 500 11.5px var(--mono); fill: var(--ink-2); }
+  .t-strong{ font: 600 12px var(--sans); fill: var(--ink); }
+  .t-note  { font: 400 11.5px var(--sans); fill: var(--muted); }
+  .t-lbl, .t-strong, .t-note { paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
+  .gridline{ stroke: var(--grid); stroke-width: 1; }
+  .axisline{ stroke: var(--axis); stroke-width: 1; }
+  .dot-a { fill: var(--arm-a); stroke: var(--surface); stroke-width: 2; }
+  .dot-b { fill: var(--arm-b); stroke: var(--surface); stroke-width: 2; }
+  .dot-x { fill: none; stroke: var(--muted); stroke-width: 1.6; }
+  .band-a { fill: var(--arm-a-soft); } .band-b { fill: var(--arm-b-soft); }
+  .medtick-a { stroke: var(--arm-a); stroke-width: 3; }
+  .medtick-b { stroke: var(--arm-b); stroke-width: 3; }
+  .hit { fill: transparent; cursor: default; }
+  .hit:hover + circle { stroke: var(--ink); stroke-width: 2; }
+
+  /* ---------- callout ---------- */
+  .callout {
+    border: 1px solid var(--border); border-left: 3px solid var(--axis);
+    border-radius: 8px; background: var(--surface);
+    padding: 12px 16px; margin: 14px 0; max-width: 76ch;
+    font-size: 14px; color: var(--ink-2);
+  }
+  .callout strong { color: var(--ink); }
+
+  /* ---------- table ---------- */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; margin: 18px 0 6px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 640px; }
+  th {
+    text-align: right; font: 600 11px/1.3 var(--mono); letter-spacing: .06em; text-transform: uppercase;
+    color: var(--muted); padding: 10px 12px; border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  th:nth-child(1), th:nth-child(2), th:nth-child(3) { text-align: left; }
+  td { padding: 7px 12px; border-bottom: 1px solid var(--grid); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  td.num { text-align: right; font-family: var(--mono); font-size: 12.5px; }
+  tr:last-child td { border-bottom: none; }
+  tr.excl td { opacity: .55; }
+  tr.excl td .xtag { opacity: 1; }
+  .xtag {
+    font: 600 10px/1 var(--mono); letter-spacing: .05em; color: var(--ink-2);
+    border: 1px solid var(--axis); border-radius: 4px; padding: 2px 5px; margin-left: 8px; white-space: nowrap;
+  }
+  .fn { font-size: 12px; color: var(--muted); max-width: 80ch; }
+
+  /* ---------- defect cards ---------- */
+  .defects { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 18px; }
+  .defect {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px 16px;
+  }
+  .defect.wide { grid-column: span 2; }
+  .defect h3 { font-size: 15.5px; font-weight: 650; margin: 0 0 6px; padding-right: 8px; }
+  .defect p { font-size: 13.5px; margin: 6px 0; }
+  .defect .datum { font: 500 12px/1.6 var(--mono); color: var(--ink-2); background: var(--tint); border-radius: 6px; padding: 6px 10px; display: inline-block; margin-top: 6px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px; float: right;
+    font: 600 11px/1 var(--mono); letter-spacing: .04em;
+    border-radius: 999px; padding: 5px 10px; white-space: nowrap;
+  }
+  .chip svg { flex: none; }
+  .chip.fixed    { color: var(--chip-good-ink);    border: 1px solid var(--good); }
+  .chip.open     { color: var(--chip-serious-ink); border: 1px solid var(--serious); }
+  .chip.mitig    { color: var(--chip-warn-ink);    border: 1px solid var(--chip-warn-ink); }
+  @media (max-width: 720px) { .defects { grid-template-columns: 1fr; } .defect.wide { grid-column: span 1; } }
+
+  /* ---------- recorded inset / pre ---------- */
+  pre.inset {
+    font: 12.5px/1.7 var(--mono); color: var(--ink-2); background: var(--surface);
+    border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; overflow-x: auto; margin: 0;
+  }
+  details { margin: 14px 0; }
+  summary { cursor: pointer; font: 600 13px/1.5 var(--sans); color: var(--ink-2); }
+
+  /* ---------- tooltip ---------- */
+  #tt {
+    position: fixed; z-index: 10; pointer-events: none; display: none;
+    background: var(--ink); color: var(--page);
+    font: 500 12px/1.55 var(--mono); border-radius: 8px; padding: 8px 12px;
+    box-shadow: 0 4px 18px rgba(0,0,0,.25); max-width: 260px;
+  }
+
+  /* ---------- recommendation ---------- */
+  .rec {
+    border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+    padding: 20px 24px; margin-top: 18px;
+  }
+  .rec .big { font-size: 19px; font-weight: 650; color: var(--ink); max-width: 60ch; line-height: 1.4; }
+  .footer-note { margin-top: 64px; padding-top: 18px; border-top: 1px solid var(--border); font: 400 12px/1.7 var(--mono); color: var(--muted); }
+  .footer-note code { font-size: 11.5px; }
+  a { color: var(--ink-2); text-underline-offset: 2px; }
+</style>
+
+<div id="tt" role="status"></div>
+<div class="wrap">
+
+<header>
+  <div class="langbar" role="group" aria-label="Language / Мова">
+    <button type="button" class="lbtn" id="lb-en" aria-pressed="true">EN</button>
+    <button type="button" class="lbtn" id="lb-uk" aria-pressed="false">УКР</button>
+  </div>
+  <div class="eyebrow"><span class="en">SDLC marketplace · bench instrument · campaign report</span><span class="uk">SDLC marketplace · інструмент bench · звіт кампанії</span></div>
+  <h1><span class="en">E2 read-discipline benchmark</span><span class="uk">Бенчмарк E2 — дисципліна читання</span></h1>
+  <div class="datemeta"><span class="en">2026-07-26 · 20 headless runs · strict A-B alternation · $7.55 total</span><span class="uk">2026-07-26 · 20 headless-прогонів · строге чергування A–B · $7.55 разом</span></div>
+  <div class="armchips">
+    <span class="armchip"><span class="swatch a"></span><span class="en">arm A — <span class="mono">&nbsp;sdlc@1.9.1</span>&nbsp;(no contract)</span><span class="uk">плече A — <span class="mono">&nbsp;sdlc@1.9.1</span>&nbsp;(без контракту)</span></span>
+    <span class="armchip"><span class="swatch b"></span><span class="en">arm B — <span class="mono">&nbsp;sdlc@1.10.0</span>&nbsp;(PR #68 read-discipline contract)</span><span class="uk">плече B — <span class="mono">&nbsp;sdlc@1.10.0</span>&nbsp;(контракт дисципліни читання, PR #68)</span></span>
+  </div>
+</header>
+
+<!-- ══════════════ 1 · VERDICT ══════════════ -->
+<section id="verdict">
+  <div class="eyebrow"><span class="en">Verdict</span><span class="uk">Вердикт</span></div>
+  <div class="verdict-line"><span class="en">No measurable effect on cache-read.</span><span class="uk">Вимірного ефекту на cache-read немає.</span></div>
+  <p class="en">The campaign asked whether the read-discipline contract added in PR #68 — thirteen lines of
+  guidance in the orchestrator's stable prefix — reduces prompt-cache cost. It cannot say that it
+  does: the arm difference is smaller than the run-to-run noise of the instrument itself.</p>
+  <p class="uk">Кампанія перевіряла, чи зменшує контракт дисципліни читання з PR #68 — тринадцять рядків
+  настанов у стабільному префіксі оркестратора — вартість промпт-кешу. Сказати, що зменшує, вона не може:
+  різниця між плечима менша за міжпрогоновий шум самого інструмента.</p>
+  <div class="verdict-tag"><span class="en">engineering judgement, not a statistical test — at N=10 per arm no significance test is reachable</span><span class="uk">інженерне судження, а не статистичний тест — за N=10 на плече жоден тест значущості недосяжний</span></div>
+  <div class="tiles">
+    <div class="tile fused">
+      <div class="cell">
+        <div class="lbl"><span class="en">Δ cache-read median (B vs A)</span><span class="uk">Δ медіани cache-read (B проти A)</span></div>
+        <div class="val">−10.65%</div>
+      </div>
+      <div class="cell">
+        <div class="lbl"><span class="en">within-arm spread</span><span class="uk">розкид усередині плеча</span></div>
+        <div class="val">55.6–64.2%</div>
+      </div>
+      <div class="bridge"><span class="en">The delta sits well inside the noise — these two numbers are one finding and must travel together.</span><span class="uk">Дельта лежить глибоко всередині шуму — ці два числа є одним результатом і мають подорожувати разом.</span></div>
+    </div>
+    <div class="tile">
+      <div class="lbl"><span class="en">runs</span><span class="uk">прогони</span></div>
+      <div class="val">20</div>
+      <div class="sub"><span class="en">19 compared — a-4 excluded (issue #70)</span><span class="uk">порівняно 19 — a-4 виключено (issue #70)</span></div>
+    </div>
+    <div class="tile">
+      <div class="lbl"><span class="en">total spend</span><span class="uk">загальні витрати</span></div>
+      <div class="val">$7.55</div>
+      <div class="sub"><span class="en">≈ $0.38 per run, headless</span><span class="uk">≈ $0.38 за прогін, headless</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ 2 · METHOD ══════════════ -->
+<section id="method">
+  <div class="eyebrow"><span class="en">Method</span><span class="uk">Метод</span></div>
+  <h2><span class="en">How it was run</span><span class="uk">Як це виконувалось</span></h2>
+  <div class="factgrid">
+    <div class="fact"><div class="k"><span class="en">arms</span><span class="uk">плечі</span></div><div class="v"><span class="en">A = 1.9.1 · B = 1.10.0 (contract)</span><span class="uk">A = 1.9.1 · B = 1.10.0 (контракт)</span></div></div>
+    <div class="fact"><div class="k">N</div><div class="v"><span class="en">10 per arm, sequential</span><span class="uk">10 на плече, послідовно</span></div></div>
+    <div class="fact"><div class="k"><span class="en">order</span><span class="uk">порядок</span></div><div class="v"><span class="en">A B A B … strict alternation</span><span class="uk">A B A B … строге чергування</span></div></div>
+    <div class="fact"><div class="k"><span class="en">mode</span><span class="uk">режим</span></div><div class="v">headless <span class="mono">claude&nbsp;-p</span></div></div>
+    <div class="fact"><div class="k"><span class="en">isolation</span><span class="uk">ізоляція</span></div><div class="v"><span class="en">per-arm <span class="mono">CLAUDE_CONFIG_DIR</span>, ref-pinned</span><span class="uk">окремий <span class="mono">CLAUDE_CONFIG_DIR</span> на плече, зафіксований ref</span></div></div>
+    <div class="fact"><div class="k"><span class="en">gap</span><span class="uk">пауза</span></div><div class="v"><span class="en">60 s between runs, constant</span><span class="uk">60 с між прогонами, стало</span></div></div>
+    <div class="fact"><div class="k"><span class="en">specimen</span><span class="uk">зразок</span></div><div class="v"><span class="en">67 Kotlin files · 64,069 tokens</span><span class="uk">67 Kotlin-файлів · 64,069 токенів</span></div></div>
+    <div class="fact"><div class="k"><span class="en">corpus ratio</span><span class="uk">відношення корпусу</span></div><div class="v"><span class="en">3.05× the fixed prefix floor</span><span class="uk">3.05× фіксованого порога префікса</span></div></div>
+    <div class="fact"><div class="k"><span class="en">metric</span><span class="uk">метрика</span></div><div class="v"><span class="en">total cache-read tokens per run</span><span class="uk">сумарні токени cache-read на прогін</span></div></div>
+  </div>
+  <figure class="chart-card">
+    <h3><span class="en">Run order as executed</span><span class="uk">Порядок виконання прогонів</span></h3>
+    <p class="sub en">Alternation is the control that keeps slow drift — machine load, cache warmth — from masquerading as an arm effect. <code>compare.mjs</code> verifies it; it did not warn.</p>
+    <p class="sub uk">Чергування — це контроль, що не дає повільному дрейфу (навантаження машини, прогрітість кешу) видати себе за ефект плеча. <code>compare.mjs</code> перевіряє його; попереджень не було.</p>
+    <div class="scrollx" id="c-alt"></div>
+    <figcaption><span class="en">Runs 8–10 of each arm failed their first pass on an account session limit and were resumed
+    after reset (visible as the 4.5 h pause) — the driver's skip-if-harvested logic re-ran nothing already paid for.</span><span class="uk">Прогони 8–10 кожного плеча з першої спроби впали через ліміт сесії акаунта і були відновлені після
+    скидання (видно як паузу 4.5 год) — логіка skip-if-harvested драйвера не переганяла нічого вже оплаченого.</span></figcaption>
+  </figure>
+</section>
+
+<!-- ══════════════ 3 · EVIDENCE ══════════════ -->
+<section id="evidence">
+  <div class="eyebrow"><span class="en">Evidence</span><span class="uk">Докази</span></div>
+  <h2><span class="en">Twenty runs, two overlapping clouds</span><span class="uk">Двадцять прогонів, дві хмари, що перекриваються</span></h2>
+  <p class="en">Every observation, plotted. The arm medians differ by −10.65%, but the two distributions
+  overlap across most of their range — which is the finding.</p>
+  <p class="uk">Кожне спостереження — на графіку. Медіани плечей різняться на −10.65%, але два розподіли
+  перекриваються на більшій частині свого діапазону — і саме це є результатом.</p>
+  <figure class="chart-card">
+    <h3><span class="en">Total cache-read tokens per run</span><span class="uk">Сумарні токени cache-read на прогін</span></h3>
+    <div class="legend">
+      <span class="key"><span class="swatch a"></span><span class="en">arm A (n=10, 9 compared)</span><span class="uk">плече A (n=10, порівняно 9)</span></span>
+      <span class="key"><span class="swatch b"></span><span class="en">arm B (n=10)</span><span class="uk">плече B (n=10)</span></span>
+    </div>
+    <div class="scrollx" id="c-strip-cache"></div>
+    <figcaption><span class="en">Bands span each arm's min→max with the within-arm spread printed at the edge; ticks mark medians.
+    a-4 ran a 7-phase pipeline after the config-dir leak (issue #70) pulled Android agents into the arm —
+    it did strictly more work and is excluded from every statistic on this page.</span><span class="uk">Смуги охоплюють min→max кожного плеча, з розкидом плеча на краю; рисками позначено медіани.
+    a-4 виконав 7-фазний конвеєр після того, як витік config-dir (issue #70) затягнув у плече Android-агентів —
+    він зробив строго більше роботи і виключений з усіх статистик на цій сторінці.</span></figcaption>
+  </figure>
+  <div class="tablewrap" id="t1"></div>
+  <p class="fn en">† wall-clock as reported by the pipeline's own telemetry. The campaign driver's separate
+  poll counter under-reports across machine sleep (defect 3 below) — b-1's real elapsed span was 1,817 s.
+  Token counts are unaffected by either clock. This table is the accessible twin of every chart above and below.</p>
+  <p class="fn uk">† wall-clock за телеметрією самого конвеєра. Окремий лічильник опитування драйвера кампанії
+  недооблікує час під час сну машини (дефект 3 нижче) — реальний проміжок b-1 становив 1,817 с. Кількість
+  токенів від жодного з годинників не залежить. Ця таблиця — доступний двійник кожного графіка вище й нижче.</p>
+</section>
+
+<!-- ══════════════ 4 · NULL SIGNATURE ══════════════ -->
+<section id="null">
+  <div class="eyebrow"><span class="en">Null signature</span><span class="uk">Сигнатура нуля</span></div>
+  <h2><span class="en">Why this reads as a null</span><span class="uk">Чому це читається як нуль</span></h2>
+  <p class="en">Replaying the delta of medians after every completed run: early readings swung between −22.7%
+  and +22.6%, then the magnitude shrank as the standard error shrank. <strong>That is the shape of a
+  null being measured more precisely — not of an effect emerging.</strong> The 3-run pilot had already
+  said STOP at 42.3% spread; twenty runs confirmed the pilot rather than overturning it.</p>
+  <p class="uk">Переграємо дельту медіан після кожного завершеного прогону: ранні значення гойдалися між −22.7%
+  та +22.6%, а далі величина стискалась разом зі стандартною похибкою. <strong>Саме так виглядає нуль,
+  який вимірюють дедалі точніше, — а не ефект, що проявляється.</strong> 3-прогоновий пілот уже сказав СТОП
+  за розкиду 42.3%; двадцять прогонів підтвердили пілот, а не спростували його.</p>
+  <figure class="chart-card">
+    <h3><span class="en">Running Δ of cache-read medians (arm B vs arm A) as runs accumulated</span><span class="uk">Поточна Δ медіан cache-read (плече B проти A) з накопиченням прогонів</span></h3>
+    <div class="scrollx" id="c-conv"></div>
+    <figcaption><span class="en">Line: the full replay with a-4 excluded throughout, ending at −10.65%. Larger dots mark values that
+    also appear among the report's seven live readings. Those live readings — the early ones taken before a-4's
+    exclusion was decided — flipped sign four times (−22.7 → +22.6 → −5.5 → +9.9 → +6.8 → −4.0 → −10.65).
+    The verbatim verdict's −11.9% is this same endpoint computed with a-4 left in. No smoothing, no fit — any
+    curve drawn through this would imply inference the instrument cannot support.</span><span class="uk">Лінія — повне перегравання з виключеним a-4 упродовж усього шляху, фінал −10.65%. Більші крапки позначають
+    значення, що збігаються з сімома «живими» показами звіту. Ті живі покази — ранні зроблено до рішення про
+    виключення a-4 — чотири рази міняли знак (−22.7 → +22.6 → −5.5 → +9.9 → +6.8 → −4.0 → −10.65).
+    −11.9% з дослівного вердикту — та сама кінцева точка, порахована з a-4 у медіанах. Без згладжування і без
+    апроксимації — будь-яка проведена тут крива означала б висновки, яких інструмент не тягне.</span></figcaption>
+  </figure>
+</section>
+
+<!-- ══════════════ 5 · HYPOTHESIS ══════════════ -->
+<section id="asymmetry">
+  <div class="eyebrow"><span class="en">The one asymmetry — a hypothesis, not a finding</span><span class="uk">Єдина асиметрія — гіпотеза, а не результат</span></div>
+  <h2><span class="en">Arm B never exceeded 37,191 peak-prefix tokens. Arm A did, twice.</span><span class="uk">Плече B жодного разу не перевищило 37,191 токенів піка префікса. Плече A — двічі.</span></h2>
+  <p class="en">Peak prefix is what the contract actually targets — the ceiling, not the middle. Across ten runs
+  arm B never exceeded 37,191 tokens (spread 33%); arm A broke through twice, at 58,184 and 51,571
+  (spread 92%). The direction matches the mechanism.</p>
+  <p class="uk">Пік префікса — це те, у що контракт цілить насправді: стеля, а не середина. За десять прогонів
+  плече B жодного разу не перевищило 37,191 токенів (розкид 33%); плече A пробило цю межу двічі — 58,184
+  та 51,571 (розкид 92%). Напрям збігається з механізмом.</p>
+  <figure class="chart-card">
+    <h3><span class="en">Peak prefix tokens per run</span><span class="uk">Пік префікса на прогін</span></h3>
+    <div class="legend">
+      <span class="key"><span class="swatch a"></span><span class="en">arm A (n=10, 9 compared)</span><span class="uk">плече A (n=10, порівняно 9)</span></span>
+      <span class="key"><span class="swatch b"></span><span class="en">arm B (n=10)</span><span class="uk">плече B (n=10)</span></span>
+    </div>
+    <div class="scrollx" id="c-strip-peak"></div>
+    <figcaption><span class="en">a-4 (41,260) sits above the arm-B ceiling but is excluded — its peak belongs to a 7-phase Android
+    pipeline, not to vanilla arm A. The E2 definition-of-done (&lt;60k) is met by <em>both</em> arms, including the
+    arm without the contract — so on this specimen the threshold does not discriminate and cannot serve as the
+    acceptance criterion it was written to be.</span><span class="uk">a-4 (41,260) лежить вище стелі плеча B, але виключений — його пік належить 7-фазному Android-конвеєру,
+    а не ванільному плечу A. Критерій готовності E2 (&lt;60k) виконують <em>обидва</em> плеча, включно з плечем без
+    контракту, — тож на цьому зразку поріг не розрізняє і не може правити за критерій приймання, яким його писали.</span></figcaption>
+  </figure>
+  <div class="callout"><span class="en"><strong>Not evidence.</strong> Under a null of exchangeable peaks, the chance that the top
+  two of the 19 vanilla runs both land in arm A is (9/19)·(8/18) ≈ <strong>21%</strong> — one experiment in five
+  would produce this pattern by chance. It is filed as the design brief for a follow-up built around peaks,
+  not as a claim.</span><span class="uk"><strong>Це не доказ.</strong> За нульової гіпотези взаємозамінних піків імовірність того, що два найбільші
+  з 19 ванільних прогонів обидва потраплять у плече A, дорівнює (9/19)·(8/18) ≈ <strong>21%</strong> — такий візерунок
+  дав би випадок в одному експерименті з п'яти. Це зафіксовано як технічне завдання для наступного дослідження
+  навколо піків, а не як твердження.</span></div>
+</section>
+
+<!-- ══════════════ 6 · NOISE FLOOR ══════════════ -->
+<section id="noise">
+  <div class="eyebrow"><span class="en">Noise floor — the most reusable output</span><span class="uk">Шумовий поріг — найкорисніший результат</span></div>
+  <h2><span class="en">What the instrument itself measures at</span><span class="uk">На чому вимірює сам інструмент</span></h2>
+  <p class="en">Identical arm, identical task, identical specimen, identical machine: total cache-read still
+  varied <strong>55.6–64.2%</strong> within an arm, peak prefix 33–92%, and turn counts ran 46–61
+  across the 19 compared runs of the same 5-phase pipeline. Consequences for every future Track E experiment:</p>
+  <p class="uk">Те саме плече, та сама задача, той самий зразок, та сама машина: сумарний cache-read усе одно
+  коливався на <strong>55.6–64.2%</strong> усередині плеча, пік префікса — на 33–92%, а кількість ходів на
+  19 порівняних прогонах того самого 5-фазного конвеєра — від 46 до 61. Наслідки для кожного наступного
+  експерименту треку E:</p>
+  <ul class="lessons">
+    <li class="en"><strong>A single run proves nothing.</strong> Two runs of the same configuration routinely differ by more than any optimisation likely to ship.</li>
+    <li class="uk"><strong>Один прогін не доводить нічого.</strong> Два прогони однієї конфігурації регулярно різняться більше, ніж будь-яка оптимізація, яку ми реально відвантажимо.</li>
+    <li class="en"><strong>Any claimed improvement below ~50% is unverifiable</strong> by this instrument at n≈10. If the expected effect can't clear that bar, don't spend the money — or change what is measured.</li>
+    <li class="uk"><strong>Будь-яке заявлене покращення менше за ~50% неперевірюване</strong> цим інструментом за n≈10. Якщо очікуваний ефект не бере цю планку — не витрачайте гроші, або міняйте вимірюване.</li>
+    <li class="en"><strong><code>recommendN</code>'s ladder is miscalibrated.</strong> It maps &lt;10% spread → N=3, &lt;25% → N=4, ≥25% → STOP. Reality was 2.5× the STOP threshold. The advice to stop was right; the ladder below it is fiction at these magnitudes.</li>
+    <li class="uk"><strong>Драбина <code>recommendN</code> відкалібрована хибно.</strong> Вона зіставляє розкид &lt;10% → N=3, &lt;25% → N=4, ≥25% → STOP. Реальність — 2.5× порога STOP. Порада зупинитись була правильною; драбина під нею на таких величинах — фікція.</li>
+    <li class="en"><strong>Medians, not means — and report the spread beside every median.</strong> A number that outlives its spread becomes folklore.</li>
+    <li class="uk"><strong>Медіани, а не середні — і поруч із кожною медіаною подавайте розкид.</strong> Число, що переживе свій розкид, стає фольклором.</li>
+  </ul>
+  <figure class="chart-card">
+    <h3><span class="en">The structure that dissolved — turns × cache-read</span><span class="uk">Структура, що розчинилась — ходи × cache-read</span></h3>
+    <div class="legend">
+      <span class="key"><span class="swatch a"></span><span class="en">arm A (context)</span><span class="uk">плече A (контекст)</span></span>
+      <span class="key"><span class="swatch b"></span><span class="en">arm B (subject)</span><span class="uk">плече B (суб'єкт)</span></span>
+    </div>
+    <div class="scrollx" id="c-scatter"></div>
+    <figcaption><span class="en">At n=7 arm B looked cleanly bimodal — three short runs, four long ones, nothing between.
+    The eighth draw, b-8, landed in the gap. Three-versus-four draws from a skewed distribution had produced
+    a story; one more draw erased it. <strong>Structure seen at small n is this instrument's default failure
+    mode, not an exception to it.</strong> (y-axis starts at 0.6M — this chart is about cluster geometry,
+    not magnitude; the strip plot above carries the zero-based view.)</span><span class="uk">За n=7 плече B виглядало чисто бімодальним — три короткі прогони, чотири довгі, нічого між ними.
+    Восьмий витяг, b-8, ліг просто в розрив. Три-проти-чотирьох витягів зі скошеного розподілу склали історію;
+    ще один витяг стер її. <strong>Структура, побачена за малих n, — типовий режим відмови цього інструмента,
+    а не виняток.</strong> (Вісь y починається з 0.6M — цей графік про геометрію кластерів, а не про масштаб;
+    нульову базу несе стрічковий графік вище.)</span></figcaption>
+  </figure>
+</section>
+
+<!-- ══════════════ 7 · YIELD ══════════════ -->
+<section id="yield">
+  <div class="eyebrow"><span class="en">The yield</span><span class="uk">Здобуток</span></div>
+  <h2><span class="en">What the $7.55 actually bought: four defects</span><span class="uk">Що насправді купили $7.55: чотири дефекти</span></h2>
+  <p class="en">The campaign could not measure its effect — but running the instrument for real exposed four
+  defects, one of which is worth more than the answer would have been.</p>
+  <p class="uk">Кампанія не змогла виміряти свій ефект — але реальний запуск інструмента виявив чотири дефекти,
+  один з яких вартий більше, ніж коштувала б сама відповідь.</p>
+  <div class="defects">
+    <div class="defect wide">
+      <span class="chip fixed" id="chip-fixed"></span>
+      <h3><span class="en">1 · Config-dir leak — issue #70 <span style="font-size:12px; color:var(--muted); font-weight:400;">· the highest-value output of the whole campaign</span></span><span class="uk">1 · Витік config-dir — issue #70 <span style="font-size:12px; color:var(--muted); font-weight:400;">· найцінніший результат усієї кампанії</span></span></h3>
+      <p class="en">The orchestrator globbed a hard-coded <code>~/.claude/plugins/cache/**</code> instead of honouring
+      <code>CLAUDE_CONFIG_DIR</code>, so stack detection read the operator's real plugin tree — and discovery never
+      consulted <code>enabledPlugins</code>. One run in twenty (a-4) found <code>android-foundation</code> there and ran a
+      7-phase Android pipeline inside an arm where only <code>sdlc</code> was enabled. The same path also resolved
+      <code>models.json</code> (tiers <em>and pricing</em>), workflow recipes, and skill-path fallbacks.</p>
+      <p class="uk">Оркестратор глобив жорстко зашитий <code>~/.claude/plugins/cache/**</code> замість шанувати
+      <code>CLAUDE_CONFIG_DIR</code>, тож визначення стека читало справжнє дерево плагінів оператора — а виявлення
+      взагалі не звірялося з <code>enabledPlugins</code>. Один прогін із двадцяти (a-4) знайшов там
+      <code>android-foundation</code> і виконав 7-фазний Android-конвеєр у плечі, де ввімкнено лише <code>sdlc</code>.
+      Той самий шлях також розв'язував <code>models.json</code> (тіри <em>і ціни</em>), рецепти воркфлоу та фолбеки
+      шляхів скілів.</p>
+      <span class="datum"><span class="en">27 occurrences · 10 files · fixed in ADR-0009 / sdlc@1.10.1 — every number on this page predates the fix</span><span class="uk">27 входжень · 10 файлів · виправлено в ADR-0009 / sdlc@1.10.1 — кожне число на цій сторінці передує виправленню</span></span>
+    </div>
+    <div class="defect">
+      <span class="chip open" id="chip-open1"></span>
+      <h3><span class="en">2 · compare.mjs counts composition mismatches</span><span class="uk">2 · compare.mjs зараховує розбіжність складу</span></h3>
+      <p class="en">A run with a different phase count is reported in the <code>phases per-run</code> line but still enters
+      the medians. It should be dropped like a flagged run — a-4 had to be excluded by hand.</p>
+      <p class="uk">Прогін з іншою кількістю фаз показується в рядку <code>phases per-run</code>, але все одно потрапляє
+      в медіани. Його слід відкидати як позначений — a-4 довелося виключати вручну.</p>
+      <span class="datum"><span class="en">verbatim verdict −11.9% (a-4 in) vs corrected −10.65%</span><span class="uk">дослівний вердикт −11.9% (з a-4) проти виправлених −10.65%</span></span>
+    </div>
+    <div class="defect">
+      <span class="chip open" id="chip-open2"></span>
+      <h3><span class="en">3 · Wall-clock counter stalls in sleep</span><span class="uk">3 · Лічильник wall-clock завмирає уві сні</span></h3>
+      <p class="en">The driver's poll loop counts <code>sleep 10</code> iterations, which freeze while the machine sleeps —
+      so the per-run timeout is looser than declared. Token counts are unaffected. Use <code>date +%s</code> deltas.</p>
+      <p class="uk">Цикл опитування драйвера рахує ітерації <code>sleep 10</code>, які завмирають, коли машина спить, —
+      тож таймаут на прогін м'якший за заявлений. На кількість токенів це не впливає. Використовуйте різниці
+      <code>date +%s</code>.</p>
+      <span class="datum"><span class="en">b-1: 840 s counted vs 1,817 s real</span><span class="uk">b-1: нараховано 840 с проти 1,817 с реальних</span></span>
+    </div>
+    <div class="defect wide">
+      <span class="chip mitig" id="chip-mitig"></span>
+      <h3><span class="en">4 · Session limit truncates unattended campaigns</span><span class="uk">4 · Ліміт сесії обриває кампанії без нагляду</span></h3>
+      <p class="en">Runs 8–10 of both arms failed their first pass with <em>“You've hit your session limit.”</em> The driver's
+      skip-if-harvested resumability let the campaign continue after reset with no repeated spend — that one
+      property saved about $3 and three hours, and every future driver should have it.</p>
+      <p class="uk">Прогони 8–10 обох плечей з першої спроби впали з <em>“You've hit your session limit.”</em>
+      Відновлюваність skip-if-harvested дала кампанії продовжитися після скидання без повторних витрат — саме ця
+      властивість зекономила близько $3 і три години, і її мусить мати кожен наступний драйвер.</p>
+      <span class="datum"><span class="en">6 of 20 runs resumed · $0 re-spent</span><span class="uk">6 із 20 прогонів відновлено · $0 повторних витрат</span></span>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ 8 · RECOMMENDATION ══════════════ -->
+<section id="rec">
+  <div class="eyebrow"><span class="en">Recommendation</span><span class="uk">Рекомендація</span></div>
+  <div class="rec">
+    <div class="big"><span class="en">Do not attach a number to PR #68. The contract is defensible on its own terms — it costs
+    almost nothing and arm B is at worst neutral on every metric measured — but this instrument cannot show
+    that it works at this task size.</span><span class="uk">Не чіпляйте число до PR #68. Контракт можна обстояти сам по собі — він майже нічого не коштує,
+    і плече B щонайгірше нейтральне за кожною виміряною метрикою, — але цей інструмент не може показати,
+    що він працює на задачі такого розміру.</span></div>
+    <figure style="margin-top:18px">
+      <div class="scrollx" id="c-sliver"></div>
+      <figcaption><span class="en">The contract itself: ~230 tokens re-read every turn ≈ 11,800 cache-read tokens per run —
+      ≈1.3% of arm B's median. An estimate from token count × turn count, not a measured delta.</span><span class="uk">Сам контракт: ~230 токенів, перечитуваних щоходу ≈ 11,800 токенів cache-read на прогін —
+      ≈1.3% медіани плеча B. Оцінка з добутку кількості токенів на кількість ходів, а не виміряна дельта.</span></figcaption>
+    </figure>
+  </div>
+  <h2 style="margin-top:40px"><span class="en">Design brief for the next attempt</span><span class="uk">Технічне завдання для наступної спроби</span></h2>
+  <ul class="lessons">
+    <li class="en"><strong>Corpus 5–10× the fixed prefix floor, not 3×.</strong> This specimen gave read discipline the least room to act; a null here does not transfer to a 500k-token codebase.</li>
+    <li class="uk"><strong>Корпус у 5–10× фіксованого порога префікса, а не 3×.</strong> Цей зразок дав дисципліні читання найменше простору подіяти; нуль тут не переноситься на кодову базу в 500k токенів.</li>
+    <li class="en"><strong>Measure peak prefix, not totals</strong> — the only structure appeared in the ceiling, and the ceiling is what the contract targets.</li>
+    <li class="uk"><strong>Міряйте пік префікса, а не суми</strong> — єдина структура з'явилась у стелі, і саме в стелю цілить контракт.</li>
+    <li class="en"><strong>Issue #70 is fixed (ADR-0009)</strong> — arm isolation is now isolation; nothing measured before the fix is comparable to anything measured after it.</li>
+    <li class="uk"><strong>Issue #70 виправлено (ADR-0009)</strong> — ізоляція плечей тепер справді ізоляція; ніщо виміряне до виправлення не порівнюване з виміряним після нього.</li>
+    <li class="en"><strong>Budget N from the measured noise floor above</strong>, not from <code>recommendN</code>.</li>
+    <li class="uk"><strong>Плануйте N від виміряного шумового порога вище</strong>, а не від <code>recommendN</code>.</li>
+  </ul>
+</section>
+
+<!-- ══════════════ 9 · PROVENANCE ══════════════ -->
+<section id="prov">
+  <div class="eyebrow"><span class="en">Provenance</span><span class="uk">Походження</span></div>
+  <h2><span class="en">Where the ceiling risk lives, and what these numbers are not</span><span class="uk">Де живе ризик стелі, і чим ці числа не є</span></h2>
+  <figure class="chart-card">
+    <h3><span class="en">Peak prefix by phase — 19 vanilla runs, both arms pooled</span><span class="uk">Пік префікса за фазами — 19 ванільних прогонів, обидва плеча разом</span></h3>
+    <p class="sub en">Median (dot) and min→max range per phase. The run-level peak is set by security and business
+    analysis; documentation never comes close.</p>
+    <p class="sub uk">Медіана (крапка) і діапазон min→max на фазу. Пік прогону задають фази безпеки та бізнес-аналізу;
+    документація й близько не підходить.</p>
+    <div class="scrollx" id="c-phase"></div>
+    <figcaption><span class="en">Pooled across arms deliberately — a per-arm split here would draw ten bars encoding differences
+    the verdict says are not measurable. a-4's Android-agent phases are a different population and are excluded.</span><span class="uk">Зумисне об'єднано обидва плеча — розбивка за плечима намалювала б тут десять смуг із різницями,
+    які вердикт називає невимірними. Фази a-4 з Android-агентами — інша популяція, їх виключено.</span></figcaption>
+  </figure>
+  <details>
+    <summary><span class="en">Verbatim <span class="mono">compare.mjs</span> output (as recorded in bench/RESULTS.md)</span><span class="uk">Дослівний вивід <span class="mono">compare.mjs</span> (як записано в bench/RESULTS.md)</span></summary>
+    <pre class="inset" style="margin-top:10px">arm a  n=10
+  cache-read  median 993,935  range 812,137..1,333,334  spread 64.2%
+  peak-prefix median 35,873.5  range 30,366..58,184
+  turns       median 53
+  phases      per-run 5, 5, 5, 5, 7, 5, 5, 5, 5, 5 (a run count mismatch means the difference may be composition, not the thing under test)
+arm b  n=10
+  cache-read  median 875,481.5  range 697,117..1,084,970  spread 55.6%
+  peak-prefix median 32,449  range 27,990..37,191
+  turns       median 51.5
+  phases      per-run 5, 5, 5, 5, 5, 5, 5, 5, 5, 5 (a run count mismatch means the difference may be composition, not the thing under test)
+
+verdict (engineering judgement, not a statistical test): no measurable
+effect at this task size: the -11.9% difference is within the observed
+64.2% run-to-run spread
+E2 DoD (&lt;60k peak prefix): arm b median 32,449, range 27,990..37,191</pre>
+  </details>
+  <div class="callout"><span class="en"><strong>What these numbers are not.</strong> They describe a delta between two arms of one
+  experiment — same specimen, same task, same scripted conditions, same machine. They are <strong>not</strong> a
+  statistical result: at 10 runs per arm no significance test is reachable. They are <strong>not</strong> comparable
+  to the 101k-peak / 6.65M-cache-read production baseline in the backlog, which came from a 7-phase run on a
+  different codebase measured by a different tool. And they all <strong>predate the issue #70 fix</strong>.</span><span class="uk"><strong>Чим ці числа не є.</strong> Вони описують дельту між двома плечима одного експерименту —
+  той самий зразок, та сама задача, ті самі сценарні умови, та сама машина. Це <strong>не</strong> статистичний
+  результат: за 10 прогонів на плече жоден тест значущості недосяжний. Вони <strong>не</strong> порівнювані з
+  продакшн-базлайном 101k піка / 6.65M cache-read у беклозі, що походить із 7-фазного прогону на іншій кодовій
+  базі, виміряного іншим інструментом. І всі вони <strong>передують виправленню issue #70</strong>.</span></div>
+  <div class="footer-note">
+    <span class="en">sources — <code>bench/RESULTS.md</code> · <code>.brain/architecture/benchmark-e2-read-discipline.md</code> ·
+    raw runs <code>bench/results-headless/{a,b}-{1..10}.json</code> · instrument <code>bench/compare.mjs</code>
+    (medians; spread = (max−min)/min)<br>
+    every statistic on this page was recomputed from the raw run JSONs with the instrument's own
+    <code>median</code>/<code>spread</code>/<code>runMetrics</code> and assertion-checked against RESULTS.md before rendering.</span>
+    <span class="uk">джерела — <code>bench/RESULTS.md</code> · <code>.brain/architecture/benchmark-e2-read-discipline.md</code> ·
+    сирі прогони <code>bench/results-headless/{a,b}-{1..10}.json</code> · інструмент <code>bench/compare.mjs</code>
+    (медіани; розкид = (max−min)/min)<br>
+    кожну статистику на цій сторінці переобчислено з сирих JSON прогонів власними
+    <code>median</code>/<code>spread</code>/<code>runMetrics</code> інструмента і звірено твердженнями з RESULTS.md перед рендером.</span>
+  </div>
+</section>
+
+</div><!-- /wrap -->
+
+<script>
+const DATA = {"meta":{"date":"2026-07-26","arms":{"a":{"version":"sdlc@1.9.1","label":"no contract"},"b":{"version":"sdlc@1.10.0","label":"PR #68 read-discipline contract"}},"n_per_arm":10,"total_cost_usd":7.55,"specimen":{"files":67,"chars":256273,"tokens":64069,"ratio":3.05},"dod_threshold":60000,"b_ceiling":37191,"p_top_two_pct":21,"contract_cost":{"tokens_per_turn":230,"est_tokens_per_run":11800,"pct_of_b_median":1.3},"pilot":{"nA":3,"spread_pct":42.3},"turns_range_included":[46,61]},"runs":[{"id":"a-1","arm":"a","run":1,"prepared_at":"2026-07-25T18:35:38.264Z","phase_count":5,"phase_names":["business_analysis","development","qa","security","documentation"],"cache_read":979820,"peak_prefix":30366,"turns":56,"cost_usd":0.4,"wall_s":774,"excluded":false,"exclude_reason":null,"seq":1},{"id":"b-1","arm":"b","run":1,"prepared_at":"2026-07-25T18:52:51.624Z","phase_count":5,"phase_names":["business_analysis","development","qa","security","documentation"],"cache_read":757876,"peak_prefix":30937,"turns":47,"cost_usd":0.29,"wall_s":1580,"excluded":false,"exclude_reason":null,"seq":2},{"id":"a-2","arm":"a","run":2,"prepared_at":"2026-07-25T19:24:09.668Z","phase_count":5,"phase_names":["business_analysis","development","qa","security","documentation"],"cache_read":839714,"peak_prefix":35925,"turns":46,"cost_usd":0.36,"wall_s":3181,"excluded":false,"exclude_reason":null,"seq":3},{"id":"b-2","arm":"b","run":2,"prepared_at":"2026-07-25T20:22:07.092Z","phase_count":5,"phase_names":["business_analysis","development","qa","security","documentation"],"cache_read":1041730,"peak_prefix":35005,"turns":61,"cost_usd":0.34,"wall_s":883,"excluded":false,"exclude_reason":null,"seq":4},{"id":"a-3","arm":"a","run":3,"prepared_at":"2026-07-25T20:40:20.448Z","phase_count":5,"phase_names":["business_analysis","development","qa","security","documentation"],"cache_read":812137,"peak_prefix":32554,"turns":47,"cost_usd":0.38,"wall_s":732,"excluded":false,"exclude_reason":null,"seq":5},{"id":"b-3","arm":"b","run":3,"prepared_at":"2026-07-25T20:55:53.512Z","phase_count":5,"phase_names":["business_analysis","development","qa","security","documentation"],"cache_read":1029512,"peak_prefix":37191,"turns":53,"cost_usd":0.43,"wall_s":933,"excluded":false,"exclude_reason":null,"seq":6},{"id":"a-4","arm":"a","run":4,"prepared_at":"2026-07-25T21:15:57.136Z","phase_count":7,"phase_names":["business_analysis","development","review","security","test","qa","documentation"],"cache_read":1229027,"peak_prefix":41260,"turns":64,"cost_usd":0.62,"wall_s":1387,"excluded":true,"exclude_reason":"7-phase composition — config-dir leak, issue #70","seq":7},{"id":"b-4","arm":"b","run":4,"prepared_at":"2026-07-25T21:43:21.230Z","phase_count":5,"phase_names":["business_analysis","development","qa","security","documentation"],"cache_read":697117,"peak_prefix":29232,"turns":46,"cost_usd":0.29,"wall_s":628,"excluded":false,"exclude_reason":null,"seq":8},{"id":"a-5","arm":"a","run":5,"prepared_at":"2026-07-25T21:58:14.263Z","phase_count":5,"phase_names":["business_analysis","development","qa","security","documentation"],"cache_read":945724,"peak_prefix":32282,"turns":51,"cost_usd":0.4,"wall_s":699,"excluded":false,"exclude_reason":null,"seq":9},{"id":"b-5","arm":"b","run":5,"prepared_at":"2026-07-25T22:14:17.475Z","phase_count":5,"phase_names":["business_analysis","development","qa","security","documentation"],"cache_read":997714,"peak_prefix":35385,"turns":57,"cost_usd":0.36,"wall_s":702,"excluded":false,"exclude_reason":null,"seq":10},{"id":"a-6","arm":"a","run":6,"prepared_at":"2026-07-25T22:30:19.937Z","phase_count":5,"phase_names":["business_analysis","development","qa","security","documentation"],"cache_read":922672,"peak_prefix":36052,"turns":48,"cost_usd":0.38,"wall_s":767,"excluded":false,"exclude_reason":null,"seq":11},{"id":"b-6","arm":"b","run":6,"prepared_at":"2026-07-25T22:46:44.094Z","phase_count":5,"phase_names":["business_analysis","development","qa","security","documentation"],"cache_read":1084970,"peak_prefix":36353,"turns":54,"cost_usd":0.4,"wall_s":862,"excluded":false,"exclude_reason":null,"seq":12},{"id":"a-7","arm":"a","run":7,"prepared_at":"2026-07-25T23:05:17.764Z","phase_count":5,"phase_names":["business_analysis","development","qa","security","documentation"],"cache_read":1008050,"peak_prefix":34513,"turns":53,"cost_usd":0.45,"wall_s":820,"excluded":false,"exclude_reason":null,"seq":13},{"id":"b-7","arm":"b","run":7,"prepared_at":"2026-07-25T23:23:31.543Z","phase_count":5,"phase_names":["business_analysis","development","qa","security","documentation"],"cache_read":737023,"peak_prefix":27990,"turns":46,"cost_usd":0.28,"wall_s":727,"excluded":false,"exclude_reason":null,"seq":14},{"id":"a-8","arm":"a","run":8,"prepared_at":"2026-07-26T03:51:26.919Z","phase_count":5,"phase_names":["business_analysis","development","qa","security","documentation"],"cache_read":1149295,"peak_prefix":58184,"turns":53,"cost_usd":0.42,"wall_s":1731,"excluded":false,"exclude_reason":null,"seq":15},{"id":"b-8","arm":"b","run":8,"prepared_at":"2026-07-26T04:24:47.488Z","phase_count":5,"phase_names":["business_analysis","development","qa","security","documentation"],"cache_read":818408,"peak_prefix":33127,"turns":50,"cost_usd":0.33,"wall_s":629,"excluded":false,"exclude_reason":null,"seq":16},{"id":"a-9","arm":"a","run":9,"prepared_at":"2026-07-26T04:45:16.006Z","phase_count":5,"phase_names":["business_analysis","development","qa","security","documentation"],"cache_read":1333334,"peak_prefix":51571,"turns":59,"cost_usd":0.45,"wall_s":961,"excluded":false,"exclude_reason":null,"seq":17},{"id":"b-9","arm":"b","run":9,"prepared_at":"2026-07-26T05:04:49.845Z","phase_count":5,"phase_names":["business_analysis","development","qa","security","documentation"],"cache_read":932555,"peak_prefix":30897,"turns":55,"cost_usd":0.33,"wall_s":641,"excluded":false,"exclude_reason":null,"seq":18},{"id":"a-10","arm":"a","run":10,"prepared_at":"2026-07-26T05:19:23.021Z","phase_count":5,"phase_names":["business_analysis","development","qa","security","documentation"],"cache_read":1089920,"peak_prefix":35822,"turns":57,"cost_usd":0.34,"wall_s":768,"excluded":false,"exclude_reason":null,"seq":19},{"id":"b-10","arm":"b","run":10,"prepared_at":"2026-07-26T05:35:56.619Z","phase_count":5,"phase_names":["business_analysis","development","qa","security","documentation"],"cache_read":758908,"peak_prefix":31771,"turns":47,"cost_usd":0.3,"wall_s":806,"excluded":false,"exclude_reason":null,"seq":20}],"arm_stats":{"a":{"all":{"n":10,"cache_read":{"median":993935,"min":812137,"max":1333334,"spread":0.6417599493681485},"peak_prefix":{"median":35873.5,"min":30366,"max":58184,"spread":0.9160903642231443},"turns_median":53,"turns_min":46,"turns_max":64,"cost_total":4.2},"included":{"n":9,"cache_read":{"median":979820,"min":812137,"max":1333334,"spread":0.6417599493681485},"peak_prefix":{"median":35822,"min":30366,"max":58184,"spread":0.9160903642231443},"turns_median":53,"turns_min":46,"turns_max":59,"cost_total":3.58}},"b":{"all":{"n":10,"cache_read":{"median":875481.5,"min":697117,"max":1084970,"spread":0.5563671521423234},"peak_prefix":{"median":32449,"min":27990,"max":37191,"spread":0.32872454448017147},"turns_median":51.5,"turns_min":46,"turns_max":61,"cost_total":3.35},"included":{"n":10,"cache_read":{"median":875481.5,"min":697117,"max":1084970,"spread":0.5563671521423234},"peak_prefix":{"median":32449,"min":27990,"max":37191,"spread":0.32872454448017147},"turns_median":51.5,"turns_min":46,"turns_max":61,"cost_total":3.35}}},"delta":{"cache_read":-0.10648741605601028,"peak_prefix":-0.09416001339958685,"turns":-0.02830188679245283},"convergence":[{"after":"b-1","seq":2,"nA":1,"nB":1,"delta":-22.65,"recorded":true},{"after":"a-2","seq":3,"nA":2,"nB":1,"delta":-16.7,"recorded":false},{"after":"b-2","seq":4,"nA":2,"nB":2,"delta":-1.1,"recorded":false},{"after":"a-3","seq":5,"nA":3,"nB":2,"delta":7.16,"recorded":false},{"after":"b-3","seq":6,"nA":3,"nB":3,"delta":22.6,"recorded":true},{"after":"b-4","seq":8,"nA":3,"nB":4,"delta":6.43,"recorded":false},{"after":"a-5","seq":9,"nA":4,"nB":4,"delta":0.11,"recorded":false},{"after":"b-5","seq":10,"nA":4,"nB":5,"delta":11.76,"recorded":false},{"after":"a-6","seq":11,"nA":5,"nB":5,"delta":8.13,"recorded":false},{"after":"b-6","seq":12,"nA":5,"nB":6,"delta":9.86,"recorded":true},{"after":"a-7","seq":13,"nA":6,"nB":6,"delta":8.5,"recorded":false},{"after":"b-7","seq":14,"nA":6,"nB":7,"delta":6.8,"recorded":true},{"after":"a-8","seq":15,"nA":7,"nB":7,"delta":5.5,"recorded":false},{"after":"b-8","seq":16,"nA":7,"nB":8,"delta":-3.98,"recorded":true},{"after":"a-9","seq":17,"nA":8,"nB":8,"delta":-5.68,"recorded":false},{"after":"b-9","seq":18,"nA":8,"nB":9,"delta":-3.14,"recorded":false},{"after":"a-10","seq":19,"nA":9,"nB":9,"delta":-4.82,"recorded":false},{"after":"b-10","seq":20,"nA":9,"nB":10,"delta":-10.65,"recorded":true}],"phase_stats":[{"phase":"business_analysis","n":19,"peak":{"median":30937,"min":25788,"max":40476},"cache_median":153460},{"phase":"development","n":19,"peak":{"median":23473,"min":18613,"max":35114},"cache_median":213612},{"phase":"qa","n":19,"peak":{"median":25988,"min":21324,"max":34513},"cache_median":228541},{"phase":"security","n":19,"peak":{"median":30366,"min":25219,"max":58184},"cache_median":180853},{"phase":"documentation","n":19,"peak":{"median":18583,"min":13563,"max":27637},"cache_median":56805}]};
+
+/* ---------- i18n ---------- */
+const STR = {
+  en: {
+    excluded: "excluded",
+    tipCache: "cache-read", tipPeak: "peak prefix", tipTurns: "turns",
+    chrono: "chronological →",
+    pause: "4.5 h pause — session-limit reset",
+    altAria: "Run order: 20 runs alternating arm A and arm B, with a-4 marked excluded and a 4.5 hour pause before run a-8.",
+    spread: "spread",
+    armA: "arm A", armB: "arm B",
+    a4CacheLabel: "a-4 — excluded (7-phase, issue #70)",
+    cacheAria: "Strip plot of total cache-read tokens for all 20 runs by arm. Arm A median 979,820 with 64.2% spread; arm B median 875,481.5 with 55.6% spread. The distributions overlap widely; run a-4 is marked excluded.",
+    dodRef: "E2 DoD &lt;60k — met by both arms",
+    ceilRef: "arm B ceiling 37,191 — never exceeded",
+    a4PeakLabel: "a-4 · 41,260 (excluded)",
+    peakAria: "Strip plot of peak prefix tokens per run by arm, with reference lines at the E2 definition-of-done threshold of 60,000 and the arm B ceiling of 37,191. Arm A exceeds the ceiling twice at 58,184 and 51,571; arm B never does. Run a-4 at 41,260 is marked excluded.",
+    convHigher: "arm B reading higher than A", convLower: "arm B reading lower than A",
+    convFinal: "−10.65% (final)",
+    convAfter: "after", convRecorded: "≈ a recorded live reading", convDelta: "Δ medians",
+    convAxis: "runs compared (a-4 excluded) →",
+    convAria: "Line chart of the running delta of cache-read medians between arms as runs accumulated, swinging from minus 22.65 percent up to plus 22.6 percent before converging to minus 10.65 percent. The line crosses zero twice; larger dots mark values matching the report's live readings.",
+    gapLabel: "apparent gap at n=7",
+    cluster1: "3 runs · 46–47 turns", cluster2: "4 runs · 53–61 turns",
+    b8Label: "b-8 — the 8th draw landed in the gap",
+    a4Scatter: "a-4 (excluded)",
+    turnsAxis: "turns per run →",
+    scatterAria: "Scatter plot of turns versus cache-read tokens per run. Two dashed outlines mark the clusters arm B appeared to form after seven runs, separated by a tinted apparent gap; run b-8 is highlighted inside that gap, dissolving the bimodal pattern. Y axis starts at 0.6 million.",
+    th: ["#", "run", "arm", "phases", "cache-read", "peak prefix", "turns", "cost $", "wall s †"],
+    xtag: "EXCLUDED — 7-phase (issue #70)",
+    sliverContract: "contract ≈ 11,800 tokens/run (est.) — ≈1.3%",
+    sliverTotal: "arm B median cache-read — 875,481.5 tokens",
+    sliverAria: "A single horizontal bar representing arm B's median cache-read of 875,481 tokens, with a thin highlighted sliver on the left representing the contract's estimated 11,800 tokens, about 1.3 percent.",
+    phases: { business_analysis: "business analysis", development: "development", qa: "qa", security: "security", documentation: "documentation" },
+    dodShort: "DoD 60k",
+    secMax: "58,184 — campaign max (a-8)",
+    phaseTipMedian: "median", phaseTipRange: "range", phaseTipN: "n=19 vanilla runs",
+    phaseAria: "Dot and range chart of peak prefix tokens by pipeline phase over the 19 vanilla runs. Security and business analysis carry the highest medians and the security phase contains the campaign maximum of 58,184; documentation is lowest. A reference line marks the definition-of-done threshold at 60,000.",
+    chipFixed: "FIXED — ADR-0009", chipOpen: "OPEN", chipMitig: "MITIGATED",
+  },
+  uk: {
+    excluded: "виключено",
+    tipCache: "cache-read", tipPeak: "пік префікса", tipTurns: "ходи",
+    chrono: "хронологічно →",
+    pause: "пауза 4.5 год — скидання ліміту сесії",
+    altAria: "Порядок прогонів: 20 прогонів із чергуванням плеча A та плеча B; a-4 позначено виключеним, перед прогоном a-8 — пауза 4.5 години.",
+    spread: "розкид",
+    armA: "плече A", armB: "плече B",
+    a4CacheLabel: "a-4 — виключено (7 фаз, issue #70)",
+    cacheAria: "Стрічкова діаграма сумарних токенів cache-read для всіх 20 прогонів за плечима. Медіана плеча A — 979,820 з розкидом 64.2%; плеча B — 875,481.5 з розкидом 55.6%. Розподіли широко перекриваються; прогін a-4 позначено виключеним.",
+    dodRef: "E2 DoD &lt;60k — виконано обома плечима",
+    ceilRef: "стеля плеча B 37,191 — не перевищена жодного разу",
+    a4PeakLabel: "a-4 · 41,260 (виключено)",
+    peakAria: "Стрічкова діаграма піка префікса на прогін за плечима, з опорними лініями порога готовності E2 у 60,000 та стелі плеча B у 37,191. Плече A перевищує стелю двічі — 58,184 та 51,571; плече B — жодного разу. Прогін a-4 із 41,260 позначено виключеним.",
+    convHigher: "плече B читає більше за A", convLower: "плече B читає менше за A",
+    convFinal: "−10.65% (фінал)",
+    convAfter: "після", convRecorded: "≈ живий показ звіту", convDelta: "Δ медіан",
+    convAxis: "порівняних прогонів (без a-4) →",
+    convAria: "Лінійний графік поточної дельти медіан cache-read між плечима з накопиченням прогонів: від мінус 22.65% до плюс 22.6% зі сходженням до мінус 10.65%. Лінія двічі перетинає нуль; більші крапки позначають значення, що збігаються з живими показами звіту.",
+    gapLabel: "уявний розрив за n=7",
+    cluster1: "3 прогони · 46–47 ходів", cluster2: "4 прогони · 53–61 хід",
+    b8Label: "b-8 — восьмий витяг ліг у розрив",
+    a4Scatter: "a-4 (виключено)",
+    turnsAxis: "ходів на прогін →",
+    scatterAria: "Діаграма розсіювання: ходи проти токенів cache-read на прогін. Два пунктирні контури позначають кластери, які плече B нібито утворило після семи прогонів, розділені тонованим уявним розривом; прогін b-8 підсвічено всередині розриву — він розчиняє бімодальну картину. Вісь Y починається з 0.6 мільйона.",
+    th: ["#", "прогін", "плече", "фази", "cache-read", "пік префікса", "ходи", "вартість $", "wall s †"],
+    xtag: "ВИКЛЮЧЕНО — 7 фаз (issue #70)",
+    sliverContract: "контракт ≈ 11,800 токенів/прогін (оцінка) — ≈1.3%",
+    sliverTotal: "медіана cache-read плеча B — 875,481.5 токенів",
+    sliverAria: "Одна горизонтальна смуга — медіана cache-read плеча B у 875,481 токенів; тонкий підсвічений зріз ліворуч — оцінені 11,800 токенів контракту, близько 1.3 відсотка.",
+    phases: { business_analysis: "бізнес-аналіз", development: "розробка", qa: "qa", security: "безпека", documentation: "документація" },
+    dodShort: "DoD 60k",
+    secMax: "58,184 — максимум кампанії (a-8)",
+    phaseTipMedian: "медіана", phaseTipRange: "діапазон", phaseTipN: "n=19 ванільних прогонів",
+    phaseAria: "Діаграма «крапка з діапазоном» піка префікса за фазами конвеєра на 19 ванільних прогонах. Найвищі медіани — у фаз безпеки та бізнес-аналізу; максимум кампанії 58,184 — у фазі безпеки; документація найнижча. Опорна лінія позначає поріг готовності у 60,000.",
+    chipFixed: "ВИПРАВЛЕНО — ADR-0009", chipOpen: "ВІДКРИТО", chipMitig: "ПОМ'ЯКШЕНО",
+  },
+};
+let lang = "en";
+try { const s = localStorage.getItem("e2-lang"); if (s === "uk" || s === "en") lang = s; } catch (e) {}
+const t = (k) => STR[lang][k];
+
+/* ---------- helpers ---------- */
+const fmt = (n) => n.toLocaleString("en-US");
+const fmtM = (n) => (n / 1e6).toFixed(1).replace(/\.0$/, "") + "M";
+const fmtK = (n) => Math.round(n / 1e3) + "k";
+function hash(s) { let h = 0; for (const c of s) h = ((h << 5) - h + c.charCodeAt(0)) | 0; return Math.abs(h); }
+const jitter = (id, amp) => ((hash(id) % 1000) / 1000 - 0.5) * 2 * amp;
+const el = (id) => document.getElementById(id);
+
+const S = DATA.arm_stats;
+
+/* tooltip */
+const tt = el("tt");
+function bindTips(root) {
+  root.querySelectorAll("[data-tip]").forEach(n => {
+    const show = () => {
+      tt.innerHTML = n.dataset.tip; tt.style.display = "block";
+      const r = n.getBoundingClientRect();
+      let x = r.left + r.width / 2 + 12, y = r.top - 8;
+      tt.style.left = Math.min(x, innerWidth - 280) + "px";
+      tt.style.top = Math.max(8, y - tt.offsetHeight) + "px";
+    };
+    const hide = () => { tt.style.display = "none"; };
+    n.addEventListener("mouseenter", show); n.addEventListener("mouseleave", hide);
+  });
+}
+const tipRun = (r) => `<b>${r.id}</b>${r.excluded ? " — " + t("excluded") : ""}<br>${t("tipCache")} ${fmt(r.cache_read)}<br>${t("tipPeak")} ${fmt(r.peak_prefix)}<br>${t("tipTurns")} ${r.turns} · $${r.cost_usd.toFixed(2)}`;
+
+/* ---------- alternation strip ---------- */
+function drawAlt() {
+  const W = 860, H = 88, y = 34;
+  const xs = i => 40 + (i * (W - 150) / 19);
+  let s = "";
+  DATA.runs.forEach((r, i) => {
+    const x = xs(i);
+    const cls = r.excluded ? "dot-x" : (r.arm === "a" ? "dot-a" : "dot-b");
+    s += `<circle class="hit" data-tip="${tipRun(r)}" cx="${x}" cy="${y}" r="13"></circle>`;
+    s += `<circle class="${cls}" cx="${x}" cy="${y}" r="6"></circle>`;
+    if (r.excluded) s += `<line x1="${x-4}" y1="${y-4}" x2="${x+4}" y2="${y+4}" stroke="var(--muted)" stroke-width="1.6"/>`;
+    if (i % 2 === 0) s += `<text class="t-axis" x="${x}" y="${y + 26}" text-anchor="middle">${r.id}</text>`;
+  });
+  const gx = (xs(13) + xs(14)) / 2;
+  s += `<line x1="${gx}" y1="${y - 16}" x2="${gx}" y2="${y + 14}" stroke="var(--axis)" stroke-width="1" stroke-dasharray="3 3"/>`;
+  s += `<text class="t-note" x="${gx + 6}" y="${y - 18}">${t("pause")}</text>`;
+  s += `<text class="t-lbl" x="${xs(0)-6}" y="${y-20}" >${t("chrono")}</text>`;
+  el("c-alt").innerHTML =
+    `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${t("altAria")}">${s}</svg>`;
+  bindTips(el("c-alt"));
+}
+
+/* ---------- strip plot factory ---------- */
+function stripPlot(mount, opt) {
+  const W = 860, H = opt.height || 430;
+  const M = { t: 26, r: 24, b: 34, l: 66 };
+  const plotH = H - M.t - M.b;
+  const yv = v => M.t + plotH * (1 - v / opt.yMax);
+  const colA = 280, colB = 570, bandW = 150, jitAmp = 42;
+  let s = "";
+  for (let v = 0; v <= opt.yMax - 1; v += opt.yStep) {
+    s += `<line class="gridline" x1="${M.l}" y1="${yv(v)}" x2="${W - M.r}" y2="${yv(v)}"/>`;
+    s += `<text class="t-axis" x="${M.l - 8}" y="${yv(v) + 4}" text-anchor="end">${opt.yFmt(v)}</text>`;
+  }
+  s += `<line class="axisline" x1="${M.l}" y1="${yv(0)}" x2="${W - M.r}" y2="${yv(0)}"/>`;
+  const stA = opt.statsA, stB = opt.statsB;
+  s += `<rect class="band-a" x="${colA - bandW/2}" y="${yv(stA.max)}" width="${bandW}" height="${yv(stA.min) - yv(stA.max)}" rx="4"/>`;
+  s += `<rect class="band-b" x="${colB - bandW/2}" y="${yv(stB.max)}" width="${bandW}" height="${yv(stB.min) - yv(stB.max)}" rx="4"/>`;
+  (opt.refs || []).forEach(rf => {
+    s += `<line x1="${M.l}" x2="${W - M.r}" y1="${yv(rf.v)}" y2="${yv(rf.v)}" stroke="${rf.color}" stroke-width="1.5" ${rf.dash ? `stroke-dasharray="6 5"` : ""}/>`;
+    s += `<text class="t-lbl" x="${W - M.r}" y="${yv(rf.v) - 6}" text-anchor="end" fill="var(--ink-2)">${rf.label}</text>`;
+  });
+  const mA = yv(stA.median), mB = yv(stB.median);
+  s += `<line class="medtick-a" x1="${colA - bandW/2 - 10}" x2="${colA + bandW/2 + 4}" y1="${mA}" y2="${mA}"/>`;
+  s += `<line class="medtick-b" x1="${colB - bandW/2 - 4}" x2="${colB + bandW/2 + 10}" y1="${mB}" y2="${mB}"/>`;
+  s += `<text class="t-strong" x="${colA - bandW/2 - 14}" y="${mA - 3}" text-anchor="end">${fmt(stA.median)}</text>`;
+  s += `<text class="t-note" x="${colA - bandW/2 - 14}" y="${mA + 13}" text-anchor="end">${t("spread")} ${opt.spreadA}</text>`;
+  s += `<text class="t-strong" x="${colB + bandW/2 + 14}" y="${mB - 3}">${fmt(stB.median)}</text>`;
+  s += `<text class="t-note" x="${colB + bandW/2 + 14}" y="${mB + 13}">${t("spread")} ${opt.spreadB}</text>`;
+  if (opt.delta) {
+    const mid = (colA + colB) / 2;
+    s += `<line x1="${colA + bandW/2 + 6}" y1="${mA}" x2="${colB - bandW/2 - 6}" y2="${mB}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="2 4"/>`;
+    s += `<text class="t-strong" x="${mid}" y="${(mA + mB) / 2 - 9}" text-anchor="middle">${opt.delta}</text>`;
+  }
+  const dots = [];
+  DATA.runs.forEach(r => {
+    const cx = (r.arm === "a" ? colA : colB) + jitter(r.id + opt.key, jitAmp);
+    const cy = yv(r[opt.key]);
+    dots.push({ r, cx, cy });
+  });
+  dots.forEach(d => {
+    s += `<circle class="hit" data-tip="${tipRun(d.r)}" cx="${d.cx}" cy="${d.cy}" r="13"></circle>`;
+    if (d.r.excluded) {
+      s += `<circle class="dot-x" cx="${d.cx}" cy="${d.cy}" r="5.5"></circle>`;
+      s += `<line x1="${d.cx-4}" y1="${d.cy-4}" x2="${d.cx+4}" y2="${d.cy+4}" stroke="var(--muted)" stroke-width="1.6"/>`;
+    } else {
+      s += `<circle class="${d.r.arm === "a" ? "dot-a" : "dot-b"}" cx="${d.cx}" cy="${d.cy}" r="5.5"></circle>`;
+    }
+  });
+  (opt.labels || []).forEach(L => {
+    const d = dots.find(x => x.r.id === L.id);
+    if (!d) return;
+    const tx = d.cx + (L.dx ?? 12), ty = d.cy + (L.dy ?? 4);
+    if (L.leader) s += `<line x1="${d.cx + 7}" y1="${d.cy}" x2="${tx - 4}" y2="${ty - 4}" stroke="var(--axis)" stroke-width="1"/>`;
+    s += `<text class="t-lbl" x="${tx}" y="${ty}">${L.text}</text>`;
+  });
+  s += `<text class="t-strong" x="${colA}" y="${H - 8}" text-anchor="middle" fill="var(--ink-2)">${t("armA")}</text>`;
+  s += `<text class="t-strong" x="${colB}" y="${H - 8}" text-anchor="middle" fill="var(--ink-2)">${t("armB")}</text>`;
+  el(mount).innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${opt.aria}">${s}</svg>`;
+  bindTips(el(mount));
+}
+
+function drawStripCache() {
+  stripPlot("c-strip-cache", {
+    key: "cache_read", yMax: 1450000, yStep: 200000, yFmt: v => v === 0 ? "0" : fmtM(v),
+    statsA: S.a.included.cache_read, statsB: S.b.all.cache_read,
+    spreadA: "64.2%", spreadB: "55.6%", delta: "Δ −10.65%",
+    labels: [
+      { id: "a-4", text: t("a4CacheLabel"), dx: 14, dy: -6, leader: true },
+      { id: "a-9", text: "a-9", dx: 12 }, { id: "b-4", text: "b-4", dx: 12 },
+    ],
+    aria: t("cacheAria"),
+  });
+}
+
+function drawStripPeak() {
+  stripPlot("c-strip-peak", {
+    key: "peak_prefix", yMax: 66000, yStep: 10000, yFmt: v => v === 0 ? "0" : fmtK(v),
+    height: 430,
+    statsA: S.a.included.peak_prefix, statsB: S.b.all.peak_prefix,
+    spreadA: "92%", spreadB: "33%",
+    refs: [
+      { v: 60000, color: "var(--axis)", label: t("dodRef") },
+      { v: 37191, color: "var(--arm-b)", dash: true, label: t("ceilRef") },
+    ],
+    labels: [
+      { id: "a-8", text: "a-8 · 58,184", dx: 12, dy: 2 },
+      { id: "a-9", text: "a-9 · 51,571", dx: 12, dy: 2 },
+      { id: "a-4", text: t("a4PeakLabel"), dx: 14, dy: -4, leader: true },
+    ],
+    aria: t("peakAria"),
+  });
+}
+
+/* ---------- convergence ---------- */
+function drawConv() {
+  const W = 860, H = 380, M = { t: 28, r: 130, b: 40, l: 60 };
+  const pts = DATA.convergence;
+  const x = i => M.l + (W - M.l - M.r) * (i / (pts.length - 1));
+  const y = v => M.t + (H - M.t - M.b) * (1 - (v + 30) / 60);
+  let s = "";
+  for (const v of [-30, -20, -10, 10, 20, 30])
+    s += `<line class="gridline" x1="${M.l}" y1="${y(v)}" x2="${W - M.r}" y2="${y(v)}"/>
+          <text class="t-axis" x="${M.l - 8}" y="${y(v) + 4}" text-anchor="end">${v > 0 ? "+" : ""}${v}%</text>`;
+  s += `<line x1="${M.l}" y1="${y(0)}" x2="${W - M.r}" y2="${y(0)}" stroke="var(--axis)" stroke-width="1.5"/>`;
+  s += `<text class="t-axis" x="${M.l - 8}" y="${y(0) + 4}" text-anchor="end">0%</text>`;
+  s += `<text class="t-note" x="${M.l + 6}" y="${y(24)}">${t("convHigher")}</text>`;
+  s += `<text class="t-note" x="${M.l + 6}" y="${y(-27)}">${t("convLower")}</text>`;
+  for (let i = 1; i < pts.length; i++) {
+    if (Math.sign(pts[i].delta) !== Math.sign(pts[i - 1].delta)) {
+      const f = Math.abs(pts[i - 1].delta) / (Math.abs(pts[i - 1].delta) + Math.abs(pts[i].delta));
+      const cx = x(i - 1) + f * (x(i) - x(i - 1));
+      s += `<line x1="${cx}" y1="${y(0) - 7}" x2="${cx}" y2="${y(0) + 7}" stroke="var(--ink-2)" stroke-width="2"/>`;
+    }
+  }
+  s += `<path d="${pts.map((p, i) => (i ? "L" : "M") + x(i) + " " + y(p.delta)).join(" ")}" fill="none" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  pts.forEach((p, i) => {
+    s += `<circle class="hit" data-tip="<b>${t("convAfter")} ${p.after}</b><br>nA=${p.nA} nB=${p.nB}<br>${t("convDelta")} ${p.delta > 0 ? "+" : ""}${p.delta}%${p.recorded ? "<br>" + t("convRecorded") : ""}" cx="${x(i)}" cy="${y(p.delta)}" r="12"></circle>`;
+    s += `<circle cx="${x(i)}" cy="${y(p.delta)}" r="${p.recorded ? 6 : 3.5}" fill="var(--ink)" stroke="var(--surface)" stroke-width="2"></circle>`;
+  });
+  const last = pts[pts.length - 1];
+  s += `<text class="t-strong" x="${x(pts.length - 1) + 12}" y="${y(last.delta) + 4}">${t("convFinal")}</text>`;
+  [0, 4, 8, 12, 17].forEach(i => {
+    s += `<text class="t-axis" x="${x(i)}" y="${H - 14}" text-anchor="middle">${pts[i].nA + pts[i].nB}</text>`;
+  });
+  s += `<text class="t-note" x="${(M.l + W - M.r) / 2}" y="${H - 0}" text-anchor="middle" font-size="11.5">${t("convAxis")}</text>`;
+  el("c-conv").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${t("convAria")}">${s}</svg>`;
+  bindTips(el("c-conv"));
+}
+
+/* ---------- scatter ---------- */
+function drawScatter() {
+  const W = 860, H = 420, M = { t: 26, r: 200, b: 46, l: 66 };
+  const x = v => M.l + (W - M.l - M.r) * ((v - 44) / (66 - 44));
+  const y = v => M.t + (H - M.t - M.b) * (1 - (v - 600000) / 800000);
+  let s = "";
+  for (let v = 600000; v <= 1400000; v += 200000)
+    s += `<line class="gridline" x1="${M.l}" y1="${y(v)}" x2="${W - M.r}" y2="${y(v)}"/>
+          <text class="t-axis" x="${M.l - 8}" y="${y(v) + 4}" text-anchor="end">${fmtM(v)}</text>`;
+  for (let v = 45; v <= 65; v += 5)
+    s += `<text class="t-axis" x="${x(v)}" y="${H - 26}" text-anchor="middle">${v}</text>`;
+  s += `<line class="axisline" x1="${M.l}" y1="${y(600000)}" x2="${W - M.r}" y2="${y(600000)}"/>`;
+  s += `<text class="t-note" x="${(M.l + W - M.r) / 2}" y="${H - 6}" text-anchor="middle">${t("turnsAxis")}</text>`;
+  s += `<rect x="${M.l}" y="${y(988000)}" width="${W - M.l - M.r}" height="${y(762000) - y(988000)}" fill="var(--tint)"/>`;
+  s += `<text class="t-note" x="${W - M.r - 8}" y="${y(875000) + 4}" text-anchor="end">${t("gapLabel")}</text>`;
+  const clusters = [
+    { x1: 45, x2: 48, y1: 690000, y2: 770000, lbl: t("cluster1") },
+    { x1: 52, x2: 62, y1: 990000, y2: 1095000, lbl: t("cluster2") },
+  ];
+  clusters.forEach(c => {
+    s += `<rect x="${x(c.x1)}" y="${y(c.y2)}" width="${x(c.x2) - x(c.x1)}" height="${y(c.y1) - y(c.y2)}" rx="12" fill="none" stroke="var(--arm-b-mid)" stroke-width="1.5" stroke-dasharray="5 4"/>`;
+    s += `<text class="t-note" x="${x(c.x2) + 8}" y="${(y(c.y1) + y(c.y2)) / 2 + 4}">${c.lbl}</text>`;
+  });
+  DATA.runs.forEach(r => {
+    const cx = x(r.turns), cy = y(Math.max(600000, Math.min(1400000, r.cache_read)));
+    s += `<circle class="hit" data-tip="${tipRun(r)}" cx="${cx}" cy="${cy}" r="12"></circle>`;
+    if (r.excluded) {
+      s += `<circle class="dot-x" cx="${cx}" cy="${cy}" r="5.5"></circle><line x1="${cx-4}" y1="${cy-4}" x2="${cx+4}" y2="${cy+4}" stroke="var(--muted)" stroke-width="1.6"/>`;
+    } else if (r.arm === "a") {
+      s += `<circle class="dot-a" cx="${cx}" cy="${cy}" r="5" opacity="0.45"></circle>`;
+    } else {
+      s += `<circle class="dot-b" cx="${cx}" cy="${cy}" r="${r.id === "b-8" ? 7.5 : 5.5}"></circle>`;
+    }
+  });
+  const b8 = DATA.runs.find(r => r.id === "b-8");
+  s += `<line x1="${x(b8.turns) + 10}" y1="${y(b8.cache_read) - 10}" x2="${x(b8.turns) + 44}" y2="${y(b8.cache_read) - 34}" stroke="var(--axis)" stroke-width="1"/>`;
+  s += `<text class="t-strong" x="${x(b8.turns) + 48}" y="${y(b8.cache_read) - 38}">${t("b8Label")}</text>`;
+  const a4 = DATA.runs.find(r => r.id === "a-4");
+  s += `<text class="t-lbl" x="${x(a4.turns) - 10}" y="${y(a4.cache_read) - 12}" text-anchor="end">${t("a4Scatter")}</text>`;
+  el("c-scatter").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${t("scatterAria")}">${s}</svg>`;
+  bindTips(el("c-scatter"));
+}
+
+/* ---------- Table T1 ---------- */
+function drawTable() {
+  let rows = DATA.runs.map(r => `
+    <tr${r.excluded ? ` class="excl"` : ""}>
+      <td class="num">${r.seq}</td>
+      <td class="mono">${r.id}${r.excluded ? `<span class="xtag">${t("xtag")}</span>` : ""}</td>
+      <td><span class="swatch ${r.arm}" style="display:inline-block;vertical-align:-1px"></span> ${r.arm.toUpperCase()}</td>
+      <td class="num">${r.phase_count}</td>
+      <td class="num">${fmt(r.cache_read)}</td>
+      <td class="num">${fmt(r.peak_prefix)}</td>
+      <td class="num">${r.turns}</td>
+      <td class="num">${r.cost_usd.toFixed(2)}</td>
+      <td class="num">${fmt(r.wall_s)}</td>
+    </tr>`).join("");
+  el("t1").innerHTML = `<table>
+    <thead><tr>${t("th").map(h => `<th>${h}</th>`).join("")}</tr></thead>
+    <tbody>${rows}</tbody></table>`;
+}
+
+/* ---------- contract sliver ---------- */
+function drawSliver() {
+  const W = 860, H = 96, barY = 34, barH = 20, x0 = 20, x1 = W - 20;
+  const total = S.b.all.cache_read.median;
+  const sliverW = Math.max(8, (11800 / total) * (x1 - x0));
+  let s = "";
+  s += `<rect x="${x0}" y="${barY}" width="${sliverW}" height="${barH}" rx="3" fill="var(--arm-b)"/>`;
+  s += `<rect x="${x0 + sliverW + 2}" y="${barY}" width="${x1 - x0 - sliverW - 2}" height="${barH}" rx="4" fill="var(--arm-b-soft)" stroke="var(--arm-b-mid)" stroke-width="1"/>`;
+  s += `<line x1="${x0 + sliverW / 2}" y1="${barY - 4}" x2="${x0 + sliverW / 2}" y2="${barY - 12}" stroke="var(--axis)" stroke-width="1"/>`;
+  s += `<text class="t-lbl" x="${x0}" y="${barY - 16}">${t("sliverContract")}</text>`;
+  s += `<text class="t-lbl" x="${x1}" y="${barY + barH + 22}" text-anchor="end">${t("sliverTotal")}</text>`;
+  el("c-sliver").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${t("sliverAria")}">${s}</svg>`;
+}
+
+/* ---------- per-phase dot-and-range ---------- */
+function drawPhase() {
+  const W = 860, H = 268, M = { t: 30, r: 40, b: 40, l: 190 };
+  const x = v => M.l + (W - M.l - M.r) * (v / 62000);
+  const rows = DATA.phase_stats;
+  const rowY = i => M.t + i * ((H - M.t - M.b) / (rows.length - 1) * 0.92) + 8;
+  let s = "";
+  for (let v = 0; v <= 60000; v += 10000)
+    s += `<line class="gridline" x1="${x(v)}" y1="${M.t - 10}" x2="${x(v)}" y2="${H - M.b + 8}"/>
+          <text class="t-axis" x="${x(v)}" y="${H - M.b + 24}" text-anchor="middle">${v === 0 ? "0" : fmtK(v)}</text>`;
+  s += `<line x1="${x(60000)}" y1="${M.t - 10}" x2="${x(60000)}" y2="${H - M.b + 8}" stroke="var(--axis)" stroke-width="1.5"/>`;
+  s += `<text class="t-lbl" x="${x(60000)}" y="${M.t - 16}" text-anchor="middle">${t("dodShort")}</text>`;
+  rows.forEach((p, i) => {
+    const yy = rowY(i);
+    s += `<text class="t-lbl" x="${M.l - 14}" y="${yy + 4}" text-anchor="end" fill="var(--ink)">${t("phases")[p.phase]}</text>`;
+    s += `<line x1="${x(p.peak.min)}" y1="${yy}" x2="${x(p.peak.max)}" y2="${yy}" stroke="var(--arm-a-mid)" stroke-width="3" stroke-linecap="round"/>`;
+    s += `<circle class="hit" data-tip="<b>${t("phases")[p.phase]}</b><br>${t("phaseTipMedian")} ${fmt(p.peak.median)}<br>${t("phaseTipRange")} ${fmt(p.peak.min)}..${fmt(p.peak.max)}<br>${t("phaseTipN")}" cx="${x(p.peak.median)}" cy="${yy}" r="12"></circle>`;
+    s += `<circle cx="${x(p.peak.median)}" cy="${yy}" r="5.5" fill="var(--arm-a)" stroke="var(--surface)" stroke-width="2"></circle>`;
+    s += `<text class="t-axis" x="${x(p.peak.median)}" y="${yy + 20}" text-anchor="middle">${fmt(p.peak.median)}</text>`;
+    if (p.phase === "security") s += `<text class="t-lbl" x="${x(p.peak.max)}" y="${yy - 12}" text-anchor="end">${t("secMax")}</text>`;
+  });
+  el("c-phase").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${t("phaseAria")}">${s}</svg>`;
+  bindTips(el("c-phase"));
+}
+
+/* ---------- status chips (icon + label, never color alone) ---------- */
+function chipSVG(kind) {
+  if (kind === "fixed") return `<svg aria-hidden="true" width="10" height="10" viewBox="0 0 10 10"><path d="M1.5 5.5l2.5 2.5 4.5-5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  if (kind === "open") return `<svg aria-hidden="true" width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="3.4" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>`;
+  return `<svg aria-hidden="true" width="10" height="10" viewBox="0 0 10 10"><path d="M5 1.2L9 8.5H1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+}
+function drawChips() {
+  el("chip-fixed").innerHTML = chipSVG("fixed") + t("chipFixed");
+  el("chip-open1").innerHTML = chipSVG("open") + t("chipOpen");
+  el("chip-open2").innerHTML = chipSVG("open") + t("chipOpen");
+  el("chip-mitig").innerHTML = chipSVG("mitig") + t("chipMitig");
+}
+
+/* ---------- render + language switch ---------- */
+function renderAll() {
+  drawAlt(); drawStripCache(); drawStripPeak(); drawConv(); drawScatter();
+  drawTable(); drawSliver(); drawPhase(); drawChips();
+}
+function setLang(l) {
+  lang = l;
+  document.body.dataset.lang = l;
+  document.documentElement.lang = l === "uk" ? "uk" : "en";
+  el("lb-en").setAttribute("aria-pressed", String(l === "en"));
+  el("lb-uk").setAttribute("aria-pressed", String(l === "uk"));
+  try { localStorage.setItem("e2-lang", l); } catch (e) {}
+  tt.style.display = "none";
+  renderAll();
+}
+el("lb-en").addEventListener("click", () => setLang("en"));
+el("lb-uk").addEventListener("click", () => setLang("uk"));
+setLang(lang);
+</script>
