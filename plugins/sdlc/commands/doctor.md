@@ -9,15 +9,21 @@ Snapshot of the pipeline's runtime environment. Reuses the same Step 0a prefligh
 
 ## What this command does
 
+0. **Resolve the plugin roots.** Run orchestrator Step 0 (`plugins/sdlc/PLUGIN-PATHS.md`) to get
+   `{SDLC_PLUGIN_ROOT}`, `{PLUGIN_CACHE_ROOT}` and `{CONFIG_DIR}`. Every path below uses them —
+   a literal `~` would read the operator's home instead of the active `CLAUDE_CONFIG_DIR` (#70).
+   Print the resolved `{PLUGIN_CACHE_ROOT}` in the report; it is the first thing to check when a
+   run picks an unexpected stack.
+
 1. **Locate the runtime dependencies file.** Try these paths in order, take the first that exists:
-   - `~/.claude/plugins/cache/sdlc/runtime-dependencies.json`
+   - `{SDLC_PLUGIN_ROOT}/runtime-dependencies.json`
    - `<repo>/plugins/sdlc/runtime-dependencies.json` (development checkout)
 
    If neither exists, print `🔌 Dependency preflight: no runtime-dependencies.json found.` and skip step 2.
 
-2. **Run the same preflight algorithm as Step 0a in `pipeline-orchestrator/SKILL.md`** (Step 0a-2 through 0a-3 — enumerate available skills via `mcp__skills__list_skills` with FS fallback to `~/.claude/plugins/cache/{plugin}/skills/{skill}/SKILL.md`, then compute per-dependency status). DO NOT enforce policy in `/sdlc:doctor` — `block` does NOT exit here. Just collect status.
+2. **Run the same preflight algorithm as Step 0a in `pipeline-orchestrator/SKILL.md`** (Step 0a-2 through 0a-3 — enumerate available skills via `mcp__skills__list_skills` with FS fallback to `{PLUGIN_CACHE_ROOT}/**/{plugin}/**/skills/{skill}/SKILL.md`, then compute per-dependency status). DO NOT enforce policy in `/sdlc:doctor` — `block` does NOT exit here. Just collect status.
 
-3. **Locate active stack profiles.** Reuse Step 0b logic from the orchestrator: `Glob ~/.claude/plugins/cache/**/manifest.yaml`, parse each, split by `kind`, evaluate `kind: foundation` detect rules against the current project. Identify the primary profile that would be selected.
+3. **Locate active stack profiles.** Reuse Step 0b logic from the orchestrator: `Glob {PLUGIN_CACHE_ROOT}/**/manifest.yaml`, parse each, split by `kind`, evaluate `kind: foundation` detect rules against the current project. Identify the primary profile that would be selected.
 
 3b. **Probe host capability.** Run `uname -s -m` for the OS/arch, then best-effort probe the host toolchains relevant to installed stack plugins — never fail, just report version or `not found`. Suggested probes (skip any that don't apply to the installed plugins): `node --version`, `java -version`, `./gradlew --version` (if a wrapper exists), `swift --version`, `xcodebuild -version`, `android --version`. This surfaces capability-gated checks up front (e.g. iOS lint/build needs macOS + Xcode; those post-pipeline checks SKIP rather than fail off-host).
 

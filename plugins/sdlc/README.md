@@ -11,6 +11,7 @@ sdlc/
 ├── .claude-plugin/plugin.json               # name: sdlc
 ├── manifest.yaml                            # vanilla profile (kind: foundation, priority 0, detect *)
 ├── config/aspects.yaml                       # aspect vocabulary (platform + functional)
+├── PLUGIN-PATHS.md                          # path-resolution contract (ADR-0009) — no literal `~`
 ├── commands/{init,start,doctor,list-stacks,batch,security-init}.md
 ├── skills/pipeline-orchestrator/SKILL.md    # the orchestrator + RESOLVER reference
 ├── workflows/{default,bugfix,hotfix,refactor,docs-only}.yaml + RESOLVER.md

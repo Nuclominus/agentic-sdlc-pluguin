@@ -21,7 +21,7 @@ the measurement; you apply only what the user approves.
 
 The current session transcript is the only durable record of cooperation
 (handoff envelopes are not persisted). Locate it at
-`~/.claude/projects/<encoded-cwd>/<session>.jsonl`, where `<encoded-cwd>` is the
+`${CLAUDE_CONFIG_DIR:-~/.claude}/projects/<encoded-cwd>/<session>.jsonl`, where `<encoded-cwd>` is the
 project cwd with `/` replaced by `-`. If it cannot be found, continue in
 **telemetry-only** mode and state that degradation in the report (cooperation
 findings will be limited).

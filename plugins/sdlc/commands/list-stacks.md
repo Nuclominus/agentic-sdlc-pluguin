@@ -9,9 +9,10 @@ List every `manifest.yaml` profile registered in installed plugins. Shows which 
 
 ## What this command does
 
-1. Use `Glob` to find all profiles:
+1. Resolve `{PLUGIN_CACHE_ROOT}` per `plugins/sdlc/PLUGIN-PATHS.md` (orchestrator Step 0), then use
+   `Glob` to find all profiles — the active config dir's cache, never a literal `~`:
    ```
-   ~/.claude/plugins/cache/**/manifest.yaml
+   {PLUGIN_CACHE_ROOT}/**/manifest.yaml
    ```
 2. For each manifest found:
    - `Read` / parse the YAML.

@@ -32,7 +32,8 @@ Same detection logic as `/sdlc:list-stacks` — find all installed `manifest.yam
 
 For each active plugin (sdlc core first, then the active platform plugins in priority order):
 
-- Read `~/.claude/plugins/cache/{plugin_path}/security-patterns.yaml` if it exists.
+- Read `{PLUGIN_CACHE_ROOT}/{plugin_path}/security-patterns.yaml` if it exists (`{PLUGIN_CACHE_ROOT}`
+  resolved per `plugins/sdlc/PLUGIN-PATHS.md` — never a literal `~`).
 - Parse the `patterns:` array.
 - Tag each rule with `_source: {plugin_name}` for traceability (written as a comment in the output).
 - De-duplicate by `rule_name` (first occurrence wins — higher-priority plugin wins).
@@ -109,7 +110,7 @@ If a stack's `manifest.yaml` has no `phase_injections.security` block, skip that
 
 ### 5. Check security-guidance plugin presence
 
-Use `Glob ~/.claude/plugins/cache/**/security-guidance/.claude-plugin/plugin.json`. If not found, append:
+Use `Glob {PLUGIN_CACHE_ROOT}/**/security-guidance/.claude-plugin/plugin.json`. If not found, append:
 
 ```text
 ℹ️  security-guidance plugin not detected. Install it to activate these rules:

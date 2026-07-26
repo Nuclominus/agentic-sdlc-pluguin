@@ -21,7 +21,7 @@ applies only what they approve.
 - `metrics_json` — the deterministic dashboard already computed from
   `docs/plans/{slug}/_telemetry.json`. **Use these numbers verbatim. Never
   recompute costs from the transcript.**
-- `transcript_path` — `~/.claude/projects/<encoded-cwd>/<session>.jsonl`. Read it
+- `transcript_path` — `${CLAUDE_CONFIG_DIR:-~/.claude}/projects/<encoded-cwd>/<session>.jsonl`. Read it
   by streaming/parsing with a small Bash + Python script — do NOT load raw JSONL
   into your reasoning context; distill it.
 - `slug` — the run under `docs/plans/{slug}/`.
