@@ -40,6 +40,16 @@ statistical result, and its numbers are not comparable to the 101k-token figure
 recorded above from the downstream Android application run — different codebase,
 different tool, different purpose.
 
+**Measured noise floor (2026-07-26, 20 runs) — read this before designing any Track E
+experiment.** Within-arm, identical-configuration run-to-run spread on total cache-read is
+**55.6%–64.2%**; peak prefix varies 33%–92%; turn count runs 46–64 on the same 5-phase
+pipeline. Therefore: a single run proves nothing, and **any improvement below ~50% is
+unverifiable by this instrument at n≈10**. Check the expected effect against that bar before
+spending. `compare.mjs`'s `recommendN` ladder (<10% → N=3, <25% → N=4, ≥25% → STOP) is
+miscalibrated — reality exceeded its STOP threshold by 2.5× — so treat its STOP as real and the
+rungs below it as fiction. Full campaign record:
+[[architecture/benchmark-e2-read-discipline]].
+
 ### E5 — Cache-pressure signal in report + AAR *(enabler, low effort)*
 Add a per-phase **reads-per-turn** and **peak-prefix** signal to `tools/report` and surface it in
 the `sdlc:aar` findings, so cache regressions are visible and heavy phases get flagged. The report
@@ -55,6 +65,16 @@ verification output terse. Growth is 73% of reads and the prefix balloons to 100
 whole files; flattening growth is the single biggest lever. **DoD:** peak-prefix on a comparable run
 drops (target <60k from 101k); no quality regression in review/test/qa verdicts. Guidance-only, no
 code. May warrant an ADR if it changes agent contracts materially.
+
+**Status: shipped in #68 ([[decisions/ADR-0008-read-discipline-contract]]), UNVALIDATED.** The
+20-run A/B could not demonstrate the win: cache-read median −10.65% against a 64.2% within-arm
+spread, sign reversing four times as n grew. **The DoD as written is dead** — both arms met
+`<60k peak`, arm A's worst run being 58,184 *without* the contract, so the threshold never
+discriminated on a specimen this size. The contract itself costs ~230 tokens re-read every turn,
+≈1.4% of a median run. It merged on engineering judgement (never worse on any metric; the specimen
+gave read discipline the least surface to act on), not on evidence. Any re-test needs a corpus with
+5–10× the fixed floor, must measure **peak prefix** rather than totals, and must wait on issue #70.
+See [[architecture/benchmark-e2-read-discipline]].
 
 ### E1 — Trim the addressable fixed prefix (floor) *(structural)*
 Shrink what rides in **every** subagent turn: agent `.md` verbosity, and the `_brief`/prior-phase
