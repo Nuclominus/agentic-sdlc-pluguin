@@ -1399,10 +1399,22 @@ Set `heal_attempts = 0`, `heal_status = "skipped"`.
    `CONTEXT.running_cost_usd` per-attempt (step 5), so run totals, caps and the cross-run rollup need
    no further arithmetic here.
 
-**Every exit from this step — healed, exhausted, pre-existing, not-mechanically-fixable, or skipped
-(no `heal:` block present at all) — proceeds to 3d-3.** "CONTINUE to the next phase" always means
-*after* 3d-3's checkpoint write, never instead of it: skipping that write loses exactly the
-`heal_attempts_used` / `heal_status` fields Tasks 2-4 exist to surface.
+**Every exit from this step proceeds to 3d-3 — but there are FIVE exit BRANCHES above and only
+FOUR legal `heal_status` values** (`schemas/checkpoint.schema.json`: `healed | exhausted | skipped |
+pre-existing` — do not add a fifth). Map each branch to its recorded status explicitly:
+
+| Branch (this step)                                | Recorded `heal_status` |
+|----------------------------------------------------|-------------------------|
+| all checks pass, `heal_attempts > 0` (step 3)       | `"healed"`               |
+| `heal_attempts == max_attempts`, still failing (step 4) | `"exhausted"`        |
+| cost cap trips mid-heal (3d-cap point 3 carve-out)  | `"exhausted"`            |
+| agent reports **pre-existing breakage** (step 5)    | `"pre-existing"`         |
+| agent reports **not mechanically fixable** (step 5) | `"exhausted"` — a BRANCH, not a distinct status; collapsing it here keeps it visible to AAR heal metrics (`plugins/sdlc/tools/aar/metrics.mjs` filters on `heal_status === "exhausted"`) instead of silently inventing an unrecognized fifth value that fails checkpoint schema validation |
+| no `heal:` block, or checks pass with `heal_attempts == 0` | `"skipped"`         |
+
+"CONTINUE to the next phase" always means *after* 3d-3's checkpoint write, never instead of it:
+skipping that write loses exactly the `heal_attempts_used` / `heal_status` fields Tasks 2-4 exist to
+surface.
 
 `heal_attempts` resets on **every dispatch**, not once per phase — so a loop phase gets a fresh
 budget each round (and a fresh `CONTEXT.pre_phase_files` snapshot per 3b-0). The checkpoint's
@@ -1416,8 +1428,9 @@ budget each round (and a fresh `CONTEXT.pre_phase_files` snapshot per 3b-0). The
      burns attempts on an invalid phase. Reword freely; do not relocate. Track G1. -->
 
 **3d-3. Write the phase checkpoint (resume substrate).** After 3d-1/3d-2 (telemetry computed), 3e
-(validation passed), AND 3e-heal (heal resolved — healed / exhausted / pre-existing /
-not-mechanically-fixable / skipped), atomically write `docs/plans/{task_slug}/.checkpoint/{unit}.json`
+(validation passed), AND 3e-heal (one of its exit branches resolved and mapped onto ONE of the FOUR
+legal `heal_status` values — `healed | exhausted | skipped | pre-existing`, per the branch→status
+table in 3e-heal's closing paragraph), atomically write `docs/plans/{task_slug}/.checkpoint/{unit}.json`
 where `{unit}` = `{phase}` for an aspect-agnostic phase or `{phase}-{aspect}` for an aspect-aware one.
 The file IS the `phases[]` telemetry entry for this unit (same fields — see Step 5) plus
 `output_file` (the `0X-{phase}{-aspect}.md` path), `completed_at` (ISO), and — for a phase carrying a
