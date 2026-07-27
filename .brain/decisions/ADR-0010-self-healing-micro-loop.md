@@ -101,6 +101,6 @@ verdict:
      fifth schema value. All five branches proceed to the checkpoint write.
 
 ## Related
-- Implemented by: #77 (placeholder — update once the merging PR number is known).
+- Implemented by: #77.
 - Relates to: [[architecture/pipeline-orchestrator]] / [[components/sdlc]] / [[planning/roadmap]] /
   [[planning/backlog]]
