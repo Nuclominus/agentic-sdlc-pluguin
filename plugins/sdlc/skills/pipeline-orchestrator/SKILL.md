@@ -747,22 +747,31 @@ heuristic):
 ```
 base_total     = Σ est_row over all rows (development already ×1.6/aspect)
 expected_total = base_total + Σ over loop phases 0.5·(est(L)+est(R))
-                            + Σ over healed phases rounds(H)·0.3·est(H)
+                            + Σ over healed phases WITH non-empty heal_checks rounds(H)·0.3·est(H)
 worst_total    = base_total + Σ over loop phases (max_rounds−1)·(est(L)+est(R))
-                            + Σ over healed phases rounds(H)·max_attempts·est(H)
+                            + Σ over healed phases WITH non-empty heal_checks rounds(H)·max_attempts·est(H)
 ```
 
 where `rounds(H) = max_rounds` when guarded phase H also carries a `loop` block (or is the
 `return_to` target of one — either way it dispatches up to `max_rounds` times), else
 `rounds(H) = 1`. This formula is authoritative for the compounding case.
 
-A phase carrying `heal: {max_attempts: N}` can re-dispatch its own agent up to N times **per
-dispatch** of that phase. A guarded-only phase dispatches once, so its term is `1·N·est(H)`. A
-phase that is BOTH looped and guarded dispatches up to `max_rounds` times, and EACH dispatch can
-independently heal up to `max_attempts` times, giving `max_rounds·max_attempts·est(H)` — e.g. a
-3-round loop over a 2-attempt guarded phase is `3 × 2 = 6` heal dispatches on top of the 3 base
-dispatches already counted by `base_total` plus the loop term above (9 dispatches for that phase
-in total).
+**The heal terms are gated on `EFFECTIVE_PROFILE.heal_checks` being non-empty — a phase carrying a
+`heal:` block contributes to the sum ONLY when the active profile also supplies at least one
+check to run.** Healing cannot fire without a check to execute (3e-heal step 0), so a `heal:`
+block over an empty `heal_checks` list must add `$0` to both totals, not a phantom estimate for
+work that can never happen. This is the vanilla-stack case: `plugins/sdlc/manifest.yaml` declares
+no `heal_checks`, so under the vanilla profile `expected_total`/`worst_total` reduce to exactly
+the pre-heal, loop-only figure — `heal:` blocks on generic recipes must not inflate the estimate
+on a stack that cannot use them.
+
+A phase carrying `heal: {max_attempts: N}` **and** a non-empty `heal_checks` list can re-dispatch
+its own agent up to N times **per dispatch** of that phase. A guarded-only phase dispatches once,
+so its term is `1·N·est(H)`. A phase that is BOTH looped and guarded dispatches up to `max_rounds`
+times, and EACH dispatch can independently heal up to `max_attempts` times, giving
+`max_rounds·max_attempts·est(H)` — e.g. a 3-round loop over a 2-attempt guarded phase (with
+`heal_checks` populated) is `3 × 2 = 6` heal dispatches on top of the 3 base dispatches already
+counted by `base_total` plus the loop term above (9 dispatches for that phase in total).
 
 #### 1d-2. MUST PRINT VERBATIM (dry-run contract)
 
@@ -770,11 +779,12 @@ in total).
 🔎 DRY RUN — no agents dispatched, no code written.
 Stack: {primary_stack} | Workflow: {active_workflow}{ (auto-selected) if CONTEXT.workflow_autoselected}
 Phases ({N}):
-   1. {phase}{ — aspect}    → {agent} ({tier})   ~${est_row}{  ‖ parallel}{  loops ⇄ {return_to}, ≤{max_rounds}×}{  🔧 heals ≤{max_attempts}×}
+   1. {phase}{ — aspect}    → {agent} ({tier})   ~${est_row}{  ‖ parallel}{  loops ⇄ {return_to}, ≤{max_rounds}×}{  🔧 heals ≤{max_attempts}× if EFFECTIVE_PROFILE.heal_checks is non-empty}
    2. {phase}               → {agent} ({tier})   ~${est_row}
    ...
    3. ⏩ {phase}{ — aspect}   → skipped (resumed from checkpoint)   $0.00
 Skip-rules applied: {csv of CONTEXT.skip_rules_applied[].rule, or "none"}
+{⚙ Healing inactive on this stack — {N_guarded} guarded phase(s) carry a heal: block, but the active profile supplies no heal_checks. Set heal_checks in .claude/sdlc.local.yaml to enable it. — printed once, only if ≥1 resolved phase carries heal: AND EFFECTIVE_PROFILE.heal_checks is empty}
 Estimated cost: ~${expected_total}  (worst-case ${worst_total})
 Cap: {CONTEXT.cost_cap or "none"}  → {WITHIN | ⚠️ EXCEEDS by $X}
 ```
@@ -784,6 +794,19 @@ alternated — a phase can be both looped and guarded, in which case both segmen
 back. The `‖ parallel` segment is the one true alternative: parallel-group members are bare
 phase-name strings in the recipe schema and cannot carry `loop` or `heal` (see 3-parallel), so a
 row never shows `‖ parallel` together with either of the other two.
+
+**The `🔧 heals ≤{max_attempts}×` flag is SUPPRESSED when `EFFECTIVE_PROFILE.heal_checks` is
+empty**, even for a phase whose recipe entry carries a `heal:` block: the phase is nominally
+guarded, but with no checks to run, healing is inactive and the flag would misrepresent the plan.
+This is the same gate as the cost formula's — a row never shows a heal cost AND suppresses the
+flag inconsistently.
+
+When at least one resolved phase carries a `heal:` block but `EFFECTIVE_PROFILE.heal_checks` is
+empty, print the `⚙ Healing inactive on this stack …` line shown above exactly once, immediately
+after `Skip-rules applied:` — this honesty line tells the user plainly that the guarded phases they
+see in the plan cannot actually heal on this stack, and names the override (`heal_checks` in
+`.claude/sdlc.local.yaml`) that turns it on. Omit the line entirely when `heal_checks` is
+non-empty, or when no resolved phase carries `heal:` at all.
 
 `{N}` counts top-level resolved entries (a parallel group is one slot; loop re-runs are
 not separate slots), matching the `{total}` convention in Step 3. Row lines, however, are
@@ -1338,6 +1361,14 @@ everywhere else in this step.
 
 Set `heal_attempts = 0`, `heal_status = "skipped"`.
 
+**0. No checks to run.** If `EFFECTIVE_PROFILE.heal_checks` is empty, healing cannot fire on this
+stack — there is nothing to execute and nothing to heal. Skip the rest of this step entirely (do
+not capture `heal_touched_files`, do not dispatch): `heal_status` stays `"skipped"` and
+`heal_attempts_used` stays `0`, and proceed straight to 3d-3. This is the vanilla-stack case —
+`plugins/sdlc/manifest.yaml` declares no `heal_checks`, so a `heal:`-guarded phase running under
+the vanilla profile always lands here, explicitly, rather than falling through steps 1-2 to a
+vacuous pass.
+
 1. **Capture the touched set.** `heal_touched_files` is a set-difference, not a fresh snapshot:
    re-run `git diff --name-only HEAD` and `git ls-files --others --exclude-standard` now, take their
    union, and subtract `CONTEXT.pre_phase_files` (the pre-dispatch snapshot captured once in 3b-0) —
@@ -1359,6 +1390,23 @@ Set `heal_attempts = 0`, `heal_status = "skipped"`.
    `"skipped"`. Proceed to 3d-3.
 
 4. **A command exits non-zero:**
+
+   **4a. Orchestrator-side pre-existing-breakage check — runs FIRST, BEFORE any heal dispatch
+   decision, and is AUTHORITATIVE.** The orchestrator already holds both inputs this needs —
+   `heal_touched_files` from step 1 and the failing command's captured output from step 2 — so
+   this check costs **zero attempts**: it never dispatches an agent. Parse the failing command's
+   output for the file paths its diagnostics name (compiler/linter error lines). Two outcomes:
+   - **Every named file lies outside `heal_touched_files`** → this is pre-existing breakage the
+     phase did not cause. Set `heal_status = "pre-existing"`, leave `heal_attempts`
+     **UNCHANGED** (so a first-failure case stays `0` — nothing was ever dispatched), record the
+     blocker `"{phase} heal skipped — {command} fails on files outside this phase's changes"` in
+     telemetry, do **NOT** dispatch, and proceed to 3d-3.
+   - **No file path can be parsed out of the output at all** (a linker error, an unlocated tool
+     crash, etc.) → the check cannot prove the failure is foreign, so treat it as **NOT**
+     pre-existing here. Fall through to 4b.
+
+   **4b. Attempt-budget branch** (reached only when 4a did not resolve the failure as
+   pre-existing):
    - If `heal_attempts == max_attempts` → set `heal_status = "exhausted"`, record the blocker
      `"{phase} heal exhausted ({heal_attempts} attempts) — {command} still failing"` in telemetry,
      **MUST PRINT VERBATIM:**
@@ -1374,7 +1422,8 @@ Set `heal_attempts = 0`, `heal_status = "skipped"`.
      then re-dispatch (step 5) and return to step 2. **`heal_touched_files` is NOT recomputed** on
      this return — it stays fixed from step 1 for every attempt of this dispatch, because it answers
      "what did the phase itself change", not "what has changed so far including heal edits"; that is
-     what the pre-existing-breakage check below needs to stay meaningful attempt over attempt.
+     what the agent-side pre-existing-breakage report in step 5 needs to stay meaningful attempt
+     over attempt.
 
 5. **The heal re-dispatch.** Spawn the SAME agent this phase used (3a lookup) — for an aspect-aware
    phase, the **canonical-last** aspect's agent (the last aspect in `database → backend → frontend →
@@ -1402,6 +1451,13 @@ Set `heal_attempts = 0`, `heal_status = "skipped"`.
      say so and STOP — do not guess.
    ```
 
+   This `heal_instruction` sentence about pre-existing breakage is a **secondary safety net**,
+   not the primary detection path: the orchestrator-side check at step 4a already runs BEFORE
+   every dispatch and normally catches pre-existing breakage first, at zero attempt cost. This
+   agent-reported path only fires when step 4a's parse missed it (e.g. it found SOME touched-set
+   file named in the output alongside foreign ones, so it fell through to dispatch) and the agent
+   discovers, in the course of trying to fix it, that the remaining failures are actually foreign.
+
    `heal_stderr` is capped at 50 lines. An unbounded build log is exactly the
    "never dump a full build/test log into context" case the read-discipline contract forbids
    (ADR-0008). **OMIT the `aspect_constraint` block** for heal dispatches regardless of which aspect
@@ -1420,8 +1476,11 @@ Set `heal_attempts = 0`, `heal_status = "skipped"`.
    re-evaluate 3d-cap (amended for heal attempts — see 3d-cap point 3) against the updated running
    total before deciding whether another attempt may proceed.
 
-   If the agent reports **pre-existing breakage**, set `heal_status = "pre-existing"`, record it as
-   a blocker, stop the loop without spending further attempts, and proceed to 3d-3.
+   If the agent nonetheless reports **pre-existing breakage** on this secondary path, set
+   `heal_status = "pre-existing"`, record it as a blocker, stop the loop without spending further
+   attempts, and proceed to 3d-3 — same recorded outcome as the step-4a case, except that
+   whatever attempts were already spent reaching this dispatch stay counted (step 4a's zero-cost
+   guarantee only applies when it catches the case BEFORE the dispatch that spent them).
    If the agent reports the failure is **not mechanically fixable**, treat it as exhausted
    immediately — do not spend the remaining attempt — and proceed to 3d-3.
 
@@ -1456,18 +1515,20 @@ Set `heal_attempts = 0`, `heal_status = "skipped"`.
    own `cost_usd` and `CONTEXT.running_cost_usd` per-attempt (step 5), so run totals, caps and the
    cross-run rollup need no further arithmetic here.
 
-**Every exit from this step proceeds to 3d-3 — but there are FIVE exit BRANCHES above and only
+**Every exit from this step proceeds to 3d-3 — but there are EIGHT exit BRANCHES above and only
 FOUR legal `heal_status` values** (`schemas/checkpoint.schema.json`: `healed | exhausted | skipped |
 pre-existing` — do not add a fifth). Map each branch to its recorded status explicitly:
 
 | Branch (this step)                                | Recorded `heal_status` |
 |----------------------------------------------------|-------------------------|
+| `EFFECTIVE_PROFILE.heal_checks` is empty — nothing to run (step 0) | `"skipped"` |
 | all checks pass, `heal_attempts > 0` (step 3)       | `"healed"`               |
-| `heal_attempts == max_attempts`, still failing (step 4) | `"exhausted"`        |
+| `heal_attempts == max_attempts`, still failing (step 4b) | `"exhausted"`       |
 | cost cap trips mid-heal (3d-cap point 3 carve-out)  | `"exhausted"`            |
-| agent reports **pre-existing breakage** (step 5)    | `"pre-existing"`         |
+| **orchestrator-side parse finds every named file outside `heal_touched_files` (step 4a) — PRIMARY trigger, fires BEFORE any dispatch, costs zero attempts** | `"pre-existing"` |
+| agent reports **pre-existing breakage** on a dispatch that already happened (step 5) — SECONDARY safety net for what step 4a's parse missed | `"pre-existing"` |
 | agent reports **not mechanically fixable** (step 5) | `"exhausted"` — a BRANCH, not a distinct status; collapsing it here keeps it visible to AAR heal metrics (`plugins/sdlc/tools/aar/metrics.mjs` filters on `heal_status === "exhausted"`) instead of silently inventing an unrecognized fifth value that fails checkpoint schema validation |
-| checks pass with `heal_attempts == 0` (guarded, ran, nothing to fix) | `"skipped"` |
+| checks pass with `heal_attempts == 0` (guarded, ran, nothing to fix) (step 3) | `"skipped"` |
 
 "CONTINUE to the next phase" always means *after* 3d-3's checkpoint write, never instead of it:
 skipping that write loses exactly the `heal_attempts_used` / `heal_status` fields Tasks 2-4 exist to

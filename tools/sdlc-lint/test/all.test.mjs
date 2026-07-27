@@ -70,3 +70,34 @@ test("the heal contract names its capability-gate and continue-on-exhaustion rul
   assert.match(section, /Never halt the run/,
     "heal exhaustion must continue the pipeline, not halt it — pin the explicit wording, not a bare /continue/i which Step 4 would also satisfy");
 });
+
+test("3e-heal's orchestrator-side pre-existing check (step 4a) runs BEFORE the heal re-dispatch (step 5)", () => {
+  const text = readFileSync(SKILL, "utf8");
+  const heal = text.indexOf("**3e-heal.");
+  const preExisting = text.indexOf("**4a. Orchestrator-side pre-existing-breakage check", heal);
+  const dispatch = text.indexOf("5. **The heal re-dispatch.", heal);
+  assert.ok(heal > -1, "3e-heal step missing");
+  assert.ok(preExisting > -1, "orchestrator-side pre-existing-breakage check (step 4a) missing");
+  assert.ok(dispatch > -1, "heal re-dispatch (step 5) missing");
+  assert.ok(preExisting < dispatch,
+    "the orchestrator-side pre-existing check must run BEFORE the heal dispatch — it already holds " +
+    "heal_touched_files and the failing command's output, so it must resolve pre-existing breakage " +
+    "at zero attempt cost before a dispatch that would burn one");
+});
+
+test("the dry-run cost formula gates BOTH heal terms on non-empty heal_checks", () => {
+  const text = readFileSync(SKILL, "utf8");
+  const totals = text.indexOf("**4. Totals.**");
+  // Anchor to the next subsection heading, not a fixed length — 1d-2 is the stable boundary
+  // of the Totals point, same anchoring discipline as the 3e-heal DRIFT GUARD window above.
+  const terminator = "#### 1d-2.";
+  const terminatorIdx = text.indexOf(terminator, totals);
+  assert.ok(totals > -1, "Step 1d-1 point 4 (Totals) missing");
+  assert.ok(terminatorIdx > -1, "1d-2 terminator missing");
+  const section = text.slice(totals, terminatorIdx);
+  const matches = section.match(/Σ over healed phases WITH non-empty heal_checks/g) || [];
+  assert.equal(matches.length, 2,
+    "both expected_total AND worst_total must sum their heal term only over phases whose active " +
+    "profile supplies non-empty heal_checks — otherwise a vanilla stack's inert heal: blocks " +
+    "(no heal_checks defined) inflate the dry-run estimate for healing that can never fire");
+});
