@@ -4,9 +4,21 @@ match:
   arguments_pattern: "\\bhotfix\\b|\\burgent\\b|\\bemergency\\b|\\bprod(uction)?\\s+fix\\b"
   loc_touched_max: 200
 caps:
-  max_total_cost_usd: 0.60
+  # base_total (heuristic, SKILL.md 1d-1): development sonnet*1.6=$0.0812 + qa sonnet=$0.0508 +
+  # security opus=$0.1555 + documentation haiku=$0.0158 = $0.3033 — well within the old 0.60 cap
+  # on its own. But G1 now guards all three code-writing phases (heal max_attempts: 2 each, no
+  # loop, rounds(H)=1): worst_total = 0.3033 + 2*(0.0812+0.0508+0.1555) = 0.3033 + 0.5752 =
+  # $0.8784, which DID breach the old 0.60 cap. 1.10 clears the worst case with ~$0.22 (25%)
+  # headroom.
+  max_total_cost_usd: 1.10
 phases:
-  - development
-  - qa
-  - security
+  - name: development
+    heal:
+      max_attempts: 2
+  - name: qa
+    heal:
+      max_attempts: 2
+  - name: security
+    heal:
+      max_attempts: 2
   - documentation

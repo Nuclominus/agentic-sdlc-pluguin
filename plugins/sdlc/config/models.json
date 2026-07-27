@@ -4,10 +4,11 @@
   "pipeline_tiers": ["opus", "sonnet", "haiku", "fable"],
   "cache_write_multipliers": { "ephemeral_5m": 1.25, "ephemeral_1h": 2.0 },
   "models": [
-    { "tag": "opus",       "model_id": "claude-opus-4-8",             "pricing": { "input": 5.00, "cached_input": 0.50, "output": 25.00 } },
+    { "tag": "opus",       "model_id": "claude-opus-5",               "pricing": { "input": 5.00, "cached_input": 0.50, "output": 25.00 } },
     { "tag": "sonnet",     "model_id": "claude-sonnet-5",             "pricing": { "input": 2.00, "cached_input": 0.20, "output": 10.00, "note": "intro pricing through 2026-08-31; standard is 3.00/0.30/15.00" } },
     { "tag": "haiku",      "model_id": "claude-haiku-4-5-20251001",   "pricing": { "input": 1.00, "cached_input": 0.10, "output": 5.00 } },
     { "tag": "fable",      "model_id": "claude-fable-5",              "pricing": { "input": 10.00, "cached_input": 1.00, "output": 50.00 } },
+    { "tag": "opus-4-8",   "model_id": "claude-opus-4-8",             "pricing": { "input": 5.00, "cached_input": 0.50, "output": 25.00 } },
     { "tag": "opus-4-7",   "model_id": "claude-opus-4-7",             "pricing": { "input": 5.00, "cached_input": 0.50, "output": 25.00 } },
     { "tag": "opus-4-6",   "model_id": "claude-opus-4-6",             "pricing": { "input": 5.00, "cached_input": 0.50, "output": 25.00 } },
     { "tag": "sonnet-4-6", "model_id": "claude-sonnet-4-6",          "pricing": { "input": 3.00, "cached_input": 0.30, "output": 15.00 } },

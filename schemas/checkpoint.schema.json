@@ -37,6 +37,8 @@
     "compact_handoff_violation": { "type": "boolean" },
     "qa_iterations_used": { "type": "integer", "minimum": 0 },
     "qa_status": { "enum": ["completed", "capped"] },
+    "heal_attempts_used": { "type": "integer", "minimum": 0 },
+    "heal_status": { "enum": ["healed", "exhausted", "skipped", "pre-existing"] },
     "output_file": { "type": "string" },
     "completed_at": { "type": "string", "format": "date-time" }
   }

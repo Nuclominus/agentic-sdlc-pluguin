@@ -130,7 +130,23 @@ Write `{CONFIG_DIR}/.sdlc-deps-preflight.json`:
 HEADLESS = (env SDLC_NONINTERACTIVE == "true" OR "1")
 ```
 
-Persist in `CONTEXT.headless_mode` for telemetry. Affects UX of policy enforcement below (interactive prompts vs. machine-readable JSON to stdout, warnings to stderr, etc.).
+Persist in `CONTEXT.headless_mode` for telemetry. Affects UX of policy enforcement below (interactive prompts vs. machine-readable JSON to stdout).
+
+**What "machine-readable" can and cannot mean here — binding on EVERY headless rule in this
+document.** This orchestrator is a skill prompt, not a program. Two consequences, both verified by
+execution rather than assumed:
+
+- **Every machine-readable signal goes to `stdout`.** A prompt's output reaches stdout; nothing it
+  can do writes the hosting process's stderr. (Observed: a headless run whose `warn` policy fired
+  produced 0 bytes on stderr.) A rule that says "write to stderr" specifies a channel that silently
+  discards the signal — never write one.
+- **No rule may promise an exit code.** The hosting `claude -p` process reports success whenever
+  the model finishes its turn normally, and this document cannot change that. (Observed: a headless
+  run that correctly aborted still exited 0.) An abort is therefore expressed as *artifacts*, not
+  as status: the machine-readable stdout line, plus `aborted_at_phase` in
+  `docs/plans/{task_slug}/_telemetry.json` for aborts that get that far.
+
+CI integrating a headless run must gate on those artifacts, **never on `$?`**.
 
 #### 0a-2. Enumerate available skills (with FS fallback)
 
@@ -173,16 +189,16 @@ For each entry where `status == "missing"`:
 
 | `policy` | Interactive (HEADLESS=false) | Headless (HEADLESS=true) |
 |---|---|---|
-| `block` | Print install command. If `mcp__plugins__suggest_plugin_install` is available, call it. Abort with exit code 1. | Print to stdout `{ "error": "missing_dependency", "plugin": "{name}", "missing_skills": [...], "install_command": [...] }` (one JSON object per blocking dep, separated by newlines). Exit 1. |
-| `warn` | Print human warning (yellow ⚠️). Set `CONTEXT.{plugin}_unavailable = true`. Continue. | Write one-line warning to stderr: `WARN: {plugin} missing skills: {csv}`. Set `CONTEXT.{plugin}_unavailable = true`. Continue. |
+| `block` | Print install command. If `mcp__plugins__suggest_plugin_install` is available, call it. Abort the run. | Print to stdout `{ "error": "missing_dependency", "plugin": "{name}", "missing_skills": [...], "install_command": [...] }` (one JSON object per blocking dep, separated by newlines). Abort the run — dispatch no phases. |
+| `warn` | Print human warning (yellow ⚠️). Set `CONTEXT.{plugin}_unavailable = true`. Continue. | Write one-line warning to stdout: `WARN: {plugin} missing skills: {csv}`. Set `CONTEXT.{plugin}_unavailable = true`. Continue. |
 | `graceful-degrade` | Silently set `CONTEXT.{plugin}_unavailable = true`. Continue. | Silently set `CONTEXT.{plugin}_unavailable = true`. Continue. |
 
 Aggregate ALL `block` failures before aborting — print all JSON entries / install instructions, then exit. Single exit, multiple grievances.
 
 **Headless mode (`SDLC_NONINTERACTIVE=true`):**
 
-- `block` → exit 1 with machine-readable JSON `{ "missing": [...], "install_command": [...] }` written to stdout.
-- `warn` → write a single line to stderr, continue.
+- `block` → abort the run (dispatch no phases) with machine-readable JSON `{ "missing": [...], "install_command": [...] }` written to stdout. Per 0a-1, do NOT promise an exit code — the stdout JSON is the signal.
+- `warn` → write a single line to stdout, continue.
 - `graceful-degrade` → silent.
 
 #### 0a-5. MUST PRINT VERBATIM (interactive only)
@@ -208,7 +224,7 @@ Or, on cache hit with all satisfied:
 🔧 Dependency preflight: cached (all satisfied)
 ```
 
-If `HEADLESS == true`, suppress this print (warnings already went to stderr; success is silent).
+If `HEADLESS == true`, suppress this print (warnings already went to stdout; success is silent).
 
 #### 0a-6. Pass downstream
 
@@ -240,7 +256,7 @@ FRAMEWORK_MANIFESTS = [ m for m in manifests if m.kind == "framework" ]   # set 
 Winner resolution below sees **FOUNDATIONS only** — frameworks cannot leak into it by construction.
 
 **0b-2. For each foundation manifest:**
-1. Read the parsed YAML fields: `kind`, `stack`, `priority`, `aspects`, `detect`, optional `workflow`, `hosts_aspects`, `framework_detection`, `agents_per_phase`, `convention_skills`, `phase_injections`, `extra_phases`, `pre_phase_commands`, `post_pipeline_checks`, `on_demand_agents`.
+1. Read the parsed YAML fields: `kind`, `stack`, `priority`, `aspects`, `detect`, optional `workflow`, `hosts_aspects`, `framework_detection`, `agents_per_phase`, `convention_skills`, `phase_injections`, `extra_phases`, `pre_phase_commands`, `post_pipeline_checks`, `heal_checks`, `on_demand_agents`.
 2. Determine whether it matches the project root by evaluating its `detect` rules:
    - `detect.any: ["*"]` → always matches.
    - `detect.all: [...]` → all sub-rules must match.
@@ -465,6 +481,7 @@ The merge input is **`ACTIVE_PROFILES.values()` plus `PRIMARY_PROFILE` plus `ADD
 - `phase_injections` (manifest field) → held internally as `phase_prompts_injection`: per-phase additional instructions.
 - `extra_phases`: list of `{name, after, agent, description}` to insert.
 - `post_pipeline_checks`: shell commands to run at the end.
+- `heal_checks`: shell commands the G1 self-healing loop runs after a guarded phase (compile/lint only).
 
 Merge across profiles to build `EFFECTIVE_PROFILE`:
 
@@ -474,6 +491,7 @@ Merge across profiles to build `EFFECTIVE_PROFILE`:
 - `phase_prompts_injection`: per-phase concat of all active profiles' injections — stack profiles first, then `ADDITIVE_PROFILES` in deterministic order (alphabetical by `stack`). Each framework contributes its `development` / `security` guidance.
 - `extra_phases`: union (later check for name conflicts; if any, halt with error).
 - `post_pipeline_checks`: union (de-duplicated, preserving order: PRIMARY first, stack profiles next, additive profiles last).
+- `heal_checks`: union (de-duplicated, preserving order: PRIMARY first, stack profiles next, additive profiles last) — same rule as `post_pipeline_checks`.
 
 Hold these merged values as `PROFILE` (mutable in 1b — `frameworks.enable/disable` from 0b-frameworks has already shaped which additive profiles are present here).
 
@@ -492,6 +510,7 @@ If present — `Read` and parse it. Recognized top-level keys:
 | Key | Type | Merge semantics |
 |---|---|---|
 | `post_pipeline_checks` | array of strings | **REPLACES** plugin's value entirely (set to `[]` to disable default checks). |
+| `heal_checks` | array of strings | **REPLACES** plugin's value entirely (set to `[]` to disable the G1 self-healing loop project-wide without editing any recipe). |
 | `phase_command_overrides` | object | Passed as context flags to agent prompts in Step 3 (see below). Plugin defaults remain available; overrides ADD or REPLACE specific keys. |
 | `extra_phase_prompts` | object (phase → string) | **APPENDS** to `phase_prompts_injection` for that phase (additive — don't lose plugin guidance). |
 | `skip_phases` | array of strings | Phase names to remove from the canonical order in 1c. |
@@ -536,6 +555,9 @@ Hold the cleaned list in `EFFECTIVE_PROFILE.extension_skills` for Step 3b-1a.
 post_pipeline_checks:
   - ./gradlew detekt
   - ./gradlew testDebugUnitTest
+  - ./gradlew compileDebugKotlin
+
+heal_checks:                          # compile/lint only — never unit tests
   - ./gradlew compileDebugKotlin
 
 phase_command_overrides:
@@ -735,14 +757,63 @@ heuristic):
   iterating adds a surcharge on top of the one-time rows already counted —
   `expected` folds in `0.5 × (est(L) + est(R))` (assume ~1.5 rounds), `worst-case`
   folds in `(max_rounds − 1) × (est(L) + est(R))` (every round hits the cap).
+- **`est(H)` (the heal term's per-dispatch estimate) is pinned to the SINGLE-dispatch `est_row`
+  of the canonical-last aspect's agent — raw, before any phase-shape multiplier.** A heal attempt
+  is one implement-only dispatch of ONE aspect's agent (3e-heal step 5/6), never the two-pass
+  plan+implement figure and never `est_row` summed or multiplied across all resolved aspects. This
+  applies even when the guarded phase is `development`: `est(H)` is that single aspect's plain
+  `est_row`, NOT the `×1.6`-per-aspect figure `base_total` already applied to `development`'s own
+  rows. (`est(R)` in the loop term above is a different, deliberately-unpinned quantity — a loop
+  re-run of `R` re-executes `R`'s FULL 3a–3e path per Step 3's loop control, which for an
+  aspect-aware `R` can mean the whole aspect fan-out, not one aspect — so the same single-dispatch
+  pin does not apply there; left as-is, out of scope for this fix.)
 
 **4. Totals.**
 
 ```
 base_total     = Σ est_row over all rows (development already ×1.6/aspect)
 expected_total = base_total + Σ over loop phases 0.5·(est(L)+est(R))
+                            + Σ over healed phases WITH non-empty heal_checks avg_rounds(H)·0.3·est(H)
 worst_total    = base_total + Σ over loop phases (max_rounds−1)·(est(L)+est(R))
+                            + Σ over healed phases WITH non-empty heal_checks rounds(H)·max_attempts·est(H)
 ```
+
+where `rounds(H) = max_rounds` when guarded phase H also carries a `loop` block (or is the
+`return_to` target of one — either way it dispatches up to `max_rounds` times), else
+`rounds(H) = 1`. `rounds(H)` is the WORST-CASE dispatch count and feeds `worst_total` only — this
+formula (with `rounds(H)`) is authoritative for the compounding worst case.
+
+`expected_total` uses a matching AVERAGE-case dispatch count instead, `avg_rounds(H)`, so the
+round assumption behind the heal term is consistent with the loop term's own `0.5·(est(L)+est(R))`
+average-case convention on the line above it: `avg_rounds(H) = 1.5` when guarded phase H also
+carries a `loop` block (or is the `return_to` target of one) — the SAME `~1.5 rounds` figure the
+loop term already assumes for that phase, not a fraction of `max_rounds` — else `avg_rounds(H) = 1`
+(a guarded-only phase dispatches exactly once regardless of expected vs. worst case, so there is no
+average/worst split to make there). Using `rounds(H) = max_rounds` in `expected_total` would apply
+a worst-case round count to the heal term while the loop term next to it stays average-case, making
+the WITHIN/EXCEEDS verdict (computed from `expected_total`) inconsistent with itself; `avg_rounds(H)`
+closes that gap. `worst_total` keeps the full `rounds(H)` — every round hitting the cap is exactly
+what "worst case" means there.
+
+**The heal terms are gated on `EFFECTIVE_PROFILE.heal_checks` being non-empty — a phase carrying a
+`heal:` block contributes to the sum ONLY when the active profile also supplies at least one
+check to run.** Healing cannot fire without a check to execute (3e-heal step 0), so a `heal:`
+block over an empty `heal_checks` list must add `$0` to both totals, not a phantom estimate for
+work that can never happen. This is the vanilla-stack case: `plugins/sdlc/manifest.yaml` declares
+no `heal_checks`, so under the vanilla profile `expected_total`/`worst_total` reduce to exactly
+the pre-heal, loop-only figure — `heal:` blocks on generic recipes must not inflate the estimate
+on a stack that cannot use them.
+
+A phase carrying `heal: {max_attempts: N}` **and** a non-empty `heal_checks` list can re-dispatch
+its own agent up to N times **per dispatch** of that phase. A guarded-only phase dispatches once,
+so its `worst_total` term is `1·N·est(H)`. A phase that is BOTH looped and guarded dispatches up to
+`max_rounds` times, and EACH dispatch can independently heal up to `max_attempts` times, giving
+`worst_total`'s `max_rounds·max_attempts·est(H)` — e.g. a **worst-case** 3-round loop over a
+2-attempt guarded phase (with `heal_checks` populated) is `3 × 2 = 6` heal dispatches on top of the
+3 base dispatches already counted by `base_total` plus the loop term above (9 dispatches for that
+phase in total). `expected_total`'s heal term for the same looped-and-guarded phase instead uses
+`avg_rounds(H)·0.3·est(H) = 1.5 · 0.3 · est(H)` — the average-case figure, not this worked worst-case
+count.
 
 #### 1d-2. MUST PRINT VERBATIM (dry-run contract)
 
@@ -750,14 +821,34 @@ worst_total    = base_total + Σ over loop phases (max_rounds−1)·(est(L)+est(
 🔎 DRY RUN — no agents dispatched, no code written.
 Stack: {primary_stack} | Workflow: {active_workflow}{ (auto-selected) if CONTEXT.workflow_autoselected}
 Phases ({N}):
-   1. {phase}{ — aspect}    → {agent} ({tier})   ~${est_row}{  loops ⇄ {return_to}, ≤{max_rounds}× | ‖ parallel — flags if any}
+   1. {phase}{ — aspect}    → {agent} ({tier})   ~${est_row}{  ‖ parallel}{  loops ⇄ {return_to}, ≤{max_rounds}×}{  🔧 heals ≤{max_attempts}× if EFFECTIVE_PROFILE.heal_checks is non-empty}
    2. {phase}               → {agent} ({tier})   ~${est_row}
    ...
    3. ⏩ {phase}{ — aspect}   → skipped (resumed from checkpoint)   $0.00
 Skip-rules applied: {csv of CONTEXT.skip_rules_applied[].rule, or "none"}
+{⚙ Healing inactive on this stack — {N_guarded} guarded phase(s) carry a heal: block, but the active profile supplies no heal_checks. Set heal_checks in .claude/sdlc.local.yaml to enable it. — printed once, only if ≥1 resolved phase carries heal: AND EFFECTIVE_PROFILE.heal_checks is empty}
 Estimated cost: ~${expected_total}  (worst-case ${worst_total})
 Cap: {CONTEXT.cost_cap or "none"}  → {WITHIN | ⚠️ EXCEEDS by $X}
 ```
+
+Each `{...}` segment above is independently optional and CONCATENATED when present, not
+alternated — a phase can be both looped and guarded, in which case both segments print back to
+back. The `‖ parallel` segment is the one true alternative: parallel-group members are bare
+phase-name strings in the recipe schema and cannot carry `loop` or `heal` (see 3-parallel), so a
+row never shows `‖ parallel` together with either of the other two.
+
+**The `🔧 heals ≤{max_attempts}×` flag is SUPPRESSED when `EFFECTIVE_PROFILE.heal_checks` is
+empty**, even for a phase whose recipe entry carries a `heal:` block: the phase is nominally
+guarded, but with no checks to run, healing is inactive and the flag would misrepresent the plan.
+This is the same gate as the cost formula's — a row never shows a heal cost AND suppresses the
+flag inconsistently.
+
+When at least one resolved phase carries a `heal:` block but `EFFECTIVE_PROFILE.heal_checks` is
+empty, print the `⚙ Healing inactive on this stack …` line shown above exactly once, immediately
+after `Skip-rules applied:` — this honesty line tells the user plainly that the guarded phases they
+see in the plan cannot actually heal on this stack, and names the override (`heal_checks` in
+`.claude/sdlc.local.yaml`) that turns it on. Omit the line entirely when `heal_checks` is
+non-empty, or when no resolved phase carries `heal:` at all.
 
 `{N}` counts top-level resolved entries (a parallel group is one slot; loop re-runs are
 not separate slots), matching the `{total}` convention in Step 3. Row lines, however, are
@@ -770,8 +861,8 @@ When `--resume` is active, already-done rows are printed in the `⏩ … skipped
 
 #### 1d-3. Headless dry-run
 
-If `HEADLESS == true` (Step 0a-1), additionally write a single machine-readable line to
-stdout so CI can gate on it:
+If `HEADLESS == true` (Step 0a-1), 🚨 **MUST PRINT VERBATIM** — a single machine-readable line to
+stdout, on its own line, so CI can gate on it:
 
 ```
 { "dry_run": true, "workflow": "{active_workflow}", "phases": {N}, "estimated_cost_usd": {expected_total}, "worst_case_usd": {worst_total}, "cap_usd": {CONTEXT.cost_cap or null}, "cap_estimate": "within"|"exceeds", "resumed": true, "reenter_at": "{first unfinished phase}" }
@@ -873,7 +964,8 @@ atomically (`.tmp` → rename). This file is overwritten (not appended) on every
 
 A resolved phase entry is one of three shapes. All are generic; the active profile still supplies the agent for each named phase via `agents_per_phase`. The orchestrator never hardcodes which phases exist.
 
-- **Plain phase** — a string or `{name, when}`. Executed per 3a–3e below.
+- **Plain phase** — a string or `{name, when}`. Executed per 3a–3e below (including 3b-0 and
+  3e-heal when the phase carries a `heal:` block).
 - **Loop phase** — `{name, loop: {return_to, max_rounds}}`. Executed per 3-loop.
 - **Parallel group** — `{parallel: [phaseA, phaseB, ...]}`. Executed per 3-parallel.
 
@@ -887,13 +979,27 @@ For `{parallel: [pA, pB, ...]}`:
 3. Dispatch all listed phases in a **single assistant message** containing one `Agent` call per phase (true concurrency). Each agent gets its normal 3b prompt and writes to its own `docs/plans/{task_slug}/0X-{phase}.md`.
 4. Wait for all to return, run 3e validation on each, then advance. If a listed phase is itself aspect-aware, run its aspect fan-out within its slot; the group as a whole is still dispatched concurrently.
 
+Parallel members are bare phase-name strings in `schemas/workflow.schema.json` — they cannot carry
+a `loop` or `heal` block; a phase needing either must run outside a parallel group.
+
 **3-loop. Loop phase (review / iterate) execution.**
 
 For a phase carrying `loop: {return_to, max_rounds}` (e.g. a review phase that bounces back to development):
-1. Run the loop phase normally (3a–3e). Set `round = 1`.
+1. Run the loop phase normally (3a–3e, including 3b-0 and 3e-heal when the phase carries a
+   `heal:` block — each round is a fresh dispatch with its own heal budget). Set `round = 1`.
 2. Read the loop phase agent's COMPACT summary for an explicit verdict:
    - **approved / no findings** (e.g. "LGTM", empty findings list) → loop satisfied; advance to the next phase.
-   - **changes requested / non-empty findings** → if `round < max_rounds`: re-dispatch the `return_to` phase with the loop phase's findings injected into its per-call context as a `loop_findings:` block, then re-run the loop phase; `round += 1`; print `↻ {loop_phase} round {round}/{max_rounds}`; repeat from step 2.
+   - **changes requested / non-empty findings** → if `round < max_rounds`: re-dispatch the
+     `return_to` phase — running its FULL 3a-3e path exactly as a first-time dispatch would,
+     including a fresh 3b-0 pre-dispatch snapshot and 3e-heal if `return_to` carries a `heal:` block
+     (every round is a fresh dispatch with its own heal budget — same rule as loop-phase step 1
+     above), and writing its own 3d-3 checkpoint — with the loop phase's findings injected into its
+     per-call context as a `loop_findings:` block. **This is the shape that matters in practice: in
+     every shipped recipe the guarded phase IS the `return_to` target (e.g. `development`), never
+     the loop phase itself** (e.g. `review`), so this bullet — not loop-phase step 1 — is what fires
+     3e-heal on a review/iterate cycle. Then re-run the loop phase; `round += 1`; print `↻
+     {loop_phase} round {round}/{max_rounds}`; repeat from step 2. The one exception: development's
+     planning gate is NOT re-opened on this re-dispatch (see below).
 3. If `round == max_rounds` and still not approved: stop the loop, record a blocker `"{loop_phase} exceeded max_rounds ({max_rounds}) without approval — escalate to human"` in telemetry, print it, and PAUSE for user direction (do not silently continue).
 
 If `return_to` is a multi-pass phase with an approval gate (e.g. development's plan→approve→implement), loop re-runs go straight to the implement pass with `loop_findings` applied — the plan was already approved, so do NOT re-open the planning gate each round.
@@ -1105,10 +1211,46 @@ The development phase runs in TWO passes with a user approval gate between them.
    📋 Implementation plan ready for {phase_name}{IF aspect-aware: " — " + aspect}.
       Review: docs/plans/{task_slug}/02-development-plan{-aspect_suffix}.md
    ```
-3. Ask the user: **approve** / **request changes** / **abort**.
+3. **If `HEADLESS == false`** (Step 0a-1): ask the user **approve** / **request changes** / **abort**.
    - If **approve**: proceed to Pass 2.
    - If **request changes**: re-dispatch Pass 1 with user feedback appended to the prompt. Repeat until approved or aborted.
    - If **abort**: mark this aspect (or entire development phase if aspect-agnostic) as skipped in telemetry. Continue to the next phase.
+4. **If `HEADLESS == true`** (Step 0a-1): there is no interactive user to answer step 3's prompt, so
+   this gate MUST NOT silently wait for one. (Observed defect this closes: a headless `claude -p` run
+   with no stdin can print the block above and stop having completed zero phases, while some
+   harnesses still report the run as a clean, successful exit — after real spend on the phases that
+   DID run.) Resolve deterministically as a **full-run abort** — never a silent wait, and never a
+   successful no-op:
+   - Record the blocker `"{phase_name} planning gate reached under HEADLESS — no interactive approver
+     to answer approve/request-changes/abort; stopping"` in telemetry.
+   - Set `CONTEXT.aborted_at_phase = {phase_name}{ + " — " + aspect if aspect-aware}`.
+   - Stop dispatching further phases — do NOT proceed to Pass 2, and do NOT continue to the next
+     phase the way the interactive **abort** bullet above does. A headless stop here halts the WHOLE
+     run, mirroring Step 3d-cap's own headless-abort rule (a cap breach with no user present also
+     resolves to a full abort, never a silent partial continuation nobody consented to).
+   - Proceed directly to Step 5 and emit the ⛔ ABORTED banner with partial telemetry —
+     `aborted_at_phase` set and the blocker recorded. A headless run that reaches this gate must
+     never present as a clean, complete run.
+
+   **CI note — `_telemetry.json` is the contract; nothing printed is.** Gate on:
+   ```
+   jq -e '.aborted_at_phase != null' docs/plans/{task_slug}/_telemetry.json
+   ```
+   Not on `$?` (per 0a-1, this orchestrator cannot set the host process's exit status — verified:
+   a run that correctly aborted here still exited 0), and **not on any expected line of output.**
+   Earlier revisions of this rule required a verbatim `ERROR: …` marker line on stdout. It was
+   removed after three consecutive real headless runs aborted correctly — right blocker, right
+   `aborted_at_phase`, no phases dispatched — while the marker never appeared once, across three
+   different phrasings including this document's own 🚨 MUST PRINT VERBATIM idiom. The orchestrator
+   reliably announces the halt in its own words and reliably writes the telemetry; it does not
+   reliably reproduce a fixed string here, so no contract may depend on one. State-on-disk, not
+   prose, is what CI can trust.
+
+   Silent auto-approval was considered and rejected: letting an unattended run wave a generated
+   implementation plan through with no human review is a bigger hazard than a loud, deterministic
+   stop the user can inspect on disk and resume past with `--resume` once satisfied. `--dry-run` is
+   unaffected by this rule — Step 1d-4 exits before Step 3 ever runs, so this gate is never reached
+   under `--dry-run` regardless of `HEADLESS`.
 
 **Pass 2 — Implementation:**
 
@@ -1118,6 +1260,41 @@ The development phase runs in TWO passes with a user approval gate between them.
 4. Standard validation (3e) applies: output must list files changed.
 
 For aspect-aware fan-out, the canonical order remains: `database → backend → frontend → testing`. Each aspect completes both passes before the next aspect begins (the plan for backend may depend on what database-aspect implemented).
+
+**3b-0. Capture the pre-dispatch working-tree snapshot (Track G1).**
+
+Runs ONLY when the resolved recipe phase carries a `heal: {max_attempts: N}` block. Without one,
+skip entirely — no commands, no `CONTEXT` write — so an unguarded phase's dispatch stays
+byte-identical to today.
+
+Immediately before spawning the agent in 3c, record into `CONTEXT.pre_phase_files` the union of
+`git diff --name-only HEAD` and `git ls-files --others --exclude-standard`. This is the working-tree
+state at the instant BEFORE this phase's own edits, and is what 3e-heal step 1 diffs against to
+derive `heal_touched_files` — without it the pre-existing-breakage guard in 3e-heal step 5 has
+nothing to compare to.
+
+**On a resumed or restarted run, this raw diff over-captures.** `CONTEXT` is an in-memory
+orchestrator variable — it does not survive a process restart. If the run was interrupted before
+this SAME phase reached its own 3d-3 checkpoint write (or before `--resume` re-enters it), that dead
+attempt's edits are STILL sitting uncommitted in the tree, and a naive `git diff --name-only HEAD`
+at this fresh 3b-0 call folds them into `pre_phase_files` as if they were someone else's prior work
+— they then get wrongly subtracted out of `heal_touched_files` and a real break in one of those files
+reads as pre-existing. Apply this rule once, here, for every phase (looped or not, aspect-aware or
+not — do not special-case it per aspect): before recording the union above, exclude any file that is
+attributable to a unit ALREADY in `CONTEXT.completed_units` (the resume set built at Step 2 item 4,
+or the equivalent set of units whose checkpoint this run itself already wrote) — cross-reference each
+completed unit's own output file under `docs/plans/{task_slug}/` (for `development`, the files-changed
+list its 3e validation already requires it to report). Any currently-dirty file that cannot be
+attributed to an already-completed unit this way is NOT foreign to the phase about to be dispatched —
+it is this same phase's own carryover from an earlier, superseded attempt, and must be left OUT of
+`pre_phase_files` so it stays eligible for `heal_touched_files`.
+
+- **Aspect-aware phase:** capture ONCE, before the FIRST aspect's dispatch — not per-aspect. Heal
+  itself runs once after the whole fan-out (3e-heal step 6), so the snapshot must predate ALL of
+  this phase's aspects, not just the last one.
+- **Looped phase:** re-capture on EVERY dispatch of the phase — each loop round is a fresh dispatch
+  with its own heal budget (see the closing note of 3e-heal), so it needs its own pre-dispatch
+  snapshot.
 
 **3c. Spawn the agent** via the `Agent` tool with `subagent_type` and the short tier resolved in 3b-3:
 
@@ -1172,16 +1349,52 @@ workflow recipe. This check sits at the **end of Step 3d, gating the next iterat
 Step 3 phase loop** (it runs after this phase's `cost_usd` is computed in 3d-1, before the
 next phase — or the next loop round, or the next aspect in a fan-out — is dispatched).
 
-1. Maintain a running total. Initialize `CONTEXT.running_cost_usd = 0` at the start of
-   Step 3, then after each phase/aspect's `cost_usd` is computed in 3d-1:
-   `CONTEXT.running_cost_usd += cost_usd` (treat a `null`-priced phase as `0` — it cannot
-   contribute to a cost cap it has no price for).
+1. Maintain a running total. Initialize `CONTEXT.running_cost_usd = 0` AND
+   `CONTEXT.cap_user_approved = false` at the start of Step 3, then after each phase/aspect's
+   `cost_usd` is computed in 3d-1: `CONTEXT.running_cost_usd += cost_usd` (treat a `null`-priced
+   phase as `0` — it cannot contribute to a cost cap it has no price for).
+   `CONTEXT.cap_user_approved` is a plain boolean, set to `true` in exactly one place in this whole
+   spec (the interactive **approve** bullet below) and never elsewhere — see point 3.
 2. If `CONTEXT.cost_cap` (resolved in Step 1d-0) is `null`, there is no cap — skip this
    gate entirely and continue.
-3. If a next dispatch exists (another phase, another loop round, or another aspect) AND
-   `CONTEXT.running_cost_usd > CONTEXT.cost_cap`:
+3. If a next dispatch exists (another phase, another loop round, another aspect, or **another heal
+   attempt**) AND `CONTEXT.running_cost_usd > CONTEXT.cost_cap`:
 
-   **Interactive (`HEADLESS == false`):** PAUSE before the next dispatch.
+   **Reachability of the heal-attempt case:** this gate is invoked from two call sites — once
+   ordinarily, at the end of Step 3d for every phase (BEFORE that phase's own 3e and 3e-heal have run),
+   and once from inside 3e-heal step 4b's `heal_attempts > 0` bullet, which explicitly re-enters 3d-cap
+   — using the running total step 5 already updated after the PREVIOUS heal dispatch, and only once
+   step 2's checks have re-run and shown this round still failing — to decide whether another attempt
+   may proceed. "Another heal attempt" can be a candidate next-dispatch ONLY on that second, step-4b
+   re-entry call — on the ordinary end-of-3d pass no heal check has happened yet for this phase, so
+   whether a further heal attempt exists is unknowable, and the heal carve-out branch immediately below
+   MUST NOT fire there. Treat the two call sites as evaluating different next-dispatch candidate sets:
+   {phase, round, aspect} on the ordinary pass, {heal attempt} only on the step-4b re-entry.
+
+   **Next dispatch is a heal attempt (Track G1):** never pause or abort the pipeline for this case —
+   3e-heal's own contract is to never halt the run regardless of outcome. Instead: STOP healing this
+   phase, set `heal_status = "exhausted"`, set `CONTEXT.cap_status = "exceeded-continued"` (the run
+   IS over cap and DID continue — a real breach must not read as `"within"` just because it was
+   handled inside a heal loop instead of at the next ordinary phase boundary; see Step 5's `cap_status`
+   field, which otherwise defaults to `"within"` at point 4 below). Do **NOT** set
+   `CONTEXT.cap_user_approved` — leave it exactly as it already was (`false`, unless a real user
+   approval elsewhere this run already set it `true`) — because no user was in the loop for this
+   carve-out: it is an automatic continuation of the run, not consent. Record the blocker `"{phase}
+   heal exhausted (cost cap) — stopped after {heal_attempts} attempt(s), ${running_cost_usd} > cap
+   ${cost_cap}"`, and proceed to 3d-3. This is identical in interactive and headless mode — a heal
+   attempt never triggers the pause/ask or abort-the-run behavior below; only the phase/round/aspect
+   cases do.
+
+   **Interactive (`HEADLESS == false`), any other next-dispatch type:**
+   - If `CONTEXT.cap_user_approved == true`, do NOT pause — set `CONTEXT.cap_status =
+     "exceeded-continued"` and continue the Step 3 loop silently, still adding to
+     `CONTEXT.running_cost_usd` for the final report. This is the ONLY condition under which this gate
+     skips the pause; the flag is an absolute, non-self-referential switch (it is `true` or it is
+     `false` for the rest of this run — never "true for the overages a specific past approval
+     covers").
+   - Otherwise (`CONTEXT.cap_user_approved == false`) PAUSE before the next dispatch — even if an
+     earlier overage this run was already handled by the heal carve-out above, since that carve-out
+     never sets the flag.
 
    🚨 **MUST PRINT VERBATIM:**
    ```
@@ -1191,20 +1404,28 @@ next phase — or the next loop round, or the next aspect in a fan-out — is di
       Approve continuing, or abort?
    ```
    Ask the user **approve continuing** / **abort**.
-   - **approve** → set `CONTEXT.cap_status = "exceeded-continued"`, continue the Step 3
-     loop. Do not ask again for subsequent overages this run (the user already accepted the
-     overrun); keep accumulating `running_cost_usd` for the final report.
+   - **approve** → set `CONTEXT.cap_status = "exceeded-continued"` AND `CONTEXT.cap_user_approved =
+     true`, then continue the Step 3 loop, still accumulating `running_cost_usd` for the final report.
+     This bullet is the ONE place in this whole spec that sets `CONTEXT.cap_user_approved` — the heal
+     carve-out above never sets it, no other branch sets it. Once `true`, per the interactive-branch
+     rule above, every later overage this run skips the pause automatically; while it is `false`,
+     every overage boundary — including one that immediately follows a heal-carve-out overage — still
+     PAUSES and asks, exactly as if no overage had ever been seen before.
    - **abort** → set `CONTEXT.cap_status = "exceeded-aborted"`, stop dispatching further
      phases, and proceed to Step 5 to write partial telemetry (with
      `aborted_at_phase: {next_phase}`) and print the final summary.
 
-   **Headless (`HEADLESS == true`):** treat a cap-exceed as an **abort** (consistent with
-   Step 0a's headless `block` handling). Set `CONTEXT.cap_status = "exceeded-aborted"`,
-   write one machine-readable line to stderr, and stop dispatching:
-   ```
-   ERROR: cost cap exceeded — running=${running_cost_usd} cap=${cost_cap} next_phase={next_phase} — aborting (headless)
-   ```
-   Then proceed to Step 5 (partial telemetry with `aborted_at_phase`, exit 1).
+   **Headless (`HEADLESS == true`), any other next-dispatch type:** treat a cap-exceed as an
+   **abort** (consistent with Step 0a's headless `block` handling). Set `CONTEXT.cap_status = "exceeded-aborted"`,
+   stop dispatching, and announce the halt — naming the running total, the cap, and the phase that
+   would have run next — then proceed to Step 5 and emit partial telemetry with
+   `aborted_at_phase: {next_phase}` and `cap_status: "exceeded-aborted"` set.
+
+   Per 0a-1, promise no exit code, and do not specify a verbatim marker line here: the abort's
+   machine contract is `_telemetry.json` (`aborted_at_phase != null`, `cap_status ==
+   "exceeded-aborted"`), for the same reason given at 3b-special's headless gate — the orchestrator
+   reliably writes the telemetry but paraphrases fixed strings, so a printed line cannot carry a
+   contract. The announcement above is human-facing and may be worded freely.
 
 4. If the cap is set and never exceeded through the last phase, `CONTEXT.cap_status`
    defaults to `"within"`.
@@ -1221,11 +1442,266 @@ gate uses the ACTUAL accumulated `cost_usd`. Both read the same cap from `CONTEX
 
 If validation fails, **do not proceed** — ask the user how to handle (retry, skip, abort).
 
-**3d-3. Write the phase checkpoint (resume substrate).** After 3d-1/3d-2 (telemetry computed) AND
-3e (validation passed), atomically write `docs/plans/{task_slug}/.checkpoint/{unit}.json` where
-`{unit}` = `{phase}` for an aspect-agnostic phase or `{phase}-{aspect}` for an aspect-aware one.
+**3e-heal. Self-healing micro-loop (Track G1).**
+
+Runs ONLY when the resolved recipe phase carries a `heal: {max_attempts: N}` block. Without one,
+skip this step entirely — no commands, no dispatch, no prompt change. Scope is **compile/lint checks
+only** — never unit or E2E tests; those stay inside the `qa` agent's own 3-iteration cap, untouched
+by this step.
+
+**Aspect-aware phases: this is a PHASE-level step, not a unit-level one.** Compilation is global —
+one aspect's code may legitimately not compile until a later aspect lands — so the checks below run
+at most **ONCE per phase dispatch**, after the LAST aspect's own 3e validation passes, and BEFORE
+that last aspect's unit checkpoint is written in 3d-3. Every EARLIER aspect's own 3e-heal turn is a
+no-op: it proceeds straight to its own 3d-3 with `heal_attempts_used: 0` and `heal_status: "skipped"`
+(heal never ran on that unit's behalf — see the worked-through consequences at step 6). An
+aspect-agnostic phase has exactly one unit, so this collapses to the simple case described
+everywhere else in this step.
+
+Set `heal_attempts = 0`, `heal_status = "skipped"`.
+
+**0. No checks to run.** If `EFFECTIVE_PROFILE.heal_checks` is empty, healing cannot fire on this
+stack — there is nothing to execute and nothing to heal. Skip the rest of this step entirely (do
+not capture `heal_touched_files`, do not dispatch): `heal_status` stays `"skipped"` and
+`heal_attempts_used` stays `0`, and proceed straight to 3d-3. This is the vanilla-stack case —
+`plugins/sdlc/manifest.yaml` declares no `heal_checks`, so a `heal:`-guarded phase running under
+the vanilla profile always lands here, explicitly, rather than falling through steps 1-2 to a
+vacuous pass.
+
+1. **Capture the touched set.** `heal_touched_files` is a set-difference, not a fresh snapshot:
+   re-run `git diff --name-only HEAD` and `git ls-files --others --exclude-standard` now, take their
+   union, and subtract `CONTEXT.pre_phase_files` (the pre-dispatch snapshot captured once in 3b-0) —
+   what remains is what THIS phase's own dispatch(es) touched, not whatever was already dirty before
+   it started. (Derive it from git, NOT from the phase's prose report — only `development` is
+   required to list changed files at 3e; `security` reports severity counts and `qa` reports
+   pass/fail counts.) This set is computed ONCE per phase dispatch and does not change across the
+   heal attempts below — see step 4's note.
+
+2. **Run the checks.** For each command in `EFFECTIVE_PROFILE.heal_checks`, execute via `Bash` with
+   `timeout: 600000` (a Gradle build exceeding the 120000 default would otherwise register as a
+   spurious failure and trigger healing against a timeout rather than a compile error).
+
+   A command whose required tool is absent on this host is a **SKIP**, not a failure — record
+   `skipped (tool unavailable on this host)` and move to the next command. This is the same rule as
+   Step 4; without it a host lacking the toolchain heals to the cap on every guarded phase.
+
+3. **All commands exit 0** → set `heal_status = "healed"` if `heal_attempts > 0`, else leave
+   `"skipped"`. Proceed to 3d-3.
+
+4. **A command exits non-zero:**
+
+   **4a. Orchestrator-side pre-existing-breakage check — runs FIRST, BEFORE any heal dispatch
+   decision, and is AUTHORITATIVE.** The orchestrator already holds both inputs this needs —
+   `heal_touched_files` from step 1 and the failing command's captured output from step 2 — so
+   this check costs **zero attempts**: it never dispatches an agent. Parse the failing command's
+   output for the file paths its diagnostics name (compiler/linter error lines). Two outcomes:
+   - **Every named file lies outside `heal_touched_files`** → this is pre-existing breakage the
+     phase did not cause. Set `heal_status = "pre-existing"`, leave `heal_attempts`
+     **UNCHANGED** (so a first-failure case stays `0` — nothing was ever dispatched), record the
+     blocker `"{phase} heal pre-existing — {command} fails on files outside this phase's changes"`
+     in telemetry, do **NOT** dispatch, and proceed to 3d-3. **The blocker must say
+     `pre-existing`, never `skipped`** — `"skipped"` is a DIFFERENT `heal_status` value with three
+     meanings of its own (see the collapse note under the branch table), so a blocker reading
+     "heal skipped" on a `pre-existing` phase makes the prose contradict the field beside it and
+     re-creates exactly the ambiguity that value split was introduced to remove.
+   - **No file path can be parsed out of the output at all** (a linker error, an unlocated tool
+     crash, etc.) → the check cannot prove the failure is foreign, so treat it as **NOT**
+     pre-existing here. Fall through to 4b.
+
+   **4b. Attempt-budget branch** (reached only when 4a did not resolve the failure as
+   pre-existing). **Sequencing note: this branch is reached ONLY after step 2's checks have
+   already re-run and shown a failure for THIS round** — a heal dispatch always returns to step 2
+   first (see step 5's closing sentence below), so a dispatch that already fixed the problem
+   resolves via step 3 (`"healed"`) before 4b is ever consulted. The checks re-running first is
+   what keeps the cap gate below from being able to mark `"exhausted"` a phase that step 2 would
+   otherwise have just marked `"healed"`:
+   - **When `heal_attempts > 0`** (i.e. a heal dispatch already happened this phase and step 5
+     already folded its cost into `CONTEXT.running_cost_usd`) — **before deciding whether to spend
+     ANOTHER attempt**, re-enter 3d-cap (amended for heal attempts — see 3d-cap point 3) against
+     that updated running total. If the cap trips, this is 3d-cap point 3's heal carve-out: STOP
+     here — do **NOT** increment `heal_attempts` or re-dispatch — set `heal_status = "exhausted"`
+     and proceed to 3d-3 as that carve-out specifies. This is the ONLY point in this step where the
+     cap is consulted — never before step 2's checks have run, and never for the very first attempt
+     (`heal_attempts == 0`), which has no prior heal-dispatch cost to gate on and is reachable only
+     from the ordinary end-of-3d cap pass that already ran before 3e-heal started (see the
+     "Reachability of the heal-attempt case" paragraph under 3d-cap point 3).
+   - If `heal_attempts == max_attempts` → set `heal_status = "exhausted"`, record the blocker
+     `"{phase} heal exhausted ({heal_attempts} attempts) — {command} still failing"` in telemetry,
+     **MUST PRINT VERBATIM:**
+     ```
+     ⚠ Phase {N}/{total}: {phase} heal exhausted after {heal_attempts} attempt(s) — {command} still failing
+     ```
+     then **proceed to 3d-3** and **CONTINUE to the next phase** once that checkpoint write
+     completes. Never halt the run. Never escalate to a review phase.
+   - Otherwise `heal_attempts += 1`, **MUST PRINT VERBATIM:**
+     ```
+     🔧 Phase {N}/{total}: {phase} heal attempt {heal_attempts}/{max_attempts}
+     ```
+     then re-dispatch (step 5) and return to step 2. **`heal_touched_files` is NOT recomputed** on
+     this return — it stays fixed from step 1 for every attempt of this dispatch, because it answers
+     "what did the phase itself change", not "what has changed so far including heal edits"; that is
+     what the agent-side pre-existing-breakage report in step 5 needs to stay meaningful attempt
+     over attempt.
+
+5. **The heal re-dispatch.** Spawn the SAME agent this phase used (3a lookup) — for an aspect-aware
+   phase, the **canonical-last** aspect's agent (the last aspect in `database → backend → frontend →
+   testing` this phase actually dispatched), never canonical-first: that unit's checkpoint is the
+   only one still unwritten at this point, so recording the heal result there is what keeps "3d-3
+   records the healed state" true without reopening any earlier aspect's already-completed write.
+   Use the SAME stable prefix — unchanged, so prompt-cache stays warm — and these ADDITIONAL per-call
+   trailer keys:
+
+   ```
+   heal_attempt: {heal_attempts}/{max_attempts}
+   heal_command: {the command that failed}
+   heal_touched_files:
+     {the git-derived list from step 1, one per line}
+   heal_stderr: |
+     {LAST 50 LINES of the failing command's combined output}
+   heal_instruction: |
+     A mechanical build check failed after your phase. Fix ONLY what the tool named.
+     Do not refactor, do not add features, do not touch tests, do not change public APIs.
+     APPEND a `## Heal attempt {heal_attempt}` section to your existing detailed output file
+     (the same path you already wrote for this phase) — do NOT overwrite or truncate it.
+     If the reported errors name ONLY files outside heal_touched_files, this is PRE-EXISTING
+     breakage you did not cause: report that and STOP without editing anything.
+     If the failure is not mechanically fixable from this output (it needs a design change),
+     say so and STOP — do not guess.
+   ```
+
+   This `heal_instruction` sentence about pre-existing breakage is a **secondary safety net**,
+   not the primary detection path: the orchestrator-side check at step 4a already runs BEFORE
+   every dispatch and normally catches pre-existing breakage first, at zero attempt cost. This
+   agent-reported path only fires when step 4a's parse missed it (e.g. it found SOME touched-set
+   file named in the output alongside foreign ones, so it fell through to dispatch) and the agent
+   discovers, in the course of trying to fix it, that the remaining failures are actually foreign.
+
+   `heal_stderr` is capped at 50 lines. An unbounded build log is exactly the
+   "never dump a full build/test log into context" case the read-discipline contract forbids
+   (ADR-0008). **OMIT the `aspect_constraint` block** for heal dispatches regardless of which aspect
+   is targeted — `heal_instruction` already bounds the edit to what the tool named, and routing
+   stderr to aspects by file path is fragile guesswork.
+
+   Neither 3d's detailed-file check nor 3e's output validation re-run for a heal dispatch — both
+   already passed for the phase proper; only this step's own `heal_checks` commands (step 2) gate a
+   heal attempt's success.
+
+   As soon as the dispatch returns, **re-enter 3d-1 for this result**: append the new `agent_id` to
+   this unit's `agent_id` (the checkpoint schema already permits a list "when the phase ran multiple
+   passes" — a heal attempt is exactly that), fold its tokens and `cost_usd` into this unit's running
+   totals, and add the same `cost_usd` delta to `CONTEXT.running_cost_usd`. A heal dispatch whose
+   `agent_id` is not recorded loses its real cost, exactly like any other dispatch (3d-1). This
+   bookkeeping always runs, regardless of outcome. Control then returns to step 2 (per 4b's
+   return-to-step-2 instruction) to re-run the checks — **the cap is NOT consulted here.** It is
+   consulted exactly once, later, at step 4b's `heal_attempts > 0` bullet, and only if step 2's
+   re-run checks still fail: that ordering is deliberate, so a dispatch that already fixed the
+   problem resolves as `"healed"` (step 3) without the cap ever being able to override it into
+   `"exhausted"`.
+
+   If the agent nonetheless reports **pre-existing breakage** on this secondary path, set
+   `heal_status = "pre-existing"`, record it as a blocker, stop the loop without spending further
+   attempts, and proceed to 3d-3 — same recorded outcome as the step-4a case, except that
+   whatever attempts were already spent reaching this dispatch stay counted (step 4a's zero-cost
+   guarantee only applies when it catches the case BEFORE the dispatch that spent them).
+   If the agent reports the failure is **not mechanically fixable**, treat it as exhausted
+   immediately — do not spend the remaining attempt — and proceed to 3d-3.
+
+6. **Aspect-aware phases — consequences of the phase-level placement above.**
+   - The heal result (`heal_attempts_used`, `heal_status`) is recorded on the canonical-last unit's
+     checkpoint only.
+   - Every earlier aspect's checkpoint — already written by its own 3d-3 pass before the last aspect
+     even started — keeps `heal_attempts_used: 0` and `heal_status: "skipped"`; it is never
+     retroactively rewritten.
+   - For an aspect-agnostic phase there is exactly one unit, so this whole point is a no-op — the
+     single unit both runs the checks and records the result.
+
+7. **Development's planning gate is NOT re-opened** on a heal re-dispatch — go straight to the
+   implement pass, mirroring loop-round behaviour (3-loop step 2).
+
+8. **The 3d-cap cost gate applies to heal dispatches** (see the cost-capture note under step 5 and
+   the dedicated heal carve-out in 3d-cap point 3). A heal attempt is real spend and must not tunnel
+   under the cap; that gate is what stops a heal loop from running to exhaustion against a cost
+   budget that is already gone.
+
+9. **Record on the checkpoint** (written next, in 3d-3): `heal_attempts_used` is a
+   **read-modify-write accumulation, not a direct assignment.** 3d-3 writes to the SAME fixed
+   `.checkpoint/{unit}.json` path on every round of a looped guarded phase, overwriting the previous
+   round's file — so before writing, read that unit's EXISTING checkpoint (if one is already on disk
+   from an earlier round) and add this round's count to it: `heal_attempts_used = (heal_attempts_used
+   already in this unit's existing checkpoint, or 0 if none exists yet) + heal_attempts`. This is what
+   makes the field the phase's TOTAL across all its rounds, matching the closing note below — a plain
+   `heal_attempts_used = heal_attempts` would silently overwrite that total with just the LAST round's
+   count. `metrics.mjs` sums `heal_attempts_used` ACROSS phases, so a phase that heals once per round
+   of a 3-round loop must report 3, not 1, or the feature's headline metric under-reports. Also record
+   `heal_status` (see the branch table below). Heal dispatch cost was already folded into this phase's
+   own `cost_usd` and `CONTEXT.running_cost_usd` per-attempt (step 5), so run totals, caps and the
+   cross-run rollup need no further arithmetic here.
+
+**Every exit from this step proceeds to 3d-3 — but there are EIGHT exit BRANCHES above and only
+FOUR legal `heal_status` values** (`schemas/checkpoint.schema.json`: `healed | exhausted | skipped |
+pre-existing` — do not add a fifth). Map each branch to its recorded status explicitly:
+
+| Branch (this step)                                | Recorded `heal_status` |
+|----------------------------------------------------|-------------------------|
+| `EFFECTIVE_PROFILE.heal_checks` is empty — nothing to run (step 0) | `"skipped"` |
+| all checks pass, `heal_attempts > 0` (step 3)       | `"healed"`               |
+| `heal_attempts == max_attempts`, still failing (step 4b) | `"exhausted"`       |
+| cost cap trips mid-heal (3d-cap point 3 carve-out)  | `"exhausted"`            |
+| **orchestrator-side parse finds every named file outside `heal_touched_files` (step 4a) — PRIMARY trigger, fires BEFORE any dispatch, costs zero attempts** | `"pre-existing"` |
+| agent reports **pre-existing breakage** on a dispatch that already happened (step 5) — SECONDARY safety net for what step 4a's parse missed | `"pre-existing"` |
+| agent reports **not mechanically fixable** (step 5) | `"exhausted"` — a BRANCH, not a distinct status; collapsing it here keeps it visible to AAR heal metrics (`plugins/sdlc/tools/aar/metrics.mjs` filters on `heal_status === "exhausted"`) instead of silently inventing an unrecognized fifth value that fails checkpoint schema validation |
+| checks pass with `heal_attempts == 0` (guarded, ran, nothing to fix) (step 3) | `"skipped"` |
+
+**`"skipped"` deliberately collapses THREE distinct situations — the four-value enum has no room
+for a fourth, and this step never adds one.** A reader (or a consumer of `_telemetry.json` /
+`metrics.mjs`) must not assume `"skipped"` alone distinguishes them:
+1. **Healing cannot fire on this stack** — `EFFECTIVE_PROFILE.heal_checks` is empty (step 0). No
+   check ever ran.
+2. **Healing ran and found nothing to fix** — checks passed with `heal_attempts == 0` (step 3). The
+   phase compiled/linted clean on the first try.
+3. **This unit is an EARLIER aspect of an aspect-aware fan-out** — per the phase-level placement
+   note above, healing runs at most once, on the canonical-last aspect only; every earlier aspect's
+   own turn at this step is unconditionally a no-op and always records `"skipped"`, even though
+   healing DID run — just on a sibling unit's checkpoint, not this one.
+If a consumer needs to tell these apart, it cannot do so from `heal_status` alone: cross-check
+`heal_attempts_used` (always `0` for cases 1 and 3, and for case 2), whether `EFFECTIVE_PROFILE.heal_checks`
+was non-empty for this run, and — for case 3 specifically — whether this unit's `aspect` is the
+phase's canonical-last resolved aspect (only that unit's checkpoint can ever show `"healed"`,
+`"exhausted"`, or `"pre-existing"`; every other aspect of the same phase is always `"skipped"`).
+
+**A phase that never carried a `heal:` block in the first place is a FOURTH, separate situation —
+and it is NOT represented by `"skipped"` at all.** Per 3d-3, `heal_attempts_used`/`heal_status` are
+only written "for a phase carrying a `heal:` block"; an unguarded phase's checkpoint omits both
+fields entirely (ABSENT / `null`), because 3e-heal itself never ran (its own opening line: "Runs
+ONLY when the resolved recipe phase carries a `heal:` block. Without one, skip this step entirely").
+"Healing was never enabled for this phase" therefore reads as a missing field, never as the string
+`"skipped"` — do not conflate the two when consuming this data.
+
+"CONTINUE to the next phase" always means *after* 3d-3's checkpoint write, never instead of it:
+skipping that write loses exactly the `heal_attempts_used` / `heal_status` fields Tasks 2-4 exist to
+surface.
+
+`heal_attempts` resets on **every dispatch**, not once per phase — so a loop phase gets a fresh
+budget each round (and a fresh `CONTEXT.pre_phase_files` snapshot per 3b-0). The checkpoint's
+`heal_attempts_used` records the SUM across that phase's rounds.
+
+<!-- DRIFT GUARD: the `heal:` block shape (max_attempts 1..3) is defined in
+     schemas/workflow.schema.json and `heal_checks` in schemas/manifest.schema.json; the
+     result fields are in schemas/checkpoint.schema.json. The ORDERING of this step
+     (after 3e validation, before the 3d-3 checkpoint write) is asserted by
+     tools/sdlc-lint/test/all.test.mjs — moving it writes an unhealed checkpoint or
+     burns attempts on an invalid phase. Reword freely; do not relocate. Track G1. -->
+
+**3d-3. Write the phase checkpoint (resume substrate).** After 3d-1/3d-2 (telemetry computed), 3e
+(validation passed), AND 3e-heal (one of its exit branches resolved and mapped onto ONE of the FOUR
+legal `heal_status` values — `healed | exhausted | skipped | pre-existing`, per the branch→status
+table in 3e-heal's closing paragraph), atomically write `docs/plans/{task_slug}/.checkpoint/{unit}.json`
+where `{unit}` = `{phase}` for an aspect-agnostic phase or `{phase}-{aspect}` for an aspect-aware one.
 The file IS the `phases[]` telemetry entry for this unit (same fields — see Step 5) plus
-`output_file` (the `0X-{phase}{-aspect}.md` path) and `completed_at` (ISO). Set `status:"completed"`.
+`output_file` (the `0X-{phase}{-aspect}.md` path), `completed_at` (ISO), and — for a phase carrying a
+`heal:` block — `heal_attempts_used` and `heal_status` (set by 3e-heal step 9; every unit of a
+guarded phase carries these fields, not just the one heal actually ran on — see 3e-heal step 6).
+Set `status:"completed"`.
 In the checkpoint file, set `aspect` to the aspect string for an aspect-aware unit, or `null` for an
 aspect-agnostic unit (matching the Step 5 example and `schemas/checkpoint.schema.json`, where `aspect`
 is `string|null`). Validated by `schemas/checkpoint.schema.json`. Write to `{unit}.json.tmp` then
@@ -1380,10 +1856,34 @@ ADR-0005):
 - `total_output_tokens` = sum of phase `output_tokens`.
 - `total_cached_input_tokens` = sum of phase `cached_input_tokens`.
 - `total_subagent_tokens` = sum of phase `subagent_tokens` (the aggregate, unsplit counts from `usage_source: "subagent_aggregate"` phases). Omit the key when no phase reported an aggregate.
-- `total_cost_usd` = sum of phase `cost_usd`, **skipping `null` entries** (phases whose model had no registry pricing, AND aggregate-only phases whose cost is not computable without a split). If any phase was null-priced, append `(partial — {n} phase(s) unpriced)` to the printed Cost line so the omission is visible.
+- `total_cost_usd` = **sum of phase `cost_usd` PLUS `orchestration_overhead.cost_usd`** — the whole
+  run's spend, not just the dispatched phases. **Skip `null` entries** (phases whose model had no
+  registry pricing, AND aggregate-only phases whose cost is not computable without a split). If any
+  phase was null-priced, append `(partial — {n} phase(s) unpriced)` to the printed Cost line so the
+  omission is visible. Print the Cost line with the split shown — `$
+  {total} (phases ${phases} + orchestration overhead ${overhead})` — because the overhead is not a
+  rounding error: across real runs it has ranged from **$1.00 to $1.17 against $0.33–$0.51 of phase
+  spend**, i.e. larger than the work it wraps. A reader shown only a single total cannot tell those
+  apart.
+
+  **When NOTHING carries a price — no phase and no overhead — set `total_cost_usd` to `null`, not
+  `0`.** An all-unpriced run and a genuinely free run are different facts, and `0` asserts the
+  second while meaning the first. (Observed: a real headless run where both phases reported
+  `subagent_aggregate` usage printed an honest `$— (unpriced)` banner while writing
+  `total_cost_usd: 0` into the JSON beside it.) Same reasoning as `cache_hit_ratio` below — an
+  unknown must not be encoded as a measured zero.
+
+  ⚠️ **`total_cost_usd` is NOT what the cost cap gates on, and the two legitimately disagree.** Step
+  3d-cap compares `CONTEXT.running_cost_usd` — which accumulates phase `cost_usd` only (3d-cap point
+  1) — against `caps.max_total_cost_usd`. Orchestration overhead never enters that comparison. So a
+  run may report `total_cost_usd: 1.33` beside `cap_status: "within"` under a $1.00 cap, and be
+  correct on both counts: $0.33 of capped dispatch spend, $1.00 of uncapped overhead. Recipe caps
+  are therefore sized against **phase** spend; read them that way when tuning one, and do not
+  "reconcile" the two numbers by folding overhead into the gate — that would silently re-tighten
+  every existing recipe's cap.
 - `cache_hit_ratio` = `total_cached_input_tokens / max(total_input_tokens, 1)` rounded to 2 decimals — **but set it to `null`** when no phase reported a real cached subset (e.g. every phase was `subagent_aggregate` or `estimated`), since a 0 there would falsely read as "zero cache hits" rather than "unknown".
 - `cost_cap_usd` = `CONTEXT.cost_cap` (the active workflow recipe's `caps.max_total_cost_usd`), or `null` when the recipe declared no cap.
-- `cap_status` = `CONTEXT.cap_status` from the Step 3d-cap gate: `"within"` (cap set and never exceeded, or no cap), `"exceeded-continued"` (user approved continuing past the cap), or `"exceeded-aborted"` (user aborted, or headless abort). When the run was cost-aborted, also set `aborted_at_phase` to the phase that was about to run.
+- `cap_status` = `CONTEXT.cap_status` from the Step 3d-cap gate: `"within"` (cap set and never exceeded, or no cap), `"exceeded-continued"` (user approved continuing past the cap, OR a heal attempt was stopped by the cap — see 3d-cap point 3), or `"exceeded-aborted"` (user aborted, or headless abort). When the run was cost-aborted, also set `aborted_at_phase` to the phase that was about to run. `aborted_at_phase` is not exclusively a cost-cap field — a headless run that hits the development planning gate with no approver present (3b-special's Approval gate, step 4) sets it the same way, for the same reason: partial telemetry must still name where the run stopped even when the abort was not cost-driven.
 - `resumed` = `true` when this run entered via `--resume` (else omit or `false`).
 - `resumed_at` = ISO timestamp of the resume entry (only when `resumed`).
 - `resume_slug` = the resumed slug (only when `resumed`).

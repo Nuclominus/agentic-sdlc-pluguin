@@ -336,6 +336,89 @@ test("priceUsage tolerates a bracketed context suffix and a dated snapshot id", 
   assert.equal(priceUsage(u, "gpt-5", reg), null);
 });
 
+test("priceUsage tolerates a Bedrock region prefix and version suffix, alone or combined", () => {
+  const u = { input_tokens: 1_000_000, output_tokens: 0, cache_read_tokens: 0, cache_write_5m_tokens: 0, cache_write_1h_tokens: 0 };
+  const opus = priceUsage(u, "claude-opus-4-8", reg);
+  assert.ok(opus > 0);
+  assert.equal(priceUsage(u, "us.anthropic.claude-opus-4-8", reg), opus);
+  assert.equal(priceUsage(u, "anthropic.claude-opus-4-8", reg), opus);
+  assert.equal(priceUsage(u, "claude-opus-4-8-v1:0", reg), opus);
+  // Prefix + date + version all stacked, in the real Bedrock cross-region shape.
+  assert.equal(priceUsage(u, "us.anthropic.claude-opus-4-8-20260115-v1:0", reg), opus);
+
+  // The dated-registry-key case (PR #77 review finding 1): haiku's canonical id
+  // IS dated, so the date stripper must run AFTER the prefix stripper — date-first
+  // never probes the bare `claude-haiku-4-5-20251001` and the only dated registry
+  // key becomes unreachable from every Bedrock shape. Haiku is a pipeline tier;
+  // this was a silent cost drop, and the opus-only cases above cannot catch it
+  // (opus's registry key is undated, so any strip order resolves it).
+  const haiku = priceUsage(u, "claude-haiku-4-5-20251001", reg);
+  assert.ok(haiku > 0);
+  assert.equal(priceUsage(u, "us.anthropic.claude-haiku-4-5-20251001", reg), haiku);
+  assert.equal(priceUsage(u, "us.anthropic.claude-haiku-4-5-20251001-v1:0", reg), haiku);
+});
+
+test("enrichTelemetry prices an opus-tier phase whose transcript model carries a Bedrock region prefix", () => {
+  // Reproduces the observed bug: business_analysis and security run on the opus
+  // tier; their transcripts recorded the model id in the Bedrock cross-region
+  // inference-profile shape (`us.anthropic.<id>`). Before the lookupPricing fix,
+  // that id silently failed to match the registry's "claude-opus-4-8" entry, so
+  // the phase ended up with usage_source:"transcript" (a real transcript WAS
+  // resolved) and cost_usd:null (nothing in it could be priced) — the exact
+  // self-contradictory pairing from the bug report. It must now resolve to a
+  // real, non-null cost.
+  const root = mkdtempSync(join(tmpdir(), "opus-prefix-"));
+  const sub = join(root, "proj", "sess", "subagents");
+  writeAgent(sub, "ffaa11112222", [
+    turn("us.anthropic.claude-opus-4-8", { input_tokens: 5000, output_tokens: 1200, cache_read_input_tokens: 20000, cache_creation_input_tokens: 3000 }),
+  ]);
+  const runDir = join(root, "plan");
+  mkdirSync(runDir, { recursive: true });
+  writeFileSync(join(runDir, "_telemetry.json"), JSON.stringify({
+    task_slug: "opus-prefix", started_at: "2026-07-07T13:28:00Z", completed_at: "2026-07-07T14:16:00Z",
+    phases: [
+      { phase: "business_analysis", agent: "x-ba", model: "claude-opus-4-8", status: "completed",
+        agent_id: "ffaa11112222", subagent_tokens: 500, usage_source: "subagent_aggregate", cost_usd: null },
+    ],
+    total_subagent_tokens: 500, total_cost_usd: null, cache_hit_ratio: null,
+  }, null, 2));
+  const r = enrichTelemetry(runDir, { registry: reg, projectsRoot: root });
+  assert.deepEqual(r.enriched, ["business_analysis"], "phase resolved a transcript and was priced, not skipped");
+  assert.deepEqual(r.skipped, []);
+  const tel = JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8"));
+  const ba = tel.phases[0];
+  assert.equal(ba.usage_source, "transcript");
+  assert.ok(ba.cost_usd != null && ba.cost_usd > 0, `expected a real priced cost, got ${ba.cost_usd}`);
+});
+
+test("enrichTelemetry does not claim usage_source:\"transcript\" when the transcript's model is genuinely unpriced", () => {
+  // Defense in depth for the other half of the contract: a transcript that DOES
+  // resolve but whose model is absent from the registry even after lookupPricing's
+  // normalisation must not be reported as a priced transcript with a null cost —
+  // it must be treated like "no transcript resolved" (skipped, aggregate untouched).
+  const root = mkdtempSync(join(tmpdir(), "unpriced-"));
+  const sub = join(root, "proj", "sess", "subagents");
+  writeAgent(sub, "zzzz99998888", [
+    turn("claude-nonexistent-9", { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 0 }),
+  ]);
+  const runDir = join(root, "plan");
+  mkdirSync(runDir, { recursive: true });
+  writeFileSync(join(runDir, "_telemetry.json"), JSON.stringify({
+    task_slug: "unpriced", started_at: "2026-07-07T13:28:00Z", completed_at: "2026-07-07T14:16:00Z",
+    phases: [
+      { phase: "business_analysis", agent: "x-ba", model: "claude-nonexistent-9", status: "completed",
+        agent_id: "zzzz99998888", subagent_tokens: 40, usage_source: "subagent_aggregate", cost_usd: null },
+    ],
+    total_subagent_tokens: 40, total_cost_usd: null, cache_hit_ratio: null,
+  }, null, 2));
+  const r = enrichTelemetry(runDir, { registry: reg, projectsRoot: root });
+  assert.deepEqual(r.enriched, []);
+  assert.deepEqual(r.skipped, ["business_analysis"]);
+  const tel = JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8"));
+  assert.equal(tel.phases[0].usage_source, "subagent_aggregate", "not falsely claimed as transcript");
+  assert.equal(tel.phases[0].cost_usd, null);
+});
+
 test("enrichTelemetry recovers agent_id from the run checkpoint when telemetry omits it", () => {
   const root = mkdtempSync(join(tmpdir(), "cp-"));
   const sub = join(root, "proj", "sess", "subagents");
@@ -355,6 +438,40 @@ test("enrichTelemetry recovers agent_id from the run checkpoint when telemetry o
   assert.equal(tel.phases[0].usage_source, "transcript");
   assert.equal(tel.phases[0].agent_id, "ccee11112222");
   assert.ok(tel.phases[0].cost_usd > 0);
+  assert.equal(tel.cost_basis, "transcript");
+});
+
+test("enrichTelemetry recovers cost when the checkpoint's agent_id is an ARRAY (G1 healed guarded phase)", () => {
+  // A guarded phase that healed at least once records a LIST agent_id on its
+  // checkpoint (3d-1: "append the new agent_id to this unit's agent_id"). When
+  // telemetry omits agent_id, checkpointAgentId() must recover the array intact
+  // so the call site can flatten it — not re-wrap it into a nested array, which
+  // would build an unresolvable filename like "agent-dddd1111,eeee2222.jsonl"
+  // and silently drop the phase's real cost into `skipped`.
+  const root = mkdtempSync(join(tmpdir(), "cp-arr-"));
+  const sub = join(root, "proj", "sess", "subagents");
+  writeAgent(sub, "dddd11112222", [turn("claude-sonnet-5", { input_tokens: 100, output_tokens: 200, cache_read_input_tokens: 5000, cache_creation_input_tokens: 1000 })]);
+  writeAgent(sub, "eeee33334444", [turn("claude-sonnet-5", { input_tokens: 50, output_tokens: 80, cache_read_input_tokens: 2000, cache_creation_input_tokens: 500 })]);
+  const runDir = join(root, "plan");
+  mkdirSync(join(runDir, ".checkpoint"), { recursive: true });
+  // The checkpoint carries a LIST (phase healed once: original attempt + heal
+  // re-dispatch); the telemetry phase does NOT carry agent_id at all.
+  writeFileSync(join(runDir, ".checkpoint", "security.json"), JSON.stringify({
+    phase: "security", agent_id: ["dddd11112222", "eeee33334444"], status: "completed",
+    heal_attempts_used: 1, heal_status: "healed",
+  }));
+  writeFileSync(join(runDir, "_telemetry.json"), JSON.stringify({
+    task_slug: "cp-arr", started_at: "2026-07-07T13:28:00Z", completed_at: "2026-07-07T14:16:00Z",
+    phases: [{ phase: "security", agent: "x-sec", model: "claude-sonnet-5", status: "completed", subagent_tokens: 300, usage_source: "subagent_aggregate", cost_usd: null }],
+    total_subagent_tokens: 300, total_cost_usd: null, cost_basis: "subagent_aggregate", cache_hit_ratio: null,
+  }, null, 2));
+  const r = enrichTelemetry(runDir, { registry: reg, projectsRoot: root });
+  assert.deepEqual(r.enriched, ["security"], "phase resolved a transcript, not skipped");
+  assert.deepEqual(r.skipped, []);
+  const tel = JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8"));
+  assert.equal(tel.phases[0].usage_source, "transcript");
+  assert.deepEqual(tel.phases[0].agent_id, ["dddd11112222", "eeee33334444"]);
+  assert.ok(tel.phases[0].cost_usd > 0, "real cost resolved, not dropped");
   assert.equal(tel.cost_basis, "transcript");
 });
 

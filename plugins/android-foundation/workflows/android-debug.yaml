@@ -11,9 +11,13 @@ match:
   priority: 10
 phases:
   - debugging
-  - development
+  - name: development
+    heal:
+      max_attempts: 2
   - name: review
     loop:
       return_to: development
       max_rounds: 2
-  - test
+  - name: test
+    heal:
+      max_attempts: 2

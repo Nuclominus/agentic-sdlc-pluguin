@@ -234,3 +234,30 @@ test("sdlc-lint rollup <root> --json reports run_count", () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+const runWith = (slug, healByPhase) => ({
+  slug,
+  telemetry: {
+    task_slug: slug,
+    started_at: `2026-07-2${slug.length}T10:00:00Z`,
+    phases: healByPhase.map((h, i) => ({
+      phase: `p${i}`, usage_source: "reported", heal_attempts_used: h, heal_status: h ? "healed" : undefined,
+    })),
+  },
+});
+
+test("rollup totals sum heal attempts across runs", () => {
+  const r = computeRollup([runWith("a", [1, 2]), runWith("bb", [0])]);
+  assert.equal(r.totals.heal_attempts, 3);
+});
+
+test("heal_distribution counts runs by their heal-attempt total", () => {
+  const r = computeRollup([runWith("a", [1, 2]), runWith("bb", [3]), runWith("ccc", [0])]);
+  assert.equal(r.heal_distribution["3"], 2);  // run "a" (1+2) and run "bb" (3)
+  assert.equal(r.heal_distribution["0"], 1);  // run "ccc"
+});
+
+test("each run row exposes its own heal_attempts", () => {
+  const r = computeRollup([runWith("a", [2])]);
+  assert.equal(r.runs[0].heal_attempts, 2);
+});

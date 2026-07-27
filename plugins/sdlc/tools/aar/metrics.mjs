@@ -40,6 +40,8 @@ export function computeMetrics(tel) {
       peak_prefix_tokens: num(p.peak_prefix_tokens),
       reads_per_turn: num(p.turns) > 0 ? Math.round(num(p.cached_input_tokens) / num(p.turns)) : 0,
       cache_pressure: p.cache_pressure === true,
+      heal_attempts_used: num(p.heal_attempts_used),
+      heal_status: p.heal_status ?? null,
     };
   });
 
@@ -75,6 +77,13 @@ export function computeMetrics(tel) {
     .sort((a, b) => b.peak_prefix_tokens - a.peak_prefix_tokens || (a.phase < b.phase ? -1 : a.phase > b.phase ? 1 : 0));
 
   const qa_iterations = phases.reduce((s, p) => s + num(p.qa_iterations_used), 0);
+  const heal_attempts = phases.reduce((s, p) => s + num(p.heal_attempts_used), 0);
+  // Phases that burned their whole heal budget without going green. These are the
+  // actionable AAR finding: a mechanical failure the loop could not close.
+  const heal_exhausted_phases = by_phase
+    .filter((p) => p.heal_status === "exhausted")
+    .map((p) => ({ phase: p.phase, heal_attempts_used: p.heal_attempts_used }))
+    .sort((a, b) => (a.phase < b.phase ? -1 : a.phase > b.phase ? 1 : 0));
   const unpriced_phase_count = by_phase.filter((p) => p.cost_usd == null).length;
   const cap_breach = tel.cap_status != null && tel.cap_status !== "within";
   const post_check_failures = (Array.isArray(tel.post_pipeline_checks) ? tel.post_pipeline_checks : [])
@@ -102,6 +111,8 @@ export function computeMetrics(tel) {
     top_consumers,
     cache_pressure_phases,
     qa_iterations,
+    heal_attempts,
+    heal_exhausted_phases,
     cap_breach,
     unpriced_phase_count,
     skip_rules_count,

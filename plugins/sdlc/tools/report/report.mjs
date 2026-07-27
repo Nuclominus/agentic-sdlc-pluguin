@@ -270,6 +270,8 @@ function headerSection(t) {
   if (t.wall_clock_seconds != null) meta.push(`<span>wall clock <b>${esc(fmtDur(t.wall_clock_seconds))}</b></span>`);
   const qa = phases.find((p) => p.phase === "qa");
   if (qa && qa.qa_iterations_used != null) meta.push(`<span>${fmtInt(qa.qa_iterations_used)} QA iteration(s)</span>`);
+  const healTotal = phases.reduce((s, p) => s + (Number(p.heal_attempts_used) || 0), 0);
+  if (healTotal > 0) meta.push(`<span>${fmtInt(healTotal)} heal attempt(s)</span>`);
   if (t.model_enforcement_corrections != null) meta.push(`<span>${fmtInt(t.model_enforcement_corrections)} model corrections</span>`);
   const eyebrow = `SDLC PIPELINE RUN${t.started_at ? ` · ${esc(dateOf(t.started_at))}` : ""}`;
   return `<header class="hero">
@@ -358,6 +360,7 @@ function phaseDetail(p) {
     `cache-r ${fmtTok(p.cached_input_tokens)}`, `cache-w ${fmtTok(p.cache_creation_tokens)}`];
   if (p.turns) parts.push(`${fmtTok(Math.round((p.cached_input_tokens || 0) / p.turns))}/turn`);
   if (p.phase === "qa" && p.qa_iterations_used != null) parts.push(`${fmtInt(p.qa_iterations_used)} iteration(s)`);
+  if (p.heal_attempts_used) parts.push(`${fmtInt(p.heal_attempts_used)} heal attempt(s)`);
   return parts.join(" · ");
 }
 

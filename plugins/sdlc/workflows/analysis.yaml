@@ -8,7 +8,15 @@ description: >
 match:
   arguments_pattern: "\\banaly[sz]e\\b|\\baudit\\b|\\bassess(ment)?\\b"
 caps:
-  max_total_cost_usd: 0.30
+  # Both phases are opus (business_analysis + security): per the orchestrator's documented
+  # heuristic (SKILL.md 1d-1), an opus row is 14k/1e6*5 + 21k/1e6*0.5 + 3k/1e6*25 = $0.1555, so
+  # this recipe's own base_total = 2 * 0.1555 = $0.3110 BEFORE any healing — a 0.30 cap breached
+  # its own baseline. G1 then guards `security` (heal max_attempts: 2, no loop, so rounds(H)=1):
+  # worst_total = 0.3110 + 1*2*0.1555 = $0.6220. 0.75 clears the worst case with ~$0.13 (21%)
+  # headroom and is still well over 2x the plain two-phase baseline.
+  max_total_cost_usd: 0.75
 phases:
   - business_analysis
-  - security
+  - name: security
+    heal:
+      max_attempts: 2
