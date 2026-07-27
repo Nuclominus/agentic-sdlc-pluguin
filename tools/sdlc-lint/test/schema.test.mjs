@@ -110,6 +110,8 @@ test("code-writing phases in the core recipes are heal-guarded at 2 attempts", (
     ["plugins/sdlc/workflows/debug.yaml", ["development", "qa"]],
     ["plugins/sdlc/workflows/testing.yaml", ["qa"]],
     ["plugins/sdlc/workflows/analysis.yaml", ["security"]],
+    ["plugins/android-foundation/workflows/android-bugfix.yaml", ["development", "qa"]],
+    ["plugins/android-foundation/workflows/android-debug.yaml", ["development", "test"]],
   ]) {
     const r = recipe(file);
     for (const ph of phases) {
@@ -135,6 +137,11 @@ test("android-feature's parallel security is unguarded — parallel groups take 
   const group = r.phases.find((p) => p.parallel);
   assert.deepEqual(group.parallel, ["security", "test"]);
   assert.equal(healOf(r, "security"), undefined);
+});
+
+test("android-debug leaves debugging unguarded — it's investigation, not implementation", () => {
+  const r = recipe("plugins/android-foundation/workflows/android-debug.yaml");
+  assert.equal(healOf(r, "debugging"), undefined);
 });
 
 test("android heal_checks exclude unit tests", () => {
