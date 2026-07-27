@@ -172,11 +172,16 @@ test("hero omits the heal meta entirely when nothing healed", () => {
 test("a healed phase carries a per-phase heal badge", () => {
   const html = renderReport({
     task_slug: "t", started_at: "2026-07-27T10:00:00Z",
-    phases: [{
-      phase: "development", usage_source: "reported",
-      input_tokens: 100, output_tokens: 50, cached_input_tokens: 10, cache_creation_tokens: 5,
-      heal_attempts_used: 2, heal_status: "exhausted",
-    }],
+    phases: [
+      { phase: "development", usage_source: "reported",
+        input_tokens: 100, output_tokens: 50, cached_input_tokens: 10, cache_creation_tokens: 5,
+        heal_attempts_used: 1, heal_status: "healed" },
+      { phase: "security", usage_source: "reported",
+        input_tokens: 100, output_tokens: 50, cached_input_tokens: 10, cache_creation_tokens: 5,
+        heal_attempts_used: 1, heal_status: "healed" },
+    ],
   });
-  assert.match(html, /2 heal attempt\(s\)/);
+  // Hero sums to 2; only a per-phase badge can produce the string "1 heal attempt(s)".
+  assert.match(html, /2 heal attempt\(s\)/);   // hero
+  assert.match(html, /1 heal attempt\(s\)/);   // per-phase badge — impossible without it
 });
