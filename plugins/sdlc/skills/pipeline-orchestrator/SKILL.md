@@ -861,8 +861,8 @@ When `--resume` is active, already-done rows are printed in the `⏩ … skipped
 
 #### 1d-3. Headless dry-run
 
-If `HEADLESS == true` (Step 0a-1), additionally write a single machine-readable line to
-stdout so CI can gate on it:
+If `HEADLESS == true` (Step 0a-1), 🚨 **MUST PRINT VERBATIM** — a single machine-readable line to
+stdout, on its own line, so CI can gate on it:
 
 ```
 { "dry_run": true, "workflow": "{active_workflow}", "phases": {N}, "estimated_cost_usd": {expected_total}, "worst_case_usd": {worst_total}, "cap_usd": {CONTEXT.cost_cap or null}, "cap_estimate": "within"|"exceeds", "resumed": true, "reenter_at": "{first unfinished phase}" }
@@ -1224,8 +1224,9 @@ The development phase runs in TWO passes with a user approval gate between them.
    - Record the blocker `"{phase_name} planning gate reached under HEADLESS — no interactive approver
      to answer approve/request-changes/abort; stopping"` in telemetry.
    - Set `CONTEXT.aborted_at_phase = {phase_name}{ + " — " + aspect if aspect-aware}`.
-   - Write ONE machine-readable line to **stdout** (the same channel Step 1d-3's headless dry-run
-     line uses, and the only one this orchestrator can actually reach — see the CI note below):
+   - 🚨 **MUST PRINT VERBATIM** to **stdout** (the same channel Step 1d-3's headless dry-run line
+     uses, and the only one this orchestrator can actually reach — see the CI note below). Print it
+     BEFORE the ⛔ ABORTED banner, on its own line:
      ```
      ERROR: development planning gate reached — headless run has no approver — aborting (headless) phase={phase_name}{ aspect={aspect}}
      ```
@@ -1417,7 +1418,8 @@ next phase — or the next loop round, or the next aspect in a fan-out — is di
 
    **Headless (`HEADLESS == true`), any other next-dispatch type:** treat a cap-exceed as an
    **abort** (consistent with Step 0a's headless `block` handling). Set `CONTEXT.cap_status = "exceeded-aborted"`,
-   write one machine-readable line to stdout (per 0a-1 — stderr is unreachable from here), and stop dispatching:
+   stop dispatching, and 🚨 **MUST PRINT VERBATIM** to stdout (per 0a-1 — the other stream is
+   unreachable from here), on its own line, BEFORE the final summary:
    ```
    ERROR: cost cap exceeded — running=${running_cost_usd} cap=${cost_cap} next_phase={next_phase} — aborting (headless)
    ```

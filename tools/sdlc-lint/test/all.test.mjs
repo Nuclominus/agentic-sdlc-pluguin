@@ -102,6 +102,27 @@ test("the dry-run cost formula gates BOTH heal terms on non-empty heal_checks", 
     "(no heal_checks defined) inflate the dry-run estimate for healing that can never fire");
 });
 
+test("every machine-readable stdout line CI gates on carries the doc's MUST PRINT VERBATIM enforcement", () => {
+  const text = readFileSync(SKILL, "utf8");
+  // Each entry: the rule's anchor, and how far ahead the enforcement marker may sit.
+  const sites = [
+    ["1d-3 headless dry-run line", "#### 1d-3. Headless dry-run"],
+    ["3b-special headless gate marker", "ERROR: development planning gate reached"],
+    ["3d-cap headless abort marker", "ERROR: cost cap exceeded"],
+  ];
+  for (const [label, anchor] of sites) {
+    const idx = text.indexOf(anchor);
+    assert.ok(idx > -1, `${label}: anchor "${anchor}" missing`);
+    // Look back over the rule that introduces the line, not the whole document.
+    const window = text.slice(Math.max(0, idx - 700), idx + 200);
+    assert.match(window, /MUST PRINT VERBATIM/,
+      `${label} must carry the 🚨 MUST PRINT VERBATIM marker this document uses everywhere else ` +
+      "for output it actually depends on. Observed twice in real headless runs: a rule phrased as " +
+      "\"write one machine-readable line to stdout\" was silently skipped while every MUST-PRINT " +
+      "block around it was honoured — CI gating on that line would have seen nothing");
+  }
+});
+
 test("no rule anywhere promises an exit code or a stderr write — neither is reachable from a skill prompt", () => {
   const text = readFileSync(SKILL, "utf8");
   // 0a-1 states the constraint once and is the only place allowed to NAME the two dead channels
@@ -166,7 +187,7 @@ test("the development planning gate defines a deterministic HEADLESS rule detect
   assert.match(section, /ERROR: development planning gate reached/,
     "the headless abort must emit its machine-readable marker line, since that line — not the " +
     "process exit code — is what CI can actually gate on");
-  assert.match(section, /machine-readable line to \*\*stdout\*\*/,
+  assert.match(section, /MUST PRINT VERBATIM\*\* to \*\*stdout\*\*/,
     "the marker must go to stdout: a skill prompt's output reaches stdout, so a rule that demands " +
     "stderr specifies a channel the orchestrator cannot write to (Step 1d-3 sets the precedent)");
   assert.doesNotMatch(section, /\bexit 1\b/,
