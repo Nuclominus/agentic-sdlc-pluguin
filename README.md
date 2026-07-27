@@ -9,8 +9,8 @@ Everything is built around one idea: a single core drives the pipeline, and plug
 ## Quickstart
 
 ```bash
-# 1. Add the marketplace
-/plugin marketplace add Nuclominus/Agentic-SDLC-Pluguin
+# 1. Add the marketplace — pinned to the stable release channel
+/plugin marketplace add Nuclominus/Agentic-SDLC-Pluguin@release
 
 # 2. Install Android Foundation (sdlc core installs automatically as a dependency)
 /plugin install android-foundation@agentic-sdlc   # Android (Kotlin + Gradle) — the centerpiece
@@ -25,6 +25,9 @@ Everything is built around one idea: a single core drives the pipeline, and plug
 # 5. Run
 /sdlc:start "Add a settings screen with a dark-mode toggle"
 ```
+
+The `@release` suffix pins the marketplace to the stable `release` branch — installs and updates
+follow it instead of the development branch. Omit the suffix to track `develop` (bleeding edge).
 
 Full install, optional dependencies, and requirements → [`docs/INSTALLATION.md`](docs/INSTALLATION.md).
 

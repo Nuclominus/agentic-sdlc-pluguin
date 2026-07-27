@@ -8,10 +8,20 @@ install, optional dependencies, and requirements.
 ### 1. Add the marketplace
 
 ```bash
+# Stable channel (recommended) — pinned to the `release` branch
+/plugin marketplace add Nuclominus/Agentic-SDLC-Pluguin@release
+
+# Bleeding edge — tracks the default branch (`develop`)
 /plugin marketplace add Nuclominus/Agentic-SDLC-Pluguin
+
 # or for local development:
 /plugin marketplace add /path/to/Agentic-SDLC-Plugin
 ```
+
+A marketplace added with a branch `ref` keeps following that branch: `/plugin marketplace update
+agentic-sdlc` (and auto-updates) pull the latest commit of `release`, not of `develop`. The
+`release` branch only moves when a release is cut (fast-forward from `develop`), so the stable
+channel never sees work-in-progress.
 
 ### 2. Install Android Foundation (+ optional frameworks)
 
