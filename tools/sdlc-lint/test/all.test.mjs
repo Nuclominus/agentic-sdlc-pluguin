@@ -102,7 +102,7 @@ test("the dry-run cost formula gates BOTH heal terms on non-empty heal_checks", 
     "(no heal_checks defined) inflate the dry-run estimate for healing that can never fire");
 });
 
-test("the development planning gate defines a deterministic HEADLESS rule that cannot exit 0 having run nothing (Track G1 F6)", () => {
+test("the development planning gate defines a deterministic HEADLESS rule detectable without the exit code (Track G1 F6)", () => {
   const text = readFileSync(SKILL, "utf8");
   const gate = text.indexOf("**Approval gate:**");
   // Anchor to the next subsection heading, not a fixed length — "Pass 2 — Implementation:"
@@ -117,9 +117,19 @@ test("the development planning gate defines a deterministic HEADLESS rule that c
     "the approval gate must branch explicitly on HEADLESS, else a headless run falls through to " +
     "the interactive ask-the-user prompt with no stdin attached — the observed nondeterministic " +
     "stop-at-$2.84-and-exit-0 defect");
-  assert.match(section, /exit 1/,
-    "a headless run that hits this gate must exit NON-ZERO — exiting 0 having completed zero " +
-    "phases is exactly the unreliable behaviour this rule closes");
+  assert.match(section, /ERROR: development planning gate reached/,
+    "the headless abort must emit its machine-readable marker line, since that line — not the " +
+    "process exit code — is what CI can actually gate on");
+  assert.match(section, /machine-readable line to \*\*stdout\*\*/,
+    "the marker must go to stdout: a skill prompt's output reaches stdout, so a rule that demands " +
+    "stderr specifies a channel the orchestrator cannot write to (Step 1d-3 sets the precedent)");
+  assert.doesNotMatch(section, /\bexit 1\b/,
+    "the rule must NOT promise a non-zero exit status: this orchestrator is a prompt, not a " +
+    "program, and cannot set the hosting `claude -p` process's exit code — verified by execution, " +
+    "a correctly-aborting headless run still exited 0");
+  assert.match(section, /never on\s+`\$\?`/,
+    "the rule must tell CI explicitly not to gate on $?, otherwise an integrator reads the abort " +
+    "language and wires up the one signal that silently reports success");
   assert.match(section, /aborted_at_phase/,
     "a headless stop at this gate must record aborted_at_phase so partial telemetry (Step 5) names " +
     "where the run stopped, same as any other full-run abort");

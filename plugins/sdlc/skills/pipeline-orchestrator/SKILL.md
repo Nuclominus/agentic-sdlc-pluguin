@@ -1208,7 +1208,8 @@ The development phase runs in TWO passes with a user approval gate between them.
    - Record the blocker `"{phase_name} planning gate reached under HEADLESS — no interactive approver
      to answer approve/request-changes/abort; stopping"` in telemetry.
    - Set `CONTEXT.aborted_at_phase = {phase_name}{ + " — " + aspect if aspect-aware}`.
-   - Write ONE machine-readable line to **stderr**:
+   - Write ONE machine-readable line to **stdout** (the same channel Step 1d-3's headless dry-run
+     line uses, and the only one this orchestrator can actually reach — see the CI note below):
      ```
      ERROR: development planning gate reached — headless run has no approver — aborting (headless) phase={phase_name}{ aspect={aspect}}
      ```
@@ -1216,8 +1217,18 @@ The development phase runs in TWO passes with a user approval gate between them.
      phase the way the interactive **abort** bullet above does. A headless stop here halts the WHOLE
      run, mirroring Step 3d-cap's own headless-abort rule (a cap breach with no user present also
      resolves to a full abort, never a silent partial continuation nobody consented to).
-   - Proceed directly to Step 5 (partial telemetry, `aborted_at_phase` set) and **exit 1** — exiting
-     0 having completed zero phases must no longer be possible.
+   - Proceed directly to Step 5 and emit the ⛔ ABORTED banner with partial telemetry —
+     `aborted_at_phase` set and the blocker recorded. A headless run that reaches this gate must
+     never present as a clean, complete run.
+
+   **CI note — do not gate on the process exit code.** This orchestrator is a skill prompt, not a
+   program: it cannot set the exit status of the `claude -p` process that hosts it, which reports
+   success whenever the model finishes its turn normally. (Verified by execution: a headless run
+   that correctly aborted at this gate still exited 0.) The abort is therefore machine-detectable
+   through the artifacts the orchestrator *does* control — gate CI on either of these, never on
+   `$?`:
+   - the `ERROR: development planning gate reached` line on stdout, or
+   - `aborted_at_phase != null` in `docs/plans/{task_slug}/_telemetry.json`.
 
    Silent auto-approval was considered and rejected: letting an unattended run wave a generated
    implementation plan through with no human review is a bigger hazard than a loud, deterministic
