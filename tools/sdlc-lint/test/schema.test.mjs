@@ -53,12 +53,12 @@ test("workflow.schema accepts a phase with a heal block", () => {
 
 test("workflow.schema rejects max_attempts above the ceiling of 3", () => {
   const v = compile("schemas/workflow.schema.json");
-  assert.equal(v({ name: "x", phases: [{ name: "development", heal: { max_attempts: 4 } }] }), false);
+  assert.equal(v({ name: "xx", phases: [{ name: "development", heal: { max_attempts: 4 } }] }), false);
 });
 
 test("workflow.schema rejects a heal block with no max_attempts", () => {
   const v = compile("schemas/workflow.schema.json");
-  assert.equal(v({ name: "x", phases: [{ name: "development", heal: {} }] }), false);
+  assert.equal(v({ name: "xx", phases: [{ name: "development", heal: {} }] }), false);
 });
 
 test("workflow.schema allows heal and loop on the same phase", () => {
