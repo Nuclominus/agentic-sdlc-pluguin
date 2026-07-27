@@ -42,6 +42,7 @@ export function computeRollup(runs) {
       cost_cap_usd: m.totals.cost_cap_usd,
       cap_breach: m.cap_breach,
       qa_iterations: num(m.qa_iterations),
+      heal_attempts: num(m.heal_attempts),
       skip_rules_count: num(m.skip_rules_count),
       phase_count: m.by_phase.length,
       unpriced: m.unpriced_phase_count > 0,
@@ -52,7 +53,7 @@ export function computeRollup(runs) {
   }).sort(cmpStartedAt);
 
   let costSum = 0, anyCost = false, inSum = 0, outSum = 0, cachedSum = 0;
-  let capBreaches = 0, skipRules = 0, qaIters = 0, unpricedRuns = 0;
+  let capBreaches = 0, skipRules = 0, qaIters = 0, healAttempts = 0, unpricedRuns = 0;
   for (const r of rows) {
     if (r.cost_usd != null) { costSum += r.cost_usd; anyCost = true; }
     inSum += r.input_tokens;
@@ -61,6 +62,7 @@ export function computeRollup(runs) {
     if (r.cap_breach) capBreaches += 1;
     skipRules += r.skip_rules_count;
     qaIters += r.qa_iterations;
+    healAttempts += r.heal_attempts;
     if (r.unpriced) unpricedRuns += 1;
   }
 
@@ -98,6 +100,9 @@ export function computeRollup(runs) {
   const qa_distribution = {};
   for (const r of rows) { const k = String(r.qa_iterations); qa_distribution[k] = (qa_distribution[k] ?? 0) + 1; }
 
+  const heal_distribution = {};
+  for (const r of rows) { const k = String(r.heal_attempts); heal_distribution[k] = (heal_distribution[k] ?? 0) + 1; }
+
   const cap_breach_incidents = rows.filter((r) => r.cap_breach).map((r) => ({ slug: r.slug, cap_status: r.cap_status, cost_usd: r.cost_usd, cost_cap_usd: r.cost_cap_usd }));
   const skips = [];
   for (const r of rows) for (const s of r._skips) skips.push({ slug: r.slug, phase_skipped: s.phase_skipped, rule: s.rule });
@@ -115,6 +120,7 @@ export function computeRollup(runs) {
       cap_breaches: capBreaches,
       skip_rules: skipRules,
       qa_iterations: qaIters,
+      heal_attempts: healAttempts,
       unpriced_runs: unpricedRuns,
     },
     by_model,
@@ -122,6 +128,7 @@ export function computeRollup(runs) {
     cost_over_time,
     cache_trend,
     qa_distribution,
+    heal_distribution,
     incidents: { cap_breaches: cap_breach_incidents, skips },
   };
 }
@@ -134,7 +141,7 @@ export function renderRollupText(agg) {
   lines.push(
     `Total cost ${fmtUsd(t.cost_usd)}${t.unpriced_runs ? ` (partial — ${t.unpriced_runs} unpriced)` : ""}` +
     ` · cache ${pct(t.cache_hit_ratio_weighted)} · cap breaches ${t.cap_breaches}` +
-    ` · skips ${t.skip_rules} · QA iters ${t.qa_iterations}`
+    ` · skips ${t.skip_rules} · QA iters ${t.qa_iterations} · heal ${t.heal_attempts}`
   );
   lines.push("");
   lines.push(`${"RUN".padEnd(24)} ${"WHEN".padEnd(20)} ${"COST".padStart(8)} ${"CACHE".padStart(6)} CAP`);
@@ -210,6 +217,7 @@ ${tile("Cache hit", pct(t.cache_hit_ratio_weighted))}
 ${tile("Cap breaches", t.cap_breaches)}
 ${tile("Skips", t.skip_rules)}
 ${tile("QA iterations", t.qa_iterations)}
+${tile("Heal attempts", t.heal_attempts)}
 </section>`;
   const partial = t.unpriced_runs ? `<p class="note">Cost partial — ${t.unpriced_runs} run(s) unpriced (no registry pricing).</p>` : "";
 
