@@ -152,3 +152,49 @@ test("android heal_checks exclude unit tests", () => {
       "heal scope is compile+lint only — unit tests stay with the qa agent's own cap");
   }
 });
+
+test("android heal_checks are trimmed to compile-only — lint stays in post_pipeline_checks", () => {
+  const m = YAML.parse(readFileSync(resolve(REPO, "plugins/android-foundation/manifest.yaml"), "utf8"));
+  // G1 perf fix: heal_checks fires after EVERY guarded-phase dispatch (not just on failure), so
+  // a lint entry here doubled the Gradle-invocation tax for no heal-relevant benefit — lint is
+  // style debt, not a mechanical build break, and is still fully covered (unconditionally) by
+  // post_pipeline_checks below. Exactly one entry, and it must be able to fail (no `|| true`).
+  assert.equal(m.heal_checks.length, 1, "heal_checks should carry exactly the compile check");
+  assert.match(m.heal_checks[0], /compileDebugKotlin/);
+  assert.doesNotMatch(m.heal_checks[0], /\|\|\s*true\b/, "the heal compile check must be able to fail");
+  for (const c of m.heal_checks) {
+    assert.doesNotMatch(c, /detekt|ktlintCheck/,
+      "lint is no longer part of the heal loop — it still runs unconditionally in post_pipeline_checks");
+  }
+  // The claim the perf fix relies on: lint coverage is not lost overall, only ungated mid-pipeline.
+  assert.ok(m.post_pipeline_checks.some((c) => /detekt/.test(c) && /ktlintCheck/.test(c)),
+    "post_pipeline_checks must still run the full detekt/ktlintCheck sweep at the end of every run");
+});
+
+test("analysis.yaml cap clears its own opus+opus baseline plus the guarded security heal allowance", () => {
+  const r = recipe("plugins/sdlc/workflows/analysis.yaml");
+  // base_total = 2 opus rows (business_analysis + security) @ $0.1555 = $0.3110 (SKILL.md 1d-1
+  // heuristic: 14k/1e6*5 + 21k/1e6*0.5 + 3k/1e6*25). worst_total with security's heal (2
+  // attempts, no loop) = 0.3110 + 2*0.1555 = $0.6220. The cap must clear both.
+  const baseTotal = 2 * 0.1555;
+  const worstTotal = baseTotal + 2 * 0.1555;
+  assert.ok(r.caps.max_total_cost_usd > baseTotal, "cap must clear the pre-heal baseline");
+  assert.ok(r.caps.max_total_cost_usd > worstTotal, "cap must clear the worst-case heal total");
+  assert.equal(r.caps.max_total_cost_usd, 0.75);
+});
+
+test("hotfix.yaml cap clears its guarded development+qa+security worst-case heal total", () => {
+  const r = recipe("plugins/sdlc/workflows/hotfix.yaml");
+  // base_total = development sonnet*1.6 ($0.0812) + qa sonnet ($0.0508) + security opus
+  // ($0.1555) + documentation haiku ($0.0158) = $0.3033. worst_total adds 2 heal attempts on
+  // each of the 3 guarded phases (no loop, rounds(H)=1): 0.3033 + 2*(0.0812+0.0508+0.1555) =
+  // $0.8784.
+  const devRow = 0.05076 * 1.6;
+  const qaRow = 0.05076;
+  const securityRow = 0.1555;
+  const docsRow = 0.01578;
+  const baseTotal = devRow + qaRow + securityRow + docsRow;
+  const worstTotal = baseTotal + 2 * (devRow + qaRow + securityRow);
+  assert.ok(r.caps.max_total_cost_usd > worstTotal, "cap must clear the worst-case heal total");
+  assert.equal(r.caps.max_total_cost_usd, 1.10);
+});

@@ -74,19 +74,26 @@ phase_injections:
     certificate pinning where required; validate incoming Intents/deep links; biometric (BiometricPrompt)
     as step-up not primary; R8/ProGuard enabled for release; no secrets in source/VCS.
 
-# G1 self-healing: compile + lint ONLY. Deliberately a subset of post_pipeline_checks —
+# G1 self-healing: compile ONLY. Deliberately a subset of post_pipeline_checks —
 # testDebugUnitTest is excluded because a failing unit test is a logic problem that belongs
 # to the qa agent's own 3-attempt cap, not to the mechanical heal loop.
-# The lint check is NOT a copy of post_pipeline_checks' `|| true` line: here a lint FAILURE
-# must actually trip healing (`|| true` would swallow it and make this check a no-op that
-# still burns 1-2 full Gradle builds every guarded-phase dispatch for nothing). So probe
-# task existence cheaply via `help --task` (no build, just task-graph resolution) and only
-# run the one task that's actually defined, letting ITS exit code decide; skip cleanly (exit
-# 0) when the project defines neither task. `post_pipeline_checks` below is untouched — its
-# `|| true` is correct there (Step 4 must never fail a run over a missing lint task).
+#
+# Perf note (measured on android-feature.yaml: development guarded + return_to of a 3-round
+# review loop, qa guarded): heal_checks runs after EVERY guarded-phase dispatch, unconditionally,
+# not only on failure — each entry here is one gradlew invocation, paid whether or not anything
+# broke. A prior 2-entry version (compile + a `help --task`-probed detekt/ktlintCheck) cost
+# 3 baseline (Step 4 post_pipeline_checks) + 4 = 7 invocations when review approved on round 1
+# (+133% vs the pre-G1 baseline of 3), and 3 + 8 = 11 on a full 3-round loop (+267%). Dropping
+# the lint entry halves the per-dispatch heal cost: 3 + 2 = 5 (+67%) and 3 + 4 = 7 (+133%)
+# respectively — lint coverage is NOT lost overall, because post_pipeline_checks below still
+# runs the full detekt/ktlintCheck sweep unconditionally at the end of every run; it just no
+# longer gates the mid-pipeline heal loop. A compile break is the one failure mode that is
+# actually "mechanical" (blocks everything downstream); a lint violation is style debt that
+# stays visible in the Step 4 report without paying for it again on every guarded dispatch and
+# every loop round. `compileDebugKotlin` must still FAIL on a genuine compile break — no
+# `|| true` here, unlike the intentionally-non-blocking post_pipeline_checks lint line below.
 heal_checks:
   - sh -c './gradlew compileDebugKotlin'
-  - sh -c "./gradlew -q help --task detekt >/dev/null 2>&1 && exec ./gradlew detekt; ./gradlew -q help --task ktlintCheck >/dev/null 2>&1 && exec ./gradlew ktlintCheck; exit 0"
 
 # NO assembleDebug (full SDK), NO connectedAndroidTest (emulator). detekt + JVM unit tests + compile-check.
 post_pipeline_checks:
