@@ -1478,8 +1478,12 @@ vacuous pass.
    - **Every named file lies outside `heal_touched_files`** → this is pre-existing breakage the
      phase did not cause. Set `heal_status = "pre-existing"`, leave `heal_attempts`
      **UNCHANGED** (so a first-failure case stays `0` — nothing was ever dispatched), record the
-     blocker `"{phase} heal skipped — {command} fails on files outside this phase's changes"` in
-     telemetry, do **NOT** dispatch, and proceed to 3d-3.
+     blocker `"{phase} heal pre-existing — {command} fails on files outside this phase's changes"`
+     in telemetry, do **NOT** dispatch, and proceed to 3d-3. **The blocker must say
+     `pre-existing`, never `skipped`** — `"skipped"` is a DIFFERENT `heal_status` value with three
+     meanings of its own (see the collapse note under the branch table), so a blocker reading
+     "heal skipped" on a `pre-existing` phase makes the prose contradict the field beside it and
+     re-creates exactly the ambiguity that value split was introduced to remove.
    - **No file path can be parsed out of the output at all** (a linker error, an unlocated tool
      crash, etc.) → the check cannot prove the failure is foreign, so treat it as **NOT**
      pre-existing here. Fall through to 4b.

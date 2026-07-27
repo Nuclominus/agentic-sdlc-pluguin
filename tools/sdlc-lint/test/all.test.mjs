@@ -102,6 +102,22 @@ test("the dry-run cost formula gates BOTH heal terms on non-empty heal_checks", 
     "(no heal_checks defined) inflate the dry-run estimate for healing that can never fire");
 });
 
+test("3e-heal step 4a's pre-existing blocker names its own status, never the reserved word 'skipped'", () => {
+  const text = readFileSync(SKILL, "utf8");
+  const start = text.indexOf("**4a. Orchestrator-side pre-existing-breakage check");
+  const terminatorIdx = text.indexOf("**4b. Attempt-budget branch**", start);
+  assert.ok(start > -1, "3e-heal step 4a section missing");
+  assert.ok(terminatorIdx > -1, "4b terminator missing");
+  const section = text.slice(start, terminatorIdx);
+
+  assert.match(section, /blocker `"\{phase\} heal pre-existing —/,
+    "4a sets heal_status = \"pre-existing\", so its blocker template must say pre-existing too");
+  assert.doesNotMatch(section, /blocker `"\{phase\} heal skipped/,
+    "the blocker must not say \"heal skipped\" on a phase recorded as \"pre-existing\": \"skipped\" " +
+    "is a distinct enum value collapsing three other situations, so this wording makes the prose " +
+    "contradict the field beside it (observed in a real run's _telemetry.json blockers array)");
+});
+
 test("the development planning gate defines a deterministic HEADLESS rule detectable without the exit code (Track G1 F6)", () => {
   const text = readFileSync(SKILL, "utf8");
   const gate = text.indexOf("**Approval gate:**");
