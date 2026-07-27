@@ -183,8 +183,13 @@ Recipes gaining `heal: {max_attempts: 2}`:
 | `debug.yaml` | `development`, `qa` |
 | `testing.yaml` | `qa` |
 | `analysis.yaml` | `security` |
-| `android-feature.yaml` | `development`, `security`, `qa` |
+| `android-feature.yaml` | `development`, `qa` — **not** `security` (see below) |
 | `docs-only.yaml` | none — `documentation` writes no compilable source |
+
+`android-feature.yaml` runs `security` inside a `parallel: [security, test]` group. The parallel
+branch of `workflow.schema.json` accepts an **array of strings only**, so no `heal` block can be
+attached to a member of a parallel group. Its `security` phase is therefore unguarded; `development`
+and `qa` are standalone and are guarded normally.
 
 `analysis.yaml` has no `development` phase, but its `security` phase still fixes Critical/High
 directly, so it is guarded. `debug.yaml` runs `development` + `qa` and is fully guarded — the
@@ -291,3 +296,8 @@ dropped `aspect_constraint`), so it warrants an ADR in `.brain/decisions/` per
 - **F2 fast-track DAG** pairs with this for the trivial-change lane; not part of G1.
 - **Baseline probe** (running `heal_checks` once at run start) is rejected here on cost, but becomes
   cheap if a future stack profile declares an incremental check. Revisit then.
+- **Heal inside parallel groups.** `workflow.schema.json`'s parallel branch accepts strings only, so
+  a member of a `parallel:` group cannot carry a `heal` block — this leaves `android-feature.yaml`'s
+  `security` phase unguarded. Widening that branch to accept phase objects is a schema change with
+  blast radius well beyond G1 (it affects loop and `when` handling inside groups too), so it is
+  deliberately deferred.
