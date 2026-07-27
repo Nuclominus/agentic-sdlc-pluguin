@@ -71,10 +71,14 @@ verdict:
 - Heal dispatches drop `aspect_constraint`; on a phase both looped and guarded, worst case is
   `max_rounds × max_attempts` heal dispatches on top of the base rounds (e.g. a 3-round loop over a
   2-attempt guarded phase adds 6 heal dispatches to the 3 base ones — 9 total). The dry-run cost
-  preview's `worst_total`/`expected_total` fold this in as
-  `Σ over healed phases rounds(H)·max_attempts·est(H)` (worst) /
-  `rounds(H)·0.3·est(H)` (expected), where `rounds(H) = max_rounds` when the guarded phase is also
-  looped, else `1`.
+  preview folds this in — both terms summed **only over phases whose active profile supplies
+  non-empty `heal_checks`** (an inert `heal:` block on a stack with no checks prices at $0):
+  `Σ rounds(H)·max_attempts·est(H)` (worst, `rounds(H) = max_rounds` when the guarded phase is also
+  looped, else `1`) / `Σ avg_rounds(H)·0.3·est(H)` (expected, `avg_rounds(H) = 1.5` for the
+  looped-and-guarded case — matching the ~1.5-round average the loop term itself assumes — else
+  `1`). Worst-case and expected deliberately use different round counts; an earlier draft of this
+  ADR used `max_rounds` in both, overstating the expected heal term 2× on a 3-round loop (PR #77
+  review finding 2). SKILL.md Step 1d-1 point 4 is the normative formula.
 - `heal_status` gives a binary per-run success metric (`healed` vs. `exhausted`), so unlike Track E
   this needs no `bench/` A/B campaign to validate — it is verifiable at n=1.
 - **Two decisions reversed during implementation review**, both worth flagging explicitly because a

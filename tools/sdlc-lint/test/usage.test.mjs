@@ -345,6 +345,17 @@ test("priceUsage tolerates a Bedrock region prefix and version suffix, alone or 
   assert.equal(priceUsage(u, "claude-opus-4-8-v1:0", reg), opus);
   // Prefix + date + version all stacked, in the real Bedrock cross-region shape.
   assert.equal(priceUsage(u, "us.anthropic.claude-opus-4-8-20260115-v1:0", reg), opus);
+
+  // The dated-registry-key case (PR #77 review finding 1): haiku's canonical id
+  // IS dated, so the date stripper must run AFTER the prefix stripper — date-first
+  // never probes the bare `claude-haiku-4-5-20251001` and the only dated registry
+  // key becomes unreachable from every Bedrock shape. Haiku is a pipeline tier;
+  // this was a silent cost drop, and the opus-only cases above cannot catch it
+  // (opus's registry key is undated, so any strip order resolves it).
+  const haiku = priceUsage(u, "claude-haiku-4-5-20251001", reg);
+  assert.ok(haiku > 0);
+  assert.equal(priceUsage(u, "us.anthropic.claude-haiku-4-5-20251001", reg), haiku);
+  assert.equal(priceUsage(u, "us.anthropic.claude-haiku-4-5-20251001-v1:0", reg), haiku);
 });
 
 test("enrichTelemetry prices an opus-tier phase whose transcript model carries a Bedrock region prefix", () => {

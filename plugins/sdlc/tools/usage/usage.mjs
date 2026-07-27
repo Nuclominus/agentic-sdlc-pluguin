@@ -152,17 +152,25 @@ function zeroUsage() {
  * (`us.anthropic.claude-opus-4-8`, `anthropic.claude-opus-4-8`), or a trailing
  * Bedrock version suffix (`claude-opus-4-8-v1:0`). The exact id is tried first,
  * so a registry key that legitimately IS dated (e.g. `claude-haiku-4-5-20251001`)
- * still matches. Decorations are stripped to a fixed point (repeatedly, in any
- * order) so combinations — e.g. a prefixed AND dated AND versioned Bedrock id —
- * still resolve once fully normalised, not just single-decoration cases.
+ * still matches. Decorations are stripped to a fixed point so combinations —
+ * e.g. a prefixed AND dated AND versioned Bedrock id — still resolve once fully
+ * normalised, not just single-decoration cases.
+ *
+ * ORDER MATTERS: the registry is probed after every individual strip, and the
+ * date stripper is deliberately LAST. Bracket/version/prefix are never part of
+ * a registry key, but a date can be (`claude-haiku-4-5-20251001`) — stripping
+ * the date before the prefix means the probe sequence for
+ * `us.anthropic.claude-haiku-4-5-20251001` never visits the bare dated id, and
+ * the one dated registry key becomes unreachable from its Bedrock shape
+ * (PR #77 review finding 1). Never-a-key decorations first, date last.
  * Returns the pricing object, `null` for a known-but-unpriced model, or `null`
  * when the id is unknown even after normalisation.
  */
 const MODEL_ID_STRIPPERS = [
   (s) => s.replace(/\[[^\]]*\]$/, ""),                 // trailing context tag: [1m]
   (s) => s.replace(/-v\d+:\d+$/, ""),                  // trailing Bedrock version: -v1:0
-  (s) => s.replace(/-\d{8}$/, ""),                     // trailing dated snapshot: -20260115
   (s) => s.replace(/^[a-z]{2}\.anthropic\./, "").replace(/^anthropic\./, ""), // us.anthropic. / anthropic. prefix
+  (s) => s.replace(/-\d{8}$/, ""),                     // trailing dated snapshot: -20260115 — LAST (see above)
 ];
 
 export function lookupPricing(modelId, registry) {
