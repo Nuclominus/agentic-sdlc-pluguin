@@ -741,8 +741,15 @@ heuristic):
 ```
 base_total     = Σ est_row over all rows (development already ×1.6/aspect)
 expected_total = base_total + Σ over loop phases 0.5·(est(L)+est(R))
+                            + Σ over healed phases 0.3·est(H)
 worst_total    = base_total + Σ over loop phases (max_rounds−1)·(est(L)+est(R))
+                            + Σ over healed phases max_attempts·est(H)
 ```
+
+A phase carrying `heal: {max_attempts: N}` can re-dispatch its own agent up to N times per
+dispatch, so `worst_total` folds in `N × est(H)` for each guarded phase H. When a phase is BOTH
+looped and guarded the two multiply — a 3-round loop over a 2-attempt guarded phase is up to
+9 dispatches — so the guarded-phase term is added per loop round, not once.
 
 #### 1d-2. MUST PRINT VERBATIM (dry-run contract)
 
@@ -750,7 +757,7 @@ worst_total    = base_total + Σ over loop phases (max_rounds−1)·(est(L)+est(
 🔎 DRY RUN — no agents dispatched, no code written.
 Stack: {primary_stack} | Workflow: {active_workflow}{ (auto-selected) if CONTEXT.workflow_autoselected}
 Phases ({N}):
-   1. {phase}{ — aspect}    → {agent} ({tier})   ~${est_row}{  loops ⇄ {return_to}, ≤{max_rounds}× | ‖ parallel — flags if any}
+   1. {phase}{ — aspect}    → {agent} ({tier})   ~${est_row}{  loops ⇄ {return_to}, ≤{max_rounds}× | ‖ parallel | 🔧 heals ≤{max_attempts}× — flags if any}
    2. {phase}               → {agent} ({tier})   ~${est_row}
    ...
    3. ⏩ {phase}{ — aspect}   → skipped (resumed from checkpoint)   $0.00
@@ -1220,6 +1227,98 @@ gate uses the ACTUAL accumulated `cost_usd`. Both read the same cap from `CONTEX
 - Docs phase: must contain a PR URL or commit hash.
 
 If validation fails, **do not proceed** — ask the user how to handle (retry, skip, abort).
+
+**3e-heal. Self-healing micro-loop (Track G1).**
+
+Runs ONLY when the resolved recipe phase carries a `heal: {max_attempts: N}` block. Without one,
+skip this step entirely — no commands, no dispatch, no prompt change.
+
+Set `heal_attempts = 0`, `heal_status = "skipped"`.
+
+1. **Capture the touched set.** Before the phase was dispatched you recorded
+   `git diff --name-only HEAD` plus `git ls-files --others --exclude-standard`. Run both again now;
+   the union of the two deltas is `heal_touched_files`. (Derive it from git, NOT from the phase's
+   prose report — only `development` is required to list changed files at 3e; `security` reports
+   severity counts and `qa` reports pass/fail counts.)
+
+2. **Run the checks.** For each command in `EFFECTIVE_PROFILE.heal_checks`, execute via `Bash` with
+   `timeout: 600000` (a Gradle build exceeding the 120000 default would otherwise register as a
+   spurious failure and trigger healing against a timeout rather than a compile error).
+
+   A command whose required tool is absent on this host is a **SKIP**, not a failure — record
+   `skipped (tool unavailable on this host)` and move to the next command. This is the same rule as
+   Step 4; without it a host lacking the toolchain heals to the cap on every guarded phase.
+
+3. **All commands exit 0** → set `heal_status = "healed"` if `heal_attempts > 0`, else leave
+   `"skipped"`. Proceed to 3d-3.
+
+4. **A command exits non-zero:**
+   - If `heal_attempts == max_attempts` → set `heal_status = "exhausted"`, record the blocker
+     `"{phase} heal exhausted ({heal_attempts} attempts) — {command} still failing"` in telemetry,
+     **MUST PRINT VERBATIM:**
+     ```
+     ⚠ Phase {N}/{total}: {phase} heal exhausted after {heal_attempts} attempt(s) — {command} still failing
+     ```
+     and **CONTINUE to the next phase.** Never halt the run. Never escalate to a review phase.
+   - Otherwise `heal_attempts += 1`, **MUST PRINT VERBATIM:**
+     ```
+     🔧 Phase {N}/{total}: {phase} heal attempt {heal_attempts}/{max_attempts}
+     ```
+     then re-dispatch (step 5) and return to step 2.
+
+5. **The heal re-dispatch.** Spawn the SAME agent this phase used (3a lookup), with the SAME stable
+   prefix — unchanged, so prompt-cache stays warm — and these ADDITIONAL per-call trailer keys:
+
+   ```
+   heal_attempt: {heal_attempts}/{max_attempts}
+   heal_command: {the command that failed}
+   heal_touched_files:
+     {the git-derived list from step 1, one per line}
+   heal_stderr: |
+     {LAST 50 LINES of the failing command's combined output}
+   heal_instruction: |
+     A mechanical build check failed after your phase. Fix ONLY what the tool named.
+     Do not refactor, do not add features, do not touch tests, do not change public APIs.
+     If the reported errors name ONLY files outside heal_touched_files, this is PRE-EXISTING
+     breakage you did not cause: report that and STOP without editing anything.
+     If the failure is not mechanically fixable from this output (it needs a design change),
+     say so and STOP — do not guess.
+   ```
+
+   `heal_stderr` is capped at 50 lines. An unbounded build log is exactly the
+   "never dump a full build/test log into context" case the read-discipline contract forbids
+   (ADR-0008).
+
+   If the agent reports **pre-existing breakage**, set `heal_status = "pre-existing"`, record it as
+   a blocker, and stop the loop without spending further attempts.
+   If the agent reports the failure is **not mechanically fixable**, treat it as exhausted
+   immediately — do not spend the remaining attempt.
+
+6. **Aspect-aware phases.** Compilation is global: one aspect's code may legitimately not compile
+   until a later aspect lands. So heal runs **ONCE after the whole fan-out completes**, never
+   per-aspect. Dispatch to the canonical-first aspect's agent and **OMIT the `aspect_constraint`
+   block** for heal dispatches only — `heal_instruction` already bounds the edit to what the tool
+   named, and routing stderr to aspects by file path is fragile guesswork.
+
+7. **Development's planning gate is NOT re-opened** on a heal re-dispatch — go straight to the
+   implement pass, mirroring loop-round behaviour (3-loop step 2).
+
+8. **The 3d-cap cost gate applies to heal dispatches.** A heal attempt is real spend and must not
+   tunnel under the cap. Re-evaluate the gate after each heal dispatch's cost is folded in.
+
+9. **Record on the checkpoint** (written next, in 3d-3): `heal_attempts_used = heal_attempts` and
+   `heal_status`. Heal dispatch cost folds into this phase's own `cost_usd`, so run totals, caps and
+   the cross-run rollup need no arithmetic change.
+
+`heal_attempts` resets on **every dispatch**, not once per phase — so a loop phase gets a fresh
+budget each round. The checkpoint's `heal_attempts_used` records the SUM across that phase's rounds.
+
+<!-- DRIFT GUARD: the `heal:` block shape (max_attempts 1..3) is defined in
+     schemas/workflow.schema.json and `heal_checks` in schemas/manifest.schema.json; the
+     result fields are in schemas/checkpoint.schema.json. The ORDERING of this step
+     (after 3e validation, before the 3d-3 checkpoint write) is asserted by
+     tools/sdlc-lint/test/all.test.mjs — moving it writes an unhealed checkpoint or
+     burns attempts on an invalid phase. Reword freely; do not relocate. Track G1. -->
 
 **3d-3. Write the phase checkpoint (resume substrate).** After 3d-1/3d-2 (telemetry computed) AND
 3e (validation passed), atomically write `docs/plans/{task_slug}/.checkpoint/{unit}.json` where
