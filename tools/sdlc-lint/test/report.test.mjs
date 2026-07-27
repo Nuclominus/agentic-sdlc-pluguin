@@ -149,3 +149,34 @@ test("cache-pressure signal absent when a phase is under threshold", () => {
   assert.doesNotMatch(html, /high cache pressure/);    // no warn badge
   assert.doesNotMatch(html, /High cache-pressure/);    // no Signals flag
 });
+
+test("hero shows total heal attempts when any phase healed", () => {
+  const html = renderReport({
+    task_slug: "t", started_at: "2026-07-27T10:00:00Z",
+    phases: [
+      { phase: "development", usage_source: "reported", heal_attempts_used: 1, heal_status: "healed" },
+      { phase: "qa", usage_source: "reported", heal_attempts_used: 2, heal_status: "exhausted" },
+    ],
+  });
+  assert.match(html, /3 heal attempt\(s\)/);
+});
+
+test("hero omits the heal meta entirely when nothing healed", () => {
+  const html = renderReport({
+    task_slug: "t", started_at: "2026-07-27T10:00:00Z",
+    phases: [{ phase: "qa", usage_source: "reported" }],
+  });
+  assert.doesNotMatch(html, /heal attempt/);
+});
+
+test("a healed phase carries a per-phase heal badge", () => {
+  const html = renderReport({
+    task_slug: "t", started_at: "2026-07-27T10:00:00Z",
+    phases: [{
+      phase: "development", usage_source: "reported",
+      input_tokens: 100, output_tokens: 50, cached_input_tokens: 10, cache_creation_tokens: 5,
+      heal_attempts_used: 2, heal_status: "exhausted",
+    }],
+  });
+  assert.match(html, /2 heal attempt\(s\)/);
+});
