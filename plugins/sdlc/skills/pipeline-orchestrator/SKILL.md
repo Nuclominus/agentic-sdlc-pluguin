@@ -924,7 +924,17 @@ For a phase carrying `loop: {return_to, max_rounds}` (e.g. a review phase that b
    `heal:` block — each round is a fresh dispatch with its own heal budget). Set `round = 1`.
 2. Read the loop phase agent's COMPACT summary for an explicit verdict:
    - **approved / no findings** (e.g. "LGTM", empty findings list) → loop satisfied; advance to the next phase.
-   - **changes requested / non-empty findings** → if `round < max_rounds`: re-dispatch the `return_to` phase with the loop phase's findings injected into its per-call context as a `loop_findings:` block, then re-run the loop phase; `round += 1`; print `↻ {loop_phase} round {round}/{max_rounds}`; repeat from step 2.
+   - **changes requested / non-empty findings** → if `round < max_rounds`: re-dispatch the
+     `return_to` phase — running its FULL 3a-3e path exactly as a first-time dispatch would,
+     including a fresh 3b-0 pre-dispatch snapshot and 3e-heal if `return_to` carries a `heal:` block
+     (every round is a fresh dispatch with its own heal budget — same rule as loop-phase step 1
+     above), and writing its own 3d-3 checkpoint — with the loop phase's findings injected into its
+     per-call context as a `loop_findings:` block. **This is the shape that matters in practice: in
+     every shipped recipe the guarded phase IS the `return_to` target (e.g. `development`), never
+     the loop phase itself** (e.g. `review`), so this bullet — not loop-phase step 1 — is what fires
+     3e-heal on a review/iterate cycle. Then re-run the loop phase; `round += 1`; print `↻
+     {loop_phase} round {round}/{max_rounds}`; repeat from step 2. The one exception: development's
+     planning gate is NOT re-opened on this re-dispatch (see below).
 3. If `round == max_rounds` and still not approved: stop the loop, record a blocker `"{loop_phase} exceeded max_rounds ({max_rounds}) without approval — escalate to human"` in telemetry, print it, and PAUSE for user direction (do not silently continue).
 
 If `return_to` is a multi-pass phase with an approval gate (e.g. development's plan→approve→implement), loop re-runs go straight to the implement pass with `loop_findings` applied — the plan was already approved, so do NOT re-open the planning gate each round.
@@ -1233,10 +1243,14 @@ next phase — or the next loop round, or the next aspect in a fan-out — is di
 
    **Next dispatch is a heal attempt (Track G1):** never pause or abort the pipeline for this case —
    3e-heal's own contract is to never halt the run regardless of outcome. Instead: STOP healing this
-   phase, set `heal_status = "exhausted"`, record the blocker `"{phase} heal exhausted (cost cap) —
-   stopped after {heal_attempts} attempt(s), ${running_cost_usd} > cap ${cost_cap}"`, and proceed to
-   3d-3. This is identical in interactive and headless mode — a heal attempt never triggers the
-   pause/ask or abort-the-run behavior below; only the phase/round/aspect cases do.
+   phase, set `heal_status = "exhausted"`, set `CONTEXT.cap_status = "exceeded-continued"` (the run
+   IS over cap and DID continue — a real breach must not read as `"within"` just because it was
+   handled inside a heal loop instead of at the next ordinary phase boundary; see Step 5's `cap_status`
+   field, which otherwise defaults to `"within"` at point 4 below), record the blocker `"{phase} heal
+   exhausted (cost cap) — stopped after {heal_attempts} attempt(s), ${running_cost_usd} > cap
+   ${cost_cap}"`, and proceed to 3d-3. This is identical in interactive and headless mode — a heal
+   attempt never triggers the pause/ask or abort-the-run behavior below; only the phase/round/aspect
+   cases do.
 
    **Interactive (`HEADLESS == false`), any other next-dispatch type:** PAUSE before the next dispatch.
 
@@ -1400,10 +1414,19 @@ Set `heal_attempts = 0`, `heal_status = "skipped"`.
    under the cap; that gate is what stops a heal loop from running to exhaustion against a cost
    budget that is already gone.
 
-9. **Record on the checkpoint** (written next, in 3d-3): `heal_attempts_used = heal_attempts` and
-   `heal_status`. Heal dispatch cost was already folded into this phase's own `cost_usd` and
-   `CONTEXT.running_cost_usd` per-attempt (step 5), so run totals, caps and the cross-run rollup need
-   no further arithmetic here.
+9. **Record on the checkpoint** (written next, in 3d-3): `heal_attempts_used` is a
+   **read-modify-write accumulation, not a direct assignment.** 3d-3 writes to the SAME fixed
+   `.checkpoint/{unit}.json` path on every round of a looped guarded phase, overwriting the previous
+   round's file — so before writing, read that unit's EXISTING checkpoint (if one is already on disk
+   from an earlier round) and add this round's count to it: `heal_attempts_used = (heal_attempts_used
+   already in this unit's existing checkpoint, or 0 if none exists yet) + heal_attempts`. This is what
+   makes the field the phase's TOTAL across all its rounds, matching the closing note below — a plain
+   `heal_attempts_used = heal_attempts` would silently overwrite that total with just the LAST round's
+   count. `metrics.mjs` sums `heal_attempts_used` ACROSS phases, so a phase that heals once per round
+   of a 3-round loop must report 3, not 1, or the feature's headline metric under-reports. Also record
+   `heal_status` (see the branch table below). Heal dispatch cost was already folded into this phase's
+   own `cost_usd` and `CONTEXT.running_cost_usd` per-attempt (step 5), so run totals, caps and the
+   cross-run rollup need no further arithmetic here.
 
 **Every exit from this step proceeds to 3d-3 — but there are FIVE exit BRANCHES above and only
 FOUR legal `heal_status` values** (`schemas/checkpoint.schema.json`: `healed | exhausted | skipped |
@@ -1416,7 +1439,7 @@ pre-existing` — do not add a fifth). Map each branch to its recorded status ex
 | cost cap trips mid-heal (3d-cap point 3 carve-out)  | `"exhausted"`            |
 | agent reports **pre-existing breakage** (step 5)    | `"pre-existing"`         |
 | agent reports **not mechanically fixable** (step 5) | `"exhausted"` — a BRANCH, not a distinct status; collapsing it here keeps it visible to AAR heal metrics (`plugins/sdlc/tools/aar/metrics.mjs` filters on `heal_status === "exhausted"`) instead of silently inventing an unrecognized fifth value that fails checkpoint schema validation |
-| no `heal:` block, or checks pass with `heal_attempts == 0` | `"skipped"`         |
+| checks pass with `heal_attempts == 0` (guarded, ran, nothing to fix) | `"skipped"` |
 
 "CONTINUE to the next phase" always means *after* 3d-3's checkpoint write, never instead of it:
 skipping that write loses exactly the `heal_attempts_used` / `heal_status` fields Tasks 2-4 exist to
