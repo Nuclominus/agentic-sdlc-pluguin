@@ -247,7 +247,10 @@ export function sessionSubagentsDir(sessionTranscriptPath) {
  * lacks `agent_id` (the orchestrator failed to propagate it — the primary
  * lost-cost bug). Matches <runDir>/.checkpoint/<file>.json to the phase by name,
  * separator-insensitive, preferring an exact phase(+aspect) match over a
- * phase-only match. Returns the recovered id, or null.
+ * phase-only match. Returns the recovered `agent_id` verbatim as read from the
+ * checkpoint — a single id string, OR an array of ids when the checkpoint records
+ * a multi-pass phase (e.g. a healed guarded phase) — or null if none is found.
+ * Callers must handle both shapes; do not re-wrap the result in `[...]` blindly.
  */
 export function checkpointAgentId(runDir, phase) {
   if (!runDir || !phase) return null;
@@ -345,7 +348,12 @@ export function enrichTelemetry(runDir, opts = {}) {
     // orchestrator did not copy `agent_id` into _telemetry.json.
     if (!ids || !ids.length) {
       const cpId = checkpointAgentId(runDir, p);
-      if (cpId) ids = [cpId];
+      // cp.agent_id can itself be a list (checkpoint schema: "when the phase ran
+      // multiple passes", e.g. a healed guarded phase) — flatten instead of
+      // re-wrapping, or a nested array here becomes a single bogus id downstream
+      // (`agent-<arrayToString>.jsonl`, e.g. "agent-aaaa1111,bbbb3333.jsonl") that
+      // never resolves to a real transcript file, silently dropping the phase's cost.
+      if (cpId) ids = Array.isArray(cpId) ? cpId : [cpId];
     }
     if (!ids || !ids.length) { skipped.push(p.phase); continue; }
     // Drop ids already priced for an earlier phase: a two-pass phase can reuse

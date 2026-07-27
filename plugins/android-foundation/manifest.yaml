@@ -77,9 +77,16 @@ phase_injections:
 # G1 self-healing: compile + lint ONLY. Deliberately a subset of post_pipeline_checks —
 # testDebugUnitTest is excluded because a failing unit test is a logic problem that belongs
 # to the qa agent's own 3-attempt cap, not to the mechanical heal loop.
+# The lint check is NOT a copy of post_pipeline_checks' `|| true` line: here a lint FAILURE
+# must actually trip healing (`|| true` would swallow it and make this check a no-op that
+# still burns 1-2 full Gradle builds every guarded-phase dispatch for nothing). So probe
+# task existence cheaply via `help --task` (no build, just task-graph resolution) and only
+# run the one task that's actually defined, letting ITS exit code decide; skip cleanly (exit
+# 0) when the project defines neither task. `post_pipeline_checks` below is untouched — its
+# `|| true` is correct there (Step 4 must never fail a run over a missing lint task).
 heal_checks:
   - sh -c './gradlew compileDebugKotlin'
-  - sh -c './gradlew detekt 2>/dev/null || ./gradlew ktlintCheck 2>/dev/null || true'
+  - sh -c "./gradlew -q help --task detekt >/dev/null 2>&1 && exec ./gradlew detekt; ./gradlew -q help --task ktlintCheck >/dev/null 2>&1 && exec ./gradlew ktlintCheck; exit 0"
 
 # NO assembleDebug (full SDK), NO connectedAndroidTest (emulator). detekt + JVM unit tests + compile-check.
 post_pipeline_checks:

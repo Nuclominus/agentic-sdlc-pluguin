@@ -358,6 +358,40 @@ test("enrichTelemetry recovers agent_id from the run checkpoint when telemetry o
   assert.equal(tel.cost_basis, "transcript");
 });
 
+test("enrichTelemetry recovers cost when the checkpoint's agent_id is an ARRAY (G1 healed guarded phase)", () => {
+  // A guarded phase that healed at least once records a LIST agent_id on its
+  // checkpoint (3d-1: "append the new agent_id to this unit's agent_id"). When
+  // telemetry omits agent_id, checkpointAgentId() must recover the array intact
+  // so the call site can flatten it — not re-wrap it into a nested array, which
+  // would build an unresolvable filename like "agent-dddd1111,eeee2222.jsonl"
+  // and silently drop the phase's real cost into `skipped`.
+  const root = mkdtempSync(join(tmpdir(), "cp-arr-"));
+  const sub = join(root, "proj", "sess", "subagents");
+  writeAgent(sub, "dddd11112222", [turn("claude-sonnet-5", { input_tokens: 100, output_tokens: 200, cache_read_input_tokens: 5000, cache_creation_input_tokens: 1000 })]);
+  writeAgent(sub, "eeee33334444", [turn("claude-sonnet-5", { input_tokens: 50, output_tokens: 80, cache_read_input_tokens: 2000, cache_creation_input_tokens: 500 })]);
+  const runDir = join(root, "plan");
+  mkdirSync(join(runDir, ".checkpoint"), { recursive: true });
+  // The checkpoint carries a LIST (phase healed once: original attempt + heal
+  // re-dispatch); the telemetry phase does NOT carry agent_id at all.
+  writeFileSync(join(runDir, ".checkpoint", "security.json"), JSON.stringify({
+    phase: "security", agent_id: ["dddd11112222", "eeee33334444"], status: "completed",
+    heal_attempts_used: 1, heal_status: "healed",
+  }));
+  writeFileSync(join(runDir, "_telemetry.json"), JSON.stringify({
+    task_slug: "cp-arr", started_at: "2026-07-07T13:28:00Z", completed_at: "2026-07-07T14:16:00Z",
+    phases: [{ phase: "security", agent: "x-sec", model: "claude-sonnet-5", status: "completed", subagent_tokens: 300, usage_source: "subagent_aggregate", cost_usd: null }],
+    total_subagent_tokens: 300, total_cost_usd: null, cost_basis: "subagent_aggregate", cache_hit_ratio: null,
+  }, null, 2));
+  const r = enrichTelemetry(runDir, { registry: reg, projectsRoot: root });
+  assert.deepEqual(r.enriched, ["security"], "phase resolved a transcript, not skipped");
+  assert.deepEqual(r.skipped, []);
+  const tel = JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8"));
+  assert.equal(tel.phases[0].usage_source, "transcript");
+  assert.deepEqual(tel.phases[0].agent_id, ["dddd11112222", "eeee33334444"]);
+  assert.ok(tel.phases[0].cost_usd > 0, "real cost resolved, not dropped");
+  assert.equal(tel.cost_basis, "transcript");
+});
+
 test("enrichTelemetry prices a resumed subagent once across two phases (no double count)", () => {
   const root = mkdtempSync(join(tmpdir(), "dedup-"));
   const sub = join(root, "proj", "sess", "subagents");

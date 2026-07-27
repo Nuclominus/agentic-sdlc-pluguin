@@ -1232,27 +1232,51 @@ workflow recipe. This check sits at the **end of Step 3d, gating the next iterat
 Step 3 phase loop** (it runs after this phase's `cost_usd` is computed in 3d-1, before the
 next phase — or the next loop round, or the next aspect in a fan-out — is dispatched).
 
-1. Maintain a running total. Initialize `CONTEXT.running_cost_usd = 0` at the start of
-   Step 3, then after each phase/aspect's `cost_usd` is computed in 3d-1:
-   `CONTEXT.running_cost_usd += cost_usd` (treat a `null`-priced phase as `0` — it cannot
-   contribute to a cost cap it has no price for).
+1. Maintain a running total. Initialize `CONTEXT.running_cost_usd = 0` AND
+   `CONTEXT.cap_user_approved = false` at the start of Step 3, then after each phase/aspect's
+   `cost_usd` is computed in 3d-1: `CONTEXT.running_cost_usd += cost_usd` (treat a `null`-priced
+   phase as `0` — it cannot contribute to a cost cap it has no price for).
+   `CONTEXT.cap_user_approved` is a plain boolean, set to `true` in exactly one place in this whole
+   spec (the interactive **approve** bullet below) and never elsewhere — see point 3.
 2. If `CONTEXT.cost_cap` (resolved in Step 1d-0) is `null`, there is no cap — skip this
    gate entirely and continue.
 3. If a next dispatch exists (another phase, another loop round, another aspect, or **another heal
    attempt**) AND `CONTEXT.running_cost_usd > CONTEXT.cost_cap`:
+
+   **Reachability of the heal-attempt case:** this gate is invoked from two call sites — once
+   ordinarily, at the end of Step 3d for every phase (BEFORE that phase's own 3e and 3e-heal have run),
+   and once from inside 3e-heal step 5, which explicitly re-enters 3d-cap after each heal dispatch to
+   decide whether another attempt may proceed. "Another heal attempt" can be a candidate next-dispatch
+   ONLY on that second, 3e-heal-step-5 re-entry call — on the ordinary end-of-3d pass no heal check has
+   happened yet for this phase, so whether a further heal attempt exists is unknowable, and the heal
+   carve-out branch immediately below MUST NOT fire there. Treat the two call sites as evaluating
+   different next-dispatch candidate sets: {phase, round, aspect} on the ordinary pass, {heal attempt}
+   only on the 3e-heal-step-5 re-entry.
 
    **Next dispatch is a heal attempt (Track G1):** never pause or abort the pipeline for this case —
    3e-heal's own contract is to never halt the run regardless of outcome. Instead: STOP healing this
    phase, set `heal_status = "exhausted"`, set `CONTEXT.cap_status = "exceeded-continued"` (the run
    IS over cap and DID continue — a real breach must not read as `"within"` just because it was
    handled inside a heal loop instead of at the next ordinary phase boundary; see Step 5's `cap_status`
-   field, which otherwise defaults to `"within"` at point 4 below), record the blocker `"{phase} heal
-   exhausted (cost cap) — stopped after {heal_attempts} attempt(s), ${running_cost_usd} > cap
+   field, which otherwise defaults to `"within"` at point 4 below). Do **NOT** set
+   `CONTEXT.cap_user_approved` — leave it exactly as it already was (`false`, unless a real user
+   approval elsewhere this run already set it `true`) — because no user was in the loop for this
+   carve-out: it is an automatic continuation of the run, not consent. Record the blocker `"{phase}
+   heal exhausted (cost cap) — stopped after {heal_attempts} attempt(s), ${running_cost_usd} > cap
    ${cost_cap}"`, and proceed to 3d-3. This is identical in interactive and headless mode — a heal
    attempt never triggers the pause/ask or abort-the-run behavior below; only the phase/round/aspect
    cases do.
 
-   **Interactive (`HEADLESS == false`), any other next-dispatch type:** PAUSE before the next dispatch.
+   **Interactive (`HEADLESS == false`), any other next-dispatch type:**
+   - If `CONTEXT.cap_user_approved == true`, do NOT pause — set `CONTEXT.cap_status =
+     "exceeded-continued"` and continue the Step 3 loop silently, still adding to
+     `CONTEXT.running_cost_usd` for the final report. This is the ONLY condition under which this gate
+     skips the pause; the flag is an absolute, non-self-referential switch (it is `true` or it is
+     `false` for the rest of this run — never "true for the overages a specific past approval
+     covers").
+   - Otherwise (`CONTEXT.cap_user_approved == false`) PAUSE before the next dispatch — even if an
+     earlier overage this run was already handled by the heal carve-out above, since that carve-out
+     never sets the flag.
 
    🚨 **MUST PRINT VERBATIM:**
    ```
@@ -1262,15 +1286,13 @@ next phase — or the next loop round, or the next aspect in a fan-out — is di
       Approve continuing, or abort?
    ```
    Ask the user **approve continuing** / **abort**.
-   - **approve** → set `CONTEXT.cap_status = "exceeded-continued"`, continue the Step 3
-     loop. Do not ask again for subsequent overages THAT THIS APPROVAL COVERS this run (the user
-     already accepted the overrun); keep accumulating `running_cost_usd` for the final report. This
-     suppression rule is scoped to an approval the user actually gave HERE — it does NOT extend to
-     the heal carve-out above (point 3's "Next dispatch is a heal attempt" branch), which can also
-     set `cap_status = "exceeded-continued"` but with no user in the loop at all. An
-     automatically-set `cap_status` is never consent: the NEXT ordinary phase/round/aspect boundary
-     that finds `running_cost_usd > cost_cap` still MUST pause and ask, exactly as if `cap_status`
-     were still `"within"`, unless a real user approval (this bullet) already covers it.
+   - **approve** → set `CONTEXT.cap_status = "exceeded-continued"` AND `CONTEXT.cap_user_approved =
+     true`, then continue the Step 3 loop, still accumulating `running_cost_usd` for the final report.
+     This bullet is the ONE place in this whole spec that sets `CONTEXT.cap_user_approved` — the heal
+     carve-out above never sets it, no other branch sets it. Once `true`, per the interactive-branch
+     rule above, every later overage this run skips the pause automatically; while it is `false`,
+     every overage boundary — including one that immediately follows a heal-carve-out overage — still
+     PAUSES and asks, exactly as if no overage had ever been seen before.
    - **abort** → set `CONTEXT.cap_status = "exceeded-aborted"`, stop dispatching further
      phases, and proceed to Step 5 to write partial telemetry (with
      `aborted_at_phase: {next_phase}`) and print the final summary.
