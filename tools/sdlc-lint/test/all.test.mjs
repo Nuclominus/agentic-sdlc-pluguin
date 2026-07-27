@@ -104,17 +104,29 @@ test("the dry-run cost formula gates BOTH heal terms on non-empty heal_checks", 
 
 test("total_cost_usd is null, not 0, when no phase carries a price", () => {
   const text = readFileSync(SKILL, "utf8");
-  const idx = text.indexOf("- `total_cost_usd` = sum of phase `cost_usd`");
+  const idx = text.indexOf("- `total_cost_usd` =");
   assert.ok(idx > -1, "Step 5 total_cost_usd rule missing");
-  const rule = text.slice(idx, text.indexOf("\n- `", idx + 10));
+  // The rule now spans several paragraphs; `cache_hit_ratio`'s own bullet is the stable boundary.
+  const end = text.indexOf("- `cache_hit_ratio` =", idx);
+  assert.ok(end > idx, "cache_hit_ratio bullet (the rule's terminator) missing");
+  const rule = text.slice(idx, end);
 
-  assert.match(rule, /set `total_cost_usd` to `null`, not `0`/,
+  assert.match(rule, /set `total_cost_usd` to `null`,\s+not\s+`0`/,
     "an all-unpriced run and a genuinely free run are different facts; writing 0 asserts the " +
     "second while meaning the first. Observed in a real run: the banner honestly printed " +
     "'$— (unpriced)' while the JSON beside it carried total_cost_usd: 0");
   assert.match(rule, /cache_hit_ratio/,
     "the rule should point at cache_hit_ratio, which already resolves this exact ambiguity the " +
     "same way in the very next bullet — an unknown must not be encoded as a measured zero");
+  assert.match(rule, /PLUS `orchestration_overhead\.cost_usd`/,
+    "total_cost_usd includes orchestration overhead — verified across 4 real runs (1.68 = 0.51 " +
+    "phases + 1.17 overhead; 1.33 = 0.33 + 1.00). Defining it as the phase sum alone understates " +
+    "the run by more than the phases themselves cost");
+  assert.match(rule, /NOT what the cost cap gates on/,
+    "3d-cap compares running_cost_usd (phase costs only) against max_total_cost_usd, so a run can " +
+    "report total_cost_usd above the cap with cap_status \"within\" and both be right. Undocumented, " +
+    "that reads as a bug and invites someone to fold overhead into the gate — silently " +
+    "re-tightening every existing recipe cap");
 });
 
 test("no headless ABORT contract depends on a printed marker line — telemetry state is the contract", () => {

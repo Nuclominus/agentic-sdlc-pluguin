@@ -1856,7 +1856,31 @@ ADR-0005):
 - `total_output_tokens` = sum of phase `output_tokens`.
 - `total_cached_input_tokens` = sum of phase `cached_input_tokens`.
 - `total_subagent_tokens` = sum of phase `subagent_tokens` (the aggregate, unsplit counts from `usage_source: "subagent_aggregate"` phases). Omit the key when no phase reported an aggregate.
-- `total_cost_usd` = sum of phase `cost_usd`, **skipping `null` entries** (phases whose model had no registry pricing, AND aggregate-only phases whose cost is not computable without a split). If any phase was null-priced, append `(partial — {n} phase(s) unpriced)` to the printed Cost line so the omission is visible. **When NO phase carries a price at all, set `total_cost_usd` to `null`, not `0`** — an all-unpriced run and a genuinely free run are different facts, and `0` asserts the second while meaning the first. (Observed: a real headless run where both phases reported `subagent_aggregate` usage printed an honest `$— (unpriced)` banner while writing `total_cost_usd: 0` into the JSON beside it.) This is the same reasoning that makes `cache_hit_ratio` `null` rather than `0` in the next bullet — an unknown must not be encoded as a measured zero.
+- `total_cost_usd` = **sum of phase `cost_usd` PLUS `orchestration_overhead.cost_usd`** — the whole
+  run's spend, not just the dispatched phases. **Skip `null` entries** (phases whose model had no
+  registry pricing, AND aggregate-only phases whose cost is not computable without a split). If any
+  phase was null-priced, append `(partial — {n} phase(s) unpriced)` to the printed Cost line so the
+  omission is visible. Print the Cost line with the split shown — `$
+  {total} (phases ${phases} + orchestration overhead ${overhead})` — because the overhead is not a
+  rounding error: across real runs it has ranged from **$1.00 to $1.17 against $0.33–$0.51 of phase
+  spend**, i.e. larger than the work it wraps. A reader shown only a single total cannot tell those
+  apart.
+
+  **When NOTHING carries a price — no phase and no overhead — set `total_cost_usd` to `null`, not
+  `0`.** An all-unpriced run and a genuinely free run are different facts, and `0` asserts the
+  second while meaning the first. (Observed: a real headless run where both phases reported
+  `subagent_aggregate` usage printed an honest `$— (unpriced)` banner while writing
+  `total_cost_usd: 0` into the JSON beside it.) Same reasoning as `cache_hit_ratio` below — an
+  unknown must not be encoded as a measured zero.
+
+  ⚠️ **`total_cost_usd` is NOT what the cost cap gates on, and the two legitimately disagree.** Step
+  3d-cap compares `CONTEXT.running_cost_usd` — which accumulates phase `cost_usd` only (3d-cap point
+  1) — against `caps.max_total_cost_usd`. Orchestration overhead never enters that comparison. So a
+  run may report `total_cost_usd: 1.33` beside `cap_status: "within"` under a $1.00 cap, and be
+  correct on both counts: $0.33 of capped dispatch spend, $1.00 of uncapped overhead. Recipe caps
+  are therefore sized against **phase** spend; read them that way when tuning one, and do not
+  "reconcile" the two numbers by folding overhead into the gate — that would silently re-tighten
+  every existing recipe's cap.
 - `cache_hit_ratio` = `total_cached_input_tokens / max(total_input_tokens, 1)` rounded to 2 decimals — **but set it to `null`** when no phase reported a real cached subset (e.g. every phase was `subagent_aggregate` or `estimated`), since a 0 there would falsely read as "zero cache hits" rather than "unknown".
 - `cost_cap_usd` = `CONTEXT.cost_cap` (the active workflow recipe's `caps.max_total_cost_usd`), or `null` when the recipe declared no cap.
 - `cap_status` = `CONTEXT.cap_status` from the Step 3d-cap gate: `"within"` (cap set and never exceeded, or no cap), `"exceeded-continued"` (user approved continuing past the cap, OR a heal attempt was stopped by the cap — see 3d-cap point 3), or `"exceeded-aborted"` (user aborted, or headless abort). When the run was cost-aborted, also set `aborted_at_phase` to the phase that was about to run. `aborted_at_phase` is not exclusively a cost-cap field — a headless run that hits the development planning gate with no approver present (3b-special's Approval gate, step 4) sets it the same way, for the same reason: partial telemetry must still name where the run stopped even when the abort was not cost-driven.
