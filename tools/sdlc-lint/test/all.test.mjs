@@ -101,3 +101,65 @@ test("the dry-run cost formula gates BOTH heal terms on non-empty heal_checks", 
     "profile supplies non-empty heal_checks — otherwise a vanilla stack's inert heal: blocks " +
     "(no heal_checks defined) inflate the dry-run estimate for healing that can never fire");
 });
+
+test("the development planning gate defines a deterministic HEADLESS rule that cannot exit 0 having run nothing (Track G1 F6)", () => {
+  const text = readFileSync(SKILL, "utf8");
+  const gate = text.indexOf("**Approval gate:**");
+  // Anchor to the next subsection heading, not a fixed length — "Pass 2 — Implementation:"
+  // is the stable boundary of the approval-gate block.
+  const terminator = "**Pass 2 — Implementation:**";
+  const terminatorIdx = text.indexOf(terminator, gate);
+  assert.ok(gate > -1, "development plan Approval gate section missing");
+  assert.ok(terminatorIdx > -1, "Pass 2 terminator missing");
+  const section = text.slice(gate, terminatorIdx);
+
+  assert.match(section, /HEADLESS == true/,
+    "the approval gate must branch explicitly on HEADLESS, else a headless run falls through to " +
+    "the interactive ask-the-user prompt with no stdin attached — the observed nondeterministic " +
+    "stop-at-$2.84-and-exit-0 defect");
+  assert.match(section, /exit 1/,
+    "a headless run that hits this gate must exit NON-ZERO — exiting 0 having completed zero " +
+    "phases is exactly the unreliable behaviour this rule closes");
+  assert.match(section, /aborted_at_phase/,
+    "a headless stop at this gate must record aborted_at_phase so partial telemetry (Step 5) names " +
+    "where the run stopped, same as any other full-run abort");
+});
+
+test("expected_total's heal term uses an AVERAGE-case round count, distinct from worst_total's worst-case rounds(H) (Track G1 F3)", () => {
+  const text = readFileSync(SKILL, "utf8");
+  const totals = text.indexOf("**4. Totals.**");
+  const terminator = "#### 1d-2.";
+  const terminatorIdx = text.indexOf(terminator, totals);
+  assert.ok(totals > -1, "Step 1d-1 point 4 (Totals) missing");
+  assert.ok(terminatorIdx > -1, "1d-2 terminator missing");
+  const section = text.slice(totals, terminatorIdx);
+
+  // Each total is a two-line formula inside the fenced code block (the heal term wraps onto a
+  // continuation line) — slice expected_total's own span (up to worst_total's start) and
+  // worst_total's own span (up to the closing fence) rather than a single line.
+  const expectedStart = section.indexOf("expected_total");
+  const worstStart = section.indexOf("worst_total", expectedStart);
+  const fenceEnd = section.indexOf("```", worstStart);
+  assert.ok(expectedStart > -1, "expected_total formula missing");
+  assert.ok(worstStart > -1, "worst_total formula missing");
+  assert.ok(fenceEnd > -1, "closing fence of the Totals formula block missing");
+  const expectedLine = section.slice(expectedStart, worstStart);
+  const worstLine = section.slice(worstStart, fenceEnd);
+
+  assert.match(expectedLine, /avg_rounds\(H\)/,
+    "expected_total's heal term must use avg_rounds(H), an average-case round count, matching the " +
+    "loop term's own 0.5-average convention on the same line — using worst-case rounds(H) here " +
+    "over-weights the WITHIN/EXCEEDS verdict (computed from expected_total) with a worst-case " +
+    "assumption while the loop term next to it stays average-case");
+  assert.doesNotMatch(worstLine, /avg_rounds\(H\)/,
+    "worst_total must keep the full worst-case rounds(H) — every round hitting the cap is exactly " +
+    "what worst-case means; it must not be softened to the average-case avg_rounds(H)");
+  assert.match(worstLine, /(?<!avg_)rounds\(H\)/,
+    "worst_total's heal term must still use rounds(H) (worst-case dispatch count)");
+
+  assert.match(section, /avg_rounds\(H\)\s*=\s*1\.5/,
+    "avg_rounds(H) must be pinned to 1.5 for a looped-and-guarded phase — the SAME ~1.5-round " +
+    "figure the loop term already assumes, not a fraction of max_rounds");
+  assert.match(section, /rounds\(H\)\s*=\s*max_rounds/,
+    "rounds(H) = max_rounds must remain the worst-case definition, unchanged, feeding worst_total only");
+});
