@@ -9,4 +9,6 @@ match:
   # route here. Also matches "test/code coverage".
   arguments_pattern: "\\b(add|write|backfill|improve|increase)\\s+(unit\\s+|integration\\s+)?tests?\\b|\\b(test|code)\\s+coverage\\b"
 phases:
-  - qa
+  - name: qa
+    heal:
+      max_attempts: 2

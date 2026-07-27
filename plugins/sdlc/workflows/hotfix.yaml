@@ -6,7 +6,13 @@ match:
 caps:
   max_total_cost_usd: 0.60
 phases:
-  - development
-  - qa
-  - security
+  - name: development
+    heal:
+      max_attempts: 2
+  - name: qa
+    heal:
+      max_attempts: 2
+  - name: security
+    heal:
+      max_attempts: 2
   - documentation

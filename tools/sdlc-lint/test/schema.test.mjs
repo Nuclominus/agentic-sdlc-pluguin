@@ -6,6 +6,7 @@ import { checkSchemas } from "../lib/schema.mjs";
 import Ajv from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 import { readFileSync } from "node:fs";
+import YAML from "yaml";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
@@ -92,4 +93,55 @@ test("checkpoint.schema rejects an unknown heal_status", () => {
     phase: "development", status: "completed", completed_at: "2026-07-27T10:00:00Z",
     heal_status: "partially-healed",
   }), false);
+});
+
+const recipe = (p) => YAML.parse(readFileSync(resolve(REPO, p), "utf8"));
+const healOf = (r, phase) => {
+  const p = r.phases.find((x) => (typeof x === "string" ? x : x.name) === phase);
+  return typeof p === "string" ? undefined : p?.heal;
+};
+
+test("code-writing phases in the core recipes are heal-guarded at 2 attempts", () => {
+  for (const [file, phases] of [
+    ["plugins/sdlc/workflows/default.yaml", ["development", "security", "qa"]],
+    ["plugins/sdlc/workflows/bugfix.yaml", ["development", "security", "qa"]],
+    ["plugins/sdlc/workflows/hotfix.yaml", ["development", "security", "qa"]],
+    ["plugins/sdlc/workflows/refactor.yaml", ["development", "security", "qa"]],
+    ["plugins/sdlc/workflows/debug.yaml", ["development", "qa"]],
+    ["plugins/sdlc/workflows/testing.yaml", ["qa"]],
+    ["plugins/sdlc/workflows/analysis.yaml", ["security"]],
+  ]) {
+    const r = recipe(file);
+    for (const ph of phases) {
+      assert.deepEqual(healOf(r, ph), { max_attempts: 2 }, `${file} phase ${ph}`);
+    }
+  }
+});
+
+test("docs-only declares no heal — documentation writes no compilable source", () => {
+  const r = recipe("plugins/sdlc/workflows/docs-only.yaml");
+  assert.equal(healOf(r, "documentation"), undefined);
+});
+
+test("android-feature guards development and qa", () => {
+  const r = recipe("plugins/android-foundation/workflows/android-feature.yaml");
+  for (const ph of ["development", "qa"]) {
+    assert.deepEqual(healOf(r, ph), { max_attempts: 2 }, `android-feature phase ${ph}`);
+  }
+});
+
+test("android-feature's parallel security is unguarded — parallel groups take strings only", () => {
+  const r = recipe("plugins/android-foundation/workflows/android-feature.yaml");
+  const group = r.phases.find((p) => p.parallel);
+  assert.deepEqual(group.parallel, ["security", "test"]);
+  assert.equal(healOf(r, "security"), undefined);
+});
+
+test("android heal_checks exclude unit tests", () => {
+  const m = YAML.parse(readFileSync(resolve(REPO, "plugins/android-foundation/manifest.yaml"), "utf8"));
+  assert.ok(Array.isArray(m.heal_checks) && m.heal_checks.length > 0);
+  for (const c of m.heal_checks) {
+    assert.doesNotMatch(c, /testDebugUnitTest/,
+      "heal scope is compile+lint only — unit tests stay with the qa agent's own cap");
+  }
 });

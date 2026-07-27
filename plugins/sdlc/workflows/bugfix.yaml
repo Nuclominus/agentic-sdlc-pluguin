@@ -4,7 +4,13 @@ match:
   arguments_pattern: "\\bfix(es|ed)?\\b|\\bbug\\b|\\bissue\\b"
   loc_touched_max: 500
 phases:
-  - development
-  - qa
-  - security
+  - name: development
+    heal:
+      max_attempts: 2
+  - name: qa
+    heal:
+      max_attempts: 2
+  - name: security
+    heal:
+      max_attempts: 2
   - documentation

@@ -240,7 +240,7 @@ FRAMEWORK_MANIFESTS = [ m for m in manifests if m.kind == "framework" ]   # set 
 Winner resolution below sees **FOUNDATIONS only** — frameworks cannot leak into it by construction.
 
 **0b-2. For each foundation manifest:**
-1. Read the parsed YAML fields: `kind`, `stack`, `priority`, `aspects`, `detect`, optional `workflow`, `hosts_aspects`, `framework_detection`, `agents_per_phase`, `convention_skills`, `phase_injections`, `extra_phases`, `pre_phase_commands`, `post_pipeline_checks`, `on_demand_agents`.
+1. Read the parsed YAML fields: `kind`, `stack`, `priority`, `aspects`, `detect`, optional `workflow`, `hosts_aspects`, `framework_detection`, `agents_per_phase`, `convention_skills`, `phase_injections`, `extra_phases`, `pre_phase_commands`, `post_pipeline_checks`, `heal_checks`, `on_demand_agents`.
 2. Determine whether it matches the project root by evaluating its `detect` rules:
    - `detect.any: ["*"]` → always matches.
    - `detect.all: [...]` → all sub-rules must match.
@@ -465,6 +465,7 @@ The merge input is **`ACTIVE_PROFILES.values()` plus `PRIMARY_PROFILE` plus `ADD
 - `phase_injections` (manifest field) → held internally as `phase_prompts_injection`: per-phase additional instructions.
 - `extra_phases`: list of `{name, after, agent, description}` to insert.
 - `post_pipeline_checks`: shell commands to run at the end.
+- `heal_checks`: shell commands the G1 self-healing loop runs after a guarded phase (compile/lint only).
 
 Merge across profiles to build `EFFECTIVE_PROFILE`:
 
@@ -474,6 +475,7 @@ Merge across profiles to build `EFFECTIVE_PROFILE`:
 - `phase_prompts_injection`: per-phase concat of all active profiles' injections — stack profiles first, then `ADDITIVE_PROFILES` in deterministic order (alphabetical by `stack`). Each framework contributes its `development` / `security` guidance.
 - `extra_phases`: union (later check for name conflicts; if any, halt with error).
 - `post_pipeline_checks`: union (de-duplicated, preserving order: PRIMARY first, stack profiles next, additive profiles last).
+- `heal_checks`: union (de-duplicated, preserving order: PRIMARY first, stack profiles next, additive profiles last) — same rule as `post_pipeline_checks`.
 
 Hold these merged values as `PROFILE` (mutable in 1b — `frameworks.enable/disable` from 0b-frameworks has already shaped which additive profiles are present here).
 
@@ -492,6 +494,7 @@ If present — `Read` and parse it. Recognized top-level keys:
 | Key | Type | Merge semantics |
 |---|---|---|
 | `post_pipeline_checks` | array of strings | **REPLACES** plugin's value entirely (set to `[]` to disable default checks). |
+| `heal_checks` | array of strings | **REPLACES** plugin's value entirely (set to `[]` to disable the G1 self-healing loop project-wide without editing any recipe). |
 | `phase_command_overrides` | object | Passed as context flags to agent prompts in Step 3 (see below). Plugin defaults remain available; overrides ADD or REPLACE specific keys. |
 | `extra_phase_prompts` | object (phase → string) | **APPENDS** to `phase_prompts_injection` for that phase (additive — don't lose plugin guidance). |
 | `skip_phases` | array of strings | Phase names to remove from the canonical order in 1c. |
@@ -536,6 +539,9 @@ Hold the cleaned list in `EFFECTIVE_PROFILE.extension_skills` for Step 3b-1a.
 post_pipeline_checks:
   - ./gradlew detekt
   - ./gradlew testDebugUnitTest
+  - ./gradlew compileDebugKotlin
+
+heal_checks:                          # compile/lint only — never unit tests
   - ./gradlew compileDebugKotlin
 
 phase_command_overrides:

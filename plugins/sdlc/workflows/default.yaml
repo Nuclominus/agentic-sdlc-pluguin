@@ -3,7 +3,13 @@ description: Canonical 5-phase SDLC pipeline — business analysis through docum
 
 phases:
   - business_analysis
-  - development
-  - qa
-  - security
+  - name: development
+    heal:
+      max_attempts: 2
+  - name: qa
+    heal:
+      max_attempts: 2
+  - name: security
+    heal:
+      max_attempts: 2
   - documentation

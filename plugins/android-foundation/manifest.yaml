@@ -74,6 +74,13 @@ phase_injections:
     certificate pinning where required; validate incoming Intents/deep links; biometric (BiometricPrompt)
     as step-up not primary; R8/ProGuard enabled for release; no secrets in source/VCS.
 
+# G1 self-healing: compile + lint ONLY. Deliberately a subset of post_pipeline_checks —
+# testDebugUnitTest is excluded because a failing unit test is a logic problem that belongs
+# to the qa agent's own 3-attempt cap, not to the mechanical heal loop.
+heal_checks:
+  - sh -c './gradlew compileDebugKotlin'
+  - sh -c './gradlew detekt 2>/dev/null || ./gradlew ktlintCheck 2>/dev/null || true'
+
 # NO assembleDebug (full SDK), NO connectedAndroidTest (emulator). detekt + JVM unit tests + compile-check.
 post_pipeline_checks:
   - sh -c './gradlew detekt 2>/dev/null || ./gradlew ktlintCheck 2>/dev/null || true'

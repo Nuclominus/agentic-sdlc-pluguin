@@ -5,11 +5,15 @@ description: >
   Loop + parallel are generic orchestrator control flow; the android profile supplies the agents per phase.
 phases:
   - business_analysis
-  - development
+  - name: development
+    heal:
+      max_attempts: 2
   - name: review
     loop:
       return_to: development
       max_rounds: 3
   - parallel: [security, test]
-  - qa
+  - name: qa
+    heal:
+      max_attempts: 2
   - documentation
