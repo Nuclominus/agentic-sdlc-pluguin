@@ -94,3 +94,51 @@ test("by_phase carries cache-pressure fields and cache_pressure_phases lists fla
   assert.equal(d.cache_pressure_phases[0].phase, "development");
   assert.equal(d.cache_pressure_phases[0].peak_prefix_tokens, 101000);
 });
+
+test("by_phase carries heal fields, defaulting cleanly when absent", () => {
+  const d = computeMetrics({
+    task_slug: "t",
+    phases: [
+      { phase: "development", usage_source: "reported", heal_attempts_used: 1, heal_status: "healed" },
+      { phase: "security", usage_source: "reported" },
+    ],
+  });
+  const dev = d.by_phase.find((p) => p.phase === "development");
+  assert.equal(dev.heal_attempts_used, 1);
+  assert.equal(dev.heal_status, "healed");
+  const sec = d.by_phase.find((p) => p.phase === "security");
+  assert.equal(sec.heal_attempts_used, 0);
+  assert.equal(sec.heal_status, null);
+});
+
+test("heal_attempts sums across phases", () => {
+  const d = computeMetrics({
+    task_slug: "t",
+    phases: [
+      { phase: "development", usage_source: "reported", heal_attempts_used: 2, heal_status: "exhausted" },
+      { phase: "qa", usage_source: "reported", heal_attempts_used: 1, heal_status: "healed" },
+    ],
+  });
+  assert.equal(d.heal_attempts, 3);
+});
+
+test("heal_exhausted_phases lists only exhausted phases, phase-name ascending", () => {
+  const d = computeMetrics({
+    task_slug: "t",
+    phases: [
+      { phase: "security", usage_source: "reported", heal_attempts_used: 2, heal_status: "exhausted" },
+      { phase: "development", usage_source: "reported", heal_attempts_used: 2, heal_status: "exhausted" },
+      { phase: "qa", usage_source: "reported", heal_attempts_used: 1, heal_status: "healed" },
+    ],
+  });
+  assert.deepEqual(d.heal_exhausted_phases, [
+    { phase: "development", heal_attempts_used: 2 },
+    { phase: "security", heal_attempts_used: 2 },
+  ]);
+});
+
+test("a run with no healing reports zero and an empty exhausted list", () => {
+  const d = computeMetrics({ task_slug: "t", phases: [{ phase: "qa", usage_source: "reported" }] });
+  assert.equal(d.heal_attempts, 0);
+  assert.deepEqual(d.heal_exhausted_phases, []);
+});
