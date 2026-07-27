@@ -57,8 +57,16 @@ test("the 3e-heal step exists and sits between 3e validation and the 3d-3 checkp
 test("the heal contract names its capability-gate and continue-on-exhaustion rules", () => {
   const text = readFileSync(SKILL, "utf8");
   const heal = text.indexOf("**3e-heal.");
-  const section = text.slice(heal, heal + 4000);
+  // Anchor the window to the step's own DRIFT GUARD terminator, not a fixed length — a fixed
+  // window that outlives a future reword would spill into Step 4, which ALSO contains
+  // "tool unavailable on this host" and "continue", making both assertions pass vacuously.
+  const guardMarker = "Track G1. -->";
+  const guardIdx = text.indexOf(guardMarker, heal);
+  assert.ok(heal > -1, "3e-heal step missing");
+  assert.ok(guardIdx > -1, "3e-heal DRIFT GUARD terminator missing");
+  const section = text.slice(heal, guardIdx + guardMarker.length);
   assert.match(section, /tool unavailable on this host/,
     "heal must reuse Step 4's capability gate, else a host without the toolchain heals to the cap every phase");
-  assert.match(section, /continue/i, "heal exhaustion must continue the pipeline, not halt it");
+  assert.match(section, /Never halt the run/,
+    "heal exhaustion must continue the pipeline, not halt it — pin the explicit wording, not a bare /continue/i which Step 4 would also satisfy");
 });
