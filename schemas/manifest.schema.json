@@ -178,6 +178,11 @@
       "type": "array",
       "description": "Shell commands run after the pipeline (lint/test/compile gates). Empty for most frameworks.",
       "items": { "type": "string", "minLength": 1 }
+    },
+    "heal_checks": {
+      "type": "array",
+      "description": "Shell commands the G1 self-healing loop runs after a guarded phase (compile/lint gates ONLY — never unit tests). Merged across profiles as a de-duplicated union, PRIMARY first. Usually a subset of post_pipeline_checks. Empty for most frameworks.",
+      "items": { "type": "string", "minLength": 1 }
     }
   },
   "$defs": {

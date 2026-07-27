@@ -45,3 +45,51 @@ test("run.schema accepts a resolved phase list", () => {
   const v = compile("schemas/run.schema.json");
   assert.ok(v({ task_slug: "x", workflow: "default", resolved_phases: [{ name: "qa", kind: "plain", aspects: null }] }));
 });
+
+test("workflow.schema accepts a phase with a heal block", () => {
+  const v = compile("schemas/workflow.schema.json");
+  assert.ok(v({ name: "xx", phases: [{ name: "development", heal: { max_attempts: 2 } }] }));
+});
+
+test("workflow.schema rejects max_attempts above the ceiling of 3", () => {
+  const v = compile("schemas/workflow.schema.json");
+  assert.equal(v({ name: "x", phases: [{ name: "development", heal: { max_attempts: 4 } }] }), false);
+});
+
+test("workflow.schema rejects a heal block with no max_attempts", () => {
+  const v = compile("schemas/workflow.schema.json");
+  assert.equal(v({ name: "x", phases: [{ name: "development", heal: {} }] }), false);
+});
+
+test("workflow.schema allows heal and loop on the same phase", () => {
+  const v = compile("schemas/workflow.schema.json");
+  assert.ok(v({
+    name: "xx",
+    phases: [{ name: "development", heal: { max_attempts: 2 }, loop: { return_to: "qa", max_rounds: 3 } }],
+  }));
+});
+
+test("manifest.schema accepts heal_checks", () => {
+  const v = compile("schemas/manifest.schema.json");
+  assert.ok(v({
+    kind: "foundation", stack: "android", priority: 50,
+    detect: { any: ["*"] },
+    heal_checks: ["sh -c './gradlew compileDebugKotlin'"],
+  }));
+});
+
+test("checkpoint.schema accepts heal result fields", () => {
+  const v = compile("schemas/checkpoint.schema.json");
+  assert.ok(v({
+    phase: "development", status: "completed", completed_at: "2026-07-27T10:00:00Z",
+    heal_attempts_used: 1, heal_status: "healed",
+  }));
+});
+
+test("checkpoint.schema rejects an unknown heal_status", () => {
+  const v = compile("schemas/checkpoint.schema.json");
+  assert.equal(v({
+    phase: "development", status: "completed", completed_at: "2026-07-27T10:00:00Z",
+    heal_status: "partially-healed",
+  }), false);
+});

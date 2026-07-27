@@ -94,6 +94,21 @@
                     "description": "Cap on iterations before escalating to the user."
                   }
                 }
+              },
+              "heal": {
+                "type": "object",
+                "description": "Self-healing micro-loop for mechanical build failures (Track G1). After this phase runs, the orchestrator executes the merged `heal_checks` commands; on a non-zero exit it re-dispatches THIS phase's agent with the captured stderr, up to `max_attempts`. On exhaustion it records a blocker and CONTINUES the pipeline — it never halts the run and never escalates to a review phase. Scope is compile/lint only; unit-test failures stay with the qa agent's own cap.",
+                "required": ["max_attempts"],
+                "additionalProperties": false,
+                "properties": {
+                  "max_attempts": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3,
+                    "default": 2,
+                    "description": "Hard cap on heal re-dispatches per phase dispatch. Ceiling of 3 is a deliberate backstop against runaway-iteration cost incidents; it resets on each dispatch, so a loop phase gets a fresh budget per round."
+                  }
+                }
               }
             }
           },
