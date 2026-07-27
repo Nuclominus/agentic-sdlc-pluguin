@@ -145,22 +145,43 @@ function zeroUsage() {
 // ── pricing ───────────────────────────────────────────────────────────────────
 
 /**
- * Resolve registry pricing for a transcript's model id, tolerating suffixes the
- * harness may append that are not literal registry keys: a bracketed context tag
- * (`claude-opus-4-8[1m]`) or a trailing dated snapshot (`claude-sonnet-5-20260115`).
- * The exact id is tried first, so a registry key that legitimately IS dated
- * (e.g. `claude-haiku-4-5-20251001`) still matches. Returns the pricing object,
- * `null` for a known-but-unpriced model, or `null` when the id is unknown.
+ * Resolve registry pricing for a transcript's model id, tolerating decorations
+ * an inference platform or the harness may attach that are not literal registry
+ * keys: a bracketed context tag (`claude-opus-4-8[1m]`), a trailing dated
+ * snapshot (`claude-sonnet-5-20260115`), a Bedrock-style region/provider prefix
+ * (`us.anthropic.claude-opus-4-8`, `anthropic.claude-opus-4-8`), or a trailing
+ * Bedrock version suffix (`claude-opus-4-8-v1:0`). The exact id is tried first,
+ * so a registry key that legitimately IS dated (e.g. `claude-haiku-4-5-20251001`)
+ * still matches. Decorations are stripped to a fixed point (repeatedly, in any
+ * order) so combinations — e.g. a prefixed AND dated AND versioned Bedrock id —
+ * still resolve once fully normalised, not just single-decoration cases.
+ * Returns the pricing object, `null` for a known-but-unpriced model, or `null`
+ * when the id is unknown even after normalisation.
  */
+const MODEL_ID_STRIPPERS = [
+  (s) => s.replace(/\[[^\]]*\]$/, ""),                 // trailing context tag: [1m]
+  (s) => s.replace(/-v\d+:\d+$/, ""),                  // trailing Bedrock version: -v1:0
+  (s) => s.replace(/-\d{8}$/, ""),                     // trailing dated snapshot: -20260115
+  (s) => s.replace(/^[a-z]{2}\.anthropic\./, "").replace(/^anthropic\./, ""), // us.anthropic. / anthropic. prefix
+];
+
 export function lookupPricing(modelId, registry) {
   if (modelId == null) return null;
-  const id = String(modelId);
-  let P = registry.byId.get(id);
+  let norm = String(modelId);
+  let P = registry.byId.get(norm);
   if (P !== undefined) return P;
-  const noBracket = id.replace(/\[[^\]]*\]$/, "");
-  if (noBracket !== id) { P = registry.byId.get(noBracket); if (P !== undefined) return P; }
-  const noDate = noBracket.replace(/-\d{8}$/, "");
-  if (noDate !== noBracket) { P = registry.byId.get(noDate); if (P !== undefined) return P; }
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const strip of MODEL_ID_STRIPPERS) {
+      const next = strip(norm);
+      if (next === norm) continue;
+      norm = next;
+      changed = true;
+      P = registry.byId.get(norm);
+      if (P !== undefined) return P;
+    }
+  }
   return null;
 }
 
@@ -368,6 +389,14 @@ export function enrichTelemetry(runDir, opts = {}) {
     for (const id of usedIds) pricedIds.add(id);
     if (!firstResolved) firstResolved = paths[0];
     const r = priceTranscripts(paths, registry);
+    // A resolved transcript whose model(s) are ALL unpriced (unknown even after
+    // lookupPricing's normalisation) must not be reported as usage_source:
+    // "transcript" with a null cost_usd — that pairing claims a priced
+    // transcript while admitting it has no price. Treat it the same as "no
+    // transcript resolved": leave the phase's pre-enrich aggregate fields
+    // untouched and report the skip, rather than clobbering real fields with a
+    // self-contradictory source label.
+    if (r.cost_usd == null) { skipped.push(p.phase); continue; }
     p.agent_id = usedIds.length === 1 ? usedIds[0] : usedIds;
     p.input_tokens = r.input_tokens;
     p.output_tokens = r.output_tokens;

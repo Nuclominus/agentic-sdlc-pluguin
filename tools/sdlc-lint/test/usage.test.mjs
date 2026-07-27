@@ -336,6 +336,78 @@ test("priceUsage tolerates a bracketed context suffix and a dated snapshot id", 
   assert.equal(priceUsage(u, "gpt-5", reg), null);
 });
 
+test("priceUsage tolerates a Bedrock region prefix and version suffix, alone or combined", () => {
+  const u = { input_tokens: 1_000_000, output_tokens: 0, cache_read_tokens: 0, cache_write_5m_tokens: 0, cache_write_1h_tokens: 0 };
+  const opus = priceUsage(u, "claude-opus-4-8", reg);
+  assert.ok(opus > 0);
+  assert.equal(priceUsage(u, "us.anthropic.claude-opus-4-8", reg), opus);
+  assert.equal(priceUsage(u, "anthropic.claude-opus-4-8", reg), opus);
+  assert.equal(priceUsage(u, "claude-opus-4-8-v1:0", reg), opus);
+  // Prefix + date + version all stacked, in the real Bedrock cross-region shape.
+  assert.equal(priceUsage(u, "us.anthropic.claude-opus-4-8-20260115-v1:0", reg), opus);
+});
+
+test("enrichTelemetry prices an opus-tier phase whose transcript model carries a Bedrock region prefix", () => {
+  // Reproduces the observed bug: business_analysis and security run on the opus
+  // tier; their transcripts recorded the model id in the Bedrock cross-region
+  // inference-profile shape (`us.anthropic.<id>`). Before the lookupPricing fix,
+  // that id silently failed to match the registry's "claude-opus-4-8" entry, so
+  // the phase ended up with usage_source:"transcript" (a real transcript WAS
+  // resolved) and cost_usd:null (nothing in it could be priced) — the exact
+  // self-contradictory pairing from the bug report. It must now resolve to a
+  // real, non-null cost.
+  const root = mkdtempSync(join(tmpdir(), "opus-prefix-"));
+  const sub = join(root, "proj", "sess", "subagents");
+  writeAgent(sub, "ffaa11112222", [
+    turn("us.anthropic.claude-opus-4-8", { input_tokens: 5000, output_tokens: 1200, cache_read_input_tokens: 20000, cache_creation_input_tokens: 3000 }),
+  ]);
+  const runDir = join(root, "plan");
+  mkdirSync(runDir, { recursive: true });
+  writeFileSync(join(runDir, "_telemetry.json"), JSON.stringify({
+    task_slug: "opus-prefix", started_at: "2026-07-07T13:28:00Z", completed_at: "2026-07-07T14:16:00Z",
+    phases: [
+      { phase: "business_analysis", agent: "x-ba", model: "claude-opus-4-8", status: "completed",
+        agent_id: "ffaa11112222", subagent_tokens: 500, usage_source: "subagent_aggregate", cost_usd: null },
+    ],
+    total_subagent_tokens: 500, total_cost_usd: null, cache_hit_ratio: null,
+  }, null, 2));
+  const r = enrichTelemetry(runDir, { registry: reg, projectsRoot: root });
+  assert.deepEqual(r.enriched, ["business_analysis"], "phase resolved a transcript and was priced, not skipped");
+  assert.deepEqual(r.skipped, []);
+  const tel = JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8"));
+  const ba = tel.phases[0];
+  assert.equal(ba.usage_source, "transcript");
+  assert.ok(ba.cost_usd != null && ba.cost_usd > 0, `expected a real priced cost, got ${ba.cost_usd}`);
+});
+
+test("enrichTelemetry does not claim usage_source:\"transcript\" when the transcript's model is genuinely unpriced", () => {
+  // Defense in depth for the other half of the contract: a transcript that DOES
+  // resolve but whose model is absent from the registry even after lookupPricing's
+  // normalisation must not be reported as a priced transcript with a null cost —
+  // it must be treated like "no transcript resolved" (skipped, aggregate untouched).
+  const root = mkdtempSync(join(tmpdir(), "unpriced-"));
+  const sub = join(root, "proj", "sess", "subagents");
+  writeAgent(sub, "zzzz99998888", [
+    turn("claude-nonexistent-9", { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 0 }),
+  ]);
+  const runDir = join(root, "plan");
+  mkdirSync(runDir, { recursive: true });
+  writeFileSync(join(runDir, "_telemetry.json"), JSON.stringify({
+    task_slug: "unpriced", started_at: "2026-07-07T13:28:00Z", completed_at: "2026-07-07T14:16:00Z",
+    phases: [
+      { phase: "business_analysis", agent: "x-ba", model: "claude-nonexistent-9", status: "completed",
+        agent_id: "zzzz99998888", subagent_tokens: 40, usage_source: "subagent_aggregate", cost_usd: null },
+    ],
+    total_subagent_tokens: 40, total_cost_usd: null, cache_hit_ratio: null,
+  }, null, 2));
+  const r = enrichTelemetry(runDir, { registry: reg, projectsRoot: root });
+  assert.deepEqual(r.enriched, []);
+  assert.deepEqual(r.skipped, ["business_analysis"]);
+  const tel = JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8"));
+  assert.equal(tel.phases[0].usage_source, "subagent_aggregate", "not falsely claimed as transcript");
+  assert.equal(tel.phases[0].cost_usd, null);
+});
+
 test("enrichTelemetry recovers agent_id from the run checkpoint when telemetry omits it", () => {
   const root = mkdtempSync(join(tmpdir(), "cp-"));
   const sub = join(root, "proj", "sess", "subagents");
