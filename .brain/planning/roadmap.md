@@ -22,7 +22,7 @@ status: in-progress
 | E8 | micro-task batching (3–5 bugfixes) | planned | — |
 | F1 | speculative TDD (QA ∥ Dev)        | planned     | — |
 | F2 | fast-track bugfix DAG (LOC-gated) | planned     | — |
-| G1 | self-healing compiler/lint micro-loops | planned | — |
+| G1 | self-healing compiler/lint micro-loops | done | #77 |
 | G2 | contextual AAR lesson classification | planned  | — |
 
 _Remaining: B3. (`kotlinx.serialization` deferred — needs a `serialization` aspect decision before
@@ -55,8 +55,10 @@ here when scheduled.
   approval (§2.1); F2 LOC-gated fast-track DAG (`Dev → QA → Docs` when `LOC_TOUCHED < 20 AND
   NO_ARCHITECTURE_CHANGES`) (§2.2). Builds on the shipped `[security ‖ test]` group.
 - **Track G — quality & autonomy.** G1 self-healing compiler/lint micro-loops feeding `stderr` back
-  to Dev, hard-capped at 2 attempts before escalating to Reviewer (§3.1); G2 semantic tagging of AAR
-  lessons so phases load only domain-relevant lessons, extending Track C1 (§3.2).
+  to the phase's own agent, hard-capped at 2 attempts before recording a blocker and continuing
+  (§3.1) — **done in #77**, see [[decisions/ADR-0010-self-healing-micro-loop]]; G2 semantic tagging
+  of AAR lessons so phases load only domain-relevant lessons, extending Track C1 (§3.2).
 
 **Highest-ROI next steps (per plan summary): G1 (self-healing) + E8 (micro-task batching)** — they
-eliminate trivial blockers and cut cost-per-ticket most directly.
+eliminate trivial blockers and cut cost-per-ticket most directly. **G1 shipped in #77**; **E8
+(micro-task batching) is the one remaining highest-ROI item.**

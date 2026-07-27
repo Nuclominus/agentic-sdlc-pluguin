@@ -164,14 +164,18 @@ BA/Security while non-trivial changes still take the full pipeline (no silent un
 Reduce human intervention and raise code quality without inflating prompt cost. Derived from the
 Roadmap Development Plan §3.
 
-### G1 — Self-healing compiler/lint micro-loops *(from plan §3.1)*
+### G1 — Self-healing compiler/lint micro-loops *(from plan §3.1)* — **done, #77**
 Instead of a full, expensive Review-loop for mechanical compile/lint failures, add local build hooks:
 run build/lint validation, intercept `stderr` on failure, and feed the raw output **directly back to
-the Dev agent** — **hard-capped at 2 attempts** — escalating to the Reviewer only if self-healing
-fails. Flagged in the plan summary as the highest-ROI next step (eliminates trivial blockers).
-**DoD:** a build/detekt failure is auto-fixed within ≤2 Dev attempts without invoking the reviewer;
-the 2-attempt cap is enforced and logged; genuine logic failures still escalate. Aligns with the
-existing QA 3-attempt-cap discipline.
+the phase's own agent** — **hard-capped at 2 attempts** (schema ceiling 3) — recording a blocker and
+continuing the pipeline if self-healing is exhausted (escalating "to the Reviewer" turned out to be
+impossible on recipes with no `review` phase, e.g. `default`/`bugfix`/`hotfix`/`refactor`). Flagged
+in the plan summary as the highest-ROI next step (eliminates trivial blockers). **DoD met:** a
+build/detekt failure is auto-fixed within ≤2 attempts without invoking a reviewer; the attempt cap is
+enforced (schema `maximum: 3`) and logged as `heal_attempts_used`/`heal_status` on the checkpoint;
+genuine (not mechanically fixable) or pre-existing failures are classified and still escalate via a
+recorded blocker. Aligns with the existing QA 3-attempt-cap discipline. See
+[[decisions/ADR-0010-self-healing-micro-loop]].
 
 ### G2 — Contextual classification of AAR lessons *(from plan §3.2)*
 Prevent `.claude/sdlc-lessons.md` from bloating every prompt over time: the AAR agent applies a

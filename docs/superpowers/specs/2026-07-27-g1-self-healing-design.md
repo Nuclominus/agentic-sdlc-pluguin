@@ -2,7 +2,18 @@
 
 **Date:** 2026-07-27
 **Track:** G1 (quality & autonomy) — see `.brain/planning/backlog.md`
-**Status:** design approved, ready for implementation planning
+**Status:** shipped (#77) — see amendment note below and `.brain/decisions/ADR-0010-self-healing-micro-loop.md`
+
+> **Amendment (post-implementation).** Review of the implementation plan found two Critical and six
+> Important defects in the design below; the plan author ruled that the review findings govern, and
+> the shipped `plugins/sdlc/skills/pipeline-orchestrator/SKILL.md` implements the *corrected* design,
+> not this document verbatim. This spec has been amended in place to match what shipped, with the
+> corrections called out explicitly where a decision was reversed. The two load-bearing corrections:
+> a new step **`3b-0`** (not described below as a distinct step) captures the pre-dispatch snapshot
+> that `heal_touched_files` depends on, and the aspect-aware re-dispatch target is the
+> **canonical-last** aspect's agent, not canonical-first as originally written. See
+> [[decisions/ADR-0010-self-healing-micro-loop]] (repo-relative: `.brain/decisions/`) for the full
+> account, including the cost-accounting correction (Important I3).
 
 ## Problem
 
@@ -57,13 +68,25 @@ code-writing agent in every foundation plugin (the copy-drift trap already decli
 
 ### Attachment point
 
-A new orchestrator step **3e-heal**, between `3e` (validate phase output) and `3d-3` (write
-checkpoint):
+**Two new orchestrator steps, not one.** The self-healing loop needs a "before" snapshot of the
+working tree as well as the healing step itself — an earlier draft of this design left the snapshot
+implicit (Critical finding C1), which is corrected here:
 
 ```
-3c spawn → 3d summary → 3d-1 telemetry → 3d-2 QA telem → 3d-cap cost gate
+3b-0 pre-dispatch snapshot → 3c spawn → 3d summary → 3d-1 telemetry → 3d-2 QA telem → 3d-cap cost gate
    → 3e validate → [3e-heal] → 3d-3 checkpoint
 ```
+
+- **`3b-0`**, immediately before `3c` spawns the agent, runs ONLY when the phase carries a `heal:`
+  block. It records `CONTEXT.pre_phase_files` = the union of `git diff --name-only HEAD` and
+  `git ls-files --others --exclude-standard` — the working-tree state *before* this phase's own
+  edits. This is what `3e-heal` step 1 subtracts from the post-dispatch state to derive
+  `heal_touched_files`; without it the pre-existing-breakage guard (below) has nothing to compare
+  against. For an aspect-aware phase this is captured **once**, before the first aspect's dispatch
+  (heal itself runs once, after the last aspect — see "Aspect-aware phases" below), not per aspect.
+  For a looped phase it is re-captured on every round, since each round is a fresh dispatch with its
+  own heal budget.
+- **`3e-heal`**, between `3e` (validate phase output) and `3d-3` (write checkpoint):
 
 - **Before `3d-3`** so the checkpoint records the healed state and folds heal cost into the phase's
   `cost_usd`. A run interrupted mid-heal writes no checkpoint, so `--resume` re-runs the phase whole —
@@ -95,12 +118,21 @@ Inherited behaviours, deliberately:
 ### Aspect-aware phases
 
 Compilation is global: aspect A's code may legitimately not compile until aspect B lands. Therefore
-heal runs **once after the whole fan-out**, never per-aspect.
+heal runs **once after the whole fan-out**, never per-aspect — specifically, once after the **last**
+aspect's own `3e` validation passes, before that last aspect's unit checkpoint is written.
 
-The re-dispatch goes to the **canonical-first aspect's agent**, and the `aspect_constraint` is
-**dropped for heal dispatches only**, replaced by an explicit instruction to fix nothing beyond what
-the tool named. Mechanical fixes at a named `file:line` do not need aspect ownership; the alternative
-(routing stderr to aspects by file path) is fragile guesswork.
+The re-dispatch goes to the **canonical-last aspect's agent** (the last aspect in
+`database → backend → frontend → testing` this phase actually dispatched). **This reverses an
+earlier version of this design, which named canonical-first — that was wrong.** The reason is the
+checkpoint, not the code: the canonical-last unit's checkpoint is the only one still unwritten at
+the point `3e-heal` runs, so recording the heal result there is what keeps "the checkpoint records
+the healed state" true without reopening an earlier aspect's already-completed checkpoint write.
+Every earlier aspect's own `3e-heal` turn is a no-op — it proceeds straight to its checkpoint with
+`heal_attempts_used: 0`, `heal_status: "skipped"`.
+
+The `aspect_constraint` is **dropped for heal dispatches only**, replaced by an explicit instruction
+to fix nothing beyond what the tool named. Mechanical fixes at a named `file:line` do not need aspect
+ownership; the alternative (routing stderr to aspects by file path) is fragile guesswork.
 
 ### The heal dispatch
 
@@ -184,7 +216,13 @@ Recipes gaining `heal: {max_attempts: 2}`:
 | `testing.yaml` | `qa` |
 | `analysis.yaml` | `security` |
 | `android-feature.yaml` | `development`, `qa` — **not** `security` (see below) |
+| `android-bugfix.yaml` | `development`, `qa` |
+| `android-debug.yaml` | `development`, `test` — **not** `debugging` (see below) |
 | `docs-only.yaml` | none — `documentation` writes no compilable source |
+
+**Amendment:** the two `android-bugfix.yaml` / `android-debug.yaml` rows were added during
+implementation and are not in the original table above — the same reasoning that guards
+`android-feature.yaml` applies to both.
 
 `android-feature.yaml` runs `security` inside a `parallel: [security, test]` group. The parallel
 branch of `workflow.schema.json` accepts an **array of strings only**, so no `heal` block can be
@@ -193,7 +231,10 @@ and `qa` are standalone and are guarded normally.
 
 `analysis.yaml` has no `development` phase, but its `security` phase still fixes Critical/High
 directly, so it is guarded. `debug.yaml` runs `development` + `qa` and is fully guarded — the
-debugger writes code like any other implementer.
+debugger writes code like any other implementer. `android-debug.yaml` guards `development` and
+`test` the same way, but deliberately leaves its `debugging` phase (the on-demand root-cause
+investigator) unguarded — it is an investigation phase that writes no code, so there is nothing for
+`heal_checks` to validate.
 
 ## Telemetry and reporting
 
@@ -207,8 +248,18 @@ than inventing a parallel mechanism.
 | `plugins/sdlc/tools/rollup/rollup.mjs` | cross-run `heal_attempts` total + distribution, mirroring `qa_distribution` |
 | `plugins/sdlc/tools/report/report.mjs:360` | per-phase badge — `2 heal attempt(s)` |
 
-Heal dispatch cost folds into the phase's own `cost_usd`, so existing totals, caps and the cross-run
-rollup stay correct with no arithmetic changes.
+**Heal dispatch cost does not fold in automatically — an earlier version of this design assumed it
+did, and that was false (Important finding I3).** Step `3d-1` (telemetry capture) is explicitly
+**re-entered after every heal dispatch returns**: the new `agent_id` is appended to the unit's
+`agent_id` list (the checkpoint schema already permits a list for "multiple passes"), its
+tokens/`cost_usd` are added to the unit's running totals, and the same delta is added to
+`CONTEXT.running_cost_usd` before `3d-cap` (the cost-cap gate) is re-evaluated to decide whether
+another heal attempt may proceed. `3d-cap` itself gained a dedicated carve-out for this case: when
+the *next* dispatch would be a heal attempt and the running total already exceeds the cap, the run
+never pauses to ask or aborts (3e-heal's own contract is to never halt the run) — instead healing
+stops for that phase, `heal_status` is set to `"exhausted"`, and the run proceeds to the checkpoint
+write. With that explicit bookkeeping in place, existing totals, caps and the cross-run rollup stay
+correct — but it is bookkeeping the orchestrator must do, not something that happens for free.
 
 This gives G1 what E2 lacked: **the metric that proves or disproves it ships with it.**
 `heal_status: healed` counts follow-up runs avoided; `exhausted` counts wasted dispatches. Both are
@@ -225,7 +276,9 @@ the first guarded phase would catch it but costs a full build (minutes, on Gradl
 
 Cheaper mitigation: derive the touched set from **git**, not from agent prose. The orchestrator
 captures `git diff --name-only HEAD` plus untracked files immediately before dispatching a guarded
-phase and again after it returns; the delta is `heal_touched_files`.
+phase (step `3b-0`, added above — this was the Critical finding: an earlier version of this
+document described the "before" snapshot without ever naming the step that takes it) and again,
+inline, at the top of `3e-heal`; the delta is `heal_touched_files`.
 
 The rule passed to the heal dispatch — *if the reported errors name only files outside the touched
 set, this is pre-existing breakage: report it and stop, do not attempt a fix.* Record
@@ -289,7 +342,9 @@ honest test is a seeded specimen:
 
 This changes the orchestrator↔subagent contract (a new dispatch kind with its own per-call keys and a
 dropped `aspect_constraint`), so it warrants an ADR in `.brain/decisions/` per
-`.claude/rules/second-brain.md` §3 — **ADR-0010** is the next free number.
+`.claude/rules/second-brain.md` §3 — written as `.brain/decisions/ADR-0010-self-healing-micro-loop.md`,
+which is now the authoritative record of the shipped decision, including the two reversals called
+out in the amendment notes above.
 
 ## Open follow-ups (explicitly out of scope)
 

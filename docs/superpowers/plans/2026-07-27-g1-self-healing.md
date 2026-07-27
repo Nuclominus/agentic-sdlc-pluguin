@@ -1,5 +1,24 @@
 # G1 Self-Healing Compiler/Lint Micro-Loops Implementation Plan
 
+> **Amendment (post-implementation, shipped as #77).** This plan is a historical record; the tasks
+> below are complete and merged. Review of this plan during implementation found two Critical and
+> six Important defects in the design it was built from, and the plan author ruled that the review
+> findings govern — so the text actually shipped into
+> `plugins/sdlc/skills/pipeline-orchestrator/SKILL.md` differs from some of the literal instructions
+> below in two load-bearing ways, both marked inline where they occur:
+> 1. **A new step `3b-0`** (not in this plan) captures the pre-dispatch `git` snapshot that
+>    `heal_touched_files` depends on — Task 5's step 1 below assumed that snapshot already existed
+>    without ever specifying where it came from.
+> 2. **The aspect-aware heal re-dispatch targets the canonical-LAST aspect's agent**, not
+>    canonical-first as written in Task 5 step 6 below.
+> 3. **Heal cost does not fold into the phase's `cost_usd` automatically** — Task 5 step 9 below
+>    claims "no arithmetic change," which is false; the orchestrator re-enters step `3d-1` after every
+>    heal dispatch to append the cost explicitly.
+>
+> See `.brain/decisions/ADR-0010-self-healing-micro-loop.md` for the authoritative account. Read the
+> actual `3b-0` / `3e-heal` steps in `SKILL.md` for the shipped wording; do not treat the code blocks
+> below as current.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a `heal:` workflow primitive that feeds compiler/lint `stderr` back to the phase's own agent, hard-capped at 2 attempts, then records a blocker and continues the pipeline.
@@ -561,8 +580,12 @@ skip this step entirely — no commands, no dispatch, no prompt change.
 Set `heal_attempts = 0`, `heal_status = "skipped"`.
 
 1. **Capture the touched set.** Before the phase was dispatched you recorded
-   `git diff --name-only HEAD` plus `git ls-files --others --exclude-standard`. Run both again now;
-   the union of the two deltas is `heal_touched_files`. (Derive it from git, NOT from the phase's
+   `git diff --name-only HEAD` plus `git ls-files --others --exclude-standard`. **[Amended: this
+   "before" snapshot needed its own named step — it did not exist implicitly. The shipped design
+   adds step `3b-0`, immediately before `3c` spawns the agent, which writes this snapshot to
+   `CONTEXT.pre_phase_files`. See `SKILL.md`'s actual `3b-0` step for the aspect-aware /
+   loop-round capture rules.]** Run both again now; the union of the two deltas, minus
+   `CONTEXT.pre_phase_files`, is `heal_touched_files`. (Derive it from git, NOT from the phase's
    prose report — only `development` is required to list changed files at 3e; `security` reports
    severity counts and `qa` reports pass/fail counts.)
 
@@ -621,8 +644,12 @@ Set `heal_attempts = 0`, `heal_status = "skipped"`.
 
 6. **Aspect-aware phases.** Compilation is global: one aspect's code may legitimately not compile
    until a later aspect lands. So heal runs **ONCE after the whole fan-out completes**, never
-   per-aspect. Dispatch to the canonical-first aspect's agent and **OMIT the `aspect_constraint`
-   block** for heal dispatches only — `heal_instruction` already bounds the edit to what the tool
+   per-aspect. **[Amended: dispatch to the canonical-LAST aspect's agent, not canonical-first as
+   originally written here — this was reversed during implementation. The canonical-last unit's
+   checkpoint is the only one still unwritten at this point, so recording the heal result there
+   keeps "the checkpoint records the healed state" true without reopening an earlier aspect's
+   already-completed checkpoint write. See ADR-0010 Consequences.]** OMIT the `aspect_constraint`
+   block for heal dispatches only — `heal_instruction` already bounds the edit to what the tool
    named, and routing stderr to aspects by file path is fragile guesswork.
 
 7. **Development's planning gate is NOT re-opened** on a heal re-dispatch — go straight to the
@@ -632,8 +659,13 @@ Set `heal_attempts = 0`, `heal_status = "skipped"`.
    tunnel under the cap. Re-evaluate the gate after each heal dispatch's cost is folded in.
 
 9. **Record on the checkpoint** (written next, in 3d-3): `heal_attempts_used = heal_attempts` and
-   `heal_status`. Heal dispatch cost folds into this phase's own `cost_usd`, so run totals, caps and
-   the cross-run rollup need no arithmetic change.
+   `heal_status`. **[Amended: "heal dispatch cost folds into this phase's own `cost_usd`... no
+   arithmetic change" was false (Important finding I3) — nothing does that automatically. The
+   shipped design re-enters step `3d-1` after every heal dispatch: it appends the new `agent_id`,
+   adds the dispatch's tokens/`cost_usd` to the unit's running totals, and adds the same delta to
+   `CONTEXT.running_cost_usd` before `3d-cap` is re-evaluated. `3d-cap` also gained a carve-out so a
+   cap-exceeded heal attempt marks `heal_status: "exhausted"` and proceeds to the checkpoint write
+   instead of pausing/aborting the run. See ADR-0010 Consequences.]**
 
 `heal_attempts` resets on **every dispatch**, not once per phase — so a loop phase gets a fresh
 budget each round. The checkpoint's `heal_attempts_used` records the SUM across that phase's rounds.
@@ -714,6 +746,13 @@ Wires `heal_checks` through profile merge and project-local override, gives Andr
 - Modify: `plugins/sdlc/workflows/{default,bugfix,hotfix,refactor,debug,testing,analysis}.yaml`
 - Modify: `plugins/android-foundation/workflows/android-feature.yaml`
 - Test: `tools/sdlc-lint/test/schema.test.mjs`
+
+**[Amended: this file list is incomplete.** The shipped rollout also added `heal:` to
+`plugins/android-foundation/workflows/android-bugfix.yaml` (`development`, `qa`) and
+`plugins/android-foundation/workflows/android-debug.yaml` (`development`, `test` — its `debugging`
+phase is deliberately unguarded, being an investigation phase with no compilable output), extending
+the same reasoning `android-feature.yaml` already got. See ADR-0010 Decision for the full guarded
+list.]
 
 **Interfaces:**
 - Consumes: Task 1's `heal_checks` manifest key and `heal` recipe block; Task 5's `EFFECTIVE_PROFILE.heal_checks` reader.
