@@ -102,25 +102,52 @@ test("the dry-run cost formula gates BOTH heal terms on non-empty heal_checks", 
     "(no heal_checks defined) inflate the dry-run estimate for healing that can never fire");
 });
 
-test("every machine-readable stdout line CI gates on carries the doc's MUST PRINT VERBATIM enforcement", () => {
+test("total_cost_usd is null, not 0, when no phase carries a price", () => {
   const text = readFileSync(SKILL, "utf8");
-  // Each entry: the rule's anchor, and how far ahead the enforcement marker may sit.
-  const sites = [
-    ["1d-3 headless dry-run line", "#### 1d-3. Headless dry-run"],
-    ["3b-special headless gate marker", "ERROR: development planning gate reached"],
-    ["3d-cap headless abort marker", "ERROR: cost cap exceeded"],
-  ];
-  for (const [label, anchor] of sites) {
+  const idx = text.indexOf("- `total_cost_usd` = sum of phase `cost_usd`");
+  assert.ok(idx > -1, "Step 5 total_cost_usd rule missing");
+  const rule = text.slice(idx, text.indexOf("\n- `", idx + 10));
+
+  assert.match(rule, /set `total_cost_usd` to `null`, not `0`/,
+    "an all-unpriced run and a genuinely free run are different facts; writing 0 asserts the " +
+    "second while meaning the first. Observed in a real run: the banner honestly printed " +
+    "'$— (unpriced)' while the JSON beside it carried total_cost_usd: 0");
+  assert.match(rule, /cache_hit_ratio/,
+    "the rule should point at cache_hit_ratio, which already resolves this exact ambiguity the " +
+    "same way in the very next bullet — an unknown must not be encoded as a measured zero");
+});
+
+test("no headless ABORT contract depends on a printed marker line — telemetry state is the contract", () => {
+  const text = readFileSync(SKILL, "utf8");
+
+  // The two headless aborts. Each must NOT reintroduce a verbatim marker line, and each must
+  // name _telemetry.json / aborted_at_phase as what a machine reads.
+  for (const [label, marker, anchor, span] of [
+    ["3b-special headless gate", "ERROR: development planning gate reached", "**Approval gate:**", 4200],
+    ["3d-cap headless abort", "ERROR: cost cap exceeded", "**Headless (`HEADLESS == true`), any other next-dispatch type:**", 1400],
+  ]) {
     const idx = text.indexOf(anchor);
-    assert.ok(idx > -1, `${label}: anchor "${anchor}" missing`);
-    // Look back over the rule that introduces the line, not the whole document.
-    const window = text.slice(Math.max(0, idx - 700), idx + 200);
-    assert.match(window, /MUST PRINT VERBATIM/,
-      `${label} must carry the 🚨 MUST PRINT VERBATIM marker this document uses everywhere else ` +
-      "for output it actually depends on. Observed twice in real headless runs: a rule phrased as " +
-      "\"write one machine-readable line to stdout\" was silently skipped while every MUST-PRINT " +
-      "block around it was honoured — CI gating on that line would have seen nothing");
+    assert.ok(idx > -1, `${label}: anchor missing`);
+    const section = text.slice(idx, idx + span);
+
+    assert.ok(!section.includes(marker) || /Earlier revisions|removed after/.test(section),
+      `${label} must not require the verbatim marker "${marker}". Three consecutive real headless ` +
+      "runs aborted correctly — right blocker, right aborted_at_phase, no phases dispatched — and " +
+      "the marker appeared in none of them, across three phrasings including this document's own " +
+      "MUST PRINT VERBATIM idiom. The orchestrator paraphrases fixed strings but reliably writes " +
+      "telemetry, so a printed line cannot carry a machine contract");
+    assert.match(section, /aborted_at_phase/,
+      `${label} must name aborted_at_phase — with the marker line gone, telemetry state is the ` +
+      "only abort signal a machine can read");
   }
+
+  // 1d-3's dry-run JSON is a different case and deliberately keeps its marker: --dry-run writes NO
+  // telemetry, so stdout is the only channel that exists. Guard that it is still enforced there.
+  const dryRun = text.indexOf("#### 1d-3. Headless dry-run");
+  assert.ok(dryRun > -1, "1d-3 anchor missing");
+  assert.match(text.slice(dryRun, dryRun + 700), /MUST PRINT VERBATIM/,
+    "1d-3 has no telemetry file to fall back on, so its stdout line keeps the enforcement idiom " +
+    "(note: unlike the abort markers, this one has no execution evidence either way yet)");
 });
 
 test("no rule anywhere promises an exit code or a stderr write — neither is reachable from a skill prompt", () => {
@@ -184,17 +211,15 @@ test("the development planning gate defines a deterministic HEADLESS rule detect
     "the approval gate must branch explicitly on HEADLESS, else a headless run falls through to " +
     "the interactive ask-the-user prompt with no stdin attached — the observed nondeterministic " +
     "stop-at-$2.84-and-exit-0 defect");
-  assert.match(section, /ERROR: development planning gate reached/,
-    "the headless abort must emit its machine-readable marker line, since that line — not the " +
-    "process exit code — is what CI can actually gate on");
-  assert.match(section, /MUST PRINT VERBATIM\*\* to \*\*stdout\*\*/,
-    "the marker must go to stdout: a skill prompt's output reaches stdout, so a rule that demands " +
-    "stderr specifies a channel the orchestrator cannot write to (Step 1d-3 sets the precedent)");
+  assert.match(section, /jq -e '\.aborted_at_phase != null'/,
+    "the CI note must give the concrete telemetry gate: with no marker line and no usable exit " +
+    "code, `aborted_at_phase` in _telemetry.json is the only abort signal a machine can read, and " +
+    "an integrator needs to be shown exactly how to read it");
   assert.doesNotMatch(section, /\bexit 1\b/,
     "the rule must NOT promise a non-zero exit status: this orchestrator is a prompt, not a " +
     "program, and cannot set the hosting `claude -p` process's exit code — verified by execution, " +
     "a correctly-aborting headless run still exited 0");
-  assert.match(section, /never on\s+`\$\?`/,
+  assert.match(section, /[Nn]ot on\s+`\$\?`/,
     "the rule must tell CI explicitly not to gate on $?, otherwise an integrator reads the abort " +
     "language and wires up the one signal that silently reports success");
   assert.match(section, /aborted_at_phase/,

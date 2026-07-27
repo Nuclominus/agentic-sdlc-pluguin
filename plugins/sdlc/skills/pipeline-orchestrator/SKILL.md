@@ -1224,12 +1224,6 @@ The development phase runs in TWO passes with a user approval gate between them.
    - Record the blocker `"{phase_name} planning gate reached under HEADLESS — no interactive approver
      to answer approve/request-changes/abort; stopping"` in telemetry.
    - Set `CONTEXT.aborted_at_phase = {phase_name}{ + " — " + aspect if aspect-aware}`.
-   - 🚨 **MUST PRINT VERBATIM** to **stdout** (the same channel Step 1d-3's headless dry-run line
-     uses, and the only one this orchestrator can actually reach — see the CI note below). Print it
-     BEFORE the ⛔ ABORTED banner, on its own line:
-     ```
-     ERROR: development planning gate reached — headless run has no approver — aborting (headless) phase={phase_name}{ aspect={aspect}}
-     ```
    - Stop dispatching further phases — do NOT proceed to Pass 2, and do NOT continue to the next
      phase the way the interactive **abort** bullet above does. A headless stop here halts the WHOLE
      run, mirroring Step 3d-cap's own headless-abort rule (a cap breach with no user present also
@@ -1238,14 +1232,19 @@ The development phase runs in TWO passes with a user approval gate between them.
      `aborted_at_phase` set and the blocker recorded. A headless run that reaches this gate must
      never present as a clean, complete run.
 
-   **CI note — do not gate on the process exit code.** This orchestrator is a skill prompt, not a
-   program: it cannot set the exit status of the `claude -p` process that hosts it, which reports
-   success whenever the model finishes its turn normally. (Verified by execution: a headless run
-   that correctly aborted at this gate still exited 0.) The abort is therefore machine-detectable
-   through the artifacts the orchestrator *does* control — gate CI on either of these, never on
-   `$?`:
-   - the `ERROR: development planning gate reached` line on stdout, or
-   - `aborted_at_phase != null` in `docs/plans/{task_slug}/_telemetry.json`.
+   **CI note — `_telemetry.json` is the contract; nothing printed is.** Gate on:
+   ```
+   jq -e '.aborted_at_phase != null' docs/plans/{task_slug}/_telemetry.json
+   ```
+   Not on `$?` (per 0a-1, this orchestrator cannot set the host process's exit status — verified:
+   a run that correctly aborted here still exited 0), and **not on any expected line of output.**
+   Earlier revisions of this rule required a verbatim `ERROR: …` marker line on stdout. It was
+   removed after three consecutive real headless runs aborted correctly — right blocker, right
+   `aborted_at_phase`, no phases dispatched — while the marker never appeared once, across three
+   different phrasings including this document's own 🚨 MUST PRINT VERBATIM idiom. The orchestrator
+   reliably announces the halt in its own words and reliably writes the telemetry; it does not
+   reliably reproduce a fixed string here, so no contract may depend on one. State-on-disk, not
+   prose, is what CI can trust.
 
    Silent auto-approval was considered and rejected: letting an unattended run wave a generated
    implementation plan through with no human review is a bigger hazard than a loud, deterministic
@@ -1418,14 +1417,15 @@ next phase — or the next loop round, or the next aspect in a fan-out — is di
 
    **Headless (`HEADLESS == true`), any other next-dispatch type:** treat a cap-exceed as an
    **abort** (consistent with Step 0a's headless `block` handling). Set `CONTEXT.cap_status = "exceeded-aborted"`,
-   stop dispatching, and 🚨 **MUST PRINT VERBATIM** to stdout (per 0a-1 — the other stream is
-   unreachable from here), on its own line, BEFORE the final summary:
-   ```
-   ERROR: cost cap exceeded — running=${running_cost_usd} cap=${cost_cap} next_phase={next_phase} — aborting (headless)
-   ```
-   Then proceed to Step 5 and emit partial telemetry with `aborted_at_phase` set. Per 0a-1, promise
-   no exit code: that line on stdout and `aborted_at_phase` in `_telemetry.json` ARE the abort
-   signal, and are what CI gates on.
+   stop dispatching, and announce the halt — naming the running total, the cap, and the phase that
+   would have run next — then proceed to Step 5 and emit partial telemetry with
+   `aborted_at_phase: {next_phase}` and `cap_status: "exceeded-aborted"` set.
+
+   Per 0a-1, promise no exit code, and do not specify a verbatim marker line here: the abort's
+   machine contract is `_telemetry.json` (`aborted_at_phase != null`, `cap_status ==
+   "exceeded-aborted"`), for the same reason given at 3b-special's headless gate — the orchestrator
+   reliably writes the telemetry but paraphrases fixed strings, so a printed line cannot carry a
+   contract. The announcement above is human-facing and may be worded freely.
 
 4. If the cap is set and never exceeded through the last phase, `CONTEXT.cap_status`
    defaults to `"within"`.
@@ -1856,7 +1856,7 @@ ADR-0005):
 - `total_output_tokens` = sum of phase `output_tokens`.
 - `total_cached_input_tokens` = sum of phase `cached_input_tokens`.
 - `total_subagent_tokens` = sum of phase `subagent_tokens` (the aggregate, unsplit counts from `usage_source: "subagent_aggregate"` phases). Omit the key when no phase reported an aggregate.
-- `total_cost_usd` = sum of phase `cost_usd`, **skipping `null` entries** (phases whose model had no registry pricing, AND aggregate-only phases whose cost is not computable without a split). If any phase was null-priced, append `(partial — {n} phase(s) unpriced)` to the printed Cost line so the omission is visible.
+- `total_cost_usd` = sum of phase `cost_usd`, **skipping `null` entries** (phases whose model had no registry pricing, AND aggregate-only phases whose cost is not computable without a split). If any phase was null-priced, append `(partial — {n} phase(s) unpriced)` to the printed Cost line so the omission is visible. **When NO phase carries a price at all, set `total_cost_usd` to `null`, not `0`** — an all-unpriced run and a genuinely free run are different facts, and `0` asserts the second while meaning the first. (Observed: a real headless run where both phases reported `subagent_aggregate` usage printed an honest `$— (unpriced)` banner while writing `total_cost_usd: 0` into the JSON beside it.) This is the same reasoning that makes `cache_hit_ratio` `null` rather than `0` in the next bullet — an unknown must not be encoded as a measured zero.
 - `cache_hit_ratio` = `total_cached_input_tokens / max(total_input_tokens, 1)` rounded to 2 decimals — **but set it to `null`** when no phase reported a real cached subset (e.g. every phase was `subagent_aggregate` or `estimated`), since a 0 there would falsely read as "zero cache hits" rather than "unknown".
 - `cost_cap_usd` = `CONTEXT.cost_cap` (the active workflow recipe's `caps.max_total_cost_usd`), or `null` when the recipe declared no cap.
 - `cap_status` = `CONTEXT.cap_status` from the Step 3d-cap gate: `"within"` (cap set and never exceeded, or no cap), `"exceeded-continued"` (user approved continuing past the cap, OR a heal attempt was stopped by the cap — see 3d-cap point 3), or `"exceeded-aborted"` (user aborted, or headless abort). When the run was cost-aborted, also set `aborted_at_phase` to the phase that was about to run. `aborted_at_phase` is not exclusively a cost-cap field — a headless run that hits the development planning gate with no approver present (3b-special's Approval gate, step 4) sets it the same way, for the same reason: partial telemetry must still name where the run stopped even when the abort was not cost-driven.
