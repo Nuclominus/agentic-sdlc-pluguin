@@ -22,7 +22,7 @@ status: in-progress
 | E8 | micro-task batching (3–5 bugfixes) | planned | — |
 | F1 | speculative TDD (QA ∥ Dev)        | planned     | — |
 | F2 | fast-track bugfix DAG (LOC-gated) | planned     | — |
-| G1 | self-healing compiler/lint micro-loops | done | #77 (provisional) |
+| G1 | self-healing compiler/lint micro-loops | done | #77 |
 | G2 | contextual AAR lesson classification | planned  | — |
 
 _Remaining: B3. (`kotlinx.serialization` deferred — needs a `serialization` aspect decision before
@@ -56,10 +56,10 @@ here when scheduled.
   NO_ARCHITECTURE_CHANGES`) (§2.2). Builds on the shipped `[security ‖ test]` group.
 - **Track G — quality & autonomy.** G1 self-healing compiler/lint micro-loops feeding `stderr` back
   to the phase's own agent, hard-capped at 2 attempts before recording a blocker and continuing
-  (§3.1) — **done in #77 (provisional)**, see [[decisions/ADR-0010-self-healing-micro-loop]]; G2 semantic tagging
+  (§3.1) — **done in #77**, see [[decisions/ADR-0010-self-healing-micro-loop]]; G2 semantic tagging
   of AAR lessons so phases load only domain-relevant lessons, extending Track C1 (§3.2).
 
 **Highest-ROI next step (per plan summary): E8 (micro-task batching)** — cuts cost-per-ticket by
 amortizing init cost across 3–5 bugfixes. The plan summary's other flagged item, G1 (self-healing),
-already shipped in #77 (provisional — see [[decisions/ADR-0010-self-healing-micro-loop]]), which is
+already shipped in #77 (see [[decisions/ADR-0010-self-healing-micro-loop]]), which is
 why it no longer appears here as a next step.
