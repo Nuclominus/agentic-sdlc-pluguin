@@ -1263,8 +1263,14 @@ next phase — or the next loop round, or the next aspect in a fan-out — is di
    ```
    Ask the user **approve continuing** / **abort**.
    - **approve** → set `CONTEXT.cap_status = "exceeded-continued"`, continue the Step 3
-     loop. Do not ask again for subsequent overages this run (the user already accepted the
-     overrun); keep accumulating `running_cost_usd` for the final report.
+     loop. Do not ask again for subsequent overages THAT THIS APPROVAL COVERS this run (the user
+     already accepted the overrun); keep accumulating `running_cost_usd` for the final report. This
+     suppression rule is scoped to an approval the user actually gave HERE — it does NOT extend to
+     the heal carve-out above (point 3's "Next dispatch is a heal attempt" branch), which can also
+     set `cap_status = "exceeded-continued"` but with no user in the loop at all. An
+     automatically-set `cap_status` is never consent: the NEXT ordinary phase/round/aspect boundary
+     that finds `running_cost_usd > cost_cap` still MUST pause and ask, exactly as if `cap_status`
+     were still `"within"`, unless a real user approval (this bullet) already covers it.
    - **abort** → set `CONTEXT.cap_status = "exceeded-aborted"`, stop dispatching further
      phases, and proceed to Step 5 to write partial telemetry (with
      `aborted_at_phase: {next_phase}`) and print the final summary.
@@ -1623,7 +1629,7 @@ ADR-0005):
 - `total_cost_usd` = sum of phase `cost_usd`, **skipping `null` entries** (phases whose model had no registry pricing, AND aggregate-only phases whose cost is not computable without a split). If any phase was null-priced, append `(partial — {n} phase(s) unpriced)` to the printed Cost line so the omission is visible.
 - `cache_hit_ratio` = `total_cached_input_tokens / max(total_input_tokens, 1)` rounded to 2 decimals — **but set it to `null`** when no phase reported a real cached subset (e.g. every phase was `subagent_aggregate` or `estimated`), since a 0 there would falsely read as "zero cache hits" rather than "unknown".
 - `cost_cap_usd` = `CONTEXT.cost_cap` (the active workflow recipe's `caps.max_total_cost_usd`), or `null` when the recipe declared no cap.
-- `cap_status` = `CONTEXT.cap_status` from the Step 3d-cap gate: `"within"` (cap set and never exceeded, or no cap), `"exceeded-continued"` (user approved continuing past the cap), or `"exceeded-aborted"` (user aborted, or headless abort). When the run was cost-aborted, also set `aborted_at_phase` to the phase that was about to run.
+- `cap_status` = `CONTEXT.cap_status` from the Step 3d-cap gate: `"within"` (cap set and never exceeded, or no cap), `"exceeded-continued"` (user approved continuing past the cap, OR a heal attempt was stopped by the cap — see 3d-cap point 3), or `"exceeded-aborted"` (user aborted, or headless abort). When the run was cost-aborted, also set `aborted_at_phase` to the phase that was about to run.
 - `resumed` = `true` when this run entered via `--resume` (else omit or `false`).
 - `resumed_at` = ISO timestamp of the resume entry (only when `resumed`).
 - `resume_slug` = the resumed slug (only when `resumed`).
