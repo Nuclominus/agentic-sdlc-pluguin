@@ -25,6 +25,14 @@ Every runtime path it reads resolves from the **running install** — the three 
 (`SDLC_PLUGIN_ROOT` / `PLUGIN_CACHE_ROOT` / `CONFIG_DIR`) defined in `plugins/sdlc/PLUGIN-PATHS.md`
 and computed in orchestrator Step 0, never a literal `~`
 ([[decisions/ADR-0009-plugin-root-resolution]], issue #70) — guarded by the `plugin-paths` lint verb.
+Guarded phases run a **self-healing micro-loop** (Track G1,
+[[decisions/ADR-0010-self-healing-micro-loop]]): after the phase, the active profile's compile/lint
+`heal_checks` run; a failure re-dispatches the phase's own agent with the tool output (≤2 attempts),
+with an orchestrator-side pre-existing-breakage guard that classifies out-of-scope failures at zero
+attempt cost. Heal outcomes (`heal_attempts_used`/`heal_status`) land in checkpoints, telemetry, AAR
+metrics, and the HTML report. Headless automation gates on `_telemetry.json` state
+(`aborted_at_phase`), never on printed output or the exit code — the SKILL.md is a prompt and can
+control neither, a constraint stated in Step 0a-1 and enforced doc-wide by sdlc-lint.
 
 ## Key files
 - `plugins/sdlc/manifest.yaml`
@@ -39,6 +47,7 @@ and computed in orchestrator Step 0, never a literal `~`
 - [[decisions/ADR-0001-stack-provider-pattern]]
 - [[decisions/ADR-0003-session-recorder-run-journal]]
 - [[decisions/ADR-0009-plugin-root-resolution]]
+- [[decisions/ADR-0010-self-healing-micro-loop]]
 
 ## Change history
 _Backlinks from `changes/` accumulate here._
