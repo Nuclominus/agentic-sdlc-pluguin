@@ -130,7 +130,23 @@ Write `{CONFIG_DIR}/.sdlc-deps-preflight.json`:
 HEADLESS = (env SDLC_NONINTERACTIVE == "true" OR "1")
 ```
 
-Persist in `CONTEXT.headless_mode` for telemetry. Affects UX of policy enforcement below (interactive prompts vs. machine-readable JSON to stdout, warnings to stderr, etc.).
+Persist in `CONTEXT.headless_mode` for telemetry. Affects UX of policy enforcement below (interactive prompts vs. machine-readable JSON to stdout).
+
+**What "machine-readable" can and cannot mean here — binding on EVERY headless rule in this
+document.** This orchestrator is a skill prompt, not a program. Two consequences, both verified by
+execution rather than assumed:
+
+- **Every machine-readable signal goes to `stdout`.** A prompt's output reaches stdout; nothing it
+  can do writes the hosting process's stderr. (Observed: a headless run whose `warn` policy fired
+  produced 0 bytes on stderr.) A rule that says "write to stderr" specifies a channel that silently
+  discards the signal — never write one.
+- **No rule may promise an exit code.** The hosting `claude -p` process reports success whenever
+  the model finishes its turn normally, and this document cannot change that. (Observed: a headless
+  run that correctly aborted still exited 0.) An abort is therefore expressed as *artifacts*, not
+  as status: the machine-readable stdout line, plus `aborted_at_phase` in
+  `docs/plans/{task_slug}/_telemetry.json` for aborts that get that far.
+
+CI integrating a headless run must gate on those artifacts, **never on `$?`**.
 
 #### 0a-2. Enumerate available skills (with FS fallback)
 
@@ -173,16 +189,16 @@ For each entry where `status == "missing"`:
 
 | `policy` | Interactive (HEADLESS=false) | Headless (HEADLESS=true) |
 |---|---|---|
-| `block` | Print install command. If `mcp__plugins__suggest_plugin_install` is available, call it. Abort with exit code 1. | Print to stdout `{ "error": "missing_dependency", "plugin": "{name}", "missing_skills": [...], "install_command": [...] }` (one JSON object per blocking dep, separated by newlines). Exit 1. |
-| `warn` | Print human warning (yellow ⚠️). Set `CONTEXT.{plugin}_unavailable = true`. Continue. | Write one-line warning to stderr: `WARN: {plugin} missing skills: {csv}`. Set `CONTEXT.{plugin}_unavailable = true`. Continue. |
+| `block` | Print install command. If `mcp__plugins__suggest_plugin_install` is available, call it. Abort the run. | Print to stdout `{ "error": "missing_dependency", "plugin": "{name}", "missing_skills": [...], "install_command": [...] }` (one JSON object per blocking dep, separated by newlines). Abort the run — dispatch no phases. |
+| `warn` | Print human warning (yellow ⚠️). Set `CONTEXT.{plugin}_unavailable = true`. Continue. | Write one-line warning to stdout: `WARN: {plugin} missing skills: {csv}`. Set `CONTEXT.{plugin}_unavailable = true`. Continue. |
 | `graceful-degrade` | Silently set `CONTEXT.{plugin}_unavailable = true`. Continue. | Silently set `CONTEXT.{plugin}_unavailable = true`. Continue. |
 
 Aggregate ALL `block` failures before aborting — print all JSON entries / install instructions, then exit. Single exit, multiple grievances.
 
 **Headless mode (`SDLC_NONINTERACTIVE=true`):**
 
-- `block` → exit 1 with machine-readable JSON `{ "missing": [...], "install_command": [...] }` written to stdout.
-- `warn` → write a single line to stderr, continue.
+- `block` → abort the run (dispatch no phases) with machine-readable JSON `{ "missing": [...], "install_command": [...] }` written to stdout. Per 0a-1, do NOT promise an exit code — the stdout JSON is the signal.
+- `warn` → write a single line to stdout, continue.
 - `graceful-degrade` → silent.
 
 #### 0a-5. MUST PRINT VERBATIM (interactive only)
@@ -208,7 +224,7 @@ Or, on cache hit with all satisfied:
 🔧 Dependency preflight: cached (all satisfied)
 ```
 
-If `HEADLESS == true`, suppress this print (warnings already went to stderr; success is silent).
+If `HEADLESS == true`, suppress this print (warnings already went to stdout; success is silent).
 
 #### 0a-6. Pass downstream
 
@@ -1401,11 +1417,13 @@ next phase — or the next loop round, or the next aspect in a fan-out — is di
 
    **Headless (`HEADLESS == true`), any other next-dispatch type:** treat a cap-exceed as an
    **abort** (consistent with Step 0a's headless `block` handling). Set `CONTEXT.cap_status = "exceeded-aborted"`,
-   write one machine-readable line to stderr, and stop dispatching:
+   write one machine-readable line to stdout (per 0a-1 — stderr is unreachable from here), and stop dispatching:
    ```
    ERROR: cost cap exceeded — running=${running_cost_usd} cap=${cost_cap} next_phase={next_phase} — aborting (headless)
    ```
-   Then proceed to Step 5 (partial telemetry with `aborted_at_phase`, exit 1).
+   Then proceed to Step 5 and emit partial telemetry with `aborted_at_phase` set. Per 0a-1, promise
+   no exit code: that line on stdout and `aborted_at_phase` in `_telemetry.json` ARE the abort
+   signal, and are what CI gates on.
 
 4. If the cap is set and never exceeded through the last phase, `CONTEXT.cap_status`
    defaults to `"within"`.

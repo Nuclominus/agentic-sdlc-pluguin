@@ -102,6 +102,36 @@ test("the dry-run cost formula gates BOTH heal terms on non-empty heal_checks", 
     "(no heal_checks defined) inflate the dry-run estimate for healing that can never fire");
 });
 
+test("no rule anywhere promises an exit code or a stderr write — neither is reachable from a skill prompt", () => {
+  const text = readFileSync(SKILL, "utf8");
+  // 0a-1 states the constraint once and is the only place allowed to NAME the two dead channels
+  // (it exists to forbid them). Everything after it must comply.
+  const rule = text.indexOf("**What \"machine-readable\" can and cannot mean here");
+  assert.ok(rule > -1, "0a-1's headless channel/exit-code constraint is missing");
+
+  const offenders = [];
+  for (const [label, re] of [
+    ["exit-code promise", /\bexits? (?:with )?(?:code )?1\b/gi],
+    // `{stderr ...}` is an INTERPOLATION of a subprocess's captured stderr, which the Bash tool
+    // hands back and the orchestrator may legitimately quote. Only an unbraced `stderr` is a claim
+    // about writing the host process's own stderr stream.
+    ["stderr write", /(?:write|written|print)[^.\n]{0,40}\bstderr\b(?![}\s]*(?:tail)?\s*\})/gi],
+  ]) {
+    for (const m of text.matchAll(re)) {
+      // The constraint block itself cites both as the things NOT to do.
+      if (m.index >= rule && m.index < rule + 1400) continue;
+      const line = text.slice(0, m.index).split("\n").length;
+      offenders.push(`${label} at line ${line}: ${JSON.stringify(m[0])}`);
+    }
+  }
+  assert.deepEqual(offenders, [],
+    "this orchestrator is a prompt, not a program: it cannot set the hosting `claude -p` process's " +
+    "exit code (verified — a correctly-aborting headless run exited 0) and cannot write that " +
+    "process's stderr (verified — a headless run whose warn policy fired left stderr empty). Any " +
+    "rule specifying either names a signal that is silently discarded. Route machine-readable " +
+    "output to stdout and express aborts as artifacts (stdout marker + aborted_at_phase)");
+});
+
 test("3e-heal step 4a's pre-existing blocker names its own status, never the reserved word 'skipped'", () => {
   const text = readFileSync(SKILL, "utf8");
   const start = text.indexOf("**4a. Orchestrator-side pre-existing-breakage check");
