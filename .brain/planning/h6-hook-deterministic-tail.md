@@ -1,5 +1,5 @@
 ---
-status: planned
+status: shipped
 ---
 
 # H6 — Hooks as the deterministic tail
