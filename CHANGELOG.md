@@ -4,7 +4,40 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
-_Nothing yet._
+### Changed
+
+- **The end of a run is one command instead of three.** Steps 5 and 5b used to mandate the run-clock
+  arithmetic, `usage/cli.mjs enrich` and `report/cli.mjs report` as three separate prose-driven
+  invocations across six sub-steps. The compliance audit shipped in Track H measured what that
+  costs: single-command steps score 87–100%, while the one genuinely multi-step instruction — read
+  the anchor, subtract, render with a BSD-vs-GNU `date` fallback — scored **67%**, the worst in the
+  set, while carrying the most emphatic prose in the file. Compliance tracks how many separate
+  things an instruction asks for, not how firmly it asks.
+
+  A new shipped tool, `plugins/sdlc/tools/run/`, does all three in one call:
+
+  ```
+  node "${CLAUDE_PLUGIN_ROOT}/tools/run/cli.mjs" finish {task_slug} [--no-report]
+  ```
+
+  It writes `started_at` / `completed_at` / `wall_clock_seconds` from the machine anchor
+  `.checkpoint/_started_at` — the orchestrator no longer authors them at all — then enriches cost
+  from the phase transcripts, reconciles the cap verdict and the run window, and renders the HTML
+  report. Every stage fails open: sealing a run cannot fail a run that already succeeded. There is
+  no `--session` argument, because the enricher recovers the session by itself; the glob the model
+  used to run (and could get wrong on any worktree-isolated run) is gone rather than relocated.
+  See ADR-0014.
+
+  `usage/cli.mjs enrich` and `report/cli.mjs report` are unchanged and still work for backfills and
+  for auditing older runs.
+
+- **`sdlc-lint` contracts can retire.** A contract may now carry `until: YYYY-MM-DD`; runs dated
+  after it record `na: retired` rather than a failure. The three contracts this change replaced moved
+  to `plugins/sdlc/skills/pipeline-orchestrator/contracts-retired.md`, so the compliance rates
+  already published for the historical corpus stay reproducible — verified: the same 82.3% over the
+  same 15 runs, after the procedure they measured no longer exists. The per-run detail also stops
+  listing `na` verdicts as deviations, which had made runs that did everything asked of them render
+  as failures.
 
 ## [1.11.2] — 2026-07-28
 

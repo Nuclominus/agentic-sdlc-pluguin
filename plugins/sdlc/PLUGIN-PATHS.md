@@ -63,6 +63,7 @@ Hold the three values in `CONTEXT` and substitute them into every subsequent `Gl
 - ✅ `Glob {PLUGIN_CACHE_ROOT}/**/manifest.yaml` — resolved symbol.
 - ✅ `Read {SDLC_PLUGIN_ROOT}/config/models.json` — self-referential.
 - ✅ `node "${CLAUDE_PLUGIN_ROOT}/tools/usage/cli.mjs"` — inside `Bash`, where the shell expands it.
+- ✅ `node "${CLAUDE_PLUGIN_ROOT}/tools/run/cli.mjs" finish {task_slug}` — same, Step 5b's sealer.
 - ✅ `${CLAUDE_CONFIG_DIR:-~/.claude}/projects/...` — prose describing a config-dir-relative path.
 - ❌ `~/.claude/plugins/cache/**/manifest.yaml` — reads the operator's home. This is issue #70. <!-- plugin-paths: ok — the counter-example this contract exists to forbid -->
 - ❌ `$HOME/.claude/plugins/...` unguarded — same defect, different spelling. <!-- plugin-paths: ok — the counter-example this contract exists to forbid -->

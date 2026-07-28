@@ -73,14 +73,42 @@ incident run, so `3d-1b` gets a denominator of ~3 and yields no usable rate. Wit
 `plugin_version` in telemetry (this item adds it), every published rate is **provisional**, and a
 result near the 80/95% boundary is a reason to keep measuring rather than a decision on H4.
 
-### H2 — Collapse multi-step prose into single commands
+### H2 — Collapse multi-step prose into single commands ✅
 
-Step 5b is currently four separate prose sub-steps (enrich → verify → cap reconcile → render). One
+Step 5b was four separate prose sub-steps (enrich → verify → cap reconcile → render). One
 `cli.mjs finish <slug>` doing all of it end-to-end leaves the model one chance to deviate instead of
 four. Same treatment for any other multi-call sequence the audit in H1 flags as frequently partial.
 
 **DoD:** the count of *mandated tool invocations* in `SKILL.md` drops measurably; H1's compliance
 rate for the collapsed steps rises.
+
+**Shipped.** The collapse went one step further than the item as written: it took Step 5's clock
+with it, because H1 named `5-clock` — not 5b — as the worst-scoring step in the set. A new shipped
+tool `plugins/sdlc/tools/run/` composes the two existing ones without changing either;
+`clock.mjs` became the sole writer of `started_at` / `completed_at` / `wall_clock_seconds`, derived
+from the machine anchor through `Date`, so the BSD-vs-GNU `date` fallback left the prose along with
+the step. `--session` was not moved but **deleted**: the enricher already recovers the orchestrator
+session from a phase transcript, so the model can no longer supply the wrong one. See
+[[decisions/ADR-0014-the-run-tail-is-one-command]].
+
+**Measured (2026-07-29):**
+
+| | before | after |
+|---|---|---|
+| mandated tool invocations in the run tail | 3 | **1** |
+| `SKILL.md` lines | 2509 | **2436** |
+| live contracts | 6 | **4** (3 retired) |
+
+The historical rates **reproduce exactly** after the collapse — `2-4-anchor` 100%, `5b-2-report`
+87%, `6-journal` 87%, `5b-0-enrich` 80%, `5-clock` 67%, overall 82.3% over the same 15 auditable
+runs. That is what the retirement window buys: replacing a step no longer costs the baseline it was
+measured against. Every rate stays **provisional** for H1's original reason — no run in the corpus
+carries `plugin_version`, so step availability is dated from commits rather than from evidence.
+
+`5b-finish` currently reports `n=0` (`na: predates` on all 15 runs), not `0%`. **H2's own effect is
+therefore not yet measured**, and cannot be until real runs exist on the new version. The next
+measurement is the one that matters: does a step that is now a single command beat the 67% it
+replaced? Re-run `sdlc-lint compliance` once ~10 runs carry the new tail.
 
 ### H3 — The machine-value invariant
 
@@ -114,6 +142,11 @@ cost. **H4 stays gated — now on evidence rather than intuition.** Revisit afte
 landed and 10 runs carry `plugin_version`: if compliance has not moved above ~90% by then, this
 becomes the answer.
 
+**H2 landed 2026-07-29** ([[decisions/ADR-0014-the-run-tail-is-one-command]]), which removed the
+67% step rather than improving it. Half of what this gate waits on is done; the other half is H3
+plus enough runs on the new tail to re-measure. Do not revisit before that data exists — the whole
+point of the gate is that it is decided by a number, not by how the prose reads.
+
 ### H5 — Prompt surface reduction
 
 2453 lines is itself a compliance risk: adherence degrades with volume, and with the distance
@@ -137,7 +170,7 @@ consumed *during* the run (the 3d-1b cap gate stays the orchestrator's responsib
 ```
 H1 (diagnose) ──► decides scope of H4
    │
-   ├─► H2 (collapse)   ─┐
+   ├─► H2 (collapse) ✅ ─┐
    ├─► H3 (invariant)   ├─► re-measure with H1
    └─► H6 (hook tail)  ─┘
 H5 runs alongside, shared with Track E
