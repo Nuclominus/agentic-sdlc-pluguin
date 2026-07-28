@@ -39,9 +39,8 @@ Shipped to the stable channel by marketplace release **v1.10.0** (`e355071`).
   and nowhere else. This is a standing trap for any content-only PR under `plugins/`, not a
   one-off.
 - **Why minor, not patch:** G1 adds a capability (a new `heal:` primitive and new checkpoint
-  fields), so semver minor. The `/release` command proposed in #78 (open at time of writing) adds a
-  warn-only gate for exactly this omission — plugins whose content changed since the last release
-  without a `plugin.json` bump.
+  fields), so semver minor. The `/release` command added in #78 carries a warn-only gate for exactly
+  this omission — plugins whose content changed since the last release without a `plugin.json` bump.
 
 ## Planning
 
