@@ -18,6 +18,13 @@ jobs:
         run: node tools/sdlc-lint/cli.mjs all --json
       - name: sdlc-lint unit tests
         run: npm test --prefix tools/sdlc-lint
+      # The vault is the repo's SSOT (.claude/rules/second-brain.md), so its structure,
+      # links and index completeness are a build concern. Without this the check only ran
+      # when someone remembered to — which is how two ADRs shipped unlisted.
+      - name: brain-sync vault check
+        run: node tools/brain-sync/cli.mjs check --vault .brain
+      - name: brain-sync unit tests
+        run: node --test tools/brain-sync/test/*.test.mjs
       - name: AAR reference integrity
         run: |
           # planning docs under docs/superpowers/ and historical change notes under .brain/

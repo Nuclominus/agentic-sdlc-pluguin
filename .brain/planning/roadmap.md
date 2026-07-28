@@ -24,9 +24,9 @@ status: in-progress
 | F2 | fast-track bugfix DAG (LOC-gated) | planned     | — |
 | G1 | self-healing compiler/lint micro-loops | done | #77 |
 | G2 | contextual AAR lesson classification | planned  | — |
-| H1 | transcript compliance auditor (`sdlc-lint compliance`) | planned | — |
-| H2 | collapse multi-step prose into single commands | planned | — |
-| H3 | machine-value invariant + lint | planned | — |
+| H1 | transcript compliance auditor (`sdlc-lint compliance`) | done | #101 |
+| H2 | collapse multi-step prose into single commands (`run/cli.mjs finish`) | done | #103 |
+| H3 | machine-value invariant + lint (`sdlc-lint machine-values`) | done | #104 |
 | H4 | deterministic control flow (gated on H1) | planned | — |
 | H5 | prompt surface reduction / JIT procedure loading | planned | — |
 | H6 | `Stop` hook sealing the run (deterministic tail) | planned | — |
@@ -76,10 +76,18 @@ probabilistic instruction, so the fix is to move load-bearing steps out of prose
 rather than to word it more firmly — and to **measure compliance first** (H1) so the scope of the
 expensive item (H4, deterministic control flow) is decided by data instead of by this one incident.
 
-**Highest-ROI next step: H1 (transcript compliance auditor)**, then H2 and H3 — cheap, purely
-diagnostic, and it sizes everything after it. We currently cannot tell whether the incident was an
-outlier or whether the orchestrator routinely skips part of its own procedure; H1 answers that from
-transcripts we already have on disk. H2 and H3 need no such data and can run alongside. It displaces
+**H1 landed 2026-07-28 and answered the question it was built for: the incident was not an outlier.**
+Over 15 auditable runs the orchestrator executes its own mandated steps **82.3%** of the time
+([[planning/h1-compliance-auditor]]). The useful signal is not the aggregate but its spread —
+single-command steps score 87–100%, the one multi-step procedure (`5-clock`) scores 67% while
+carrying the file's most emphatic prose. Compliance tracks how many separate things an instruction
+asks for, not how firmly it asks.
+
+**H2 and H3 both landed on 2026-07-29** (#103, #104) — the measurement pointed straight at them,
+and both were far cheaper than H4. **The next step on this track is therefore the re-measurement,
+not more building**: H4 stays gated until ~10 runs carry `plugin_version` on the new tail and
+`sdlc-lint compliance` runs again. Neither shipped item can be credited before then — H2's own
+contract still reports `n=0` and H3 adds no contract at all. This displaces
 the previously flagged **E8 (micro-task batching)**, which stays
 the top item on the cost track: a cost optimisation is worth less while the cost record itself is
 unreliable. The plan summary's other flagged item, G1 (self-healing), already shipped in #77 (see

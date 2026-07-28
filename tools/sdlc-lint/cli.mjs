@@ -9,6 +9,11 @@ import { renderReportFile } from "./lib/report.mjs";
 import { rollupWorkspace } from "./lib/rollup.mjs";
 import { checkReadDiscipline } from "./lib/read-discipline.mjs";
 import { checkPluginPaths } from "./lib/plugin-paths.mjs";
+import { checkMachineValues } from "./lib/machine-values.mjs";
+import { parseContracts } from "./lib/contracts.mjs";
+import { auditRun } from "./lib/compliance.mjs";
+import { aggregate, renderText } from "./lib/compliance-report.mjs";
+import { globSync } from "tinyglobby";
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 
 const args = process.argv.slice(2);
@@ -56,6 +61,17 @@ function printPluginPaths(results) {
   } else {
     for (const r of failed) console.error(`✗ ${r.file}\n    ${r.errors.join("\n    ")}`);
     console.log(`plugin-paths: ${results.length - failed.length}/${results.length} clean`);
+  }
+  return failed.some(r => r.tool_error) ? 2 : failed.length ? 1 : 0;
+}
+
+function printMachineValues(results) {
+  const failed = results.filter(r => !r.ok);
+  if (jsonOut) {
+    console.log(JSON.stringify({ command: "machine-values", checked: results.length, failed: failed.length, failures: failed }));
+  } else {
+    for (const r of failed) console.error(`✗ ${r.file}\n    ${r.errors.join("\n    ")}`);
+    console.log(`machine-values: ${results.length - failed.length}/${results.length} clean`);
   }
   return failed.some(r => r.tool_error) ? 2 : failed.length ? 1 : 0;
 }
@@ -124,12 +140,61 @@ function printResumeFixtures() {
   return failed.some(r => r.tool_error) ? 2 : failed.length ? 1 : 0;
 }
 
+function opt(name, fallback = null) {
+  const i = args.indexOf(name);
+  return i >= 0 && args[i + 1] && !args[i + 1].startsWith("--") ? args[i + 1] : fallback;
+}
+
+function printCompliance() {
+  // Live contracts sit next to the prose they describe; retired ones sit in the
+  // archive, so a run from before a step was replaced is still audited against the
+  // procedure that was actually in force.
+  const skillDir = resolve(root, "plugins/sdlc/skills/pipeline-orchestrator");
+  const { contracts, errors } = parseContracts([
+    join(skillDir, "SKILL.md"),
+    join(skillDir, "contracts-retired.md"),
+  ]);
+  for (const e of errors) console.error(`✗ contract: ${e}`);
+  if (!contracts.length) {
+    console.error("✗ compliance: no sdlc-contract blocks found — nothing to audit");
+    return 2;
+  }
+
+  const pattern = opt("--runs", "docs/plans/*");
+  const dirs = globSync(pattern, { cwd: root, absolute: true, onlyDirectories: true })
+    .filter((d) => existsSync(join(d, "_telemetry.json"))).sort();
+  if (!dirs.length) {
+    console.error(`✗ compliance: no run directories with _telemetry.json matched '${pattern}'`);
+    return 2;
+  }
+
+  // Defaults to the resolved Claude config dir inside auditRun; overridable so the
+  // fixtures — and any archived transcript tree — can be audited without touching it.
+  const configDir = opt("--config-dir");
+  const projectsRoot = configDir ? resolve(root, configDir, "projects") : undefined;
+
+  const results = dirs.map((d) => auditRun(d, contracts, { projectsRoot }));
+  const agg = aggregate(results, contracts);
+  if (jsonOut) {
+    console.log(JSON.stringify({
+      command: "compliance", contracts: agg.contracts,
+      auditable: agg.auditable, seal: agg.seal, excluded: agg.excluded, runs: results,
+    }));
+  } else {
+    console.log(renderText(agg, results));
+  }
+
+  // An instrument, not a gate: findings must not fail a build until the rate is known.
+  return errors.length ? 2 : 0;
+}
+
 function runAll() {
   const codes = [
     printSchema(checkSchemas(root)),
     printCycles(checkAllWorkflows(root)),
     printReadDiscipline(checkReadDiscipline(root)),
     printPluginPaths(checkPluginPaths(root)),
+    printMachineValues(checkMachineValues(root)),
     printDetect2(detectRows()),
     printResumeFixtures(),
   ];
@@ -144,6 +209,7 @@ switch (cmd) {
   case "cycles": code = printCycles(checkAllWorkflows(root)); break;
   case "read-discipline": code = printReadDiscipline(checkReadDiscipline(root)); break;
   case "plugin-paths": code = printPluginPaths(checkPluginPaths(root)); break;
+  case "machine-values": code = printMachineValues(checkMachineValues(root)); break;
   case "detect": code = printDetect(); break;
   case "resume":
     code = args[1] && !args[1].startsWith("--") ? printResumeOne(resolve(root, args[1])) : printResumeFixtures();
@@ -180,12 +246,15 @@ switch (cmd) {
     }
     break;
   }
+  case "compliance": code = printCompliance(); break;
   case "all": code = runAll(); break;
   case undefined:
   case "--help":
-    console.log("Usage: sdlc-lint <schema|cycles|detect|resume|report|rollup|read-discipline|plugin-paths|all> [--json]");
+    console.log("Usage: sdlc-lint <schema|cycles|detect|resume|report|rollup|read-discipline|plugin-paths|machine-values|compliance|all> [--json]");
     console.log("  read-discipline   E2: contract present in the stable prefix; no re-read phrasing in agents");
     console.log("  plugin-paths      #70: no home-anchored ~/.claude paths in shipped plugin text");
+    console.log("  machine-values    H3: no prose computing a value a machine already writes");
+    console.log("  compliance        H1: did the orchestrator run its own mandated steps? [--runs <glob>] [--config-dir <path>]");
     break;
   default:
     console.error(`unknown command: ${cmd}`);

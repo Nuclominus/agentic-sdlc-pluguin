@@ -1,0 +1,5 @@
+# Empty registry
+
+```machine-values
+
+```

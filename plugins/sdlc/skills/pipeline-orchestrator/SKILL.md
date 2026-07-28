@@ -750,7 +750,7 @@ two" rule would silently ignore half of what the project asked for.
 
 Both `--dry-run` (below) and the real-run gate (Step 3d-cap) read `CONTEXT.cost_cap`
 from here — the cap is never restated elsewhere. If the resolved cap is `null`, downstream logic
-treats cost as unbounded (never pauses/aborts on cost); Step 5b(d)'s post-hoc reconciliation is
+treats cost as unbounded (never pauses/aborts on cost); Step 5b's post-hoc reconciliation is
 likewise skipped, since there is no cap to reconcile against.
 
 Record the resolved value in `_telemetry.json` as `cost_cap_usd` (Step 5) exactly as resolved here —
@@ -976,6 +976,14 @@ Exit code 0 (a dry run is a successful preview, not a failure). `--dry-run` is
 side-effect-free: the only output is the preview block (plus the headless JSON line).
 
 ### Step 2 — Generate task slug and prepare workspace
+
+```sdlc-contract
+id: 2-4-anchor
+requires: bash_match
+pattern: _started_at
+cardinality: once-per-run
+since: 2026-07-06
+```
 
 1. Generate `task_slug` from `$ARGUMENTS`: lowercase, alphanumerics + dashes, max 40 chars.
 2. Create directory `docs/plans/{task_slug}/` if it does not exist.
@@ -1403,25 +1411,34 @@ MODELS = parse(Read("{SDLC_PLUGIN_ROOT}/config/models.json"))   # { pipeline_tie
 
 Resolve a tier to its concrete model ID via the `models[]` entry whose `tag` equals the declared tier. This registry is the single source of truth for model IDs **and pricing** — never hardcode either here.
 
-**3d-1. Capture per-phase telemetry** — extract from the Agent tool result. Three envelope shapes, in priority order:
+**3d-1. Capture per-phase telemetry** — record from the Agent tool result **only what nothing on
+disk can give back**. Everything priceable is read from the phase's own subagent transcript by
+3d-1b, one step later; this step must not anticipate it, estimate it, or compute it. See
+`{SDLC_PLUGIN_ROOT}/MACHINE-VALUES.md` for the invariant and the full list of machine-owned keys.
 
-1. **Split triple present** — when the result envelope exposes `input_tokens`, `output_tokens`, `cached_input_tokens`, read all three and set `usage_source: "reported"` (default).
-2. **Aggregate only** — when the envelope exposes only a single aggregate count (this harness's shape: `<usage>subagent_tokens: N, tool_uses, duration_ms</usage>`) and NOT the split triple, record `subagent_tokens: N` **verbatim** on the phase entry and set `usage_source: "subagent_aggregate"`. Do NOT fabricate an `input_tokens`/`output_tokens`/`cached_input_tokens` split from it — leave those keys unset so real (unsplit) usage survives instead of being silently zeroed. `cost_usd` is left `null` **here**, but is filled in at Step 5b from the phase's subagent transcript (see below) — the aggregate count badly understates real billed usage because it ignores per-turn cache reads, so it is a fallback only.
-3. **No usage data** — estimate from prompt + summary character length / 4 and set `usage_source: "estimated"`.
+**Always** record `agent_id` on the phase entry — the subagent id from the Agent result envelope (e.g. `agentId: a1b2c3…`). For a multi-pass phase (e.g. dev plan + implement), record the list of ids. This is what 3d-1b and Step 5b use to locate each phase's subagent transcript (`{CONFIG_DIR}/projects/<encoded-cwd>/<session>/subagents/agent-<id>.jsonl`) and derive the **real** input/output/cache split and cost.
 
-**Always** record `agent_id` on the phase entry — the subagent id from the Agent result envelope (e.g. `agentId: a1b2c3…`). For a multi-pass phase (e.g. dev plan + implement), record the list of ids. This is what Step 5b uses to locate each phase's subagent transcript (`{CONFIG_DIR}/projects/<encoded-cwd>/<session>/subagents/agent-<id>.jsonl`) and compute the **real** input/output/cache split and cost. It is the primary cost path; the shapes above are the live/fallback capture.
+> **This is REQUIRED, not best-effort.** A phase whose `agent_id` is absent from `_telemetry.json` loses its real cost (the whole run then reads as `$—`). Write the id verbatim into **both** the checkpoint (Step 3d-3) **and** the `phases[]` entry. Step 5b now recovers a missing id from `.checkpoint/<phase>.json` as a safety net, but do not rely on the net — record it here.
+>
+> `agent_id` is the one number in this step that is genuinely yours: it exists only in the result
+> envelope, and no file records it. That is why it is transcribed and the token counts beside it
+> are not.
 
-> **This is REQUIRED, not best-effort.** A phase whose `agent_id` is absent from `_telemetry.json` loses its real cost (the whole run then reads as aggregate/`$—`). Write the id verbatim into **both** the checkpoint (Step 3d-3) **and** the `phases[]` entry. Step 5b now recovers a missing id from `.checkpoint/<phase>.json` as a safety net, but do not rely on the net — record it here.
+Then record:
 
-Then compute:
-
-- `compact_summary_chars` — `len(CONTEXT.{phase}_output)`. If > 3000 chars (≈ 3K-token target), record `compact_handoff_violation: true` and emit a one-line warning to stderr: `WARN: {phase} compact summary exceeded budget ({chars} chars > 3000)`. Do not abort — the violation is recorded for post-run analysis.
+- `subagent_tokens` — when the envelope carries an aggregate (`<usage>subagent_tokens: N, tool_uses, duration_ms</usage>`, the ordinary shape on this harness), write `N` **verbatim** and set `usage_source: "subagent_aggregate"`. When the envelope carries no usage at all, omit the key and set `usage_source: "pending"`. Never split an aggregate into `input_tokens` / `output_tokens` / `cached_input_tokens`, and never estimate any of them from text length: those three come from the transcript in 3d-1b, and a fabricated number would be indistinguishable from a measured one.
+- `cost_usd: null` — always, here. Pricing is 3d-1b's job, from the transcript and the registry. A `null` reaching the cost cap is counted as `$0` and flagged `cap_gate_blind` (3d-1b point 3), which is the honest signal; a guessed price would silence it.
 - `model` — the full model ID, derived from the agent's declared `model:` tier by resolving it against the model registry loaded in 3d-0 (`MODELS.models[].model_id` where `tag` == the tier). The tier is the authoritative value because the PreToolUse hook enforces it at dispatch time; this mapping exists solely so telemetry/cost records the concrete model. **Do not** read this from the Agent result envelope (it is not exposed there).
-- `cost_usd` — computed from the **registry** pricing (SSOT), never a hardcoded rate table. Let `P = MODELS.models[].pricing` where `tag` == the phase tier (the registry is already loaded in 3d-0). Treat `input_tokens` as total input and `cached_input_tokens` as its cached subset (consistent with the `cache_hit_ratio` definition in Step 5). Then (raw token counts, `P.*` in USD per MTok):
-  - `cost_usd = (input_tokens - cached_input_tokens)/1e6 * P.input + cached_input_tokens/1e6 * P.cached_input + output_tokens/1e6 * P.output`
-  - **If the matched model has no `pricing` block:** set `cost_usd: null`, emit `WARN: no pricing for {model_id} — cost omitted` to stderr, and exclude the phase from `total_cost_usd` (Step 5). Do not abort.
-  - **For a `subagent_aggregate` phase** (envelope shape 2 above — no split triple): `cost_usd` is `null` (an aggregate count can't be priced without an input/output split), and the phase is excluded from `total_cost_usd`. Its `subagent_tokens` still counts toward `total_subagent_tokens`.
+- `compact_summary_chars` — `len(CONTEXT.{phase}_output)`. If > 3000 chars (≈ 3K-token target), record `compact_handoff_violation: true` and emit a one-line warning to stderr: `WARN: {phase} compact summary exceeded budget ({chars} chars > 3000)`. Do not abort — the violation is recorded for post-run analysis.
 - For aspect-aware phase fan-out, push one entry **per aspect** into `phases[]` with `phase: "{phase_name}"` and `aspect: "{aspect}"` set; aspect-agnostic phases omit `aspect`.
+
+```sdlc-contract
+id: 3d-1b-phase-cost
+requires: bash_match
+pattern: usage/cli\.mjs"?\s+phase-cost
+cardinality: once-per-phase
+since: 2026-07-28
+```
 
 **3d-1b. Price the phase from its subagent transcript (REQUIRED — this is what the cost cap gates on).**
 
@@ -1437,23 +1454,24 @@ Runs immediately after 3d-1, before 3d-2/3d-cap, for every completed phase or as
 > disk when the agent returns — its own subagent transcript — which is the same source Step 5b reads.
 > This step reads it **between** phases instead of only after the last one.
 
-1. Resolve the session transcript exactly as Step 5b(a) does (encode the project cwd `/`→`-`, take the
-   newest `{CONFIG_DIR}/projects/<encoded-cwd>/*.jsonl`). Resolve once per run and reuse.
-2. Run via `Bash` (`{ids}` = this unit's `agent_id`, comma-joined when the phase ran multiple passes):
+1. Run via `Bash` (`{ids}` = this unit's `agent_id`, comma-joined when the phase ran multiple passes):
 
    ```
    node "${CLAUDE_PLUGIN_ROOT}/tools/usage/cli.mjs" phase-cost {ids} \
-     --session "{session_transcript}" --exclude "{comma-joined CONTEXT.priced_agent_ids}" --json
+     --exclude "{comma-joined CONTEXT.priced_agent_ids}" --json
    ```
 
    Omit `--exclude` when `CONTEXT.priced_agent_ids` is empty. `--exclude` is what stops a resumed
-   subagent that served two passes from being charged twice.
-3. Parse the JSON line. **On `resolved: true`** — overwrite this phase entry's `cost_usd`,
+   subagent that served two passes from being charged twice. Do **not** pass `--session`: the tool
+   locates each transcript by its agent id, which is unique, while a hand-derived session path can
+   point at the wrong one (a worktree-isolated run encodes a cwd the harness never filed it under)
+   and turn a priceable phase into an unpriced one.
+2. Parse the JSON line. **On `resolved: true`** — overwrite this phase entry's `cost_usd`,
    `input_tokens`, `output_tokens`, `cached_input_tokens`, `cache_creation_tokens`, `billed_tokens`,
    `turns`, `peak_prefix_tokens`, `cache_pressure`, and set `usage_source: "transcript"`. Keep the
    envelope's `subagent_tokens` as recorded. Append every returned `agent_id` to
    `CONTEXT.priced_agent_ids`.
-4. **On `resolved: false`, a non-zero exit, or no `node`** — keep 3d-1's envelope-derived values
+3. **On `resolved: false`, a non-zero exit, or no `node`** — keep 3d-1's envelope-derived values
    untouched, set `cap_gate_blind: true` on the phase entry, and print
    `WARN: phase cost unresolved ({reason}) — cost cap is blind for {phase}`. The cap gate then
    counts this phase as `$0`, exactly as before; the flag is what makes that visible in-run and lets
@@ -1894,10 +1912,11 @@ their checkpoints, not lost). Then write `docs/plans/{task_slug}/_telemetry.json
   "profile_source": "android-foundation/manifest.yaml",
   "narrative_language": "uk",
   "headless_mode": false,
-  "started_at": "<ISO timestamp>",
-  "completed_at": "<ISO timestamp>",
-  "wall_clock_seconds": 187,
+  "started_at": "<written by Step 5b's finish from the machine anchor — do NOT hand-transcribe>",
+  "completed_at": "<written by Step 5b's finish — do NOT hand-transcribe>",
+  "wall_clock_seconds": "<written by Step 5b's finish — do NOT hand-transcribe>",
   "model_enforcement_corrections": 0,
+  "plugin_version": "<written by Step 5b's enrich — do NOT hand-transcribe>",
   "phases": [
     {
       "phase": "business_analysis",
@@ -1907,13 +1926,13 @@ their checkpoints, not lost). Then write `docs/plans/{task_slug}/_telemetry.json
       "status": "completed",
       "agent_id": "ac70de3f30beff161",
       "subagent_tokens": 73206,
-      "usage_source": "transcript",
-      "input_tokens": 102625,
-      "output_tokens": 11585,
-      "cached_input_tokens": 1631159,
-      "cache_creation_tokens": 342931,
-      "billed_tokens": 2088300,
-      "cost_usd": 3.76,
+      "usage_source": "subagent_aggregate",
+      "input_tokens": "<written by Step 5b's finish — do NOT hand-transcribe>",
+      "output_tokens": "<written by Step 5b's finish — do NOT hand-transcribe>",
+      "cached_input_tokens": "<written by Step 5b's finish — do NOT hand-transcribe>",
+      "cache_creation_tokens": "<written by Step 5b's finish — do NOT hand-transcribe>",
+      "billed_tokens": "<written by Step 5b's finish — do NOT hand-transcribe>",
+      "cost_usd": null,
       "compact_summary_chars": 1840,
       "compact_handoff_violation": false
     },
@@ -1927,13 +1946,13 @@ their checkpoints, not lost). Then write `docs/plans/{task_slug}/_telemetry.json
       "qa_iterations_used": 2,
       "qa_status": "completed",
       "subagent_tokens": 30100,
-      "usage_source": "transcript",
-      "input_tokens": 40,
-      "output_tokens": 3361,
-      "cached_input_tokens": 869118,
-      "cache_creation_tokens": 143805,
-      "billed_tokens": 1016324,
-      "cost_usd": 0.57,
+      "usage_source": "subagent_aggregate",
+      "input_tokens": "<written by Step 5b's finish — do NOT hand-transcribe>",
+      "output_tokens": "<written by Step 5b's finish — do NOT hand-transcribe>",
+      "cached_input_tokens": "<written by Step 5b's finish — do NOT hand-transcribe>",
+      "cache_creation_tokens": "<written by Step 5b's finish — do NOT hand-transcribe>",
+      "billed_tokens": "<written by Step 5b's finish — do NOT hand-transcribe>",
+      "cost_usd": null,
       "recovery": "sendmessage-resume",
       "compact_summary_chars": 1450,
       "compact_handoff_violation": false
@@ -1945,21 +1964,17 @@ their checkpoints, not lost). Then write `docs/plans/{task_slug}/_telemetry.json
   "post_pipeline_checks": [
     { "command": "...", "exit_code": 0 }
   ],
-  "total_input_tokens": 103641,
-  "total_output_tokens": 68547,
-  "total_cached_input_tokens": 15902636,
-  "total_cache_creation_tokens": 1841024,
+  "total_input_tokens": "<written by Step 5b's finish — do NOT hand-transcribe>",
+  "total_output_tokens": "<written by Step 5b's finish — do NOT hand-transcribe>",
+  "total_cached_input_tokens": "<written by Step 5b's finish — do NOT hand-transcribe>",
+  "total_cache_creation_tokens": "<written by Step 5b's finish — do NOT hand-transcribe>",
   "total_subagent_tokens": 590655,
-  "total_cost_usd": 16.87,
-  "cost_basis": "transcript",
-  "orchestration_overhead": {
-    "cost_usd": 6.52,
-    "main_loop": { "model": "claude-opus-4-8", "cost_usd": 5.16, "turns": 54 },
-    "nested_subagents": { "model": "claude-sonnet-5", "cost_usd": 1.36 }
-  },
+  "total_cost_usd": null,
+  "cost_basis": "<written by Step 5b's finish — do NOT hand-transcribe>",
+  "orchestration_overhead": "<written by Step 5b's finish — do NOT hand-transcribe>",
   "cost_cap_usd": 0.60,
   "cap_status": "within",
-  "cache_hit_ratio": 0.99,
+  "cache_hit_ratio": null,
   "deps_preflight": {
     "superpowers": { "status": "available", "missing_skills": [] }
   },
@@ -1969,49 +1984,44 @@ their checkpoints, not lost). Then write `docs/plans/{task_slug}/_telemetry.json
 }
 ```
 
-Compute the timing from the real clock captured in Step 2 (via `Bash`):
+Keys shown as `<written by …>` are placeholders, not strings to copy: **omit** them and let
+`finish` write them. The block documents the shape of the sealed file, not the shape of what you
+hand-assemble.
 
-- `start=$(cat docs/plans/{task_slug}/.checkpoint/_started_at)` (epoch seconds, UTC).
-- `end=$(date -u +%s)`.
-- `wall_clock_seconds` = `end - start` (integer; clamp negatives to 0).
-- `started_at` / `completed_at` = the two epochs rendered ISO-8601 UTC. Portable rendering:
-  `date -u -r <epoch> +%FT%TZ` (BSD/macOS) or `date -u -d @<epoch> +%FT%TZ` (GNU/Linux) — try one,
-  fall back to the other.
-- **Degraded fallback:** if `.checkpoint/_started_at` is missing or unreadable (e.g. an old run
-  started before this was wired), set `completed_at` to now, estimate `started_at` / `wall_clock_seconds`
-  as before, and DO NOT fail. This keeps `report.mjs` / `rollup.mjs` / `aar/metrics.mjs` timing real
-  whenever the anchor exists.
-- Do **not** hand-transcribe these from your own sense of the time. Read the anchor and run the
-  `date` command. An observed run wrote its **local** clock stamped `Z` — 3h20m off the anchor — and
-  derived `completed_at` from it, so the record was internally consistent and externally false.
-  Step 5b now reconciles both strings against the anchor and WARNs when they disagree by more than
-  120s; that is a repair of your output, not a substitute for doing it right.
+**Timing is not yours to write.** Do NOT put `started_at`, `completed_at` or `wall_clock_seconds`
+into `_telemetry.json` — omit the three keys entirely. Step 5b's `finish` derives all three from the
+machine anchor `.checkpoint/_started_at` written in Step 2, and is their only writer (ADR-0014). You
+have no way to read a clock more authoritative than the one already on disk, and an observed run
+proved the cost of trying: it stamped its **local** time with a `Z`, putting the run window 3h20m
+off the anchor while staying internally consistent and externally false.
 
-Compute aggregates from `phases[]` (these are the **live/fallback** values; Step 5b's transcript
-enrichment overwrites `total_cost_usd`, the `total_*` token aggregates, `cache_hit_ratio`, and adds
-`total_cache_creation_tokens` + `orchestration_overhead` with the real, priced numbers — see
-ADR-0005):
+**The cost and token totals are not yours to write either.** Set these keys to `null` and let Step
+5b's `finish` fill them from the subagent transcripts (ADR-0005, ADR-0015): `total_input_tokens`,
+`total_output_tokens`, `total_cached_input_tokens`, `total_cache_creation_tokens`,
+`total_cost_usd`, `cache_hit_ratio`, `orchestration_overhead`, `cost_basis`. `finish` assigns each
+of them unconditionally, so any number you put here is discarded — the only thing hand-summing can
+change is whether the run is briefly wrong before it is overwritten. `null`, not omission and not
+`0`: an unknown must not be encoded as a measured zero, and if no phase transcript resolves,
+`finish` leaves the run alone and your `null` is what an honest reader sees.
 
-- `total_input_tokens` = sum of phase `input_tokens` (phases with only `subagent_tokens` contribute 0 here — their usage lives in `total_subagent_tokens`).
-- `total_output_tokens` = sum of phase `output_tokens`.
-- `total_cached_input_tokens` = sum of phase `cached_input_tokens`.
 - `total_subagent_tokens` = sum of phase `subagent_tokens` (the aggregate, unsplit counts from `usage_source: "subagent_aggregate"` phases). Omit the key when no phase reported an aggregate.
-- `total_cost_usd` = **sum of phase `cost_usd` PLUS `orchestration_overhead.cost_usd`** — the whole
-  run's spend, not just the dispatched phases. **Skip `null` entries** (phases whose model had no
-  registry pricing, AND aggregate-only phases whose cost is not computable without a split). If any
-  phase was null-priced, append `(partial — {n} phase(s) unpriced)` to the printed Cost line so the
-  omission is visible. Print the Cost line with the split shown — `$
-  {total} (phases ${phases} + orchestration overhead ${overhead})` — because the overhead is not a
-  rounding error: across real runs it has ranged from **$1.00 to $1.17 against $0.33–$0.51 of phase
-  spend**, i.e. larger than the work it wraps. A reader shown only a single total cannot tell those
-  apart.
+  **This one is yours**: it is the envelope's own count, `finish` sums only transcript-priced phases
+  and never writes this key, so dropping it here would delete the value rather than move it.
 
-  **When NOTHING carries a price — no phase and no overhead — set `total_cost_usd` to `null`, not
-  `0`.** An all-unpriced run and a genuinely free run are different facts, and `0` asserts the
-  second while meaning the first. (Observed: a real headless run where both phases reported
-  `subagent_aggregate` usage printed an honest `$— (unpriced)` banner while writing
-  `total_cost_usd: 0` into the JSON beside it.) Same reasoning as `cache_hit_ratio` below — an
-  unknown must not be encoded as a measured zero.
+Reading the totals `finish` writes — this is judgement, and stays yours:
+
+- If any phase was null-priced, `finish` marks the run partial so the omission is visible. The
+  printed Cost line shows the split — phases versus orchestration overhead — because the overhead is
+  not a rounding error: across real runs it has ranged from **$1.00 to $1.17 against $0.33–$0.51 of
+  phase spend**, i.e. larger than the work it wraps. A reader shown only a single total cannot tell
+  those apart.
+
+  **When NOTHING carries a price — no phase and no overhead — `finish` writes `total_cost_usd` as
+  `null`, not `0`.** An all-unpriced run and a genuinely free run are different facts, and `0`
+  asserts the second while meaning the first. (Observed: a real headless run where both phases
+  reported `subagent_aggregate` usage printed an honest `$— (unpriced)` banner while writing
+  `total_cost_usd: 0` into the JSON beside it.) `cache_hit_ratio` resolves the same ambiguity the
+  same way. Do not "repair" either back to a number.
 
   ⚠️ **`total_cost_usd` is NOT what the cost cap gates on, and the two legitimately disagree.** Step
   3d-cap compares `CONTEXT.running_cost_usd` — which accumulates phase `cost_usd` only (3d-cap point
@@ -2023,12 +2033,14 @@ ADR-0005):
   every existing recipe's cap.
 
   What this does **not** excuse is `cap_status: "within"` beside a **phase** spend over the cap.
-  That combination is always a gate failure, never a legitimate disagreement, and Step 5b(d) now
+  That combination is always a gate failure, never a legitimate disagreement, and Step 5b's `finish` now
   rewrites it to `"exceeded-undetected"` automatically. If you are reading a run where the two
   disagree, check the difference is overhead before believing it.
-- `cache_hit_ratio` = `total_cached_input_tokens / max(total_input_tokens, 1)` rounded to 2 decimals — **but set it to `null`** when no phase reported a real cached subset (e.g. every phase was `subagent_aggregate` or `estimated`), since a 0 there would falsely read as "zero cache hits" rather than "unknown".
+
+The remaining keys ARE yours — they are decisions the run made, not measurements a tool can take:
+
 - `cost_cap_usd` = `CONTEXT.cost_cap` **as resolved in 1d-0** — the active workflow recipe's `caps.max_total_cost_usd`, or the project's `cost_caps` override where one applied, or `null` when neither set a cap. Always the cap the run was actually gated on, never the recipe's shipped default: a reader comparing `total_cost_usd` against a cap that never applied would draw the wrong conclusion in both directions. When the value came from a project override, also set `cost_cap_source` to `"project:{workflow}"` or `"project:*"` (omit the key, or set `"recipe"`, otherwise) so a cross-run rollup can tell a retuned project apart from a breach of the shipped default.
-- `cap_status` = `CONTEXT.cap_status` from the Step 3d-cap gate: `"within"` (cap set and never exceeded, or no cap), `"exceeded-continued"` (user approved continuing past the cap, OR a heal attempt was stopped by the cap — see 3d-cap point 3), or `"exceeded-aborted"` (user aborted, or headless abort). A fourth value, `"exceeded-undetected"`, is written **not by you but by the enrich tool** at Step 5b(d): phase spend was over cap but the in-run gate never saw it (a `cap_gate_blind` phase priced as $0). Never write it yourself, and never "correct" it back to `"within"` — it means the gate failed, and a run that hides that is how a $0.75 cap absorbed $3.37 of spend. It travels with `cap_breach_usd` (phase spend minus cap, USD). All three `exceeded-*` values read as a breach to every consumer (report, rollup, AAR metrics). When the run was cost-aborted, also set `aborted_at_phase` to the phase that was about to run. `aborted_at_phase` is not exclusively a cost-cap field — a headless run that hits the development planning gate with no approver present (3b-special's Approval gate, step 4) sets it the same way, for the same reason: partial telemetry must still name where the run stopped even when the abort was not cost-driven.
+- `cap_status` = `CONTEXT.cap_status` from the Step 3d-cap gate: `"within"` (cap set and never exceeded, or no cap), `"exceeded-continued"` (user approved continuing past the cap, OR a heal attempt was stopped by the cap — see 3d-cap point 3), or `"exceeded-aborted"` (user aborted, or headless abort). A fourth value, `"exceeded-undetected"`, is written **not by you but by the sealing tool** by Step 5b's `finish`: phase spend was over cap but the in-run gate never saw it (a `cap_gate_blind` phase priced as $0). Never write it yourself, and never "correct" it back to `"within"` — it means the gate failed, and a run that hides that is how a $0.75 cap absorbed $3.37 of spend. It travels with `cap_breach_usd` (phase spend minus cap, USD). All three `exceeded-*` values read as a breach to every consumer (report, rollup, AAR metrics). When the run was cost-aborted, also set `aborted_at_phase` to the phase that was about to run. `aborted_at_phase` is not exclusively a cost-cap field — a headless run that hits the development planning gate with no approver present (3b-special's Approval gate, step 4) sets it the same way, for the same reason: partial telemetry must still name where the run stopped even when the abort was not cost-driven.
 - `resumed` = `true` when this run entered via `--resume` (else omit or `false`).
 - `resumed_at` = ISO timestamp of the resume entry (only when `resumed`).
 - `resume_slug` = the resumed slug (only when `resumed`).
@@ -2040,7 +2052,7 @@ ADR-0005):
   dispatched units are `"fresh"`), not read back off disk.
 - each `phases[]` element that Step 3d-1b could **not** price from its transcript carries
   `cap_gate_blind: true` (omit the key otherwise). It means the cost gate counted that phase as $0,
-  so any breach it caused went undetected in-run — Step 5b(d) uses it to explain an
+  so any breach it caused went undetected in-run — Step 5b's `finish` uses it to explain an
   `"exceeded-undetected"` cap status, and the HTML report names the blind phases. A run with no
   `cap_gate_blind` phase had a fully-sighted cap.
 - each `phases[]` element that recovered from a **mid-run agent crash** carries `recovery` recording
@@ -2055,7 +2067,7 @@ ADR-0005):
   `[{ "status": "A|M|D|R...", "path": "<repo-relative>" }]`, reusing the git already run in Step 0c.
   On any git error, **omit the key** (never fabricate). Consumed by the HTML report (Step 5b).
 
-> Token counts come from the Agent tool's usage envelope when present (see 3d-1 for the three envelope shapes). A split `input/output/cached` triple sets `usage_source: "reported"` (default); an aggregate-only envelope records `subagent_tokens` with `usage_source: "subagent_aggregate"`; a phase with no usage data falls back to char-length / 4 estimation with `usage_source: "estimated"`.
+> The split `input/output/cached` counts come from each phase's subagent transcript, read by 3d-1b and again by Step 5b's `finish`, and carry `usage_source: "transcript"`. What 3d-1 records off the envelope is only the aggregate `subagent_tokens` (`usage_source: "subagent_aggregate"`), or nothing at all (`"pending"`) — never an estimate.
 
 Print the final summary to the user:
 
@@ -2089,106 +2101,82 @@ Post-pipeline checks:
 PR: {pr_url_if_created}
 ```
 
-### Step 5b — Enrich cost from transcripts, then render the HTML run-report
+### Step 5b — Seal the run (clock, cost, report) in one command
 
-After `_telemetry.json` is written, first enrich it with the **real** per-phase token split and
-cost recovered from each phase's subagent transcript, then render a self-contained HTML report —
-unless the user passed `--no-report` or the effective profile sets `report: false`.
+```sdlc-contract
+id: 5b-finish
+requires: bash_match
+pattern: run/cli\.mjs"?\s+finish
+cardinality: once-per-run
+since: 2026-07-29
+```
 
-0. **Enrich cost (transcript-derived).** If `command -v node` succeeds:
-   a. **Resolve this run's session transcript (best-effort)** so the tool can derive the
-      phase→`agent_id` map deterministically and price orchestration overhead even when a phase's
-      `agent_id` never reached `_telemetry.json`. Anchor the lookup on an `agent_id` this run
-      actually dispatched (read one from `_telemetry.json` or `.checkpoint/<phase>.json`) —
-      **not** on the cwd:
+After `_telemetry.json` is written, seal the run with ONE `Bash` call:
 
-      ```
-      ls {CONFIG_DIR}/projects/*/*/subagents/agent-{id}.jsonl
-      ```
+```
+node "${CLAUDE_PLUGIN_ROOT}/tools/run/cli.mjs" finish {task_slug}
+```
 
-      The session transcript is that path's session dir with `.jsonl` appended
-      (`…/<session-id>/subagents/agent-<id>.jsonl` → `…/<session-id>.jsonl`). Pass it as
-      `--session`. If the lookup finds nothing, **omit `--session`** — the tool recovers the
-      session from the phase transcripts by itself.
+Append `--no-report` when the user passed `--no-report` or the effective profile sets
+`report: false` — the run still gets its clock and its transcript-derived cost, only the HTML render
+is skipped. If `command -v node` fails, print `run sealing: skipped (node unavailable)` and go to
+the final summary.
 
-      Never encode the cwd to find it. The harness files a session under the directory it
-      **started** in, so a run that moved into a git worktree — every `/sdlc:batch` task, and any
-      worktree-isolated run — has its transcript filed under the ORIGINAL project dir while the
-      cwd now encodes to the worktree's. A cwd-derived path there resolves to an unrelated
-      session, and pricing the orchestrator's overhead against a stranger's main loop under-reports
-      the run's largest cost bucket (measured: $5.21 → $0.55) while every phase still looks
-      enriched. A wrong `--session` is worse than none. The tool rejects one whose subagents dir
-      holds none of this run's agents (WARN + falls back to self-recovery), but that guard is a
-      backstop, not the plan.
-   b. Run via `Bash`:
-      `node "${CLAUDE_PLUGIN_ROOT}/tools/usage/cli.mjs" enrich {task_slug}` — appending
-      `--session "<path>"` when step (a) resolved one.
-      The tool locates each phase's subagent transcript from its `agent_id` — recorded in Step 3d-1,
-      **or recovered from `.checkpoint/<phase>.json` / the `--session` dispatch map** when telemetry
-      omitted it — sums the real `input`/`output`/`cache_read`/`cache_creation` split, prices it
-      against the model registry (`config/models.json`, incl. `cache_write_multipliers`), and
-      rewrites the phase `cost_usd` + token split with `usage_source: "transcript"`, plus real
-      `total_*` aggregates, `cache_hit_ratio`, and an `orchestration_overhead` block. A subagent
-      transcript reused across two passes is priced once (no double count). This is the authoritative
-      cost path (ADR-0005); the live capture in 3d-1 is the fallback. When **no** phase resolves a
-      transcript the tool prints `no transcripts resolved` and leaves telemetry **unchanged** (it does
-      NOT zero it). On non-zero exit → print `cost enrichment: skipped ({stderr tail})` and continue
-      with the live-captured telemetry. Never fail the pipeline on enrichment.
-   c. **Verify (visibility).** Re-read `_telemetry.json`. If `cost_basis` is not `"transcript"`, or the
-      enrich output reported `no transcripts resolved` or any `skipped` phases, print
-      `WARN: cost enrichment incomplete — cost may read as aggregate/$—` so a silent cost loss is
-      visible in the run log rather than surfacing only later in the report/journal.
+The command writes the run clock from the machine anchor, rewrites every phase's cost from its
+subagent transcript (the authoritative cost path — ADR-0005), reconciles the cap verdict and the run
+window, and renders `report.html`. It resolves the orchestrator's session transcript by itself;
+there is no path for you to supply and no glob for you to run. The tool is shipped inside this
+plugin (`plugins/sdlc/tools/run/`, dependency-free), so it is present on every install — do NOT
+invoke the repo-local `tools/sdlc-lint/` path, which is not part of the shipped payload.
 
-      This step is **not** the only thing standing between a skipped enrichment and a clean-looking
-      report, and must not be treated as such. `cost_basis != "transcript"` makes the renderer print
-      the cap as `unverified — run unpriced` (never `within`), add a `Cost: unpriced` signal naming
-      the `cap_gate_blind` phases, and emit its own stderr WARN at 5b-2. Those are machine-side and
-      fire whether or not you get here; do not "clean them up" by hand-editing `cost_basis`,
-      `cap_status`, or `total_cost_usd`. The fix for an unpriced run is to run the enrich command,
-      not to relabel the record. A run reported as priced without transcript pricing behind it is
-      the failure this whole step exists to prevent.
-   d. **Cap reconciliation (automatic — do not hand-compute).** The enrich tool compares the enriched
-      **phase** spend against `cost_cap_usd` and, on a breach, records `cap_breach_usd` and — only if
-      the in-run gate had recorded `"within"` — rewrites `cap_status` to `"exceeded-undetected"`. It
-      never overwrites `"exceeded-continued"` / `"exceeded-aborted"`: those verdicts had a user in the
-      loop. When the tool prints its `WARN: phase spend exceeded the cost cap by $X` line, surface it
-      in the final summary — a breach the run only discovered after the fact is exactly the thing that
-      must not stay quiet.
+**Your one obligation: echo what it prints.** Copy its block into the final summary, add
+`docs/plans/{task_slug}/report.html` to the **Artifacts** block when it reports one, and reproduce
+every `WARN:` line **verbatim** — those lines are the only signal that a run is unpriced, that its
+cap was breached without the gate noticing, or that its clock has no anchor. Each stage fails open,
+so a non-zero exit means the run directory was unreadable, never that the pipeline failed.
 
-      `"exceeded-undetected"` has **two** causes, distinguished by whether any phase carries
-      `cap_gate_blind`. **With** blind phases: 3d-1b could not price them, they entered the gate as
-      `$0`, and the gate genuinely failed — investigate. **Without** any: the overage landed on the
-      run's LAST dispatch, where 3d-cap has nothing left to stop (point 3 requires a next dispatch),
-      or the recipe has a single phase and therefore no gate boundary at all. That second case is not
-      a malfunction — it is the shape of a pre-dispatch gate, and it usually means the recipe's cap is
-      sized below what one phase actually costs. Do not "fix" it by loosening the gate; fix the cap.
-   e. **Run-window reconciliation (automatic).** The tool also compares `started_at` against the
-      machine anchor `.checkpoint/_started_at` and rewrites `started_at` / `completed_at` when they
-      drift more than 120s apart (`wall_clock_seconds`, the anchor's own arithmetic, is left as-is).
-      Surface its `WARN: started_at was … but the machine anchor says …` line: it means Step 5's
-      timing instructions were not followed, and the report header, the Step 6 journal entry and
-      every cross-run rollup were about to read a fabricated clock.
-1. If `command -v node` fails → print `HTML report: skipped (node unavailable)` and skip to the
-   final summary.
-2. Else run via `Bash`: `node "${CLAUDE_PLUGIN_ROOT}/tools/report/cli.mjs" report {task_slug}`.
-   The renderer is shipped inside this plugin (`plugins/sdlc/tools/report/`, dependency-free), so it
-   is present on every install; `${CLAUDE_PLUGIN_ROOT}` resolves to the installed plugin root while
-   `{task_slug}` resolves against the project cwd (`docs/plans/{task_slug}/`). Do NOT invoke the
-   repo-local `tools/sdlc-lint/` path — that dev/CI tool is not part of the shipped payload.
-   - On exit 0 → the file is at `docs/plans/{task_slug}/report.html`. Add it to the **Artifacts**
-     block of the final summary and print `HTML report: docs/plans/{task_slug}/report.html`.
-   - On non-zero exit → print `HTML report: failed — {stderr tail}` and continue. The report is a
-     convenience; a render failure NEVER fails the pipeline (the run already succeeded).
+**A `Stop` hook seals a run you did not.** `hooks/seal-run.sh` runs this same command when a run's
+phases are all complete and `.checkpoint/_sealed` is absent, so a forgotten seal is repaired rather
+than lost. It is a net, not a substitute: it fires only after your turn ends, so nothing it does is
+available to you during the run; it cannot assemble a `_telemetry.json` you never wrote; and it does
+nothing for the cost gate, which spends its numbers while the run is still going. Which path sealed
+a run is recorded in `sealed_by` — machine-owned, never yours to write.
 
-Skipped entirely under `--dry-run` (nothing ran; consistent with "Do NOT run Step 5").
-Under `--resume`, the report is regenerated from the reassembled telemetry, so it reflects the full
-multi-session picture.
+**Reading the result** (this is judgement, and stays yours):
+
+- `cost: $— (unpriced)` means no phase transcript resolved. Do **not** repair the appearance by
+  hand-editing `cost_basis`, `cap_status` or `total_cost_usd` — the report deliberately renders
+  `unverified — run unpriced` and names the `cap_gate_blind` phases. A run reported as priced
+  without transcript pricing behind it is the failure this step exists to prevent.
+- `cap: exceeded-undetected` has **two** causes, told apart by whether any phase carries
+  `cap_gate_blind`. **With** blind phases, Step 3d-1b could not price them, they entered the gate as
+  `$0`, and the gate genuinely failed — investigate. **Without** any, the overage landed on the run's
+  LAST dispatch, where 3d-cap has nothing left to stop (point 3 requires a next dispatch), or the
+  recipe has a single phase and no gate boundary at all. That second case is the shape of a
+  pre-dispatch gate, not a malfunction: it means the recipe's cap is sized below what one phase
+  costs. Fix the cap, not the gate.
+- `total_cost_usd` and the cap legitimately disagree: the gate compares **phase** spend only, and
+  orchestration overhead — routinely larger than the phases it wraps — sits outside it by design.
+  Never fold overhead into the gate to "reconcile" them; that would silently re-tighten every
+  existing recipe's cap.
+
+Skipped entirely under `--dry-run` (nothing ran; consistent with "Do NOT run Step 5"). Under
+`--resume`, sealing re-runs against the reassembled telemetry and is idempotent — the anchor never
+moves, only the end of the window advances.
 
 ### Step 6 — Close the session (journal entry)
 
 The final act of every run: dispatch the `session-recorder` agent to append one short entry to the
 cumulative run journal `docs/plans/_journal.md`. This is the orchestrator's built-in closer — it
 always runs (on every stack, every workflow), because it is wired here, not as a workflow phase.
+
+```sdlc-contract
+id: 6-journal
+requires: agent_dispatch
+pattern: session-recorder
+cardinality: once-per-run
+since: 2026-07-06
+```
 
 Dispatch via the `Agent` tool:
 - `subagent_type`: `session-recorder` (the neutral core agent; not a workflow phase, so it takes no
@@ -2419,6 +2407,13 @@ You **always**:
 - Pass agents COMPACT prompts. Never inline a previous phase's full output.
 - Save telemetry, even if the pipeline is aborted (with `aborted_at_phase` field).
 - Print final summary to the user, even on partial completion.
+
+**`sdlc-contract` blocks are not instructions.** Fenced blocks whose info string is
+`sdlc-contract` describe, for a machine, the observable trace a mandated step leaves in
+the session transcript. They are read by `sdlc-lint compliance` after the fact; they are
+never executed, never a substitute for the prose beside them, and nothing in a run depends
+on them. Ignore them while running the pipeline. When you change a step that carries one,
+change its contract in the same edit — that adjacency is the whole reason they live here.
 
 ### Prompt-caching discipline
 

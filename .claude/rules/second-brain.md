@@ -31,8 +31,14 @@ The heartbeat: **a merged PR is the trigger to update the docs.**
   update the touched `[[components/<plugin>]]` / `architecture/` notes.
 - Run the tool locally when needed: `node tools/brain-sync/cli.mjs sync --pr <n>` (one PR),
   `sync --backfill` (all merged PRs), `reindex` (rebuild `_moc-changes.md` only), `check` (validate
-  structure + links). Tests: `node --test tools/brain-sync/test/*.test.mjs` (the trailing-slash dir
-  form does not auto-discover on Node 22).
+  structure + links + **index completeness**). Tests: `node --test tools/brain-sync/test/*.test.mjs`
+  (the trailing-slash dir form does not auto-discover on Node 22). CI runs `check` and these tests
+  on every PR.
+- **Every content note must be listed in some `_moc-*` index** — its pillar's MOC, or `_moc-root.md`
+  for `components/`. `check` fails on one that is not. A note nothing links *to* still resolves all
+  its own links and passes every other test, yet is unreachable by anyone browsing the vault: that
+  is how ADR-0014 and ADR-0015 both shipped unlisted while `check` reported "clean". Adding an ADR
+  therefore means adding its MOC row in the same commit.
 - **Two brain-sync PRs open at once will conflict on `_moc-changes.md`** — both append a row, so
   merging `develop` into the second one collides every time. Resolve it with `reindex`, never by
   hand and never with `sync --backfill`: backfill rewrites *every* note from its PR and destroys the

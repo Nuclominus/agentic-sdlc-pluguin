@@ -1,0 +1,9 @@
+{
+  "task_slug": "partial",
+  "started_at": "2026-07-28T10:00:00Z",
+  "phases": [
+    { "phase": "development", "agent_id": "ggg777" },
+    { "phase": "qa", "agent_id": "ggg777" },
+    { "phase": "security", "agent_id": "ggg777" }
+  ]
+}

@@ -65,16 +65,52 @@ transcript, and publish a **compliance rate per step**. That number decides H4's
 we do not know whether this run was an outlier or whether the orchestrator routinely skips ~20% of
 its own procedure. Diagnostic value first; CI gating second.
 
-### H2 — Collapse multi-step prose into single commands
+**Implementation spec: [[planning/h1-compliance-auditor]].** Two findings from designing it change
+what H1 can deliver. `bench/` holds no telemetry, so the corpus is the downstream Android project:
+18 runs, of which only **12** carry an `agent_id` to anchor a transcript. And the steps are younger
+than the corpus — `usage/cli.mjs phase-cost` became mandatory on 2026-07-28, ~7.5h before the
+incident run, so `3d-1b` gets a denominator of ~3 and yields no usable rate. With `n=12` and no
+`plugin_version` in telemetry (this item adds it), every published rate is **provisional**, and a
+result near the 80/95% boundary is a reason to keep measuring rather than a decision on H4.
 
-Step 5b is currently four separate prose sub-steps (enrich → verify → cap reconcile → render). One
+### H2 — Collapse multi-step prose into single commands ✅
+
+Step 5b was four separate prose sub-steps (enrich → verify → cap reconcile → render). One
 `cli.mjs finish <slug>` doing all of it end-to-end leaves the model one chance to deviate instead of
 four. Same treatment for any other multi-call sequence the audit in H1 flags as frequently partial.
 
 **DoD:** the count of *mandated tool invocations* in `SKILL.md` drops measurably; H1's compliance
 rate for the collapsed steps rises.
 
-### H3 — The machine-value invariant
+**Shipped.** The collapse went one step further than the item as written: it took Step 5's clock
+with it, because H1 named `5-clock` — not 5b — as the worst-scoring step in the set. A new shipped
+tool `plugins/sdlc/tools/run/` composes the two existing ones without changing either;
+`clock.mjs` became the sole writer of `started_at` / `completed_at` / `wall_clock_seconds`, derived
+from the machine anchor through `Date`, so the BSD-vs-GNU `date` fallback left the prose along with
+the step. `--session` was not moved but **deleted**: the enricher already recovers the orchestrator
+session from a phase transcript, so the model can no longer supply the wrong one. See
+[[decisions/ADR-0014-the-run-tail-is-one-command]].
+
+**Measured (2026-07-29):**
+
+| | before | after |
+|---|---|---|
+| mandated tool invocations in the run tail | 3 | **1** |
+| `SKILL.md` lines | 2509 | **2436** |
+| live contracts | 6 | **4** (3 retired) |
+
+The historical rates **reproduce exactly** after the collapse — `2-4-anchor` 100%, `5b-2-report`
+87%, `6-journal` 87%, `5b-0-enrich` 80%, `5-clock` 67%, overall 82.3% over the same 15 auditable
+runs. That is what the retirement window buys: replacing a step no longer costs the baseline it was
+measured against. Every rate stays **provisional** for H1's original reason — no run in the corpus
+carries `plugin_version`, so step availability is dated from commits rather than from evidence.
+
+`5b-finish` currently reports `n=0` (`na: predates` on all 15 runs), not `0%`. **H2's own effect is
+therefore not yet measured**, and cannot be until real runs exist on the new version. The next
+measurement is the one that matters: does a step that is now a single command beat the 67% it
+replaced? Re-run `sdlc-lint compliance` once ~10 runs carry the new tail.
+
+### H3 — The machine-value invariant ✅
 
 A rule with lint teeth: **the model never transcribes a value a machine already holds.** Timestamps,
 costs, token counts, agent ids, iteration counters. Three of the four defects above are instances of
@@ -82,6 +118,37 @@ this. Where a value exists on disk, the contract must pass the *path*, never the
 
 **DoD:** an audit of `SKILL.md` for every place it asks the model to produce a machine-known value,
 each one either removed or justified in writing; a `sdlc-lint` check that fails on new ones.
+
+**Shipped.** `plugins/sdlc/MACHINE-VALUES.md` is the contract, the audit and the lint's own input at
+once — a fenced ` ```machine-values ` registry of `key: owner` lines, read by the new
+`sdlc-lint machine-values` verb. The check anchors on the **left-hand side** of a computation, which
+is what keeps it silent on the dozens of lines that legitimately discuss these keys. See
+[[decisions/ADR-0015-the-machine-value-invariant]].
+
+The argument for a lint over firmer wording came from the audit itself: the two definitions of
+`cache_hit_ratio` had already diverged — `SKILL.md` said `cached / max(input, 1)`, `usage.mjs:628`
+says `cached / (input + cached)` — with no symptom, because the tool overwrites the model's answer.
+
+**Measured (2026-07-29):**
+
+| | before | after |
+|---|---|---|
+| formulas over machine-owned keys in `SKILL.md` | 6 | **0** |
+| machine-owned telemetry keys the model computes | 21 | **0** |
+| escape-hatch exemptions in the tree | — | **0** |
+| `SKILL.md` lines | 2436 | 2441 |
+
+The line count **rose by five**, against this item's own expectation. Recorded as a wrong
+prediction rather than dropped: H3 removes arithmetic, and the replacement text explains *why* a
+value is not the model's. The first two rows are the real metric. H3 adds no mandated step, so it
+produces no compliance rate of its own — its effect is a smaller surface under the rates
+[[planning/h1-compliance-auditor]] already tracks.
+
+Two honest limits. The check is **lexical**: a stale Step 5 summary that still described all three
+retired envelope shapes, char/4 estimation included, passed it and was found by reading instead. And
+`total_subagent_tokens` is deliberately **not** in the registry — `finish` never writes it, so
+removing the model's sum would delete the value rather than move it. That the lint stays silent on
+exactly that one sum is the contract's machine-owned/model-owned split validating itself.
 
 ### H4 — Deterministic control flow
 
@@ -93,14 +160,87 @@ compliance stops being a property to measure and becomes a property of the progr
 **Gated on H1's numbers.** If compliance is ~95%, H2 + H3 + H6 are enough and this is not worth the
 rewrite. If it is ~80%, this is the only real fix. Do not start it before that data exists.
 
+**H1 answered this on 2026-07-28: 82.3%** over 15 auditable runs
+([[planning/h1-compliance-auditor]]). Near-boundary, and `provisional` — but the aggregate is not
+what decides. The **spread** does: steps that are a single command score 87–100% (`2-4-anchor` 100%,
+`5b-2-report` and `6-journal` 87%, `5b-0-enrich` 80%), while the one genuinely multi-step
+procedure — `5-clock`, which reads the anchor, computes, and renders with a BSD/GNU fallback —
+scores **67%**, the worst in the set, despite carrying the most emphatic prose in the whole file.
+
+Compliance tracks the number of separate things an instruction asks for, not how firmly it asks.
+H4 would fix the 67%; so would collapsing that step into one command (H2), at a fraction of the
+cost. **H4 stays gated — now on evidence rather than intuition.** Revisit after H2 and H3 have
+landed and 10 runs carry `plugin_version`: if compliance has not moved above ~90% by then, this
+becomes the answer.
+
+**H2 landed 2026-07-29** ([[decisions/ADR-0014-the-run-tail-is-one-command]]), which removed the
+67% step rather than improving it. **H3 landed the same day**
+([[decisions/ADR-0015-the-machine-value-invariant]]), removing the six remaining formulas rather
+than adding a step to check them.
+
+Both halves of the *work* this gate waited on are therefore done. What remains is only the
+**measurement**: ~10 runs carrying `plugin_version` on the new tail, then `sdlc-lint compliance`
+again. Do not revisit before that data exists — the whole point of the gate is that it is decided
+by a number, not by how the prose reads. Note that neither H2 nor H3 can be credited in advance:
+H2's own contract (`5b-finish`) still reports `n=0`, and H3 adds no contract at all, so the next
+run of the auditor is the first evidence either way.
+
 ### H5 — Prompt surface reduction
 
-2453 lines is itself a compliance risk: adherence degrades with volume, and with the distance
-between where a rule is written and the moment it applies. Just-in-time loading of procedure
-fragments beats any amount of emphasis inside a monolith. Overlaps with Track E's cost goals — a
-smaller stable prefix is also cheaper — so measure both effects together.
+`SKILL.md` is itself a compliance risk, on two claims the original wording ran together and this
+revision separates — because they are different mechanisms with different evidence and different
+fixes:
 
-### H6 — Hooks as the deterministic tail
+- **Volume.** Adherence degrades as the file grows. Plausible, and consistent with H1's spread, but
+  **untested**: no measurement here isolates size from complexity.
+- **Distance.** Adherence degrades with the gap between where a rule is written and the moment it
+  applies. Also untested, and *not* the same claim — a short file can still state a rule 400 lines
+  from its use.
+
+Just-in-time loading of procedure fragments addresses the second and only incidentally the first.
+
+#### The cost argument: compute it, do not benchmark it
+
+The original text said "measure both effects together" alongside Track E. Sizing that showed
+benchmarking the cost half is **futile**, and the arithmetic says so before a single run is spent.
+
+Measured on `native-chat-engine-s4-unread` (2026-07-28): the orchestrator main loop ran **47 turns**
+against **7,850,973** cached input tokens — an average prefix of ~167k per turn. `SKILL.md` at
+156,080 chars is roughly **39k tokens** (a `chars/4` estimate; no machine holds the real number),
+i.e. ~23% of that prefix, ~$1.27 of the run's $12.81, or **~10% of total run cost**. Across the
+corpus the orchestrator loop is 22–69% of run cost, median 43%.
+
+Now hold that against the noise floor already recorded in [[planning/backlog]]: run-to-run spread on
+total cache-read is **55.6–64.2%**, and anything below ~50% is unverifiable at n≈10. **Even deleting
+the file outright lands an order of magnitude under the detection bar.** An A/B here reproduces
+[[architecture/benchmark-e2-read-discipline]] — 20 runs to conclude −10.65% inside 64% noise.
+
+The correct instrument is arithmetic, not experiment. Unlike E2's, this mechanism is
+**deterministic**: a token removed from the stable prefix is not billed on every turn, so the saving
+is `removed_prefix_tokens × turns × 0.1 × input_price`, computable from one run's telemetry. Report
+that number; do not spend a campaign failing to detect it.
+
+#### The risk the item did not name
+
+JIT loading means the orchestrator must **read** a fragment mid-run. Every such read is a step that
+can be skipped — and H1's finding is precisely that compliance tracks how many separate things an
+instruction asks for. H5 therefore threatens to trade one monolith, present by construction, for N
+fragments each carrying its own chance of never being loaded. **It can lower compliance while
+lowering cost**, which would invert the track's purpose. Any design must say which fragments are
+load-bearing at what moment, and how a missed load is detected rather than silently tolerated.
+
+A hard boundary comes with it: [[decisions/ADR-0008-read-discipline-contract]] puts the read
+contract inside `=== STABLE PREFIX ===` deliberately, so it is served as a cache hit on every
+subagent turn. That content cannot move, and neither can anything else whose value is being present
+without being fetched.
+
+**DoD:** a fragment map naming what stays in the prefix and what loads on demand, each with the
+moment it applies; the deterministic cost saving computed rather than benchmarked; and a compliance
+re-measurement showing the rate did **not** fall — H5 is refuted, not merely unproven, if
+fragmentation costs more compliance than volume was costing. That last part shares the corpus H4
+waits on, so H5's *design* is unblocked while its *acceptance* is not.
+
+### H6 — Hooks as the deterministic tail ✅
 
 A `Stop` hook (`plugins/sdlc/hooks/seal-run.sh`) that runs `enrich` + report rendering itself, so
 the sealing of a run is not a step the model owns at all. Idempotent via a `.checkpoint/_sealed`
@@ -111,14 +251,36 @@ Explicit limits, so this is not oversold: a hook enforces **state**, never inten
 the session is killed before `Stop`; and it repairs after the fact, so it can do nothing for a value
 consumed *during* the run (the 3d-1b cap gate stays the orchestrator's responsibility).
 
+**Implementation spec: [[planning/h6-hook-deterministic-tail]].** Sizing it settled the one question
+the item as written left open — *when* is a run finished? Recency cannot tell a paused run from a
+completed one, so the gate is **completeness**: every phase in the resolved DAG carries a terminal
+checkpoint. Measured over the 19-run corpus, that gate opens for 10 runs, including the ADR-0012
+incident run (H6's known-positive), and stays shut for the three H1 named as carrying most of the
+damage. Two consequences fall out: the completeness rule must **move into the plugin** — it lives in
+the repo-root `sdlc-lint` today and so does not ship to the consumer running the hook — and the
+clock must come from the run's newest mtime rather than `Date.now()`, or a late hook charges the run
+for the time the user spent chatting afterwards.
+
+**Shipped.** [[decisions/ADR-0017-the-tail-has-a-net]]. The gate turned out to be the whole design
+question, and it is settled by measurement rather than by a timeout: completeness (every phase in
+the resolved DAG terminal) opens for 10 of the 19 corpus runs including the ADR-0012 incident run,
+and stays shut for the three H1 named as carrying most of the damage. Two things fell out of sizing
+it — the completeness rule had to **ship** (it lived in the repo-root `sdlc-lint`, which the hook
+cannot reach), and the clock had to come from the run's newest mtime, since a hook is late by
+construction and `now - anchor` would bill the run for the time after it finished.
+
+H6 adds no mandated step, so like H3 it produces no compliance rate of its own. What it adds is
+`sealed_by`, an orthogonal signal: how often the net had to fire. `5b-finish` is deliberately
+untouched — a hook leaves no `tool_use` block, so it cannot flatter the number that decides H4.
+
 ## Order and dependencies
 
 ```
 H1 (diagnose) ──► decides scope of H4
    │
-   ├─► H2 (collapse)   ─┐
-   ├─► H3 (invariant)   ├─► re-measure with H1
-   └─► H6 (hook tail)  ─┘
+   ├─► H2 (collapse) ✅ ─┐
+   ├─► H3 (invariant) ✅ ├─► re-measure with H1
+   └─► H6 (hook tail) ✅ ─┘
 H5 runs alongside, shared with Track E
 ```
 

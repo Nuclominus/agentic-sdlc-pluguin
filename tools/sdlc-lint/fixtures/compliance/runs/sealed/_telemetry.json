@@ -1,0 +1,8 @@
+{
+  "task_slug": "sealed",
+  "started_at": "2026-07-30T10:00:00Z",
+  "plugin_version": "1.15.0",
+  "phases": [
+    { "phase": "development", "agent_id": "hhh888" }
+  ]
+}
