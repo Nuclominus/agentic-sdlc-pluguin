@@ -51,6 +51,15 @@ function validate(raw, seen) {
   if (typeof raw.since !== "string" || !ISO_DATE.test(raw.since) || Number.isNaN(Date.parse(raw.since))) {
     errs.push(`${label}: since must be YYYY-MM-DD, got '${raw.since}'`);
   }
+  // `until` marks a contract retired: the step it describes was replaced on that date.
+  // Optional — a live contract has no closing edge.
+  if (raw.until != null) {
+    if (typeof raw.until !== "string" || !ISO_DATE.test(raw.until) || Number.isNaN(Date.parse(raw.until))) {
+      errs.push(`${label}: until must be YYYY-MM-DD, got '${raw.until}'`);
+    } else if (typeof raw.since === "string" && ISO_DATE.test(raw.since) && raw.until < raw.since) {
+      errs.push(`${label}: until '${raw.until}' precedes since '${raw.since}'`);
+    }
+  }
 
   const conditions = [];
   const aw = raw.applies_when;
@@ -68,40 +77,47 @@ function validate(raw, seen) {
     errors: [],
     contract: {
       id, requires: raw.requires, pattern: raw.pattern,
-      cardinality: raw.cardinality, since: raw.since, applies_when: conditions,
+      cardinality: raw.cardinality, since: raw.since, until: raw.until ?? null,
+      applies_when: conditions,
     },
   };
 }
 
 /**
- * Read every `sdlc-contract` block out of a SKILL.md.
+ * Read every `sdlc-contract` block out of one or more files.
  *
- * The contracts live inside the skill, adjacent to the prose they describe, so
+ * Live contracts live inside `SKILL.md`, adjacent to the prose they describe, so
  * that renumbering a step without updating its contract shows up in one diff. A
- * manifest kept in a separate file drifts on the first such edit and then either
- * fails forever or silently audits nothing.
+ * manifest kept apart from the procedure drifts on the first such edit and then
+ * either fails forever or silently audits nothing.
+ *
+ * RETIRED contracts are read from a second file. A contract carrying an `until`
+ * describes a procedure that no longer exists and therefore cannot drift from it,
+ * while keeping dead blocks inside the live procedure would grow exactly the
+ * prompt surface Track H is trying to shrink.
  *
  * Returns errors rather than throwing: the CLI decides whether a malformed
- * contract is fatal.
+ * contract is fatal. `seen` spans the whole set, so an id duplicated across two
+ * files is caught.
  */
-export function parseContracts(skillPath) {
-  if (!skillPath || !existsSync(skillPath)) {
-    return { contracts: [], errors: [`cannot read ${skillPath}`] };
-  }
-  let text;
-  try { text = readFileSync(skillPath, "utf8"); }
-  catch (e) { return { contracts: [], errors: [`cannot read ${skillPath}: ${e.message}`] }; }
-
+export function parseContracts(pathOrPaths) {
+  const paths = Array.isArray(pathOrPaths) ? pathOrPaths : [pathOrPaths];
   const contracts = [], errors = [], seen = new Set();
-  BLOCK.lastIndex = 0;
-  for (const m of text.matchAll(BLOCK)) {
-    let raw;
-    try { raw = YAML.parse(m[1]); }
-    catch (e) { errors.push(`contract block: unparseable YAML — ${e.message}`); continue; }
-    const { errors: errs, contract } = validate(raw, seen);
-    if (errs.length) { errors.push(...errs); continue; }
-    seen.add(contract.id);
-    contracts.push(contract);
+  for (const p of paths) {
+    if (!p || !existsSync(p)) { errors.push(`cannot read ${p}`); continue; }
+    let text;
+    try { text = readFileSync(p, "utf8"); }
+    catch (e) { errors.push(`cannot read ${p}: ${e.message}`); continue; }
+    BLOCK.lastIndex = 0;
+    for (const m of text.matchAll(BLOCK)) {
+      let raw;
+      try { raw = YAML.parse(m[1]); }
+      catch (e) { errors.push(`contract block: unparseable YAML — ${e.message}`); continue; }
+      const { errors: errs, contract } = validate(raw, seen);
+      if (errs.length) { errors.push(...errs); continue; }
+      seen.add(contract.id);
+      contracts.push(contract);
+    }
   }
   return { contracts, errors };
 }

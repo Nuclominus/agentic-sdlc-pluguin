@@ -70,3 +70,22 @@ test("the rendered report names all three sections", () => {
   assert.match(text, /excluded/i);
   assert.match(text, /no-agent-ids/);
 });
+
+test("a retired contract is annotated with its window", () => {
+  const contracts = [{ id: "5-clock", since: "2026-07-06", until: "2026-07-28" }];
+  const results = [{ status: "auditable", run: "r1", plugin_version: "1.15.0", date: "2026-07-29",
+    verdicts: [{ id: "5-clock", verdict: "na", reason: "retired" }] }];
+  const agg = aggregate(results, contracts);
+  assert.match(agg.contracts[0].annotations.join(" "), /retired 2026-07-28/);
+  assert.equal(agg.contracts[0].rate, null);
+});
+
+test("a run whose only non-pass verdicts are na renders as compliant, not as a failure", () => {
+  const contracts = [{ id: "a", since: "2026-07-01" }, { id: "b", since: "2026-07-01", until: "2026-07-10" }];
+  const results = [{ status: "auditable", run: "r1", plugin_version: "1.15.0", date: "2026-07-29",
+    date_source: "started_at",
+    verdicts: [{ id: "a", verdict: "pass" }, { id: "b", verdict: "na", reason: "retired" }] }];
+  const text = renderText(aggregate(results, contracts), results);
+  assert.match(text, /✓ r1/);
+  assert.doesNotMatch(text, /✗ r1/);
+});

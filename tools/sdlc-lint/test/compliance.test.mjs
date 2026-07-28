@@ -12,14 +12,26 @@ const REPO = resolve(HERE, "..", "..", "..");
 const PROJECTS = join(FIX, "projects");
 const run = (name) => join(FIX, "runs", name);
 
-const { contracts } = parseContracts(join(REPO, "plugins/sdlc/skills/pipeline-orchestrator/SKILL.md"));
+const SKILLDIR = join(REPO, "plugins/sdlc/skills/pipeline-orchestrator");
+const { contracts } = parseContracts([join(SKILLDIR, "SKILL.md"), join(SKILLDIR, "contracts-retired.md")]);
 const audit = (name) => auditRun(run(name), contracts, { projectsRoot: PROJECTS });
 const verdict = (res, id) => res.verdicts.find((v) => v.id === id);
 
-test("a fully compliant run passes every contract", () => {
-  const res = audit("compliant");
+test("a fully compliant run of the old era passes every contract that applied to it", () => {
+  const res = audit("compliant");                       // dated 2026-07-28
   assert.equal(res.status, "auditable");
-  assert.deepEqual(res.verdicts.filter((v) => v.verdict !== "pass"), []);
+  assert.deepEqual(res.verdicts.filter((v) => v.verdict !== "pass" && v.verdict !== "na"), []);
+  // The tail was three calls back then, and the collapsed contract did not exist yet.
+  assert.equal(verdict(res, "5b-finish").reason, "predates");
+});
+
+test("a run of the new era passes the collapsed contract and retires the old three", () => {
+  const res = audit("sealed");                          // dated 2026-07-30
+  assert.equal(verdict(res, "5b-finish").verdict, "pass");
+  for (const id of ["5-clock", "5b-0-enrich", "5b-2-report"]) {
+    assert.equal(verdict(res, id).reason, "retired", id);
+  }
+  assert.deepEqual(res.verdicts.filter((v) => v.verdict === "fail"), []);
 });
 
 test("the incident shape fails 5b-0-enrich", () => {
@@ -83,4 +95,19 @@ test("the run date falls back to the telemetry mtime, flagged as inferred", () =
 test("plugin_version is surfaced when telemetry carries it", () => {
   assert.equal(audit("compliant").plugin_version, "1.14.1");
   assert.equal(audit("incident").plugin_version, null);
+});
+
+test("a contract retired before the run is na: retired", () => {
+  const retired = [{ id: "gone", requires: "bash_match", pattern: "date -u",
+    cardinality: "once-per-run", since: "2026-07-06", until: "2026-07-10", applies_when: [] }];
+  const res = auditRun(run("compliant"), retired, { projectsRoot: PROJECTS });   // run dated 2026-07-28
+  assert.equal(res.verdicts[0].verdict, "na");
+  assert.equal(res.verdicts[0].reason, "retired");
+});
+
+test("a run inside the retirement window is still judged", () => {
+  const retired = [{ id: "still-live", requires: "bash_match", pattern: "date -u",
+    cardinality: "once-per-run", since: "2026-07-06", until: "2026-07-31", applies_when: [] }];
+  const res = auditRun(run("compliant"), retired, { projectsRoot: PROJECTS });
+  assert.equal(res.verdicts[0].verdict, "pass");
 });

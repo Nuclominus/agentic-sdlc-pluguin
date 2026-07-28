@@ -53,3 +53,21 @@ applies_when:
 ```sdlc-contract
 id: not-a-mapping
 ```
+
+```sdlc-contract
+id: bad-until
+requires: bash_match
+pattern: x
+cardinality: once-per-run
+since: 2026-07-06
+until: yesterday
+```
+
+```sdlc-contract
+id: backwards-window
+requires: bash_match
+pattern: x
+cardinality: once-per-run
+since: 2026-07-06
+until: 2026-07-01
+```

@@ -1,0 +1,4 @@
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"mkdir -p docs/plans/sealed/.checkpoint\n[ -f docs/plans/sealed/.checkpoint/_started_at ] || date -u +%s > docs/plans/sealed/.checkpoint/_started_at"}}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t2","name":"Bash","input":{"command":"node \"${CLAUDE_PLUGIN_ROOT}/tools/usage/cli.mjs\" phase-cost hhh888 --json"}}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t3","name":"Bash","input":{"command":"node \"${CLAUDE_PLUGIN_ROOT}/tools/run/cli.mjs\" finish sealed"}}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t4","name":"Agent","input":{"subagent_type":"sdlc:session-recorder","description":"Close SDLC session"}}]}}

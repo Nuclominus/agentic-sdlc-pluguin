@@ -24,6 +24,9 @@ export function aggregate(results, contracts) {
     // reached a downstream install, not evidence that it did. Until plugin_version is
     // present on every audited run, no rate here is a measurement of what was installed.
     if (anyUnversioned) annotations.push("provisional");
+    // A retired contract's rate describes the era it governed, not the current
+    // procedure. Say so beside the number, or it reads as a live measurement.
+    if (c.until) annotations.push(`retired ${c.until}`);
     if (denominator < THIN) annotations.push(`thin denominator (n=${denominator})`);
     if (c.id === "5b-2-report") annotations.push("confounded by --no-report (not recorded)");
     return { id: c.id, ...counts, denominator, rate: denominator ? counts.pass / denominator : null, annotations };
@@ -50,7 +53,10 @@ export function renderText(agg, results) {
   out.push("");
   out.push("per-run detail (non-pass verdicts only)");
   for (const r of results.filter((x) => x.status === "auditable")) {
-    const bad = r.verdicts.filter((v) => v.verdict !== "pass");
+    // `na` is not a deviation: the contract did not apply to this run (it predates the
+    // step, or the step has since been replaced). Listing it here made runs that did
+    // everything asked of them render as ✗.
+    const bad = r.verdicts.filter((v) => v.verdict !== "pass" && v.verdict !== "na");
     const date = `${r.date ?? "?"}${r.date_source === "mtime" ? " (date-inferred)" : ""}`;
     if (!bad.length) { out.push(`  ✓ ${r.run}  ${date}`); continue; }
     const detail = bad.map((v) => v.verdict === "partial"

@@ -24,8 +24,8 @@ status: in-progress
 | F2 | fast-track bugfix DAG (LOC-gated) | planned     | — |
 | G1 | self-healing compiler/lint micro-loops | done | #77 |
 | G2 | contextual AAR lesson classification | planned  | — |
-| H1 | transcript compliance auditor (`sdlc-lint compliance`) | done | — |
-| H2 | collapse multi-step prose into single commands | planned | — |
+| H1 | transcript compliance auditor (`sdlc-lint compliance`) | done | #101 |
+| H2 | collapse multi-step prose into single commands (`run/cli.mjs finish`) | done | #103 |
 | H3 | machine-value invariant + lint | planned | — |
 | H4 | deterministic control flow (gated on H1) | planned | — |
 | H5 | prompt surface reduction / JIT procedure loading | planned | — |

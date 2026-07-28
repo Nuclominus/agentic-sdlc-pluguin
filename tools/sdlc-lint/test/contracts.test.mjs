@@ -54,11 +54,59 @@ test("the real orchestrator SKILL.md parses with zero errors", () => {
   assert.deepEqual(errors, []);
 });
 
-test("the orchestrator declares exactly the v1 contract set", () => {
+test("the orchestrator declares exactly the live contract set", () => {
   const { contracts } = parseContracts(
     join(REPO, "plugins/sdlc/skills/pipeline-orchestrator/SKILL.md"));
   assert.deepEqual(contracts.map((c) => c.id).sort(), [
-    "2-4-anchor", "3d-1b-phase-cost", "5-clock",
-    "5b-0-enrich", "5b-2-report", "6-journal",
+    "2-4-anchor", "3d-1b-phase-cost", "5b-finish", "6-journal",
   ]);
+  assert.equal(contracts.every((c) => c.until === null), true);
+});
+
+test("the archive declares exactly the retired set, each with a window", () => {
+  const { contracts, errors } = parseContracts(
+    join(REPO, "plugins/sdlc/skills/pipeline-orchestrator/contracts-retired.md"));
+  assert.deepEqual(errors, []);
+  assert.deepEqual(contracts.map((c) => c.id).sort(), ["5-clock", "5b-0-enrich", "5b-2-report"]);
+  assert.equal(contracts.every((c) => c.until === "2026-07-28"), true);
+});
+
+test("live and retired sets parse together without a duplicate id", () => {
+  const base = join(REPO, "plugins/sdlc/skills/pipeline-orchestrator");
+  const { contracts, errors } = parseContracts([join(base, "SKILL.md"), join(base, "contracts-retired.md")]);
+  assert.deepEqual(errors, []);
+  assert.equal(contracts.length, 7);
+});
+
+test("until is optional and defaults to null", () => {
+  const { contracts } = parseContracts(join(FIX, "skill-contracts-ok.md"));
+  assert.equal(contracts[0].until, null);
+});
+
+test("a retired contract carries its until date", () => {
+  const { contracts, errors } = parseContracts(join(FIX, "contracts-retired-ok.md"));
+  assert.deepEqual(errors, []);
+  assert.equal(contracts[0].id, "5-clock");
+  assert.equal(contracts[0].until, "2026-07-28");
+});
+
+test("a malformed or backwards until is an error, not a throw", () => {
+  const { errors } = parseContracts(join(FIX, "skill-contracts-bad.md"));
+  const joined = errors.join("\n");
+  assert.match(joined, /until must be YYYY-MM-DD/);
+  assert.match(joined, /precedes since/);
+});
+
+test("parseContracts accepts a list of files and unions them", () => {
+  const { contracts, errors } = parseContracts([
+    join(FIX, "skill-contracts-ok.md"), join(FIX, "contracts-retired-ok.md")]);
+  assert.deepEqual(errors, []);
+  assert.deepEqual(contracts.map((c) => c.id), ["5b-0-enrich", "6-journal", "5-clock"]);
+});
+
+test("an id duplicated ACROSS files is reported once and excluded", () => {
+  const { contracts, errors } = parseContracts([
+    join(FIX, "skill-contracts-ok.md"), join(FIX, "skill-contracts-ok.md")]);
+  assert.match(errors.join("\n"), /duplicate id '5b-0-enrich'/);
+  assert.equal(contracts.filter((c) => c.id === "5b-0-enrich").length, 1);
 });

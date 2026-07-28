@@ -83,6 +83,10 @@ function evaluate(contract, { facts, tel, phaseCount, date }) {
   // Lexicographic on two YYYY-MM-DD strings is exactly chronological. `since` is
   // validated to that shape by parseContracts; `date` is built from toISOString().
   if (date && contract.since > date) return na("predates");
+  // Retired: the step existed, then was replaced. The contract still audits the runs
+  // from its era — that is what keeps a published rate reproducible after the procedure
+  // it measured is gone — but says nothing about a run that postdates the change.
+  if (date && contract.until && contract.until < date) return na("retired");
   for (const c of contract.applies_when) if (!conditionHolds(c, tel)) return na("not-applicable");
 
   const matched = countMatches(contract, facts);

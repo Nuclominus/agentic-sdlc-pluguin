@@ -43,6 +43,8 @@ control neither, a constraint stated in Step 0a-1 and enforced doc-wide by sdlc-
 - `plugins/sdlc/tools/usage/` (transcript-derived pricing; `enrich` is the authoritative cost path,
   and it self-recovers the session from the run's `agent_id`s — never from the cwd)
 - `plugins/sdlc/tools/report/` (HTML run report; refuses to render a cap verdict on an unpriced run)
+- `plugins/sdlc/tools/run/` (`finish` — seals a run in one call: machine clock, enrichment, report;
+  the orchestrator's whole Step 5b, see [[decisions/ADR-0014-the-run-tail-is-one-command]])
 - `tools/sdlc-lint/lib/read-discipline.mjs`
 - `tools/sdlc-lint/lib/plugin-paths.mjs`
 
