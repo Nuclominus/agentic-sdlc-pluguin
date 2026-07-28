@@ -84,7 +84,7 @@ against the procedure that was actually in force.
   `plugins/sdlc/skills/pipeline-orchestrator/SKILL.md` (Steps 5, 5b, 3d-1b),
   `plugins/sdlc/skills/pipeline-orchestrator/contracts-retired.md`,
   `tools/sdlc-lint/lib/contracts.mjs`, `tools/sdlc-lint/lib/compliance.mjs`,
-  `tools/sdlc-lint/lib/compliance-report.mjs`; PR pending.
+  `tools/sdlc-lint/lib/compliance-report.mjs`; PR #103.
 - Acts on the measurement in: [[planning/h1-compliance-auditor]]
 - Motivated by the incident in: [[decisions/ADR-0012-unpriced-runs-must-not-render-a-cap-verdict]]
 - Generalises the anchor's authority from: [[decisions/ADR-0007-overhead-window-authoritative-anchor]]
