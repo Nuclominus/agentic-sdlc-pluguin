@@ -103,6 +103,38 @@ tripwire that fires every time and trains people to click through it. If a workf
 less, constrain the work — fewer phases, cheaper tiers via `.claude/model.local.json` — and let the
 cap follow the measurement.
 
+#### Changing a cap for one project
+
+Add a `cost_caps` block to `.claude/sdlc.local.yaml`:
+
+```yaml
+cost_caps:
+  android-feature: 8.00     # exact recipe name — wins over "*"
+  "*": 5.00                 # optional fallback for any recipe with no exact entry
+  hotfix: null              # explicit null = run this recipe uncapped in this project
+```
+
+The override **replaces** the recipe's number (never combined with it, no "safest of the two"), and
+is resolved in one place — orchestrator Step 1d-0 — so `--dry-run`, the live gate, and
+`_telemetry.json` all agree on the value the run was gated on. Telemetry records the resolved cap in
+`cost_cap_usd` plus a `cost_cap_source` of `recipe` / `project:<workflow>` / `project:*`, and the
+HTML report labels an overridden cap as **(project override)** so it is never mistaken for the
+shipped default. A run announces the override on startup:
+
+```
+🔧 Cost cap overridden by .claude/sdlc.local.yaml: $8.00 (was $16.50) — via project:android-feature
+```
+
+An unusable value (string, negative, nested object) is dropped with a `WARN` and the recipe's own
+cap applies — a malformed override never halts a run. An entry naming a recipe you do not use is
+silently ignored, not an error.
+
+The older alternative still works and remains the right tool when you want to change *more* than the
+cap: a project-local recipe at `.claude/sdlc-workflows/<name>.yaml` shadows the plugin recipe of the
+same name entirely (author one with `/sdlc:workflow-config`). Prefer `cost_caps` for a cap alone —
+shadowing means duplicating the phase list, `heal:` and `loop:` blocks, and your copy stops
+receiving upstream recipe updates.
+
 **`--resume`** — continue an interrupted pipeline from the first unfinished phase (per-phase
 checkpoints in `docs/plans/{slug}/.checkpoint/`). See [How the system works](WORKFLOW.md).
 

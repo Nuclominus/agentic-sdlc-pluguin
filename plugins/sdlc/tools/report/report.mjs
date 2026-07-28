@@ -289,7 +289,12 @@ function tile(value, label, sub, cls) {
   return `<div class="tile"><div class="tv${cls ? " " + cls : ""}">${value}</div><div class="tl">${esc(label)}</div>${sub ? `<div class="ts">${sub}</div>` : ""}</div>`;
 }
 function kpiSection(t) {
-  const capNote = t.cost_cap_usd != null ? `${fmtUsd(t.cost_cap_usd)} cap · ${esc(t.cap_status || "—")}` : "no cap set";
+  // A project-overridden cap must say so: otherwise a reader compares this number against the
+  // shipped recipe's cap, sees a mismatch, and cannot tell a retuned project from a stale report.
+  const capSrc = t.cost_cap_source && t.cost_cap_source !== "recipe" ? " (project override)" : "";
+  const capNote = t.cost_cap_usd != null
+    ? `${fmtUsd(t.cost_cap_usd)} cap${capSrc} · ${esc(t.cap_status || "—")}`
+    : (capSrc ? "uncapped (project override)" : "no cap set");
   const oh = t.orchestration_overhead;
   const costSub = oh && oh.cost_usd != null ? `${capNote} · orch ${fmtUsd(oh.cost_usd)}` : capNote;
   const billed = totalBilled(t);
