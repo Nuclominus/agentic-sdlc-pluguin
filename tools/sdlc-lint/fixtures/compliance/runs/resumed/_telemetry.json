@@ -1,0 +1,8 @@
+{
+  "task_slug": "resumed",
+  "started_at": "2026-07-28T10:00:00Z",
+  "phases": [
+    { "phase": "development", "agent_id": "ddd444" },
+    { "phase": "qa", "agent_id": "eee555" }
+  ]
+}

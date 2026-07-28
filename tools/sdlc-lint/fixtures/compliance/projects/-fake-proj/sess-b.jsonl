@@ -1,0 +1,1 @@
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"node \"${CLAUDE_PLUGIN_ROOT}/tools/usage/cli.mjs\" enrich resumed"}}]}}
