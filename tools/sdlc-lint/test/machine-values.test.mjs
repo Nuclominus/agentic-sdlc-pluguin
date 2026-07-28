@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
-import { parseRegistry, CONTRACT_PATH } from "../lib/machine-values.mjs";
+import { parseRegistry, scanText, violationRe, OK_MARKER, CONTRACT_PATH } from "../lib/machine-values.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIX = join(HERE, "..", "fixtures", "machine-values");
@@ -66,4 +66,70 @@ test("a malformed entry is reported by line, and good entries around it still pa
   assert.match(errors[1], /^registry line 3: expected '<key>: <owner>'/);   // owner missing
   assert.match(errors[2], /^registry line 5: duplicate key 'cost_usd'/);
   assert.deepEqual(keys, ["total_cost_usd", "cost_usd"]);
+});
+
+const KEYS = ["total_input_tokens", "total_cost_usd", "cache_hit_ratio", "cost_usd", "input_tokens"]
+  .sort((a, b) => b.length - a.length || a.localeCompare(b));
+
+test("each of the six real formula shapes is flagged exactly once", () => {
+  const { ok, errors } = scanText(fixture("violations.md"), KEYS);
+  assert.equal(ok, false);
+  assert.equal(errors.length, 6);
+  assert.match(errors[0], /^line 3: "cost_usd" is computed here/);
+  assert.match(errors[1], /^line 4: "total_input_tokens" is computed here/);
+  assert.match(errors[2], /^line 5: "total_cost_usd" is computed here/);
+  assert.match(errors[3], /^line 6: "cache_hit_ratio" is computed here/);
+  assert.match(errors[4], /^line 7: "total_cost_usd" is computed here/);
+  assert.match(errors[5], /^line 8: "cost_usd" is computed here/);
+});
+
+test("a violation names the contract so the fix is discoverable", () => {
+  assert.match(scanText(fixture("violations.md"), KEYS).errors[0], /MACHINE-VALUES\.md/);
+});
+
+test("the three near-misses that would make the check noise are NOT flagged", () => {
+  // 1. `max_total_cost_usd=0.60` — a config example, rejected by the leading \b.
+  // 2. `CONTEXT.running_cost_usd = 0` — the cap gate's own state, same \b rejection.
+  // 3. descriptive prose about the same keys, of which SKILL.md has dozens.
+  assert.deepEqual(scanText(fixture("clean.md"), KEYS), { ok: true, errors: [] });
+});
+
+test("a model-owned key is invisible to the check even when it IS a sum", () => {
+  // total_subagent_tokens is absent from the registry, so its legitimate Step 5 sum passes.
+  const line = "- `total_subagent_tokens` = sum of phase `subagent_tokens`.";
+  assert.deepEqual(scanText(line, KEYS), { ok: true, errors: [] });
+});
+
+test("comparisons are not assignments", () => {
+  for (const line of ["when `total_cost_usd` == 0", "if `cost_usd` != null", "`cost_usd` >= 1"]) {
+    assert.deepEqual(scanText(line, KEYS), { ok: true, errors: [] }, line);
+  }
+});
+
+test("marker on the matching line suppresses it", () => {
+  assert.equal(scanText(fixture("suppressed-same-line.md"), KEYS).ok, true);
+});
+
+test("marker on the preceding line suppresses it", () => {
+  assert.equal(scanText(fixture("suppressed-prev-line.md"), KEYS).ok, true);
+});
+
+test("a marker with no stated reason does not suppress", () => {
+  const { ok, errors } = scanText(fixture("marker-no-reason.md"), KEYS);
+  assert.equal(ok, false);
+  assert.equal(errors.length, 2, "both the bare marker and the `-->`-only marker must still fail");
+});
+
+test("an empty key list scans nothing rather than building an empty alternation", () => {
+  // new RegExp("\\b()\\b…") matches at every position — a registry failure must not
+  // become a firehose of violations on every file in the tree.
+  assert.deepEqual(scanText("cost_usd = 1", []), { ok: true, errors: [] });
+});
+
+test("violationRe captures the key it matched", () => {
+  assert.equal(violationRe(KEYS).exec("- `total_cost_usd` = sum of")[1], "total_cost_usd");
+});
+
+test("OK_MARKER is the string the error message tells authors to write", () => {
+  assert.ok(scanText(fixture("violations.md"), KEYS).errors[0].includes(OK_MARKER));
 });

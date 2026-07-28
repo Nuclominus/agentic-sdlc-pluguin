@@ -51,3 +51,53 @@ export function parseRegistry(text) {
   const keys = [...owners.keys()].sort((a, b) => b.length - a.length || a.localeCompare(b));
   return { keys, owners, errors };
 }
+
+export const OK_MARKER = "<!-- machine-values: ok";
+
+// A bare marker is not a justification: require a stated reason after `ok`. The lookahead
+// keeps the closing `-->` from passing as a one-character reason (its leading `-` would
+// otherwise satisfy a bare `\S`). Same guard as lib/plugin-paths.mjs.
+const OK_MARKER_RE = /<!--\s*machine-values:\s*ok\s*—\s*(?!-->)\S/;
+
+/**
+ * A registry key as the SUBJECT of a computation. Anchoring on the left-hand side is what
+ * keeps the check silent on the dozens of lines that merely discuss these keys — and what
+ * makes `max_total_cost_usd=0.60` and `CONTEXT.running_cost_usd = 0` pass, since neither
+ * has a word boundary before the key. `=(?!=)` excludes `==`; `!=`, `>=` and `<=` never
+ * reach it, because the character after `\s*` is not `=`.
+ * @param {string[]} keys
+ * @returns {RegExp} capture group 1 is the matched key
+ */
+export function violationRe(keys) {
+  return new RegExp(
+    "\\b(" + keys.join("|") + ")\\b`?\\s*(?:=(?!=)|(?:is )?(?:the )?sum of|computed from|derived from)",
+  );
+}
+
+/**
+ * Scan one shipped-prose file for arithmetic over a machine-owned key.
+ * @param {string} text
+ * @param {string[]} keys registry keys, longest-first
+ * @returns {{ ok: boolean, errors: string[] }}
+ */
+export function scanText(text, keys) {
+  // An empty alternation matches everywhere. A broken registry must fail loudly at its own
+  // entry (parseRegistry), never flood every file in the tree with phantom violations.
+  if (!keys.length) return { ok: true, errors: [] };
+  const re = violationRe(keys);
+  const lines = text.split("\n");
+  const errors = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (OK_MARKER_RE.test(lines[i])) continue;
+    if (i > 0 && OK_MARKER_RE.test(lines[i - 1])) continue;
+    const m = lines[i].match(re);
+    if (m) {
+      errors.push(
+        `line ${i + 1}: "${m[1]}" is computed here — a machine already writes it ` +
+        `(see ${CONTRACT_PATH}). Pass the path, not the number, or justify with ` +
+        `${OK_MARKER} — reason -->`,
+      );
+    }
+  }
+  return { ok: errors.length === 0, errors };
+}
