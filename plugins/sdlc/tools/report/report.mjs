@@ -20,6 +20,12 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmtUsd = (n) => (n == null ? "—" : `$${Number(n).toFixed(2)}`);
 const fmtInt = (n) => String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+// Same, but an absent value stays absent. Since H3 the orchestrator writes the token
+// totals as `null` and lets `finish` fill them (ADR-0015), so a run that stopped before
+// sealing reaches here with nulls — and "0 output tokens" asserts a measurement nobody
+// took. Use this wherever 0 would be a claim rather than a count; keep plain fmtInt where
+// zero is a real answer (phase count, files touched, model corrections).
+const fmtIntOrDash = (n) => (n == null ? "—" : fmtInt(n));
 const pct = (r) => (r == null ? "—" : `${Math.round(Number(r) * 100)}%`);
 // Compact token count for dense breakdown lines: 5.0M, 17k, 146.
 const fmtTok = (n) => {
@@ -326,13 +332,13 @@ function kpiSection(t) {
   // fall back to the harness aggregate only if no phase was transcript-enriched.
   const billedTile = billed > 0
     ? tile(fmtTok(billed), "Billed tokens", `${fmtInt(billed)} total`)
-    : tile(fmtInt(t.total_subagent_tokens), "Aggregate tokens", "harness aggregate — unpriced");
+    : tile(fmtIntOrDash(t.total_subagent_tokens), "Aggregate tokens", "harness aggregate — unpriced");
   const outSub = billed > 0 ? `${pctOf(t.total_output_tokens, billed) || "—"} of billed` : "";
   const cacheSub = t.total_cached_input_tokens ? `${fmtTok(t.total_cached_input_tokens)} read from cache` : "";
   const tiles = [
     tile(fmtUsd(t.total_cost_usd), "Total cost", costSub, capVerified(t) ? "" : "warn"),
     billedTile,
-    tile(fmtInt(t.total_output_tokens), "Output tokens", outSub),
+    tile(fmtIntOrDash(t.total_output_tokens), "Output tokens", outSub),
     tile(pct(t.cache_hit_ratio), "Cache hit", cacheSub, "good"),
     tile(fmtInt((t.phases || []).length), "Phases"),
     tile(fmtInt(t.model_enforcement_corrections), "Model corrections"),
