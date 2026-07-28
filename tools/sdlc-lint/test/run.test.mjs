@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
 import { sealRunClock, finishRun } from "../lib/run.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -184,4 +185,59 @@ test("cap-breach and clock-drift warnings from enrichment are surfaced verbatim"
   assert.match(w, /exceeded-undetected/);
   assert.match(w, /overhead window fell back/);
   assert.match(w, /machine anchor says/);
+});
+
+const CLI = join(REPO, "plugins", "sdlc", "tools", "run", "cli.mjs");
+// Runs the CLI with cwd = the repo, so `finish <dir>` also exercises path resolution.
+// spawnSync rather than execFileSync: the latter surfaces stderr only when the process
+// exits non-zero, and the whole point of this verb is that it warns loudly while
+// exiting 0.
+function runCli(args, cwd) {
+  const r = spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: "utf8" });
+  return { stdout: r.stdout ?? "", stderr: r.stderr ?? "", status: r.status };
+}
+
+test("the CLI prints a block shaped for the orchestrator to echo", () => {
+  const dir = makeUnresolvableRun();
+  const r = runCli(["finish", dir, "--no-report", "--registry", REGISTRY, "--projects-root", join(dir, "none")], REPO);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /^finish: /m);
+  assert.match(r.stdout, /clock:\s+\d{4}-\d{2}-\d{2}T/);
+  assert.match(r.stdout, /cost:/);
+});
+
+test("WARN lines go to stderr, not into the stdout block", () => {
+  const dir = makeUnresolvableRun();
+  const r = runCli(["finish", dir, "--no-report", "--registry", REGISTRY, "--projects-root", join(dir, "none")], REPO);
+  assert.match(r.stderr, /WARN: cost enrichment incomplete/);
+  assert.doesNotMatch(r.stdout, /WARN:/);
+});
+
+test("--json emits exactly one parseable line", () => {
+  const dir = makeUnresolvableRun();
+  const r = runCli(["finish", dir, "--no-report", "--json", "--registry", REGISTRY, "--projects-root", join(dir, "none")], REPO);
+  const lines = r.stdout.trim().split("\n");
+  assert.equal(lines.length, 1);
+  const j = JSON.parse(lines[0]);
+  assert.equal(j.command, "finish");
+  assert.equal(j.ok, true);
+  assert.equal(j.clock.wall_clock_seconds >= 0, true);
+  assert.equal(Array.isArray(j.warnings), true);
+});
+
+test("sealing never fails a run that already succeeded — exit stays 0 with warnings", () => {
+  const dir = makeUnresolvableRun();
+  const r = runCli(["finish", dir, "--registry", REGISTRY, "--projects-root", join(dir, "none")], REPO);
+  assert.equal(r.status, 0);
+});
+
+test("an unreadable run is a usage error, exit 2", () => {
+  const r = runCli(["finish", "no-such-slug"], REPO);
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /finish/);
+});
+
+test("no verb, or an unknown one, prints usage and exits 2", () => {
+  assert.equal(runCli([], REPO).status, 2);
+  assert.equal(runCli(["seal", "x"], REPO).status, 2);
 });
