@@ -4,9 +4,9 @@ match:
   arguments_pattern: "\\bdoc(s|umentation)?\\b|\\breadme\\b|\\bchangelog\\b"
   config_only: true
 caps:
-  # Sized from MEASURED transcript cost (see analysis.yaml for why the 1d-1 heuristic runs 6-10x
-  # low). Measured `documentation` phase across 6 real runs: p50 $0.16, p90/max $0.21 — so the old
-  # $0.10 was below the cheapest observed run of this recipe and could never hold.
+  # Sized from MEASURED transcript cost (see analysis.yaml for the method). Measured `documentation`
+  # phase across 6 real runs: p50 $0.16, p90/max $0.21 — so the old $0.10, inherited from the
+  # pre-recalibration Step 1d-1 estimate, was below the cheapest observed run and could never hold.
   # Cap = p90 $0.21 * 1.2 = $0.25, rounded up to 0.35 (see below).
   #
   # NOTE: this recipe has ONE phase, so the Step 3d-cap gate can never fire here — it only acts

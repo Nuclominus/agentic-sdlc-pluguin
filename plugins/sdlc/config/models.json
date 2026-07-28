@@ -1,17 +1,126 @@
 {
   "$schema": "../../../schemas/models.schema.json",
   "description": "Model registry — the SINGLE SOURCE OF TRUTH for tag -> model_id AND pricing. A `tag` is the short alias used across local files and the plugin (agent `.md` frontmatter `model: <tag>`); `model_id` is the real Claude model string, used both to invoke the model and for telemetry. `pricing` (USD per MTok: input/cached_input/output) is authoritative for telemetry cost accounting — the pipeline reads it from here, never restates rates elsewhere. `cache_write_multipliers` price prompt-cache CREATION relative to the model's input rate (Anthropic standard: 5-minute TTL = 1.25x, 1-hour TTL = 2x); the usage tool multiplies the per-turn ephemeral_5m/ephemeral_1h cache-creation token split by these. To bump a model or its price, edit it HERE (README/CORE-TODO/SKILL link here). `pipeline_tiers` lists the tags the pipeline actually dispatches and that hooks/enforce-agent-model.sh enforces (mirror of its is_valid_tier list — keep in sync); the remaining `models` entries are reference/pin-only. NOTE: `sonnet` carries intro pricing through 2026-08-31 — see its pricing.note.",
-  "pipeline_tiers": ["opus", "sonnet", "haiku", "fable"],
-  "cache_write_multipliers": { "ephemeral_5m": 1.25, "ephemeral_1h": 2.0 },
+  "pipeline_tiers": [
+    "opus",
+    "sonnet",
+    "haiku",
+    "fable"
+  ],
+  "cache_write_multipliers": {
+    "ephemeral_5m": 1.25,
+    "ephemeral_1h": 2.0
+  },
+  "estimation_baselines": {
+    "_comment": "Per-dispatch token baselines for the Step 1d-1 dry-run cost preview ONLY — never for billing or the cost cap, which use transcript-derived actuals (ADR-0005/0011). Derived from the median of 56 transcript-priced phases across 10 real runs, excluding `development` (see its phase multiplier in SKILL.md 1d-1). Note the shape: uncached `input` is negligible while `cache_read` dominates — a phase is a multi-turn agent loop that re-reads its whole prefix every turn, which the pre-2026-07 baseline (35k input, 60% cached, single call) did not model at all and so under-reported real cost by 6-10x. Priced with the same formula as usage.mjs priceUsage, including cache_write_multipliers. Re-derive when the agent roster or prompt sizes change materially.",
+    "opus": {
+      "input": 30,
+      "cache_read": 670000,
+      "cache_write": 93000,
+      "output": 1125
+    },
+    "sonnet": {
+      "input": 25,
+      "cache_read": 725000,
+      "cache_write": 73000,
+      "output": 1230
+    },
+    "haiku": {
+      "input": 195,
+      "cache_read": 820000,
+      "cache_write": 51000,
+      "output": 30
+    },
+    "fable": {
+      "input": 30,
+      "cache_read": 670000,
+      "cache_write": 93000,
+      "output": 1125
+    },
+    "_fable_note": "No fable run has been measured; it inherits the opus token shape and is priced at its own registry rates."
+  },
   "models": [
-    { "tag": "opus",       "model_id": "claude-opus-5",               "pricing": { "input": 5.00, "cached_input": 0.50, "output": 25.00 } },
-    { "tag": "sonnet",     "model_id": "claude-sonnet-5",             "pricing": { "input": 2.00, "cached_input": 0.20, "output": 10.00, "note": "intro pricing through 2026-08-31; standard is 3.00/0.30/15.00" } },
-    { "tag": "haiku",      "model_id": "claude-haiku-4-5-20251001",   "pricing": { "input": 1.00, "cached_input": 0.10, "output": 5.00 } },
-    { "tag": "fable",      "model_id": "claude-fable-5",              "pricing": { "input": 10.00, "cached_input": 1.00, "output": 50.00 } },
-    { "tag": "opus-4-8",   "model_id": "claude-opus-4-8",             "pricing": { "input": 5.00, "cached_input": 0.50, "output": 25.00 } },
-    { "tag": "opus-4-7",   "model_id": "claude-opus-4-7",             "pricing": { "input": 5.00, "cached_input": 0.50, "output": 25.00 } },
-    { "tag": "opus-4-6",   "model_id": "claude-opus-4-6",             "pricing": { "input": 5.00, "cached_input": 0.50, "output": 25.00 } },
-    { "tag": "sonnet-4-6", "model_id": "claude-sonnet-4-6",          "pricing": { "input": 3.00, "cached_input": 0.30, "output": 15.00 } },
-    { "tag": "mythos",     "model_id": "claude-mythos-5",             "pricing": { "input": 10.00, "cached_input": 1.00, "output": 50.00 } }
+    {
+      "tag": "opus",
+      "model_id": "claude-opus-5",
+      "pricing": {
+        "input": 5.0,
+        "cached_input": 0.5,
+        "output": 25.0
+      }
+    },
+    {
+      "tag": "sonnet",
+      "model_id": "claude-sonnet-5",
+      "pricing": {
+        "input": 2.0,
+        "cached_input": 0.2,
+        "output": 10.0,
+        "note": "intro pricing through 2026-08-31; standard is 3.00/0.30/15.00"
+      }
+    },
+    {
+      "tag": "haiku",
+      "model_id": "claude-haiku-4-5-20251001",
+      "pricing": {
+        "input": 1.0,
+        "cached_input": 0.1,
+        "output": 5.0
+      }
+    },
+    {
+      "tag": "fable",
+      "model_id": "claude-fable-5",
+      "pricing": {
+        "input": 10.0,
+        "cached_input": 1.0,
+        "output": 50.0
+      }
+    },
+    {
+      "tag": "opus-4-8",
+      "model_id": "claude-opus-4-8",
+      "pricing": {
+        "input": 5.0,
+        "cached_input": 0.5,
+        "output": 25.0
+      }
+    },
+    {
+      "tag": "opus-4-7",
+      "model_id": "claude-opus-4-7",
+      "pricing": {
+        "input": 5.0,
+        "cached_input": 0.5,
+        "output": 25.0
+      }
+    },
+    {
+      "tag": "opus-4-6",
+      "model_id": "claude-opus-4-6",
+      "pricing": {
+        "input": 5.0,
+        "cached_input": 0.5,
+        "output": 25.0
+      }
+    },
+    {
+      "tag": "sonnet-4-6",
+      "model_id": "claude-sonnet-4-6",
+      "pricing": {
+        "input": 3.0,
+        "cached_input": 0.3,
+        "output": 15.0
+      }
+    },
+    {
+      "tag": "mythos",
+      "model_id": "claude-mythos-5",
+      "pricing": {
+        "input": 10.0,
+        "cached_input": 1.0,
+        "output": 50.0
+      }
+    }
   ]
 }

@@ -4,15 +4,24 @@
   "title": "SDLC Model Registry",
   "description": "Schema for plugins/sdlc/config/models.json — the machine-read single source of truth mapping a short `tag` (used in agent .md frontmatter `model: <tag>` and other local/plugin files) to the concrete Claude `model_id`, and each model's `pricing` (USD per MTok, used for telemetry cost accounting). `pipeline_tiers` MIRRORS the is_valid_tier list in plugins/sdlc/hooks/enforce-agent-model.sh — keep them in sync.",
   "type": "object",
-  "required": ["pipeline_tiers", "models"],
+  "required": [
+    "pipeline_tiers",
+    "models"
+  ],
   "additionalProperties": false,
   "properties": {
-    "$schema": { "type": "string" },
-    "description": { "type": "string" },
+    "$schema": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
     "pipeline_tiers": {
       "type": "array",
       "description": "Tags the pipeline dispatches and the enforcement hook validates. Every entry MUST also appear as a `tag` in `models`.",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "minItems": 1,
       "uniqueItems": true
     },
@@ -21,21 +30,174 @@
       "description": "Prompt-cache CREATION price relative to a model's input rate (Anthropic standard, model-independent). The usage tool multiplies the per-turn ephemeral cache-creation token split by these before pricing at the input rate.",
       "additionalProperties": false,
       "properties": {
-        "ephemeral_5m": { "type": "number", "minimum": 0, "description": "Multiplier for 5-minute-TTL cache writes (standard 1.25)." },
-        "ephemeral_1h": { "type": "number", "minimum": 0, "description": "Multiplier for 1-hour-TTL cache writes (standard 2.0)." }
+        "ephemeral_5m": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Multiplier for 5-minute-TTL cache writes (standard 1.25)."
+        },
+        "ephemeral_1h": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Multiplier for 1-hour-TTL cache writes (standard 2.0)."
+        }
       }
     },
     "models": {
       "type": "array",
       "description": "Every available model, keyed by a unique `tag`.",
       "minItems": 1,
-      "items": { "$ref": "#/$defs/model" }
+      "items": {
+        "$ref": "#/$defs/model"
+      }
+    },
+    "estimation_baselines": {
+      "type": "object",
+      "description": "Per-dispatch token baselines used ONLY by the Step 1d-1 dry-run cost preview. Never used for billing or the cost cap — those read transcript-derived actuals (ADR-0005/0011). Keys are pipeline tiers; underscore-prefixed keys are free-form provenance notes.",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^_": {
+          "type": "string"
+        }
+      },
+      "properties": {
+        "opus": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "input",
+            "cache_read",
+            "cache_write",
+            "output"
+          ],
+          "properties": {
+            "input": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Uncached input tokens for one dispatch. Small by design — nearly the whole prompt is served from cache after the first turn."
+            },
+            "cache_read": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Prompt-cache READ tokens summed across the phase's turns. The dominant cost term: a phase re-reads its accumulated prefix every turn."
+            },
+            "cache_write": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Prompt-cache CREATION tokens (priced at input rate x cache_write_multipliers.ephemeral_5m)."
+            },
+            "output": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Output tokens for one dispatch."
+            }
+          }
+        },
+        "sonnet": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "input",
+            "cache_read",
+            "cache_write",
+            "output"
+          ],
+          "properties": {
+            "input": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Uncached input tokens for one dispatch. Small by design — nearly the whole prompt is served from cache after the first turn."
+            },
+            "cache_read": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Prompt-cache READ tokens summed across the phase's turns. The dominant cost term: a phase re-reads its accumulated prefix every turn."
+            },
+            "cache_write": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Prompt-cache CREATION tokens (priced at input rate x cache_write_multipliers.ephemeral_5m)."
+            },
+            "output": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Output tokens for one dispatch."
+            }
+          }
+        },
+        "haiku": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "input",
+            "cache_read",
+            "cache_write",
+            "output"
+          ],
+          "properties": {
+            "input": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Uncached input tokens for one dispatch. Small by design — nearly the whole prompt is served from cache after the first turn."
+            },
+            "cache_read": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Prompt-cache READ tokens summed across the phase's turns. The dominant cost term: a phase re-reads its accumulated prefix every turn."
+            },
+            "cache_write": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Prompt-cache CREATION tokens (priced at input rate x cache_write_multipliers.ephemeral_5m)."
+            },
+            "output": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Output tokens for one dispatch."
+            }
+          }
+        },
+        "fable": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "input",
+            "cache_read",
+            "cache_write",
+            "output"
+          ],
+          "properties": {
+            "input": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Uncached input tokens for one dispatch. Small by design — nearly the whole prompt is served from cache after the first turn."
+            },
+            "cache_read": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Prompt-cache READ tokens summed across the phase's turns. The dominant cost term: a phase re-reads its accumulated prefix every turn."
+            },
+            "cache_write": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Prompt-cache CREATION tokens (priced at input rate x cache_write_multipliers.ephemeral_5m)."
+            },
+            "output": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Output tokens for one dispatch."
+            }
+          }
+        }
+      }
     }
   },
   "$defs": {
     "model": {
       "type": "object",
-      "required": ["tag", "model_id"],
+      "required": [
+        "tag",
+        "model_id"
+      ],
       "additionalProperties": false,
       "properties": {
         "tag": {
@@ -53,10 +215,22 @@
           "description": "USD per million tokens. Read by the pipeline for telemetry cost accounting. Optional per model — a model with no pricing yields cost_usd: null in telemetry (excluded from the total).",
           "additionalProperties": false,
           "properties": {
-            "input": { "type": "number", "minimum": 0 },
-            "cached_input": { "type": "number", "minimum": 0 },
-            "output": { "type": "number", "minimum": 0 },
-            "note": { "type": "string", "description": "Optional annotation, e.g. a time-limited intro price and its expiry." }
+            "input": {
+              "type": "number",
+              "minimum": 0
+            },
+            "cached_input": {
+              "type": "number",
+              "minimum": 0
+            },
+            "output": {
+              "type": "number",
+              "minimum": 0
+            },
+            "note": {
+              "type": "string",
+              "description": "Optional annotation, e.g. a time-limited intro price and its expiry."
+            }
           }
         }
       }

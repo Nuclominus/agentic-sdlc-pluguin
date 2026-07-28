@@ -4,9 +4,9 @@ match:
   arguments_pattern: "\\bhotfix\\b|\\burgent\\b|\\bemergency\\b|\\bprod(uction)?\\s+fix\\b"
   loc_touched_max: 200
 caps:
-  # Sized from MEASURED transcript cost, not the 1d-1 dry-run heuristic (see analysis.yaml for why
-  # that heuristic runs 6-10x low). The old $1.10 was derived from it and sits below this recipe's
-  # measured MEDIAN run.
+  # Sized from MEASURED transcript cost (see analysis.yaml for the method). The old $1.10 came from
+  # the Step 1d-1 estimate before it was recalibrated, and sat below this recipe's measured MEDIAN
+  # run.
   #
   # Basis: 56 transcript-priced phases across 10 real runs. Per-phase p90 —
   #   development $5.41, qa $1.48, security $0.40, documentation $0.21  =>  base_p90 = $7.50
