@@ -128,7 +128,7 @@ a{color:var(--accent);text-decoration:none}a:hover{color:var(--accent-hover);tex
 /* kpis */
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:20px}
 .tile{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
-.tv{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums}.tv.good{color:var(--green)}
+.tv{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums}.tv.good{color:var(--green)}.tv.warn{color:var(--warn)}
 .tl{color:var(--muted);font-size:12px;margin-top:2px}.ts{color:var(--faint);font-size:11px;margin-top:4px}
 
 /* generic card */
@@ -288,12 +288,29 @@ ${meta.length ? `<div class="hero-meta">${meta.join("")}</div>` : ""}
 function tile(value, label, sub, cls) {
   return `<div class="tile"><div class="tv${cls ? " " + cls : ""}">${value}</div><div class="tl">${esc(label)}</div>${sub ? `<div class="ts">${sub}</div>` : ""}</div>`;
 }
+
+/**
+ * Is `cap_status` worth printing as a verdict?
+ *
+ * It is written by the in-run gate, which prices an unresolvable phase at $0 and flags
+ * it `cap_gate_blind`. Transcript enrichment (Step 5b) is what turns that provisional
+ * record into a verdict: it holds the real per-phase prices and rewrites a contradicted
+ * `"within"` to `"exceeded-undetected"`. Until it runs, `"within"` does not mean "the
+ * run stayed under cap" — it means "nothing ever checked", which is exactly what a run
+ * whose enrichment silently never fired looks like. Rendering that as a clean verdict
+ * beside an em-dash cost manufactures assurance the run does not have, so the report
+ * must say `unverified` and name the reason instead.
+ */
+function capVerified(t) {
+  return t.total_cost_usd != null && t.cost_basis === "transcript";
+}
 function kpiSection(t) {
   // A project-overridden cap must say so: otherwise a reader compares this number against the
   // shipped recipe's cap, sees a mismatch, and cannot tell a retuned project from a stale report.
   const capSrc = t.cost_cap_source && t.cost_cap_source !== "recipe" ? " (project override)" : "";
+  const verdict = capVerified(t) ? esc(t.cap_status || "—") : "unverified — run unpriced";
   const capNote = t.cost_cap_usd != null
-    ? `${fmtUsd(t.cost_cap_usd)} cap${capSrc} · ${esc(t.cap_status || "—")}`
+    ? `${fmtUsd(t.cost_cap_usd)} cap${capSrc} · ${verdict}`
     : (capSrc ? "uncapped (project override)" : "no cap set");
   const oh = t.orchestration_overhead;
   const costSub = oh && oh.cost_usd != null ? `${capNote} · orch ${fmtUsd(oh.cost_usd)}` : capNote;
@@ -306,7 +323,7 @@ function kpiSection(t) {
   const outSub = billed > 0 ? `${pctOf(t.total_output_tokens, billed) || "—"} of billed` : "";
   const cacheSub = t.total_cached_input_tokens ? `${fmtTok(t.total_cached_input_tokens)} read from cache` : "";
   const tiles = [
-    tile(fmtUsd(t.total_cost_usd), "Total cost", costSub),
+    tile(fmtUsd(t.total_cost_usd), "Total cost", costSub, capVerified(t) ? "" : "warn"),
     billedTile,
     tile(fmtInt(t.total_output_tokens), "Output tokens", outSub),
     tile(pct(t.cache_hit_ratio), "Cache hit", cacheSub, "good"),
@@ -490,6 +507,15 @@ function signalsSection(t) {
   for (const s of t.skip_rules_applied || []) {
     items.push(`Skipped <b>${esc(s.phase_skipped)}</b> — ${esc(s.rule)}`);
   }
+  // An unpriced run is a defect in its own right, not merely a missing number: the cost
+  // cap never gated anything, and no cap_status below can be trusted. Say so first, and
+  // name the phases the gate could not price — that is the trail back to the cause.
+  if (!capVerified(t)) {
+    const blind = (t.phases || []).filter((p) => p.cap_gate_blind).map((p) => p.phase);
+    const basis = t.cost_basis && t.cost_basis !== "transcript" ? ` (cost_basis: ${esc(t.cost_basis)})` : "";
+    const gate = blind.length ? `; the cap gate was blind on: ${esc(blind.join(", "))}` : "";
+    items.push(`Cost: <b>unpriced</b>${basis} — transcript enrichment did not complete, so the cap verdict is unverified${gate}`);
+  }
   if (t.cap_status && t.cap_status !== "within") {
     // cap_breach_usd is phase spend minus cap — the number a reader actually needs.
     // "exceeded-undetected" additionally means the in-run gate never fired, so name
@@ -608,5 +634,7 @@ export function renderReportFile(dir) {
   const html = renderReport(t, { postChecksMarkdown, artifactFiles });
   const htmlPath = join(dir, "report.html");
   writeFileSync(htmlPath, html);
-  return { htmlPath, ok: true };
+  // Surfaced so the CLI can WARN on stderr: a run whose cost enrichment never fired is
+  // otherwise only discoverable by opening the HTML and noticing an em-dash.
+  return { htmlPath, ok: true, cap_unverified: !capVerified(t) };
 }

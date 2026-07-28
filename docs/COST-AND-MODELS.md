@@ -86,6 +86,15 @@ see `$0` for every phase and never fire (ADR-0011). Telemetry records `cost_cap_
 | `exceeded-aborted` | you aborted, or a headless run halted at the cap |
 | `exceeded-undetected` | the run went over cap **without the gate catching it**. Written after the fact by cost enrichment, alongside `cap_breach_usd` (phase spend minus cap). Two causes — if any phase carries `cap_gate_blind`, it could not be priced in-run and counted as `$0` (a real gate failure); if none does, the overage landed on the last dispatch, where the gate has nothing left to stop, which usually means the cap is sized below one phase's real cost |
 
+A `cap_status` is only worth as much as the pricing behind it. It is written by the in-run gate,
+which counts an unpriceable phase as `$0`; end-of-run enrichment is what turns it into a verdict by
+re-pricing every phase from its transcript. So the report prints it as a verdict **only** when the
+run is transcript-priced (`cost_basis: "transcript"` with a non-null `total_cost_usd`). Otherwise it
+reads `unverified — run unpriced`, lists the `cap_gate_blind` phases under Signals, and the report
+CLI warns on stderr — a run whose enrichment never fired reports `within` because nothing checked,
+not because it stayed under (ADR-0012). The fix is to run `usage/cli.mjs enrich <slug>`, not to edit
+the fields.
+
 The cap gates **phase spend only**. Orchestration overhead (the orchestrator's own turns) is
 reported in `total_cost_usd` but never enters the comparison, so a run can legitimately show a total
 above the cap while `cap_status` is `within` — size recipe caps against phase spend accordingly.

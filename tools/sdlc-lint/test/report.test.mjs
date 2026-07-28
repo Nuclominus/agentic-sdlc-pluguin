@@ -237,3 +237,54 @@ test("an ordinary recipe cap carries no override label", () => {
   assert.match(html, /\$4\.25 cap/);
   assert.doesNotMatch(html, /project override/);
 });
+
+// A run whose Step 5b enrichment never fired keeps the in-run gate's provisional
+// `cap_status: "within"` beside a null cost. Rendering that as a verdict is how a
+// $16.50 cap "held" on a run nothing ever priced — the report must refuse to.
+test("an unpriced run reports the cap as unverified, never as within", () => {
+  const t = JSON.parse(JSON.stringify(tel));
+  t.total_cost_usd = null;
+  delete t.cost_basis;
+  t.cost_cap_usd = 16.50;
+  t.cap_status = "within";
+  t.phases[0].cap_gate_blind = true;
+  t.phases[1].cap_gate_blind = true;
+  const html = renderReport(t);
+  assert.match(html, /\$16\.50 cap · unverified — run unpriced/);
+  assert.doesNotMatch(html, /\$16\.50 cap · within/);
+  // and the reason is named, with the phases the gate could not price
+  assert.match(html, /Cost: <b>unpriced<\/b>/);
+  assert.match(html, /cap verdict is unverified/);
+  assert.match(html, new RegExp(`cap gate was blind on: ${t.phases[0].phase}, ${t.phases[1].phase}`));
+});
+
+test("an aggregate-only cost_basis is not treated as a priced run", () => {
+  // total_cost_usd alone is not enough: `subagent_aggregate` / `estimated` bases carry a
+  // number that never went through transcript pricing, so the cap never really gated.
+  const t = JSON.parse(JSON.stringify(tel));
+  t.cost_basis = "subagent_aggregate";
+  const html = renderReport(t);
+  assert.match(html, /unverified — run unpriced/);
+  assert.match(html, /cost_basis: subagent_aggregate/);
+});
+
+test("a transcript-priced run keeps its cap verdict and raises no cost signal", () => {
+  const html = renderReport(tel);   // fixture is cost_basis: "transcript"
+  assert.match(html, /\$0\.60 cap · within/);
+  assert.doesNotMatch(html, /unverified/);
+  assert.doesNotMatch(html, /Cost: <b>unpriced<\/b>/);
+});
+
+test("renderReportFile flags an unpriced run so the CLI can warn on stderr", () => {
+  const dir = mkdtempSync(join(tmpdir(), "report-unpriced-"));
+  const t = JSON.parse(JSON.stringify(tel));
+  t.total_cost_usd = null;
+  writeFileSync(join(dir, "_telemetry.json"), JSON.stringify(t));
+  assert.equal(renderReportFile(dir).cap_unverified, true);
+
+  const priced = mkdtempSync(join(tmpdir(), "report-priced-"));
+  writeFileSync(join(priced, "_telemetry.json"), JSON.stringify(tel));
+  assert.equal(renderReportFile(priced).cap_unverified, false);
+  rmSync(dir, { recursive: true, force: true });
+  rmSync(priced, { recursive: true, force: true });
+});

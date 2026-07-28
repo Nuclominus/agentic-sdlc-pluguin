@@ -81,6 +81,9 @@ if (cmd === "phase-cost") {
         console.log(`enrich: ${r.telPath}`);
         console.log(`  enriched: ${r.enriched.join(", ") || "(none)"}`);
         if (r.skipped.length) console.log(`  skipped (no transcript): ${r.skipped.join(", ")}`);
+        if (r.session_mismatch) {
+          console.error(`WARN: --session does not belong to this run (none of its agents are in that session) — ignored it and recovered the session from the phase transcripts`);
+        }
         if (r.skipped_all) {
           console.log(`  no transcripts resolved — telemetry left unchanged (cost stays aggregate/unpriced)`);
         } else {

@@ -2,6 +2,7 @@
 
 > One note per architecture decision. Newest first.
 
+- [[decisions/ADR-0012-unpriced-runs-must-not-render-a-cap-verdict]]
 - [[decisions/ADR-0011-in-run-transcript-pricing-for-the-cost-cap]]
 - [[decisions/ADR-0010-self-healing-micro-loop]]
 - [[decisions/ADR-0009-plugin-root-resolution]]
