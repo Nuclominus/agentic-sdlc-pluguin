@@ -54,6 +54,61 @@ the four cells in the incident table is simply not measurable yet. The steps wit
 `enrich`, `report`, `_started_at` and `session-recorder` (~12 runs each). The published result must
 say this rather than quietly report `100%` over three runs.
 
+## Measured result (2026-07-28)
+
+`sdlc-lint compliance --runs "$HOME/parlor-android/docs/plans/*"` over 19 run directories:
+**15 auditable, 4 excluded** (`no-agent-ids`).
+
+| rate | contract | pass | fail | na | denominator | notes |
+|---|---|---|---|---|---|---|
+| **100%** | `2-4-anchor` | 15 | 0 | 0 | 15 | provisional |
+| **87%** | `5b-2-report` | 13 | 2 | 0 | 15 | provisional; confounded by `--no-report` |
+| **87%** | `6-journal` | 13 | 2 | 0 | 15 | provisional |
+| **80%** | `5b-0-enrich` | 12 | 3 | 0 | 15 | provisional |
+| **67%** | `5-clock` | 10 | 5 | 0 | 15 | provisional |
+| — | `3d-1b-phase-cost` | 2 | 2 | 11 | 4 | **no usable rate (n=4)** — 11 runs predate it |
+
+**Overall 82.3%** (65/79 applicable contract-runs); 84.0% excluding the thin
+`3d-1b-phase-cost` row. Eight of the fifteen runs are fully compliant; three carry most of
+the damage (`replace-acceptmatch-sendmatchrequest` 1/5, `fix-ingestmatches-during-pagination`
+2/5, `native-chat-engine-s2-thread-list` 3/6 — the ADR-0012 incident).
+
+Every rate is **provisional**: no run in this corpus carries `plugin_version`, so
+step availability is dated from `SKILL.md` commits — an upper bound, not evidence.
+
+### The finding that matters
+
+Compliance tracks the **mechanical complexity of the step**, not the emphasis of its prose:
+
+- `2-4-anchor` — one `Bash` line — **100%**.
+- `5b-2-report`, `6-journal` — one call, one dispatch — **87%**.
+- `5b-0-enrich` — one call, but gated behind a session-resolution sub-procedure — **80%**.
+- `5-clock` — read the anchor, compute, render with a BSD/GNU fallback — **67%**, the worst
+  rate in the set, while carrying the most emphatic prose in the entire file: *"Do **not**
+  hand-transcribe these from your own sense of the time."*
+
+That inversion is the track's premise measured rather than asserted. The step that shouts
+loudest is the step most often skipped, because what predicts compliance is how many
+separate things the instruction asks for. **This is evidence for H2 (collapse multi-step
+prose into single commands) ahead of H4** — the fix is fewer steps, not firmer wording.
+
+### Two instrument defects the audit caught first
+
+Both would have been published as findings had the plan not made known-positive
+verification a hard stop:
+
+1. `6-journal` scored a flat **0%** across all 15 runs. Transcripts carry
+   `sdlc:session-recorder`; the contract named the bare agent. The instrument was
+   measuring the install namespace.
+2. `5b-0-enrich` failed a run whose telemetry read `cost_basis: "transcript"`. The pattern
+   required `SKILL.md`'s quoted spelling; that run invoked the CLI with an unquoted path.
+
+A third apparent contradiction turned out to be a real finding, not a defect:
+`change-matches-filter-logic-gender` reads `cost_basis: "transcript"`, yet its own session
+contains **zero** `usage/cli.mjs` calls — the value was repaired later, from another
+session. Telemetry says priced; the transcript says the orchestrator never priced it. That
+distinction is the whole reason this tool reads transcripts instead of telemetry.
+
 ## Architecture
 
 Four units, each with a single responsibility. The boundary that matters: `compliance.mjs` parses
@@ -280,14 +335,26 @@ so wiring it into the gate would fail CI everywhere for reasons unrelated to the
    [[planning/h-instruction-fidelity]] — carrying its denominators and the `provisional` caveat.
 6. `node --test` green in `tools/sdlc-lint/`.
 
-## What this decides
+## What this decided
 
 H1's only real product is the input to the H4 gate, which
 [[planning/h-instruction-fidelity]] already fixed: ~95% compliance means H2 + H3 + H6 suffice and the
-deterministic-runner rewrite is not worth it; ~80% means the rewrite is the only real fix. This note
-adds one condition to that rule: with `n=12`, a `provisional` qualifier, and one contract measuring
-nothing, a result near the boundary is not a decision — it is a reason to keep measuring on new runs
-until `plugin_version` makes the denominator exact.
+deterministic-runner rewrite is not worth it; ~80% means the rewrite is the only real fix.
+
+**Measured: 82.3%.** That lands in neither pole cleanly, and this note's own added condition
+applies — with `n=15`, a `provisional` qualifier, and one contract measuring nothing, a
+near-boundary aggregate is not by itself a decision.
+
+But the aggregate is the least informative number here. The **spread** decides: single-command
+steps score 87–100%, the one multi-step procedure scores 67%. Rewriting the orchestrator as a
+deterministic runner (H4) would fix the 67% — and so would collapsing that step into one command
+(H2), at a fraction of the cost. So the ordering stands: **H2 and H3 first, then re-measure**;
+H4 stays gated, now on evidence rather than on intuition.
+
+The condition that would settle it: re-run this audit once **10 runs carry `plugin_version`**.
+That removes the `provisional` qualifier, dates step availability exactly instead of by an upper
+bound, and by then `3d-1b-phase-cost` will have a real denominator too. If compliance has not
+moved above ~90% after H2 and H3 have landed, H4 is the answer.
 
 ## Out of scope
 
