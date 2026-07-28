@@ -39,6 +39,12 @@ test("`all` runs plugin-paths and stays green", () => {
   assert.match(out, /"command":"all","ok":true/);
 });
 
+test("`all` runs machine-values and stays green", () => {
+  const out = execFileSync("node", [CLI, "all", "--json"], { cwd: REPO, encoding: "utf8" });
+  assert.match(out, /"command":"machine-values"/);
+  assert.match(out, /"command":"all","ok":true/);
+});
+
 const SKILL = resolve(REPO, "plugins/sdlc/skills/pipeline-orchestrator/SKILL.md");
 
 test("the 3e-heal step exists and sits between 3e validation and the 3d-3 checkpoint write", () => {

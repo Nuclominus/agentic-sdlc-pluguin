@@ -194,6 +194,7 @@ function runAll() {
     printCycles(checkAllWorkflows(root)),
     printReadDiscipline(checkReadDiscipline(root)),
     printPluginPaths(checkPluginPaths(root)),
+    printMachineValues(checkMachineValues(root)),
     printDetect2(detectRows()),
     printResumeFixtures(),
   ];
