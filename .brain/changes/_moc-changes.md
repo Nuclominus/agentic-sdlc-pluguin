@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-07-28 | #90 | `chore` | — | [[changes/2026-07-28-PR-90-publish-github-releases-from-release-reconcile-the-changelog]] |
 | 2026-07-28 | #88 | `fix` | — | [[changes/2026-07-28-PR-88-recalibrate-the-dry-run-estimate-it-was-wrong-in-shape-not-s]] |
 | 2026-07-28 | #86 | `feat` | — | [[changes/2026-07-28-PR-86-override-a-recipe-s-cost-cap-per-project-via-sdlc-local-yaml]] |
 | 2026-07-28 | #82 | `fix` | — | [[changes/2026-07-28-PR-82-make-the-cost-cap-work-in-run-pricing-caps-sized-against-mea]] |
