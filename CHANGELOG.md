@@ -29,7 +29,9 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
   See ADR-0014.
 
   `usage/cli.mjs enrich` and `report/cli.mjs report` are unchanged and still work for backfills and
-  for auditing older runs.
+  for auditing older runs — and that is the right tool for the job: `finish` computes
+  `wall_clock_seconds` as `now - anchor`, so pointing it at a run that finished hours ago inflates
+  that run's duration and cost, while `enrich` leaves the clock untouched by design.
 
 - **`sdlc-lint` contracts can retire.** A contract may now carry `until: YYYY-MM-DD`; runs dated
   after it record `na: retired` rather than a failure. The three contracts this change replaced moved

@@ -69,6 +69,12 @@ against the procedure that was actually in force.
   sequence in bash.
 - `usage/cli.mjs enrich` and `report/cli.mjs report` keep working unchanged, for backfills and for
   auditing old runs.
+- **`finish` seals a live run, not an old one.** `wall_clock_seconds` is `now - anchor`, so
+  re-sealing a run that finished hours ago inflates its duration and, through the overhead window,
+  its cost — measured on a real run: 3522s became 11144s and $12.81 became $13.71. This is the same
+  arithmetic Step 5 always did, correct at the end of the run it belongs to; but `enrich` alone
+  never touched the clock, so backfilling through `finish` is destructive where backfilling through
+  `enrich` is not. Historical runs keep using `usage/cli.mjs enrich`.
 - **The limit, stated plainly:** this removes a procedure, not the judgement around it. `5b-finish`
   will not be measurable until real runs exist on the new version, and a step that is now one call
   can still be skipped — just once instead of three times.

@@ -33,6 +33,12 @@ function readAnchor(runDir) {
  * Degrades honestly. With no anchor it never invents a clock — it keeps whatever the
  * telemetry already had, and when there is nothing to keep it records `null`, because
  * an unknown duration and a zero-second run are different facts.
+ *
+ * SEALS A LIVE RUN, NOT AN OLD ONE. `wall_clock_seconds` is `now - anchor`, so calling
+ * this on a run that finished hours ago inflates its duration (and, through the overhead
+ * window, its cost). That is the same arithmetic Step 5 always did — correct at the end
+ * of the run it belongs to, wrong long after. To re-price a historical run, use
+ * `usage/cli.mjs enrich`, which deliberately leaves the clock alone.
  */
 export function sealRunClock(runDir, opts = {}) {
   const now = Number.isFinite(opts.now) ? opts.now : Date.now();
