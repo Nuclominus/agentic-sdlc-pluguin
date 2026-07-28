@@ -203,6 +203,16 @@ Explicit limits, so this is not oversold: a hook enforces **state**, never inten
 the session is killed before `Stop`; and it repairs after the fact, so it can do nothing for a value
 consumed *during* the run (the 3d-1b cap gate stays the orchestrator's responsibility).
 
+**Implementation spec: [[planning/h6-hook-deterministic-tail]].** Sizing it settled the one question
+the item as written left open — *when* is a run finished? Recency cannot tell a paused run from a
+completed one, so the gate is **completeness**: every phase in the resolved DAG carries a terminal
+checkpoint. Measured over the 19-run corpus, that gate opens for 10 runs, including the ADR-0012
+incident run (H6's known-positive), and stays shut for the three H1 named as carrying most of the
+damage. Two consequences fall out: the completeness rule must **move into the plugin** — it lives in
+the repo-root `sdlc-lint` today and so does not ship to the consumer running the hook — and the
+clock must come from the run's newest mtime rather than `Date.now()`, or a late hook charges the run
+for the time the user spent chatting afterwards.
+
 ## Order and dependencies
 
 ```
