@@ -5,6 +5,12 @@ description: >
   crashes, regressions, and root-cause investigations that end in a code change.
 match:
   arguments_pattern: "\\bdebug\\b|\\bcrash\\b|\\bregression\\b|\\broot.?cause\\b"
+caps:
+  # Measured basis (method: analysis.yaml): per-phase p90 development $5.41 + qa $1.48 = $6.89.
+  # Cap = 6.89 * 1.2 = $8.268, rounded up to $8.50.
+  # Note `development` here absorbs the root-cause analysis too (vanilla ships no debugger agent),
+  # so it is NOT cheaper than a normal development phase — do not size this recipe as "small".
+  max_total_cost_usd: 8.50
 phases:
   - name: development
     heal:

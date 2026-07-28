@@ -3,6 +3,18 @@ description: >
   Android native feature pipeline (rich roster):
   BA -> Developer -> Reviewer (loops back to Developer, max 3) -> [Security || Tester] -> QA -> DocsWriter.
   Loop + parallel are generic orchestrator control flow; the android profile supplies the agents per phase.
+caps:
+  # Measured basis (method: analysis.yaml): per-phase p90 business_analysis $2.97 +
+  # development $5.41 + review $0.95 + security $0.40 + test $2.21 + qa $1.48 +
+  # documentation $0.21 = $13.63. Cap = 13.63 * 1.2 = $16.356, rounded up to $16.50.
+  #
+  # This recipe is the best-measured one in the set: six observed runs of exactly this shape cost
+  # $3.02 / $4.05 / $6.22 / $6.89 / $7.87 / $9.67 of phase spend. The cap sits ~1.7x above the
+  # worst of them. Summing per-phase p90 is tier-blind (the $2.97 business_analysis p90 comes
+  # from an opus-5 run in the `analysis` recipe, while this recipe's BA phases measured
+  # $0.71-$1.13), which inflates the total — accepted deliberately: a runaway stopper should never
+  # fire on a legitimate run, and the review loop (max_rounds: 3) is not multiplied in.
+  max_total_cost_usd: 16.50
 phases:
   - business_analysis
   - name: development

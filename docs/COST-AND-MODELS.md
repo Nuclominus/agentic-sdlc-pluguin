@@ -75,6 +75,34 @@ The cap gates **phase spend only**. Orchestration overhead (the orchestrator's o
 reported in `total_cost_usd` but never enters the comparison, so a run can legitimately show a total
 above the cap while `cap_status` is `within` — size recipe caps against phase spend accordingly.
 
+**Every shipped recipe declares a cap** (a lint test enforces it). An absent cap does not mean
+"generous" — it makes the gate skip entirely, which is how the default pipeline ran ungated before
+these were added. Project-local recipes under `.claude/sdlc-workflows/` may still opt out.
+
+| recipe | cap | recipe | cap |
+|---|---|---|---|
+| `docs-only` | $0.35 | `hotfix` | $9.00 |
+| `testing` | $2.00 | `android-debug` | $11.00 |
+| `analysis` | $4.25 | `default` | $12.75 |
+| `debug` | $8.50 | `android-bugfix` | $12.75 |
+| `bugfix` / `refactor` | $9.00 | `android-feature` | $16.50 |
+
+All are derived the same way: **sum of measured per-phase p90 × 1.2, rounded up to the next $0.25**,
+from 56 transcript-priced phases across 10 real runs. Each recipe's YAML carries its own arithmetic
+in a comment. Two deliberate choices worth knowing when you tune one:
+
+- **Review loops are not multiplied by `max_rounds`.** Six observed runs of the loop-bearing
+  `android-feature` shape topped out at $9.67 — below even the un-multiplied sum — so folding in
+  `max_rounds` would produce a cap no runaway could reach, which is the same as no cap.
+- **The ×1.2 is headroom, not measurement.** No heal attempt has ever fired in the sample data
+  (every observed `heal_status` is `skipped`), so heal cost is unmeasured; a worst-case heal
+  multiplier would be invented rather than derived.
+
+A cap is a **runaway stopper, not a budget**. Sized below a recipe's median run it becomes a
+tripwire that fires every time and trains people to click through it. If a workflow should cost
+less, constrain the work — fewer phases, cheaper tiers via `.claude/model.local.json` — and let the
+cap follow the measurement.
+
 **`--resume`** — continue an interrupted pipeline from the first unfinished phase (per-phase
 checkpoints in `docs/plans/{slug}/.checkpoint/`). See [How the system works](WORKFLOW.md).
 

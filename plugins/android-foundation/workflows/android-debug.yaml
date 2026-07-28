@@ -9,6 +9,16 @@ description: >
 match:
   arguments_pattern: "\\bdebug\\b|\\bcrash\\b|\\bregression\\b|\\broot.?cause\\b"
   priority: 10
+caps:
+  # Measured basis (method: analysis.yaml): per-phase p90 debugging $0.52 + development $5.41 +
+  # review $0.95 + test $2.21 = $9.09. Cap = 9.09 * 1.2 = $10.908, rounded up to $11.00.
+  # Two observed runs of this shape cost $3.74 and $2.25, so the cap sits ~3x above real usage —
+  # intentional, since a cap exists to stop a runaway, not to budget an ordinary run.
+  #
+  # Auto-select note: the priority: 10 above is what wins the tie against the generic `debug`
+  # recipe. Priority is compared BEFORE caps in the tie-break order, so adding a cap here (and to
+  # debug.yaml) does not disturb that resolution.
+  max_total_cost_usd: 11.00
 phases:
   - debugging
   - name: development

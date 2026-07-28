@@ -5,7 +5,7 @@ import { dirname, resolve } from "node:path";
 import { checkSchemas } from "../lib/schema.mjs";
 import Ajv from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import YAML from "yaml";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
@@ -96,6 +96,9 @@ test("checkpoint.schema rejects an unknown heal_status", () => {
 });
 
 const recipe = (p) => YAML.parse(readFileSync(resolve(REPO, p), "utf8"));
+// Every shipped recipe, as repo-relative paths.
+const recipeFiles = () => ["plugins/sdlc/workflows", "plugins/android-foundation/workflows"]
+  .flatMap((d) => readdirSync(resolve(REPO, d)).filter((f) => f.endsWith(".yaml")).map((f) => `${d}/${f}`));
 const healOf = (r, phase) => {
   const p = r.phases.find((x) => (typeof x === "string" ? x : x.name) === phase);
   return typeof p === "string" ? undefined : p?.heal;
@@ -204,6 +207,32 @@ test("hotfix.yaml cap clears measured p90 phase spend (not just the heuristic ba
   const heuristicWorst = 0.05076 * 1.6 + 0.05076 + 0.1555 + 0.01578 + 2 * (0.05076 * 1.6 + 0.05076 + 0.1555);
   assert.ok(r.caps.max_total_cost_usd > heuristicWorst);
   assert.equal(r.caps.max_total_cost_usd, 9.00);
+});
+
+test("every shipped workflow recipe declares a cost cap", () => {
+  // An absent cap is not "unlimited by choice" — it makes CONTEXT.cost_cap null, which skips the
+  // Step 3d-cap gate entirely. Until this was fixed, 8 of 11 shipped recipes were ungated,
+  // including `default` (what runs when nothing else matches) and every android-* recipe, which
+  // measured $3.02-$9.67 of phase spend per run. Project-local recipes under
+  // .claude/sdlc-workflows/ may still opt out; shipped ones may not.
+  const files = recipeFiles();
+  assert.ok(files.length >= 11, `expected the full recipe set, found ${files.length}`);
+  const uncapped = files.filter((f) => typeof recipe(f).caps?.max_total_cost_usd !== "number");
+  assert.deepEqual(uncapped, [], "these shipped recipes would run ungated");
+});
+
+test("every shipped cap clears the most expensive single phase it can dispatch", () => {
+  // The sharpest failure mode of an undersized cap: if one phase costs more than the whole cap,
+  // the gate fires on the first boundary of every single run. That is what analysis ($0.75 vs a
+  // $2.97 business_analysis) and docs-only ($0.10 vs a $0.21 documentation) both did.
+  const phasesOf = (r) => r.phases.flatMap((p) =>
+    typeof p === "string" ? [p] : p.parallel ? p.parallel : [p.name]);
+  for (const f of recipeFiles()) {
+    const r = recipe(f);
+    const worst = Math.max(...phasesOf(r).map((p) => P90[p] ?? 0));
+    assert.ok(r.caps.max_total_cost_usd > worst,
+      `${f}: cap ${r.caps.max_total_cost_usd} <= p90 ${worst} of its most expensive phase`);
+  }
 });
 
 test("docs-only.yaml cap clears its single measured phase", () => {
