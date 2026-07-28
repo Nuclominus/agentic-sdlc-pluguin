@@ -24,6 +24,12 @@ status: in-progress
 | F2 | fast-track bugfix DAG (LOC-gated) | planned     | — |
 | G1 | self-healing compiler/lint micro-loops | done | #77 |
 | G2 | contextual AAR lesson classification | planned  | — |
+| H1 | transcript compliance auditor (`sdlc-lint compliance`) | planned | — |
+| H2 | collapse multi-step prose into single commands | planned | — |
+| H3 | machine-value invariant + lint | planned | — |
+| H4 | deterministic control flow (gated on H1) | planned | — |
+| H5 | prompt surface reduction / JIT procedure loading | planned | — |
+| H6 | `Stop` hook sealing the run (deterministic tail) | planned | — |
 
 _Remaining: B3. (`kotlinx.serialization` deferred — needs a `serialization` aspect decision before
 it can land as a provider.)_
@@ -59,7 +65,22 @@ here when scheduled.
   (§3.1) — **done in #77**, see [[decisions/ADR-0010-self-healing-micro-loop]]; G2 semantic tagging
   of AAR lessons so phases load only domain-relevant lessons, extending Track C1 (§3.2).
 
-**Highest-ROI next step (per plan summary): E8 (micro-task batching)** — cuts cost-per-ticket by
-amortizing init cost across 3–5 bugfixes. The plan summary's other flagged item, G1 (self-healing),
-already shipped in #77 (see [[decisions/ADR-0010-self-healing-micro-loop]]), which is
-why it no longer appears here as a next step.
+**Track H — instruction fidelity. PRIORITY track; spec in [[planning/h-instruction-fidelity]].**
+On the Android run `native-chat-engine-s2-thread-list` (2026-07-28) four mandated `SKILL.md` steps
+were silently not executed in a single run — including both cost-pricing calls, which is why a
+$15.38 run reported `$— · $16.50 cap · within`. Ground truth: `tools/usage/cli.mjs` appears **zero**
+times across that session's 42 `Bash` calls. #92 made those misses loud (**ADR-0012**, landing with
+that PR); it did not make them impossible. The track's premise is that prose read by a model is a
+probabilistic instruction, so the fix is to move load-bearing steps out of prose (H2, H3, H4, H6)
+rather than to word it more firmly — and to **measure compliance first** (H1) so the scope of the
+expensive item (H4, deterministic control flow) is decided by data instead of by this one incident.
+
+**Highest-ROI next step: H1 (transcript compliance auditor)**, then H2 and H3 — cheap, purely
+diagnostic, and it sizes everything after it. We currently cannot tell whether the incident was an
+outlier or whether the orchestrator routinely skips part of its own procedure; H1 answers that from
+transcripts we already have on disk. H2 and H3 need no such data and can run alongside. It displaces
+the previously flagged **E8 (micro-task batching)**, which stays
+the top item on the cost track: a cost optimisation is worth less while the cost record itself is
+unreliable. The plan summary's other flagged item, G1 (self-healing), already shipped in #77 (see
+[[decisions/ADR-0010-self-healing-micro-loop]]), which is why it no longer appears here as a next
+step.

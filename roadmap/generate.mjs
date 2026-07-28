@@ -60,7 +60,9 @@ const md = readFileSync(ROADMAP_MD, "utf8");
 const priority = new Set();
 for (const line of md.split("\n")) {
   if (/highest-roi/i.test(line)) {
-    for (const m of line.matchAll(/\b([A-G][0-9])\b/g)) priority.add(m[1]);
+    // [A-Z], not [A-G]: a hard-coded upper bound silently drops every item of the next
+    // track added to the vault table — Track H lost all 6 of its cards this way.
+    for (const m of line.matchAll(/\b([A-Z][0-9])\b/g)) priority.add(m[1]);
   }
 }
 
@@ -77,7 +79,7 @@ for (const line of md.split("\n")) {
   const cells = line.split("|").slice(1, -1).map(c => c.trim());
   if (cells.length < 4) continue;
   const [id, item, status, landed] = cells;
-  if (!/^[A-G]\d*$/.test(id)) continue;                    // skips header + separator rows
+  if (!/^[A-Z]\d*$/.test(id)) continue;                    // skips header + separator rows
 
   const col = STATUS_TO_COL[status.toLowerCase()] ?? "todo";
   const prMatch = landed.match(/#(\d+)/);
