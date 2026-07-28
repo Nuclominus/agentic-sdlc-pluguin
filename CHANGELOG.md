@@ -4,6 +4,10 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [1.11.2] — 2026-07-28
+
 `sdlc` `1.14.0` → `1.14.1` (other plugins unchanged). Cost-record integrity: a run that nothing
 priced can no longer report a clean cap verdict, and worktree-isolated runs price their
 orchestration overhead against the right session.
