@@ -4,13 +4,24 @@ match:
   arguments_pattern: "\\bhotfix\\b|\\burgent\\b|\\bemergency\\b|\\bprod(uction)?\\s+fix\\b"
   loc_touched_max: 200
 caps:
-  # base_total (heuristic, SKILL.md 1d-1): development sonnet*1.6=$0.0812 + qa sonnet=$0.0508 +
-  # security opus=$0.1555 + documentation haiku=$0.0158 = $0.3033 — well within the old 0.60 cap
-  # on its own. But G1 now guards all three code-writing phases (heal max_attempts: 2 each, no
-  # loop, rounds(H)=1): worst_total = 0.3033 + 2*(0.0812+0.0508+0.1555) = 0.3033 + 0.5752 =
-  # $0.8784, which DID breach the old 0.60 cap. 1.10 clears the worst case with ~$0.22 (25%)
-  # headroom.
-  max_total_cost_usd: 1.10
+  # Sized from MEASURED transcript cost, not the 1d-1 dry-run heuristic (see analysis.yaml for why
+  # that heuristic runs 6-10x low). The old $1.10 was derived from it and sits below this recipe's
+  # measured MEDIAN run.
+  #
+  # Basis: 56 transcript-priced phases across 10 real runs. Per-phase p90 —
+  #   development $5.41, qa $1.48, security $0.40, documentation $0.21  =>  base_p90 = $7.50
+  # Cap = base_p90 * 1.2 = $9.00.
+  #
+  # The 20% is headroom for healing and variance, NOT a measurement — no heal attempt has ever
+  # fired in the data, so heal cost is unmeasured (same caveat as analysis.yaml).
+  #
+  # $9.00 looks high for an "emergency, minimal footprint" recipe, and that tension is real: the
+  # measured p90 for `development` alone is $5.41. The cap's job is to stop a runaway, not to
+  # express an aspiration — a cap set below the median run is not a budget, it is a tripwire that
+  # fires on every use and trains people to click through it. If hotfix should genuinely cost less,
+  # constrain the WORK (fewer phases, cheaper tiers via .claude/model.local.json), and let the cap
+  # follow the measurement.
+  max_total_cost_usd: 9.00
 phases:
   - name: development
     heal:

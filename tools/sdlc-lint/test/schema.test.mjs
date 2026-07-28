@@ -171,30 +171,48 @@ test("android heal_checks are trimmed to compile-only — lint stays in post_pip
     "post_pipeline_checks must still run the full detekt/ktlintCheck sweep at the end of every run");
 });
 
-test("analysis.yaml cap clears its own opus+opus baseline plus the guarded security heal allowance", () => {
+// Cost caps are sized against MEASURED transcript cost (p90 of 56 transcript-priced phases across
+// 10 real runs), not the SKILL.md 1d-1 dry-run heuristic. That heuristic prices a single API call
+// while a phase is a multi-turn agent loop, so it under-reports by 6-10x; caps derived from it sat
+// below their own recipe's MEDIAN run and were breached the moment the cost gate started working.
+// A cap below the median run is not a budget — it is a tripwire that fires every time.
+const P90 = {                    // measured per-phase p90, USD
+  development: 5.41, business_analysis: 2.97, review: 0.95, qa: 1.48,
+  test: 2.21, security: 0.40, documentation: 0.21,
+};
+const HEADROOM = 1.2;            // heal + variance allowance; heal cost itself is still unmeasured
+
+test("analysis.yaml cap clears measured p90 phase spend (not just the heuristic baseline)", () => {
   const r = recipe("plugins/sdlc/workflows/analysis.yaml");
-  // base_total = 2 opus rows (business_analysis + security) @ $0.1555 = $0.3110 (SKILL.md 1d-1
-  // heuristic: 14k/1e6*5 + 21k/1e6*0.5 + 3k/1e6*25). worst_total with security's heal (2
-  // attempts, no loop) = 0.3110 + 2*0.1555 = $0.6220. The cap must clear both.
-  const baseTotal = 2 * 0.1555;
-  const worstTotal = baseTotal + 2 * 0.1555;
-  assert.ok(r.caps.max_total_cost_usd > baseTotal, "cap must clear the pre-heal baseline");
-  assert.ok(r.caps.max_total_cost_usd > worstTotal, "cap must clear the worst-case heal total");
-  assert.equal(r.caps.max_total_cost_usd, 0.75);
+  const measuredP90 = P90.business_analysis + P90.security;          // $3.37
+  assert.ok(r.caps.max_total_cost_usd >= measuredP90 * HEADROOM,
+    `cap ${r.caps.max_total_cost_usd} must clear measured p90 ${measuredP90} + headroom`);
+  // Regression: the observed run that exposed the dead gate spent exactly this and reported "within".
+  assert.ok(r.caps.max_total_cost_usd > 3.37, "cap must not sit below the run that proved the gate dead");
+  // The old heuristic worst-case must still fit, or the recipe got cheaper without anyone noticing.
+  assert.ok(r.caps.max_total_cost_usd > 2 * 0.1555 + 2 * 0.1555);
+  assert.equal(r.caps.max_total_cost_usd, 4.25);
 });
 
-test("hotfix.yaml cap clears its guarded development+qa+security worst-case heal total", () => {
+test("hotfix.yaml cap clears measured p90 phase spend (not just the heuristic baseline)", () => {
   const r = recipe("plugins/sdlc/workflows/hotfix.yaml");
-  // base_total = development sonnet*1.6 ($0.0812) + qa sonnet ($0.0508) + security opus
-  // ($0.1555) + documentation haiku ($0.0158) = $0.3033. worst_total adds 2 heal attempts on
-  // each of the 3 guarded phases (no loop, rounds(H)=1): 0.3033 + 2*(0.0812+0.0508+0.1555) =
-  // $0.8784.
-  const devRow = 0.05076 * 1.6;
-  const qaRow = 0.05076;
-  const securityRow = 0.1555;
-  const docsRow = 0.01578;
-  const baseTotal = devRow + qaRow + securityRow + docsRow;
-  const worstTotal = baseTotal + 2 * (devRow + qaRow + securityRow);
-  assert.ok(r.caps.max_total_cost_usd > worstTotal, "cap must clear the worst-case heal total");
-  assert.equal(r.caps.max_total_cost_usd, 1.10);
+  const measuredP90 = P90.development + P90.qa + P90.security + P90.documentation;   // $7.50
+  assert.ok(r.caps.max_total_cost_usd >= measuredP90 * HEADROOM,
+    `cap ${r.caps.max_total_cost_usd} must clear measured p90 ${measuredP90} + headroom`);
+  assert.ok(r.caps.max_total_cost_usd > P90.development,
+    "a cap below one phase's p90 can only ever fire mid-run");
+  const heuristicWorst = 0.05076 * 1.6 + 0.05076 + 0.1555 + 0.01578 + 2 * (0.05076 * 1.6 + 0.05076 + 0.1555);
+  assert.ok(r.caps.max_total_cost_usd > heuristicWorst);
+  assert.equal(r.caps.max_total_cost_usd, 9.00);
+});
+
+test("docs-only.yaml cap clears its single measured phase", () => {
+  const r = recipe("plugins/sdlc/workflows/docs-only.yaml");
+  // Single-phase recipe: the 3d-cap gate can never fire (it needs a next dispatch), so this cap is
+  // only a post-hoc Step 5b(d) signal. A value under the measured phase cost would flag every run
+  // as a breach nobody could have acted on.
+  assert.equal(r.phases.length, 1, "if this grows a second phase, the gate becomes live — re-derive");
+  assert.ok(r.caps.max_total_cost_usd > P90.documentation,
+    "cap must clear the measured documentation phase, else every run reports a false breach");
+  assert.equal(r.caps.max_total_cost_usd, 0.35);
 });

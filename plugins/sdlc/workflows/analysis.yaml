@@ -8,13 +8,23 @@ description: >
 match:
   arguments_pattern: "\\banaly[sz]e\\b|\\baudit\\b|\\bassess(ment)?\\b"
 caps:
-  # Both phases are opus (business_analysis + security): per the orchestrator's documented
-  # heuristic (SKILL.md 1d-1), an opus row is 14k/1e6*5 + 21k/1e6*0.5 + 3k/1e6*25 = $0.1555, so
-  # this recipe's own base_total = 2 * 0.1555 = $0.3110 BEFORE any healing — a 0.30 cap breached
-  # its own baseline. G1 then guards `security` (heal max_attempts: 2, no loop, so rounds(H)=1):
-  # worst_total = 0.3110 + 1*2*0.1555 = $0.6220. 0.75 clears the worst case with ~$0.13 (21%)
-  # headroom and is still well over 2x the plain two-phase baseline.
-  max_total_cost_usd: 0.75
+  # Sized from MEASURED transcript cost, not the 1d-1 dry-run heuristic. That heuristic prices a
+  # single API call (35k in / 3k out); a phase is a multi-turn agent loop (median 12-18 turns, each
+  # re-reading its prefix), so it under-reports real phase cost by 6-10x. The old $0.75 here was
+  # derived from it and was breached by the very first run that could measure itself: $3.37 of phase
+  # spend under a $0.75 cap (`flutter-to-native-migration-plan`, BA $2.97 + security $0.40).
+  #
+  # Basis: 56 transcript-priced phases across 10 real runs. Per-phase p90 —
+  #   business_analysis $2.97, security $0.40  =>  base_p90 = $3.37
+  # Cap = base_p90 * 1.2 = $4.044, rounded UP to the next quarter = 4.25. Round up, never down: a
+  # cap rounded below its own derivation is a cap that fires on the run it was sized to allow.
+  #
+  # The 20% is headroom for healing and run-to-run variance, NOT a measurement: no heal attempt has
+  # ever actually fired in the data (every observed heal_status is "skipped"), so heal cost is
+  # unmeasured and a worst-case heal multiplier would be invented, not derived. Revisit once real
+  # heal_attempts_used > 0 runs exist. Summing per-phase p90 is already conservative — it assumes
+  # every phase lands in its own tail simultaneously.
+  max_total_cost_usd: 4.25
 phases:
   - business_analysis
   - name: security

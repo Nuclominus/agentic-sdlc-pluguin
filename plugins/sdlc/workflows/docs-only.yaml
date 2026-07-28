@@ -4,6 +4,17 @@ match:
   arguments_pattern: "\\bdoc(s|umentation)?\\b|\\breadme\\b|\\bchangelog\\b"
   config_only: true
 caps:
-  max_total_cost_usd: 0.10
+  # Sized from MEASURED transcript cost (see analysis.yaml for why the 1d-1 heuristic runs 6-10x
+  # low). Measured `documentation` phase across 6 real runs: p50 $0.16, p90/max $0.21 — so the old
+  # $0.10 was below the cheapest observed run of this recipe and could never hold.
+  # Cap = p90 $0.21 * 1.2 = $0.25, rounded up to 0.35 (see below).
+  #
+  # NOTE: this recipe has ONE phase, so the Step 3d-cap gate can never fire here — it only acts
+  # when a next dispatch exists, and there is nothing after the only phase. The cap is therefore
+  # purely a post-hoc signal: Step 5b(d) reconciliation records `exceeded-undetected` +
+  # `cap_breach_usd` if the run went over. That is why this one carries wider headroom than the
+  # 1.2x used elsewhere — a value that fires on ordinary runs produces a permanent false alarm
+  # nobody can act on, since there was never a dispatch to stop.
+  max_total_cost_usd: 0.35
 phases:
   - documentation
