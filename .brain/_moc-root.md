@@ -16,3 +16,6 @@
 - [[components/room-plugin]]
 - [[components/dagger-plugin]]
 - [[components/workmanager-plugin]]
+- [[components/koin-plugin]]
+- [[components/ktor-plugin]]
+- [[components/datastore-proto-plugin]]
