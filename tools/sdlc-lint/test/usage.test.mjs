@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import {
   loadRegistry, extractUsage, priceUsage, priceTranscripts,
   findAgentTranscript, sessionSubagentsDir, deriveDispatchMap, enrichTelemetry,
-  phaseCost,
+  sessionOwnsRun, knownRunAgentIds, phaseCost,
   CACHE_PRESSURE_PEAK_TOKENS,
 } from "../lib/usage.mjs";
 
@@ -228,6 +228,71 @@ test("enrichTelemetry works forward-mode from recorded agent_id (no --session), 
   assert.ok(tel.total_cost_usd > 0);
   // overhead auto-derived from the sibling session transcript
   assert.ok(tel.orchestration_overhead && tel.orchestration_overhead.cost_usd > 0);
+});
+
+// A session filed under a DIFFERENT project dir than the one the run ended up working
+// in — the shape produced by any worktree-isolated pipeline, since the harness files a
+// session by the cwd it STARTED in while a caller deriving --session from the current
+// cwd looks under the worktree's project dir.
+function foreignSession() {
+  const root = mkdtempSync(join(tmpdir(), "foreign-"));
+  const sid = "ffff9999deadbeef";
+  const sess = join(root, "proj-worktree", `${sid}.jsonl`);
+  mkdirSync(dirname(sess), { recursive: true });
+  writeFileSync(sess, turn("claude-opus-4-8", { input_tokens: 10, output_tokens: 10, cache_read_input_tokens: 0 }) + "\n");
+  // It has subagents — just none of this run's.
+  writeAgent(join(root, "proj-worktree", sid, "subagents"), "ffff77778888",
+    [turn("claude-sonnet-5", { input_tokens: 5, output_tokens: 5, cache_read_input_tokens: 0 })]);
+  return sess;
+}
+
+test("a --session that does not own the run is rejected, not priced against", () => {
+  const { runDir, projectsRoot } = buildRun();
+  const tel0 = JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8"));
+  tel0.phases[0].agent_id = "aaaa11112222";
+  tel0.phases[1].agent_id = "bbbb33334444";
+  writeFileSync(join(runDir, "_telemetry.json"), JSON.stringify(tel0));
+
+  const r = enrichTelemetry(runDir, { sessionTranscript: foreignSession(), registry: reg, projectsRoot });
+  assert.equal(r.session_mismatch, true, "the mismatch must be reported so the CLI can WARN");
+  assert.deepEqual(r.enriched.sort(), ["business_analysis", "development"]);
+
+  // The real session is recovered by walking back from a resolved phase transcript, so
+  // orchestration overhead is priced against the orchestrator that actually ran this
+  // pipeline — not against whatever main loop the wrong session happens to contain.
+  const tel = JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8"));
+  assert.equal(tel.orchestration_overhead.main_loop.turns, 2);
+  assert.ok(tel.orchestration_overhead.cost_usd > 0);
+});
+
+test("a --session that does own the run is used as before", () => {
+  const { runDir, sess, projectsRoot } = buildRun();
+  const tel0 = JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8"));
+  tel0.phases[0].agent_id = "aaaa11112222";
+  writeFileSync(join(runDir, "_telemetry.json"), JSON.stringify(tel0));
+  const r = enrichTelemetry(runDir, { sessionTranscript: sess, registry: reg, projectsRoot });
+  assert.equal(r.session_mismatch, false);
+  assert.deepEqual(r.enriched.sort(), ["business_analysis", "development"]);
+});
+
+test("sessionOwnsRun trusts an unverifiable session rather than discarding the only source", () => {
+  // Backfill: neither telemetry nor the checkpoints carry an agent_id, so the session's
+  // dispatch map is the ONLY way to map phases → subagents. Nothing to check it against.
+  const { runDir, sess } = buildRun();
+  const phases = JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8")).phases;
+  assert.equal(knownRunAgentIds(runDir, phases).size, 0);
+  assert.equal(sessionOwnsRun(foreignSession(), runDir, phases), true);
+  assert.equal(sessionOwnsRun(sess, runDir, phases), true);
+});
+
+test("knownRunAgentIds reads ids from telemetry and from checkpoints alike", () => {
+  const { runDir } = buildRun();
+  mkdirSync(join(runDir, ".checkpoint"), { recursive: true });
+  writeFileSync(join(runDir, ".checkpoint", "development.json"),
+    JSON.stringify({ phase: "development", agent_id: ["bbbb33334444", "cccc55556666"] }));
+  const phases = [{ phase: "business_analysis", agent_id: "aaaa11112222" }, { phase: "development" }];
+  assert.deepEqual([...knownRunAgentIds(runDir, phases)].sort(),
+    ["aaaa11112222", "bbbb33334444", "cccc55556666"]);
 });
 
 test("enrichTelemetry skips a phase with no locatable transcript, keeping its aggregate", () => {
@@ -547,6 +612,37 @@ test("enrichTelemetry prices overhead from the checkpoint epoch anchor when tele
   assert.equal(oh.main_loop.turns, 2, "both orchestrator turns recovered via the anchor window");
   assert.ok(oh.main_loop.cost_usd > 0, "main-loop cost priced, not zeroed by the bad telemetry window");
   assert.ok(oh.cost_usd > 0);
+});
+
+// Pricing already ignores the model-authored ISO strings (ADR-0007), but the report header,
+// the journal and every rollup read them — so enrichment corrects them too. An observed run
+// recorded 14:24:17Z against an 11:04:17Z anchor: the local clock stamped `Z`, plus drift.
+test("enrichTelemetry corrects started_at/completed_at against the machine anchor", () => {
+  const { runDir, projectsRoot } = buildAnchorRun();
+  const r = enrichTelemetry(runDir, { registry: reg, projectsRoot });
+  const tel = JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8"));
+  assert.equal(tel.started_at, "2026-07-07T13:28:00.000Z");
+  assert.equal(tel.completed_at, "2026-07-07T14:18:00.000Z");   // anchor + wall_clock_seconds
+  assert.equal(tel.wall_clock_seconds, 3000, "the duration is the anchor's own arithmetic — untouched");
+  assert.equal(r.timestamps_corrected.from, "2026-07-07T01:00:00Z");
+  assert.equal(r.timestamps_corrected.drift_seconds, -44880);
+});
+
+test("enrichTelemetry leaves a correctly-derived window alone", () => {
+  const { runDir, projectsRoot } = buildAnchorRun({ telWindow: ["2026-07-07T13:28:00Z", "2026-07-07T14:18:00Z"] });
+  const r = enrichTelemetry(runDir, { registry: reg, projectsRoot });
+  const tel = JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8"));
+  assert.equal(r.timestamps_corrected, null);
+  assert.equal(tel.started_at, "2026-07-07T13:28:00Z", "not even reformatted");
+  assert.equal(tel.completed_at, "2026-07-07T14:18:00Z");
+});
+
+test("enrichTelemetry does not invent a window when there is no anchor to check against", () => {
+  const { runDir, projectsRoot } = buildAnchorRun({ withAnchor: false });
+  const r = enrichTelemetry(runDir, { registry: reg, projectsRoot });
+  const tel = JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8"));
+  assert.equal(r.timestamps_corrected, null);
+  assert.equal(tel.started_at, "2026-07-07T01:00:00Z");
 });
 
 test("enrichTelemetry falls back to the full transcript and flags it when the window excludes every main-loop turn", () => {

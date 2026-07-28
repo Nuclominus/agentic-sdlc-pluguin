@@ -4,7 +4,38 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
-_Nothing yet._
+### Fixed
+
+- **A run nobody priced reported its cost cap as `within`.** An observed Android run finished with
+  `total_cost_usd: null`, `cost_basis: "subagent_aggregate"` and `cap_gate_blind` on every phase,
+  yet its report rendered `— · $16.50 cap · within`. Re-running enrichment against transcripts that
+  had been on disk the whole time priced it at **$15.38 (93% of the cap)** — nothing had breached,
+  but nothing had checked. The session transcript shows `tools/usage/cli.mjs` was never invoked at
+  all: both the in-run pricing call and the end-of-run enrichment are prose steps in
+  `pipeline-orchestrator/SKILL.md`, and skipping them left no trace (including the WARN that was
+  supposed to announce it). The report now renders `unverified — run unpriced` instead of a cap
+  verdict unless the run is transcript-priced, adds a `Cost: unpriced` signal naming the blind
+  phases, and warns on stderr from `report/cli.mjs`. See ADR-0012.
+- **Worktree-isolated runs mis-priced their orchestration overhead.** Step 5b(a) derived the
+  session transcript by encoding the *current* cwd, but the harness files a session under the cwd
+  it **started** in — so any run that moves into a git worktree (every `/sdlc:batch` task) resolved
+  `--session` to an unrelated session. Phase costs survived; overhead was priced against a
+  stranger's main loop, reporting **$0.55 where the truth was $5.21**, with no sign anything was
+  wrong. Session lookup is now anchored on a dispatched `agent_id`, and `enrichTelemetry` discards
+  a `--session` that holds none of the run's agents (`session_mismatch` + self-recovery from the
+  phase transcripts).
+- **The report under-reported QA iterations.** The KPI keyed on a phase literally named `qa`, but
+  the loop belongs to whichever phase a recipe puts it in — `android-feature` runs it as `test`. A
+  run that spent 2 iterations rendered `0 QA iteration(s)` while `aar/metrics.mjs`, which sums,
+  reported 2 off the same telemetry. Now summed across phases, with one Signals line per phase that
+  actually ran a loop.
+- **Run timestamps were model-authored and wrong.** Step 5 asks for `started_at` / `completed_at`
+  rendered from the `.checkpoint/_started_at` epoch via `date -u -r`; an observed run instead wrote
+  its local EEST clock stamped `Z` — 3h20m off the anchor — and derived `completed_at` from it, so
+  the record was internally consistent and externally false. Pricing already ignored these strings
+  (ADR-0007), but the report header, the journal and every rollup read them. Enrichment now
+  reconciles both against the anchor (120s tolerance) and warns, leaving `wall_clock_seconds`
+  untouched.
 
 ## [1.11.1] — 2026-07-28
 
