@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-07-28 | #98 | `chore` | — | [[changes/2026-07-28-PR-98-bump-to-1-14-1-and-complete-the-unreleased-changelog]] |
 | 2026-07-28 | #96 | `feat` | — | [[changes/2026-07-28-PR-96-add-a-reindex-verb]] |
 | 2026-07-28 | #93 | `docs` | — | [[changes/2026-07-28-PR-93-track-h-instruction-fidelity-priority-track]] |
 | 2026-07-28 | #92 | `fix` | — | [[changes/2026-07-28-PR-92-stop-reporting-a-cap-verdict-on-a-run-nothing-priced]] |
