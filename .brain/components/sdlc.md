@@ -40,14 +40,31 @@ control neither, a constraint stated in Step 0a-1 and enforced doc-wide by sdlc-
 - `plugins/sdlc/agents/session-recorder.md`
 - `plugins/sdlc/PLUGIN-PATHS.md` (path-resolution contract; orchestrator Step 0 resolves it)
 - `plugins/sdlc/skills/pipeline-orchestrator/SKILL.md` (Step 0 roots, Step 2 clock, Step 5 timing, Step 6 close)
+- `plugins/sdlc/tools/usage/` (transcript-derived pricing; `enrich` is the authoritative cost path,
+  and it self-recovers the session from the run's `agent_id`s — never from the cwd)
+- `plugins/sdlc/tools/report/` (HTML run report; refuses to render a cap verdict on an unpriced run)
 - `tools/sdlc-lint/lib/read-discipline.mjs`
 - `tools/sdlc-lint/lib/plugin-paths.mjs`
+
+## Cost record — what the artifacts promise
+
+`_telemetry.json` is the run's machine record, and two of its fields carry a trust condition worth
+knowing before reading any report:
+
+- `cap_status` is written by the in-run gate, which prices an unresolvable phase at `$0` and flags it
+  `cap_gate_blind`. It only becomes a **verdict** once Step 5b's transcript enrichment has re-priced
+  the phases (`cost_basis: "transcript"`). Until then the report shows `unverified — run unpriced`
+  rather than `within` — see [[decisions/ADR-0012-unpriced-runs-must-not-render-a-cap-verdict]].
+- `started_at` / `completed_at` are reconciled at enrichment against the machine anchor
+  `.checkpoint/_started_at`; `wall_clock_seconds` is the anchor's own arithmetic and is authoritative
+  ([[decisions/ADR-0007-overhead-window-authoritative-anchor]]).
 
 ## Decisions
 - [[decisions/ADR-0001-stack-provider-pattern]]
 - [[decisions/ADR-0003-session-recorder-run-journal]]
 - [[decisions/ADR-0009-plugin-root-resolution]]
 - [[decisions/ADR-0010-self-healing-micro-loop]]
+- [[decisions/ADR-0012-unpriced-runs-must-not-render-a-cap-verdict]]
 
 ## Change history
 _Backlinks from `changes/` accumulate here._
