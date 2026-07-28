@@ -178,7 +178,7 @@ function printCompliance() {
   if (jsonOut) {
     console.log(JSON.stringify({
       command: "compliance", contracts: agg.contracts,
-      auditable: agg.auditable, excluded: agg.excluded, runs: results,
+      auditable: agg.auditable, seal: agg.seal, excluded: agg.excluded, runs: results,
     }));
   } else {
     console.log(renderText(agg, results));

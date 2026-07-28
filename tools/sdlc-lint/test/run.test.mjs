@@ -241,3 +241,45 @@ test("no verb, or an unknown one, prints usage and exits 2", () => {
   assert.equal(runCli([], REPO).status, 2);
   assert.equal(runCli(["seal", "x"], REPO).status, 2);
 });
+
+test("finishRun marks the run sealed, defaulting to the orchestrator", () => {
+  const dir = makeRun({ task_slug: "x", phases: [] }, ANCHOR);
+  const r = finishRun(dir, { now: (ANCHOR + 60) * 1000, noReport: true,
+    enrich: () => ({ skipped_all: true }) });
+
+  assert.equal(r.sealed.by, "orchestrator");
+  assert.equal(r.sealed.at, "2026-07-28T11:01:00Z");
+  assert.equal(tel(dir).sealed_by, "orchestrator");
+
+  const marker = JSON.parse(readFileSync(join(dir, ".checkpoint", "_sealed"), "utf8"));
+  assert.equal(marker.by, "orchestrator");
+  assert.equal(marker.sealed_at, "2026-07-28T11:01:00Z");
+  assert.equal(marker.wall_clock_seconds, 60);
+});
+
+test("finishRun attributes the seal to the hook when the hook is the caller", () => {
+  const dir = makeRun({ task_slug: "x", phases: [] }, ANCHOR);
+  const r = finishRun(dir, { now: (ANCHOR + 60) * 1000, noReport: true, sealedBy: "stop-hook",
+    enrich: () => ({ skipped_all: true }) });
+
+  assert.equal(r.sealed.by, "stop-hook");
+  assert.equal(tel(dir).sealed_by, "stop-hook");
+  assert.equal(JSON.parse(readFileSync(join(dir, ".checkpoint", "_sealed"), "utf8")).by, "stop-hook");
+});
+
+test("the seal marker is written AFTER enrich, which rewrites the whole telemetry file", () => {
+  const dir = makeRun({ task_slug: "x", phases: [] }, ANCHOR);
+  // A realistic enricher: it re-reads and rewrites _telemetry.json wholesale. If the
+  // marker were written before this, enrich would erase sealed_by and the hook would
+  // re-seal a sealed run — the failure ADR-0014 priced at $12.81 -> $13.71.
+  finishRun(dir, { now: (ANCHOR + 60) * 1000, noReport: true, enrich: (d) => {
+    const p = join(d, "_telemetry.json");
+    const t = JSON.parse(readFileSync(p, "utf8"));
+    writeFileSync(p, JSON.stringify({ ...t, cost_basis: "transcript" }, null, 2) + "\n");
+    return { total_cost_usd: 1.23 };
+  } });
+
+  const t = tel(dir);
+  assert.equal(t.cost_basis, "transcript", "enrich's own write must survive");
+  assert.equal(t.sealed_by, "orchestrator", "sealed_by must survive enrich's rewrite");
+});

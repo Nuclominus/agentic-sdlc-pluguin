@@ -2135,6 +2135,13 @@ every `WARN:` line **verbatim** — those lines are the only signal that a run i
 cap was breached without the gate noticing, or that its clock has no anchor. Each stage fails open,
 so a non-zero exit means the run directory was unreadable, never that the pipeline failed.
 
+**A `Stop` hook seals a run you did not.** `hooks/seal-run.sh` runs this same command when a run's
+phases are all complete and `.checkpoint/_sealed` is absent, so a forgotten seal is repaired rather
+than lost. It is a net, not a substitute: it fires only after your turn ends, so nothing it does is
+available to you during the run; it cannot assemble a `_telemetry.json` you never wrote; and it does
+nothing for the cost gate, which spends its numbers while the run is still going. Which path sealed
+a run is recorded in `sealed_by` — machine-owned, never yours to write.
+
 **Reading the result** (this is judgement, and stays yours):
 
 - `cost: $— (unpriced)` means no phase transcript resolved. Do **not** repair the appearance by

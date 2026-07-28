@@ -97,6 +97,12 @@ test("plugin_version is surfaced when telemetry carries it", () => {
   assert.equal(audit("incident").plugin_version, null);
 });
 
+test("sealed_by is surfaced, and absent on runs that predate the seal marker", () => {
+  // Orthogonal to every verdict: it says which path sealed the run, not whether the
+  // orchestrator followed a step. The auditor reads it so the two can be read together.
+  assert.equal(audit("incident").sealed_by, null);
+});
+
 test("a contract retired before the run is na: retired", () => {
   const retired = [{ id: "gone", requires: "bash_match", pattern: "date -u",
     cardinality: "once-per-run", since: "2026-07-06", until: "2026-07-10", applies_when: [] }];

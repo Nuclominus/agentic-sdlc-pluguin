@@ -192,7 +192,7 @@ between where a rule is written and the moment it applies. Just-in-time loading 
 fragments beats any amount of emphasis inside a monolith. Overlaps with Track E's cost goals — a
 smaller stable prefix is also cheaper — so measure both effects together.
 
-### H6 — Hooks as the deterministic tail
+### H6 — Hooks as the deterministic tail ✅
 
 A `Stop` hook (`plugins/sdlc/hooks/seal-run.sh`) that runs `enrich` + report rendering itself, so
 the sealing of a run is not a step the model owns at all. Idempotent via a `.checkpoint/_sealed`
@@ -203,6 +203,28 @@ Explicit limits, so this is not oversold: a hook enforces **state**, never inten
 the session is killed before `Stop`; and it repairs after the fact, so it can do nothing for a value
 consumed *during* the run (the 3d-1b cap gate stays the orchestrator's responsibility).
 
+**Implementation spec: [[planning/h6-hook-deterministic-tail]].** Sizing it settled the one question
+the item as written left open — *when* is a run finished? Recency cannot tell a paused run from a
+completed one, so the gate is **completeness**: every phase in the resolved DAG carries a terminal
+checkpoint. Measured over the 19-run corpus, that gate opens for 10 runs, including the ADR-0012
+incident run (H6's known-positive), and stays shut for the three H1 named as carrying most of the
+damage. Two consequences fall out: the completeness rule must **move into the plugin** — it lives in
+the repo-root `sdlc-lint` today and so does not ship to the consumer running the hook — and the
+clock must come from the run's newest mtime rather than `Date.now()`, or a late hook charges the run
+for the time the user spent chatting afterwards.
+
+**Shipped.** [[decisions/ADR-0016-the-tail-has-a-net]]. The gate turned out to be the whole design
+question, and it is settled by measurement rather than by a timeout: completeness (every phase in
+the resolved DAG terminal) opens for 10 of the 19 corpus runs including the ADR-0012 incident run,
+and stays shut for the three H1 named as carrying most of the damage. Two things fell out of sizing
+it — the completeness rule had to **ship** (it lived in the repo-root `sdlc-lint`, which the hook
+cannot reach), and the clock had to come from the run's newest mtime, since a hook is late by
+construction and `now - anchor` would bill the run for the time after it finished.
+
+H6 adds no mandated step, so like H3 it produces no compliance rate of its own. What it adds is
+`sealed_by`, an orthogonal signal: how often the net had to fire. `5b-finish` is deliberately
+untouched — a hook leaves no `tool_use` block, so it cannot flatter the number that decides H4.
+
 ## Order and dependencies
 
 ```
@@ -210,7 +232,7 @@ H1 (diagnose) ──► decides scope of H4
    │
    ├─► H2 (collapse) ✅ ─┐
    ├─► H3 (invariant) ✅ ├─► re-measure with H1
-   └─► H6 (hook tail)  ─┘
+   └─► H6 (hook tail) ✅ ─┘
 H5 runs alongside, shared with Track E
 ```
 

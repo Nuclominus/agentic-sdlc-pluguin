@@ -2,6 +2,7 @@
 
 > One note per architecture decision. Newest first.
 
+- [[decisions/ADR-0016-the-tail-has-a-net]]
 - [[decisions/ADR-0015-the-machine-value-invariant]]
 - [[decisions/ADR-0014-the-run-tail-is-one-command]]
 - [[decisions/ADR-0012-unpriced-runs-must-not-render-a-cap-verdict]]

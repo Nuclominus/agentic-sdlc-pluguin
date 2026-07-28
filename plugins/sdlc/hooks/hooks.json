@@ -11,6 +11,17 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/seal-run.sh\"",
+            "description": "Seal an SDLC run whose phases are all complete but which was never sealed (Track H6). Calls run/cli.mjs seal-stale, which is idempotent via .checkpoint/_sealed. Exits 0 unconditionally — for Stop, exit 2 would block the agent from stopping."
+          }
+        ]
+      }
     ]
   }
 }

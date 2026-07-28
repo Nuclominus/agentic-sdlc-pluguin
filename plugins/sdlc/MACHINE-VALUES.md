@@ -52,6 +52,7 @@ plugin_version: tools/run/cli.mjs finish
 started_at: tools/run/cli.mjs finish
 completed_at: tools/run/cli.mjs finish
 wall_clock_seconds: tools/run/cli.mjs finish
+sealed_by: tools/run/cli.mjs finish
 ```
 
 ## Audit — what the orchestrator was asked to produce
@@ -68,6 +69,7 @@ became of it.
 | `total_cost_usd` | Step 5 | **removed** — `usage.mjs:626` |
 | `cache_hit_ratio` | Step 5 | **removed** — `usage.mjs:628`, and the two definitions had already diverged |
 | `started_at` / `completed_at` / `wall_clock_seconds` | Step 5 | **removed by H2** — `clock.mjs` is their sole writer (`ADR-0014`) |
+| `sealed_by` | — | **new in H6** — records which path sealed the run (orchestrator or `Stop` hook); the model must never write it, since the whole point is that it says who did |
 
 Values that stay with the model, and why the invariant does not reach them:
 

@@ -113,18 +113,21 @@ export function auditRun(runDir, contracts, opts = {}) {
   const base = { run: basename(runDir), dir: runDir, sessions: [], verdicts: [] };
   const telPath = join(runDir, "_telemetry.json");
   if (!existsSync(telPath)) {
-    return { ...base, date: null, date_source: "none", plugin_version: null,
+    return { ...base, date: null, date_source: "none", plugin_version: null, sealed_by: null,
              status: "unauditable", reason: "no-telemetry" };
   }
   let tel;
   try { tel = JSON.parse(readFileSync(telPath, "utf8")); }
-  catch { return { ...base, date: null, date_source: "none", plugin_version: null,
+  catch { return { ...base, date: null, date_source: "none", plugin_version: null, sealed_by: null,
                    status: "unauditable", reason: "unreadable-telemetry" }; }
 
   const phases = tel.phases || [];
   const { date, date_source } = runDate(runDir, tel);
   const plugin_version = typeof tel.plugin_version === "string" ? tel.plugin_version : null;
-  const head = { ...base, date, date_source, plugin_version };
+  // Which path sealed the run (H6). Orthogonal to every verdict below: the hook leaves
+  // no tool_use block, so it is invisible to the contracts and must never enter a rate.
+  const sealed_by = typeof tel.sealed_by === "string" ? tel.sealed_by : null;
+  const head = { ...base, date, date_source, plugin_version, sealed_by };
 
   const sessions = resolveRunSessions(runDir, phases, opts);
   if (!sessions.length) {
