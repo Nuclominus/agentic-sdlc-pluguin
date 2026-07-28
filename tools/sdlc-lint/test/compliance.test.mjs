@@ -84,3 +84,18 @@ test("plugin_version is surfaced when telemetry carries it", () => {
   assert.equal(audit("compliant").plugin_version, "1.14.1");
   assert.equal(audit("incident").plugin_version, null);
 });
+
+test("a contract retired before the run is na: retired", () => {
+  const retired = [{ id: "gone", requires: "bash_match", pattern: "date -u",
+    cardinality: "once-per-run", since: "2026-07-06", until: "2026-07-10", applies_when: [] }];
+  const res = auditRun(run("compliant"), retired, { projectsRoot: PROJECTS });   // run dated 2026-07-28
+  assert.equal(res.verdicts[0].verdict, "na");
+  assert.equal(res.verdicts[0].reason, "retired");
+});
+
+test("a run inside the retirement window is still judged", () => {
+  const retired = [{ id: "still-live", requires: "bash_match", pattern: "date -u",
+    cardinality: "once-per-run", since: "2026-07-06", until: "2026-07-31", applies_when: [] }];
+  const res = auditRun(run("compliant"), retired, { projectsRoot: PROJECTS });
+  assert.equal(res.verdicts[0].verdict, "pass");
+});
