@@ -97,9 +97,19 @@ stop and report — do not retry.
      a regenerated board and a changelog promotion carry no knowledge worth a change note.
 
 6. **Fast-forward release and tag.** Using the bump commit's SHA:
-   - `git push origin <sha>:release` (fast-forward by construction after step 0).
+   - `git push origin "<sha>:refs/heads/release"` (fast-forward by construction after step 0).
+
+     Write the refspec **fully qualified and quoted**, and substitute the SHA literally rather
+     than through a shell variable. `git push origin $SHA:release` is a trap under zsh (the
+     operator's shell): `:r` is a parameter-expansion modifier that strips a file extension, so
+     `$SHA:release` expands to the SHA followed by a bare `elease` and the push fails with
+     `src refspec … does not match any`. This has bitten a real release — v1.11.2 — where the
+     tag had already gone out, leaving the `release` branch behind until it was re-pushed.
    - In the worktree: `git tag -a vX.Y.Z -m "Release vX.Y.Z" <sha>` then
      `git push origin vX.Y.Z`.
+   - After both pushes, verify the branch actually moved:
+     `git rev-parse origin/release` must equal the bump SHA. A failed refspec is only visible in
+     stderr, and step 7 would otherwise publish a release whose stable channel never advanced.
 
 7. **Publish the GitHub release.** From the tag pushed in step 6:
    - `gh release create vX.Y.Z --verify-tag --title "<title>" --notes-file <tmp>/release-notes.md`
@@ -109,10 +119,16 @@ stop and report — do not retry.
      `Latest` on its own.
    - Report the release URL.
 
-8. **Cleanup and report.** `git worktree remove` the temp worktree. Then print a short summary:
-   new version, released SHA, the shipped commit list, tag name, GitHub release URL, and a
-   reminder that `@release` users receive it on their next `/plugin marketplace update` (or
-   auto-update), while `develop` users are unaffected.
+8. **Cleanup and report.** `git worktree remove` the temp worktree. Then re-read all four
+   artifacts from the remote and print them, rather than reporting what the commands were
+   supposed to have done:
+   - `git log --oneline origin/develop -1` (the bump), `git log --oneline origin/release -1`,
+     `git rev-list -n1 vX.Y.Z`, `gh release view vX.Y.Z --json name,isDraft,isPrerelease,tagName,url`.
+     All three refs must be the same SHA. (`gh release view` has no `isLatest` field — for Latest,
+     ask the API: `gh api repos/<owner>/<repo>/releases/latest -q .tag_name`.)
+   - Then the summary: new version, released SHA, the shipped commit list, tag name, GitHub release
+     URL, and a reminder that `@release` users receive it on their next `/plugin marketplace update`
+     (or auto-update), while `develop` users are unaffected.
 
 ## Failure rule
 
