@@ -146,22 +146,23 @@ test("SKILL.md must point at the contract, so the rule has one definition", () =
   assert.match(errors[0], /MACHINE-VALUES\.md/);
 });
 
-// PRE-STATE TEST — Task 4 replaces this with the zero-violation assertion.
-test("the check finds the six real formulas in the live SKILL.md", () => {
-  // SKILL.md appears TWICE in the results — once for checkContractReference, once for the
-  // glob scan (lib/plugin-paths.mjs has the same double entry). `find` would return the
-  // contract-reference row and its empty errors; flatten both rows instead.
-  const errs = checkMachineValues(REPO)
-    .filter(r => r.file === ORCHESTRATOR_PATH)
-    .flatMap(r => r.errors);
-  assert.equal(errs.length, 6, `expected six violations, got:\n${errs.join("\n")}`);
-  // The 3d-1 pricing formula, the four Step 5 aggregate sums, and the cache_hit_ratio
-  // definition that had already diverged from usage.mjs:628.
-  assert.deepEqual(
-    errs.map(e => e.match(/"([a-z_]+)"/)[1]).sort(),
-    ["cache_hit_ratio", "cost_usd", "total_cached_input_tokens", "total_cost_usd",
-     "total_input_tokens", "total_output_tokens"],
-  );
+test("the live tree is clean, with zero escape-hatch markers", () => {
+  const failed = checkMachineValues(REPO).filter(r => !r.ok);
+  assert.deepEqual(failed, [], "every machine value must come from a path, not a formula");
+});
+
+test("the invariant holds without exemptions — no ok-marker anywhere in shipped prose", () => {
+  // A check whose green run depends on suppressions is measuring the suppressions.
+  let out = "";
+  try {
+    // The contract itself necessarily spells the marker out — that is where authors read
+    // its syntax. Every OTHER occurrence in shipped prose is a real exemption.
+    out = execFileSync("git", ["grep", "-l", OK_MARKER, "--", "plugins/", `:!${CONTRACT_PATH}`],
+      { cwd: REPO, encoding: "utf8" }).trim();
+  } catch (e) {
+    if (e.status !== 1) throw e;   // status 1 == no matches, which is the pass
+  }
+  assert.equal(out, "", `unexpected machine-values exemptions in: ${out}`);
 });
 
 test("no file OTHER than SKILL.md violates the invariant", () => {
@@ -183,9 +184,8 @@ test("a missing contract is a tool error (exit 2), not a silent all-clear", () =
   assert.match(results[0].errors[0], /^read:/);
 });
 
-test("the CLI verb exits 1 while SKILL.md still holds the formulas", () => {
-  let status = 0;
-  try { execFileSync("node", [CLI, "machine-values", "--json"], { cwd: REPO, encoding: "utf8" }); }
-  catch (e) { status = e.status; }
-  assert.equal(status, 1, "violations must exit 1, distinct from a tool error's 2");
+test("the CLI verb exits 0 on the clean tree", () => {
+  const out = execFileSync("node", [CLI, "machine-values", "--json"], { cwd: REPO, encoding: "utf8" });
+  const report = JSON.parse(out.trim().split("\n").pop());
+  assert.equal(report.failed, 0);
 });
