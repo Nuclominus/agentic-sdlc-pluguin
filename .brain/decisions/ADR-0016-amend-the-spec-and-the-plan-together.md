@@ -1,11 +1,11 @@
 ---
-adr: 14
+adr: 16
 status: accepted
 date: 2026-07-28
 supersedes: null
 ---
 
-# ADR-0014 — Amend the spec and the plan together
+# ADR-0016 — Amend the spec and the plan together
 
 ## Context
 

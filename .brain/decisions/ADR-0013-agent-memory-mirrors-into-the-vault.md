@@ -52,7 +52,7 @@ memory that contradicts the vault is stale by definition and should be corrected
   The cost is real and deliberate: it is the same cost that makes `.brain/` trustworthy.
 - `user`-type memories stay private, which keeps personal preferences out of a shared repository.
 - Backfill: the 2026-07-28 audit found exactly one uncovered memory, mirrored as
-  [[decisions/ADR-0014-amend-the-spec-and-the-plan-together]]. The rest were already represented in
+  [[decisions/ADR-0016-amend-the-spec-and-the-plan-together]]. The rest were already represented in
   `planning/`, `architecture/` or `changes/`.
 - A stale memory is now falsifiable — the vault note is version-controlled next to the code, so a
   reader can date the claim instead of trusting it.
@@ -61,6 +61,6 @@ memory that contradicts the vault is stale by definition and should be corrected
 
 ## Related
 - Vault as SSOT: the `second-brain.md` rule; [[planning/_moc-planning]]
-- Mirrored by this decision: [[decisions/ADR-0014-amend-the-spec-and-the-plan-together]]
+- Mirrored by this decision: [[decisions/ADR-0016-amend-the-spec-and-the-plan-together]]
 - Same "one store must be authoritative" reasoning applied to cost:
   [[decisions/ADR-0005-transcript-derived-cost]]
