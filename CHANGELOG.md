@@ -4,7 +4,50 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+`sdlc` `1.14.1` → `1.15.0` (other plugins unchanged). Track H, instruction fidelity: the end of a
+run stops being three prose-driven steps, stops asking the model to compute values a machine
+already holds, and gains a hook that seals a run the orchestrator forgot.
+
+**The version bump matters more than usual here.** `plugin_version` in `_telemetry.json` is read
+from this file, and it is what lets the compliance auditor tell a run on the new tail apart from one
+on the old. Shipping these three changes under `1.14.1` would have left both eras reporting the same
+string — and the re-measurement that decides Track H's remaining item reads exactly that field.
+
+### Added
+
+- **A `Stop` hook seals a run the orchestrator did not.** `plugins/sdlc/hooks/seal-run.sh` runs
+  `finish` when a run's phases are all complete and `.checkpoint/_sealed` is absent, so a forgotten
+  seal is repaired instead of lost. The gate is **completeness**, not recency — recency cannot tell a
+  paused run from a finished one — and it was chosen by measurement: over a 19-run corpus it opens
+  for 10 runs including the incident run that opened Track H, and stays shut for the three runs the
+  audit had named as the worst offenders. The clock comes from the run's newest `mtime` rather than
+  the wall clock, because a hook is late by construction and `now - anchor` would bill a run for the
+  time that passed after it finished. The hook exits 0 unconditionally: for `Stop`, exit code 2
+  blocks the agent from stopping, and a sealing net that can trap a user in a loop is worse than no
+  net. See ADR-0016.
+
+- **`sealed_by` in telemetry, and a `seal:stop-hook` line in `sdlc-lint compliance`.** The key
+  records which path sealed a run; the auditor reports the split **beside** the contract rates,
+  never inside them — the hook leaves no transcript trace, so folding it into a contract would let
+  the net flatter the very number it must not influence. The share reads `n/a` rather than `0%` when
+  nothing recorded a sealer, because a zero would assert the net never fired when the truth is that
+  nobody was looking.
+
 ### Changed
+
+- **The model no longer computes values a machine already holds.** `plugins/sdlc/MACHINE-VALUES.md`
+  is the contract, the audit and the lint's own input at once: a registry of `key: owner` lines read
+  by the new `sdlc-lint machine-values` verb, which fails when a registered key appears as the
+  subject of a computation in shipped prose. Six formulas and 21 machine-owned telemetry keys left
+  the orchestrator's prose. The case for a lint over firmer wording came from the audit itself — the
+  two definitions of `cache_hit_ratio` had already diverged, with no symptom, because the tool
+  overwrites whatever the model computed. See ADR-0015.
+
+- **The completeness rule ships with the plugin.** `loadCheckpoints` / `computeReentry` /
+  `resolveWorkspace` moved to `plugins/sdlc/tools/run/reentry.mjs`; `tools/sdlc-lint/lib/resume.mjs`
+  is now a re-export shim over it. `--resume` and the seal gate share one definition of "done"
+  instead of two that can drift, and the rule reaches a consumer's machine through
+  `${CLAUDE_PLUGIN_ROOT}`.
 
 - **The end of a run is one command instead of three.** Steps 5 and 5b used to mandate the run-clock
   arithmetic, `usage/cli.mjs enrich` and `report/cli.mjs report` as three separate prose-driven
