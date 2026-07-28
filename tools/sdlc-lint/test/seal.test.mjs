@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, utimesSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, utimesSync, existsSync, renameSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
@@ -213,4 +213,61 @@ test("`seal-stale --json` on a plans root with nothing to do exits 0 and seals n
   const out = JSON.parse(r.stdout.trim().split("\n").pop());
   assert.deepEqual(out.sealed, []);
   assert.equal(out.skipped[0].reason, "sealed");
+});
+
+const HOOK = resolve(REPO, "plugins/sdlc/hooks/seal-run.sh");
+const PLUGIN_ROOT = resolve(REPO, "plugins/sdlc");
+
+// Run the hook as Claude Code would: payload on stdin, CLAUDE_PROJECT_DIR in the env.
+function runHook(projectDir) {
+  return spawnSync("bash", [HOOK], {
+    input: JSON.stringify({ session_id: "s1", hook_event_name: "Stop", cwd: projectDir }),
+    env: { ...process.env, CLAUDE_PROJECT_DIR: projectDir, CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT },
+    encoding: "utf8",
+  });
+}
+
+// A project directory whose docs/plans is the given plans root.
+function makeProject(opts) {
+  const projectDir = mkdtempSync(join(tmpdir(), "proj-"));
+  mkdirSync(join(projectDir, "docs"), { recursive: true });
+  const { plansRoot, slug } = makePlans(opts);
+  renameSync(plansRoot, join(projectDir, "docs", "plans"));
+  return { projectDir, runDir: join(projectDir, "docs", "plans", slug), slug };
+}
+
+test("the hook is a silent no-op in a project with no docs/plans", () => {
+  const projectDir = mkdtempSync(join(tmpdir(), "proj-"));
+  const r = runHook(projectDir);
+  assert.equal(r.status, 0);
+  assert.equal(r.stdout.trim(), "", "a project that never ran a pipeline must see nothing");
+});
+
+test("the hook is a silent no-op when every run is already sealed", () => {
+  const { projectDir } = makeProject({ sealed: true });
+  const r = runHook(projectDir);
+  assert.equal(r.status, 0);
+  assert.equal(r.stdout.trim(), "");
+});
+
+test("the hook seals a finished run the orchestrator forgot, and says so", () => {
+  const { projectDir, runDir } = makeProject({ slug: "forgotten-run" });
+  const r = runHook(projectDir);
+
+  assert.equal(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout.trim());
+  assert.match(out.systemMessage, /sealed by Stop hook/);
+  assert.match(out.systemMessage, /forgotten-run/, "the message must name the run it sealed");
+
+  const t = JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8"));
+  assert.equal(t.sealed_by, "stop-hook");
+});
+
+test("the hook never exits 2 — for Stop that would block the agent from stopping", () => {
+  const { projectDir } = makeProject({ runJson: false });   // gate shut: unprovable
+  const r = runHook(projectDir);
+  assert.notEqual(r.status, 2,
+    "exit 2 on Stop means 'do not stop' and feeds stderr back as an instruction — a " +
+    "sealing net that can trap the user in a loop is worse than no net");
+  assert.equal(r.status, 0);
 });
