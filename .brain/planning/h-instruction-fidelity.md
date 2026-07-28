@@ -187,10 +187,58 @@ run of the auditor is the first evidence either way.
 
 ### H5 — Prompt surface reduction
 
-2453 lines is itself a compliance risk: adherence degrades with volume, and with the distance
-between where a rule is written and the moment it applies. Just-in-time loading of procedure
-fragments beats any amount of emphasis inside a monolith. Overlaps with Track E's cost goals — a
-smaller stable prefix is also cheaper — so measure both effects together.
+`SKILL.md` is itself a compliance risk, on two claims the original wording ran together and this
+revision separates — because they are different mechanisms with different evidence and different
+fixes:
+
+- **Volume.** Adherence degrades as the file grows. Plausible, and consistent with H1's spread, but
+  **untested**: no measurement here isolates size from complexity.
+- **Distance.** Adherence degrades with the gap between where a rule is written and the moment it
+  applies. Also untested, and *not* the same claim — a short file can still state a rule 400 lines
+  from its use.
+
+Just-in-time loading of procedure fragments addresses the second and only incidentally the first.
+
+#### The cost argument: compute it, do not benchmark it
+
+The original text said "measure both effects together" alongside Track E. Sizing that showed
+benchmarking the cost half is **futile**, and the arithmetic says so before a single run is spent.
+
+Measured on `native-chat-engine-s4-unread` (2026-07-28): the orchestrator main loop ran **47 turns**
+against **7,850,973** cached input tokens — an average prefix of ~167k per turn. `SKILL.md` at
+156,080 chars is roughly **39k tokens** (a `chars/4` estimate; no machine holds the real number),
+i.e. ~23% of that prefix, ~$1.27 of the run's $12.81, or **~10% of total run cost**. Across the
+corpus the orchestrator loop is 22–69% of run cost, median 43%.
+
+Now hold that against the noise floor already recorded in [[planning/backlog]]: run-to-run spread on
+total cache-read is **55.6–64.2%**, and anything below ~50% is unverifiable at n≈10. **Even deleting
+the file outright lands an order of magnitude under the detection bar.** An A/B here reproduces
+[[architecture/benchmark-e2-read-discipline]] — 20 runs to conclude −10.65% inside 64% noise.
+
+The correct instrument is arithmetic, not experiment. Unlike E2's, this mechanism is
+**deterministic**: a token removed from the stable prefix is not billed on every turn, so the saving
+is `removed_prefix_tokens × turns × 0.1 × input_price`, computable from one run's telemetry. Report
+that number; do not spend a campaign failing to detect it.
+
+#### The risk the item did not name
+
+JIT loading means the orchestrator must **read** a fragment mid-run. Every such read is a step that
+can be skipped — and H1's finding is precisely that compliance tracks how many separate things an
+instruction asks for. H5 therefore threatens to trade one monolith, present by construction, for N
+fragments each carrying its own chance of never being loaded. **It can lower compliance while
+lowering cost**, which would invert the track's purpose. Any design must say which fragments are
+load-bearing at what moment, and how a missed load is detected rather than silently tolerated.
+
+A hard boundary comes with it: [[decisions/ADR-0008-read-discipline-contract]] puts the read
+contract inside `=== STABLE PREFIX ===` deliberately, so it is served as a cache hit on every
+subagent turn. That content cannot move, and neither can anything else whose value is being present
+without being fetched.
+
+**DoD:** a fragment map naming what stays in the prefix and what loads on demand, each with the
+moment it applies; the deterministic cost saving computed rather than benchmarked; and a compliance
+re-measurement showing the rate did **not** fall — H5 is refuted, not merely unproven, if
+fragmentation costs more compliance than volume was costing. That last part shares the corpus H4
+waits on, so H5's *design* is unblocked while its *acceptance* is not.
 
 ### H6 — Hooks as the deterministic tail ✅
 
