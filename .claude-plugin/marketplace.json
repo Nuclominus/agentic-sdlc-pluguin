@@ -1,6 +1,6 @@
 {
   "name": "agentic-sdlc",
-  "version": "1.10.0",
+  "version": "1.11.0",
   "description": "AI-assisted SDLC pipelines for ANDROID development (Kotlin + Gradle) in Claude Code. Android Foundation is the centerpiece stack provider; framework plugins (Retrofit, Room, Dagger/Hilt, …) attach additively to the orchestrator-managed flow via the Stack Provider Pattern. The generic sdlc core owns the pipeline; providers register themselves via manifest.yaml profiles (kind: foundation | framework). Adapted from AratKruglik/claude-sdlc (MIT).",
   "owner": {
     "name": "Nuclominus",
