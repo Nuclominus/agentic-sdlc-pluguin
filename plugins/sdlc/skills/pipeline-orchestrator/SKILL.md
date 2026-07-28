@@ -2031,10 +2031,17 @@ unless the user passed `--no-report` or the effective profile sets `report: fals
       **phase** spend against `cost_cap_usd` and, on a breach, records `cap_breach_usd` and — only if
       the in-run gate had recorded `"within"` — rewrites `cap_status` to `"exceeded-undetected"`. It
       never overwrites `"exceeded-continued"` / `"exceeded-aborted"`: those verdicts had a user in the
-      loop. This is the last line of defense behind 3d-1b, for a run where the gate went blind
-      (`cap_gate_blind` phases) and finished over cap believing it was under. When the tool prints its
-      `WARN: phase spend exceeded the cost cap by $X` line, surface it in the final summary — a breach
-      the run only discovered after the fact is exactly the thing that must not stay quiet.
+      loop. When the tool prints its `WARN: phase spend exceeded the cost cap by $X` line, surface it
+      in the final summary — a breach the run only discovered after the fact is exactly the thing that
+      must not stay quiet.
+
+      `"exceeded-undetected"` has **two** causes, distinguished by whether any phase carries
+      `cap_gate_blind`. **With** blind phases: 3d-1b could not price them, they entered the gate as
+      `$0`, and the gate genuinely failed — investigate. **Without** any: the overage landed on the
+      run's LAST dispatch, where 3d-cap has nothing left to stop (point 3 requires a next dispatch),
+      or the recipe has a single phase and therefore no gate boundary at all. That second case is not
+      a malfunction — it is the shape of a pre-dispatch gate, and it usually means the recipe's cap is
+      sized below what one phase actually costs. Do not "fix" it by loosening the gate; fix the cap.
 1. If `command -v node` fails → print `HTML report: skipped (node unavailable)` and skip to the
    final summary.
 2. Else run via `Bash`: `node "${CLAUDE_PLUGIN_ROOT}/tools/report/cli.mjs" report {task_slug}`.

@@ -744,3 +744,15 @@ test("enrichTelemetry invents no cap fields when the recipe declared no cap", ()
   assert.equal(tel.cap_status, undefined);
   assert.equal(tel.cap_breach_usd, undefined);
 });
+
+test("a last-dispatch overage is reported but is NOT attributed to a blind gate", () => {
+  // The gate only acts when a next dispatch exists, so an overage on the final
+  // phase is unpreventable by construction — as is any single-phase recipe,
+  // which has no gate boundary at all. Still a breach worth reporting, but the
+  // absence of cap_gate_blind is what says "cap too small", not "gate broken".
+  const { runDir, sess } = capRun(0.01);
+  enrichTelemetry(runDir, { sessionTranscript: sess, registry: reg });
+  const tel = readTel(runDir);
+  assert.equal(tel.cap_status, "exceeded-undetected");
+  assert.ok(tel.phases.every((p) => !p.cap_gate_blind), "no phase was blind — the gate priced them all");
+});

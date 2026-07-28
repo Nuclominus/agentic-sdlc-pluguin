@@ -63,6 +63,13 @@ consumer (report, rollup, AAR metrics) reads that field as the breach signal.
    reconstruct. The comparison uses phase spend only: orchestration overhead is deliberately outside
    the gate, and folding it in would retroactively re-tighten every recipe's cap.
 
+   `"exceeded-undetected"` covers two cases, told apart by whether any phase carries
+   `cap_gate_blind`: a gate that genuinely went blind (blind phases present), or an overage that
+   landed on the run's **last dispatch**, where 3d-cap by construction has nothing left to stop —
+   including any single-phase recipe, which has no gate boundary at all. The second is not a
+   malfunction but a property of a pre-dispatch gate; it surfaces an undersized cap rather than a
+   broken one. Both are reported, because in both the run exceeded its cap and nobody was asked.
+
 `resolved: false` always pairs with `cost_usd: null`, never `0` — an unknown cost must not reach a
 gate as a measured zero. Pricing never fails the pipeline: a miss degrades to the pre-existing
 aggregate path plus a `WARN`, because a cost-accounting read must not be able to kill real work.

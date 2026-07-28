@@ -69,7 +69,7 @@ see `$0` for every phase and never fire (ADR-0011). Telemetry records `cost_cap_
 | `within` | cap set and never exceeded (or no cap declared) |
 | `exceeded-continued` | you approved continuing past the cap, or a self-heal loop was stopped by it |
 | `exceeded-aborted` | you aborted, or a headless run halted at the cap |
-| `exceeded-undetected` | the run went over cap **without the gate catching it** — a phase could not be priced in-run (`cap_gate_blind`) and counted as `$0`. Written after the fact by cost enrichment, alongside `cap_breach_usd` (phase spend minus cap) |
+| `exceeded-undetected` | the run went over cap **without the gate catching it**. Written after the fact by cost enrichment, alongside `cap_breach_usd` (phase spend minus cap). Two causes — if any phase carries `cap_gate_blind`, it could not be priced in-run and counted as `$0` (a real gate failure); if none does, the overage landed on the last dispatch, where the gate has nothing left to stop, which usually means the cap is sized below one phase's real cost |
 
 The cap gates **phase spend only**. Orchestration overhead (the orchestrator's own turns) is
 reported in `total_cost_usd` but never enters the comparison, so a run can legitimately show a total

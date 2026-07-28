@@ -565,13 +565,23 @@ export function enrichTelemetry(runDir, opts = {}) {
 }
 
 /**
- * Last line of defense for the cost cap. The in-run gate (orchestrator Step
- * 3d-cap) spends per-phase prices supplied by Step 3d-1b; when 3d-1b comes up
- * blind for a phase (transcript not resolvable, no node, unpriced model) that
- * phase enters the gate as $0 and the run can finish over cap still reporting
- * `cap_status: "within"` — precisely the failure that made this whole path
- * suspect. Enrichment holds the real per-phase prices, so it is the last place
- * the record can be corrected before anyone reads it.
+ * Last line of defense for the cost cap. A run can finish over cap while still
+ * reporting `cap_status: "within"` for TWO distinct reasons, and this function
+ * catches both:
+ *
+ *   a. **The gate went blind.** Step 3d-1b could not price a phase (transcript
+ *      unresolvable, no node, unpriced model), so it entered the gate as $0.
+ *      Those phases carry `cap_gate_blind: true`. This is a defect.
+ *   b. **The overage landed on the last dispatch.** Step 3d-cap only acts when a
+ *      next dispatch exists — there is nothing left to stop after the final
+ *      phase, and a single-phase recipe has no gate boundary at all. This is not
+ *      a defect; it is the shape of a pre-dispatch gate, and no amount of
+ *      pricing accuracy changes it.
+ *
+ * Read `cap_gate_blind` on the phases to tell them apart. Either way the run
+ * exceeded its cap and nobody was asked, which is what `cap_status` must not
+ * hide. Enrichment holds the real per-phase prices, so it is the last place the
+ * record can be corrected before anyone reads it.
  *
  * Compared against PHASE spend only, never `total_cost_usd`: orchestration
  * overhead is deliberately outside the gate (see Step 5), and folding it in here
