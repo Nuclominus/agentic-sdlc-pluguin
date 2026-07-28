@@ -30,9 +30,14 @@ if (cmd !== "report") {
     const direct = resolve(root, target);
     const dir = existsSync(join(direct, "_telemetry.json")) ? direct : join(root, "docs", "plans", target);
     try {
-      const { htmlPath } = renderReportFile(dir);
-      if (jsonOut) console.log(JSON.stringify({ command: "report", ok: true, html_path: htmlPath }));
+      const { htmlPath, cap_unverified } = renderReportFile(dir);
+      if (jsonOut) console.log(JSON.stringify({ command: "report", ok: true, html_path: htmlPath, cap_unverified }));
       else console.log(`report: wrote ${htmlPath}`);
+      if (cap_unverified) {
+        // Non-fatal: the report is still worth having. But a silently-skipped Step 5b
+        // enrichment must not reach the run log looking like a priced run.
+        console.error(`WARN: run is unpriced (cost_basis is not "transcript") — the cost cap gated nothing and the report says "unverified"; run \`usage/cli.mjs enrich\` for this run`);
+      }
     } catch (e) {
       if (jsonOut) console.log(JSON.stringify({ command: "report", ok: false, error: e.message }));
       else console.error(`✗ report: ${e.message}`);

@@ -5,7 +5,8 @@
 // it exercises the exact code that ships.
 export {
   loadRegistry, extractUsage, priceUsage, lookupPricing, priceTranscripts,
-  findAgentTranscript, sessionSubagentsDir, checkpointAgentId, deriveDispatchMap,
+  findAgentTranscript, sessionSubagentsDir, sessionOwnsRun, knownRunAgentIds,
+  checkpointAgentId, deriveDispatchMap,
   phaseCost, enrichTelemetry,
   claudeConfigDir,
   CACHE_PRESSURE_PEAK_TOKENS,
