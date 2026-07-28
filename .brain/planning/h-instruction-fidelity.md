@@ -261,7 +261,7 @@ the repo-root `sdlc-lint` today and so does not ship to the consumer running the
 clock must come from the run's newest mtime rather than `Date.now()`, or a late hook charges the run
 for the time the user spent chatting afterwards.
 
-**Shipped.** [[decisions/ADR-0016-the-tail-has-a-net]]. The gate turned out to be the whole design
+**Shipped.** [[decisions/ADR-0017-the-tail-has-a-net]]. The gate turned out to be the whole design
 question, and it is settled by measurement rather than by a timeout: completeness (every phase in
 the resolved DAG terminal) opens for 10 of the 19 corpus runs including the ADR-0012 incident run,
 and stays shut for the three H1 named as carrying most of the damage. Two things fell out of sizing

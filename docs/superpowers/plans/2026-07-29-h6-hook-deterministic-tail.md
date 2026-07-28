@@ -42,7 +42,7 @@
 | `plugins/sdlc/skills/pipeline-orchestrator/SKILL.md` | **modify** — one short Step 5b paragraph: the net exists, and it is not a substitute. |
 | `tools/sdlc-lint/test/seal.test.mjs` | **create** — gate, clock, staleness, fail-open, hook end-to-end. |
 | `tools/sdlc-lint/test/run.test.mjs` | **modify** — `sealed_by` and the marker round-trip through `finishRun`. |
-| `.brain/decisions/ADR-0016-the-tail-has-a-net.md` | **create** — the decision. |
+| `.brain/decisions/ADR-0017-the-tail-has-a-net.md` | **create** — the decision. |
 | `.brain/decisions/_moc-decisions.md` | **modify** — index the ADR (same commit). |
 | `.brain/planning/h-instruction-fidelity.md` | **modify** — mark H6 shipped, record measurements. |
 
@@ -1103,7 +1103,7 @@ EOF
 
 **Files:**
 - Modify: `plugins/sdlc/skills/pipeline-orchestrator/SKILL.md`
-- Create: `.brain/decisions/ADR-0016-the-tail-has-a-net.md`
+- Create: `.brain/decisions/ADR-0017-the-tail-has-a-net.md`
 - Modify: `.brain/decisions/_moc-decisions.md`
 - Modify: `.brain/planning/h-instruction-fidelity.md`
 - Modify: `.brain/planning/h6-hook-deterministic-tail.md` (frontmatter `status`)
@@ -1134,7 +1134,7 @@ Expected: `"ok":true`, and `all.test.mjs` still passes — several of its tests 
 
 - [ ] **Step 3: Write the ADR**
 
-Create `.brain/decisions/ADR-0016-the-tail-has-a-net.md`:
+Create `.brain/decisions/ADR-0017-the-tail-has-a-net.md`:
 
 ```markdown
 ---
@@ -1218,7 +1218,7 @@ definition of "done" rather than two that can drift.
 `.brain/decisions/_moc-decisions.md` is ordered newest first, so the new row goes at the **top** of the list. Insert it directly above the ADR-0015 line:
 
 ```markdown
-- [[decisions/ADR-0016-the-tail-has-a-net]]
+- [[decisions/ADR-0017-the-tail-has-a-net]]
 - [[decisions/ADR-0015-the-machine-value-invariant]]
 ```
 
@@ -1232,7 +1232,7 @@ In `.brain/planning/h-instruction-fidelity.md`:
 2. Append to that section, after the implementation-spec paragraph:
 
 ```markdown
-**Shipped.** [[decisions/ADR-0016-the-tail-has-a-net]]. The gate turned out to be the whole design
+**Shipped.** [[decisions/ADR-0017-the-tail-has-a-net]]. The gate turned out to be the whole design
 question, and it is settled by measurement rather than by a timeout: completeness (every phase in
 the resolved DAG terminal) opens for 10 of the 19 corpus runs including the ADR-0012 incident run,
 and stays shut for the three H1 named as carrying most of the damage. Two things fell out of sizing
@@ -1264,7 +1264,7 @@ Expected: 0 failing tests; `"command":"all","ok":true`; `check: clean`
 - [ ] **Step 9: Commit**
 
 ```bash
-git add plugins/sdlc/skills/pipeline-orchestrator/SKILL.md .brain/decisions/ADR-0016-the-tail-has-a-net.md .brain/decisions/_moc-decisions.md .brain/planning/h-instruction-fidelity.md .brain/planning/h6-hook-deterministic-tail.md
+git add plugins/sdlc/skills/pipeline-orchestrator/SKILL.md .brain/decisions/ADR-0017-the-tail-has-a-net.md .brain/decisions/_moc-decisions.md .brain/planning/h-instruction-fidelity.md .brain/planning/h6-hook-deterministic-tail.md
 git commit -F - <<'EOF'
 docs(brain): record ADR-0016 and mark H6 landed
 

@@ -63,7 +63,7 @@ assembling `_telemetry.json`, there is nothing to seal.
 
 ## Decisions & rationale
 
-- Implements [[decisions/ADR-0016-the-tail-has-a-net]].
+- Implements [[decisions/ADR-0017-the-tail-has-a-net]].
 - Calls the one idempotent command established by
   [[decisions/ADR-0014-the-run-tail-is-one-command]], which anticipated this hook.
 - Registers `sealed_by` under [[decisions/ADR-0015-the-machine-value-invariant]].

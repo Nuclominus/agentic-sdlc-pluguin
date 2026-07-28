@@ -2,9 +2,11 @@
 
 > One note per architecture decision. Newest first.
 
-- [[decisions/ADR-0016-the-tail-has-a-net]]
+- [[decisions/ADR-0017-the-tail-has-a-net]]
+- [[decisions/ADR-0016-amend-the-spec-and-the-plan-together]]
 - [[decisions/ADR-0015-the-machine-value-invariant]]
 - [[decisions/ADR-0014-the-run-tail-is-one-command]]
+- [[decisions/ADR-0013-agent-memory-mirrors-into-the-vault]]
 - [[decisions/ADR-0012-unpriced-runs-must-not-render-a-cap-verdict]]
 - [[decisions/ADR-0011-in-run-transcript-pricing-for-the-cost-cap]]
 - [[decisions/ADR-0010-self-healing-micro-loop]]
