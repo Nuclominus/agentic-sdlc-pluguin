@@ -4,6 +4,10 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+`sdlc` `1.14.0` → `1.14.1` (other plugins unchanged). Cost-record integrity: a run that nothing
+priced can no longer report a clean cap verdict, and worktree-isolated runs price their
+orchestration overhead against the right session.
+
 ### Fixed
 
 - **A run nobody priced reported its cost cap as `within`.** An observed Android run finished with
@@ -36,6 +40,25 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
   (ADR-0007), but the report header, the journal and every rollup read them. Enrichment now
   reconciles both against the anchor (120s tolerance) and warns, leaving `wall_clock_seconds`
   untouched.
+
+### Added
+
+- **`reindex` verb in `tools/brain-sync` (#96).** Two brain-sync follow-up PRs open at once both
+  append a row to `_moc-changes.md`, so merging `develop` into the second conflicts every time. The
+  index is machine-owned and must be regenerated rather than hand-merged — but the only
+  regenerating verb was `sync --backfill`, which rewrites every note from its PR and destroys the
+  enriched prose the vault rule requires. `reindex` rebuilds the index from the notes on disk and
+  touches nothing else; the second-brain rule now names the conflict and prescribes it.
+- **Track H — instruction fidelity, opened as the priority roadmap track (#93).** The four defects
+  above were all steps `SKILL.md` mandates and the orchestrator did not perform — `usage/cli.mjs`
+  appears zero times across that run's 42 `Bash` calls. The fixes make such misses loud, not
+  impossible, so Track H moves load-bearing steps out of prose entirely: a transcript compliance
+  auditor (H1, diagnostic and first), collapsing multi-step prose into single commands (H2), the
+  machine-value invariant (H3), deterministic control flow gated on H1's numbers (H4), prompt
+  surface reduction (H5) and a `Stop` hook sealing the run (H6). Spec in
+  `.brain/planning/h-instruction-fidelity.md`; H1 displaces E8 as the highest-ROI next step.
+  Includes a `roadmap/generate.mjs` fix — two hard-coded `[A-G]` track ranges silently dropped
+  every Track H card from the generated board.
 
 ## [1.11.1] — 2026-07-28
 
