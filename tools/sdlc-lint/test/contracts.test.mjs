@@ -53,3 +53,12 @@ test("the real orchestrator SKILL.md parses with zero errors", () => {
     join(REPO, "plugins/sdlc/skills/pipeline-orchestrator/SKILL.md"));
   assert.deepEqual(errors, []);
 });
+
+test("the orchestrator declares exactly the v1 contract set", () => {
+  const { contracts } = parseContracts(
+    join(REPO, "plugins/sdlc/skills/pipeline-orchestrator/SKILL.md"));
+  assert.deepEqual(contracts.map((c) => c.id).sort(), [
+    "2-4-anchor", "3d-1b-phase-cost", "5-clock",
+    "5b-0-enrich", "5b-2-report", "6-journal",
+  ]);
+});
