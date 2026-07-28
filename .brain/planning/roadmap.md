@@ -26,7 +26,7 @@ status: in-progress
 | G2 | contextual AAR lesson classification | planned  | — |
 | H1 | transcript compliance auditor (`sdlc-lint compliance`) | done | #101 |
 | H2 | collapse multi-step prose into single commands (`run/cli.mjs finish`) | done | #103 |
-| H3 | machine-value invariant + lint | planned | — |
+| H3 | machine-value invariant + lint (`sdlc-lint machine-values`) | done | #104 |
 | H4 | deterministic control flow (gated on H1) | planned | — |
 | H5 | prompt surface reduction / JIT procedure loading | planned | — |
 | H6 | `Stop` hook sealing the run (deterministic tail) | planned | — |
@@ -83,9 +83,11 @@ single-command steps score 87–100%, the one multi-step procedure (`5-clock`) s
 carrying the file's most emphatic prose. Compliance tracks how many separate things an instruction
 asks for, not how firmly it asks.
 
-**Highest-ROI next step: H2 (collapse multi-step prose into single commands)**, then H3 — the
-measurement points straight at them, and both are far cheaper than H4, which stays gated pending a
-re-measure once H2/H3 land and 10 runs carry `plugin_version`. This displaces
+**H2 and H3 both landed on 2026-07-29** (#103, #104) — the measurement pointed straight at them,
+and both were far cheaper than H4. **The next step on this track is therefore the re-measurement,
+not more building**: H4 stays gated until ~10 runs carry `plugin_version` on the new tail and
+`sdlc-lint compliance` runs again. Neither shipped item can be credited before then — H2's own
+contract still reports `n=0` and H3 adds no contract at all. This displaces
 the previously flagged **E8 (micro-task batching)**, which stays
 the top item on the cost track: a cost optimisation is worth less while the cost record itself is
 unreliable. The plan summary's other flagged item, G1 (self-healing), already shipped in #77 (see
