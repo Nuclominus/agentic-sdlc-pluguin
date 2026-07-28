@@ -517,6 +517,40 @@ If present — `Read` and parse it. Recognized top-level keys:
 | `convention_skills_extra` | array of strings | APPENDS to `convention_skills`. |
 | `frameworks` | object with optional `enable` / `disable` string arrays | Overrides additive framework activation (see 0b-frameworks). `enable` force-activates a framework whose `detect` did not match; `disable` suppresses an auto-detected one. Already applied when shaping `ADDITIVE_PROFILES`; listed here for completeness. |
 | `extensions` | object with a `skills` array | Per-agent skill mapping injected into phase prompts in Step 3b-1a. Parsed into `EFFECTIVE_PROFILE.extension_skills` (see 1b-ext). Additive — never replaces plugin behavior. |
+| `cost_caps` | object (recipe name → number \| `null`), optional `"*"` key | Per-recipe cost-cap override. Parsed into `EFFECTIVE_PROFILE.cost_caps` and applied in **1d-0**, the single place the cap is resolved. Lets a project retune a cap **without shadowing the whole recipe** (see 1b-caps). |
+
+##### 1b-caps. Parse `cost_caps` (project-local cap override)
+
+Without this key the only way to change a recipe's cap in one project is to shadow the entire
+recipe with a project-local copy under `.claude/sdlc-workflows/` (RESOLVER.md Step 1) — which
+forces the project to duplicate the phase list, `heal:` and `loop:` blocks to change one number,
+and then silently stops receiving upstream recipe updates. This key exists so retuning a cap costs
+one line.
+
+Shape:
+
+```yaml
+cost_caps:
+  "*": 5.00              # optional fallback — applies to any recipe with no exact entry
+  android-feature: 8.00  # exact recipe name always wins over "*"
+  hotfix: null           # explicit null = run this recipe uncapped in this project
+```
+
+Parse into `EFFECTIVE_PROFILE.cost_caps` (an object; absent key → `{}`). Validation is **graceful —
+never abort the pipeline**, matching every other key in this step:
+
+- Value is a number `>= 0` → accept.
+- Value is exactly `null` → accept, and it means **no cap** (not "cap of zero"). This is the only
+  way a project can opt a recipe out of a shipped cap, so it must survive parsing intact.
+- Any other value (string, negative number, nested object) → **drop that entry**, warn:
+  `WARN: cost_caps.{name} must be a number or null — ignored, using the recipe's own cap`.
+- A name that matches no known recipe is **not** an error and must not warn: recipes come from every
+  installed plugin plus the project, the set is open, and a project may legitimately carry entries
+  for recipes it does not use on this run.
+
+> **Do not apply the override here.** This step only parses. The cap is resolved in exactly one
+> place (1d-0) and read from `CONTEXT.cost_cap` everywhere else — that single-source property is
+> what makes the Step 3d-cap gate auditable, and an override applied in two places would break it.
 
 ##### 1b-ext. Parse `extensions.skills` (Project Extension Manifest)
 
@@ -577,6 +611,11 @@ skip_phases:
 
 convention_skills_extra:
   - acme:internal-api-style
+
+cost_caps:                             # retune a shipped cap WITHOUT copying the whole recipe
+  android-feature: 8.00                #   exact recipe name
+  # "*": 5.00                          #   fallback for any recipe with no exact entry
+  # hotfix: null                       #   explicit null = uncapped in this project
 ```
 
 After merging, store as `EFFECTIVE_PROFILE` and use it for the rest of the pipeline.
@@ -591,7 +630,11 @@ After merging, store as `EFFECTIVE_PROFILE` and use it for the rest of the pipel
    skip_phases: <list>
    convention_skills_extra: <list>
    extensions.skills: <N rule(s); M mandatory, K recommended>
+   cost_caps: <N override(s)>
 ```
+
+(The cap override's own effect on this run is announced separately in 1d-0, where it is resolved —
+this line only reports that the key was parsed.)
 
 If `sdlc.local.yaml` exists but parsing fails (invalid YAML, unknown top-level keys), print a warning and continue with the unmodified plugin profile:
 
@@ -675,16 +718,44 @@ before any workspace is created or any agent is dispatched.
 
 #### 1d-0. Resolve the cost cap (always — dry-run and real runs)
 
-Read `caps.max_total_cost_usd` from the **active workflow recipe** parsed in Step 1c
-(the recipe object validated against `schemas/workflow.schema.json`). Persist:
+Start from `caps.max_total_cost_usd` on the **active workflow recipe** parsed in Step 1c
+(the recipe object validated against `schemas/workflow.schema.json`), then apply the project's
+`cost_caps` override from 1b-caps, if any:
 
 ```
-CONTEXT.cost_cap = <recipe>.caps.max_total_cost_usd   # a number, or null when the recipe declares no cap
+CONTEXT.cost_cap = <recipe>.caps.max_total_cost_usd    # a number, or null when the recipe declares no cap
+
+CAPS = EFFECTIVE_PROFILE.cost_caps                     # from 1b-caps; {} when the project set none
+IF CAPS has own key {WORKFLOW_NAME}:                   # exact recipe name wins
+    CONTEXT.cost_cap = CAPS[{WORKFLOW_NAME}]           # a number, or null meaning "uncapped here"
+ELSE IF CAPS has own key "*":
+    CONTEXT.cost_cap = CAPS["*"]
+CONTEXT.cost_cap_source = "recipe" | "project:{WORKFLOW_NAME}" | "project:*"
+```
+
+Use an **own-key** test, not a truthiness test: `cost_caps: {hotfix: null}` is a deliberate
+"uncapped in this project" and must override a shipped cap, whereas a missing key must not. A
+`null` here is indistinguishable in effect from a recipe that declares no cap — both leave the
+pipeline unbounded — but it must be reachable, or a project can only ever tighten, never loosen.
+
+An override REPLACES the recipe's number; it is never combined with it (no min/max). A project that
+writes `8.00` gets exactly `8.00`, whether the recipe shipped `4.25` or `16.50` — a "safest of the
+two" rule would silently ignore half of what the project asked for.
+
+🚨 **MUST PRINT VERBATIM** when `CONTEXT.cost_cap_source` is not `"recipe"`:
+
+```
+🔧 Cost cap overridden by .claude/sdlc.local.yaml: {CONTEXT.cost_cap or "none (uncapped)"} (was {recipe cap or "none"}) — via {cost_cap_source}
 ```
 
 Both `--dry-run` (below) and the real-run gate (Step 3d-cap) read `CONTEXT.cost_cap`
-from here — the cap is never restated elsewhere. If no cap is set, downstream logic
-treats cost as unbounded (never pauses/aborts on cost).
+from here — the cap is never restated elsewhere. If the resolved cap is `null`, downstream logic
+treats cost as unbounded (never pauses/aborts on cost); Step 5b(d)'s post-hoc reconciliation is
+likewise skipped, since there is no cap to reconcile against.
+
+Record the resolved value in `_telemetry.json` as `cost_cap_usd` (Step 5) exactly as resolved here —
+telemetry must report the cap the run was actually gated on, not the recipe's shipped default, or a
+reader comparing spend against a cap will compare against a number that never applied.
 
 #### 1d-1. Dry-run preview (only if `$ARGUMENTS` contains `--dry-run`)
 
@@ -1936,7 +2007,7 @@ ADR-0005):
   rewrites it to `"exceeded-undetected"` automatically. If you are reading a run where the two
   disagree, check the difference is overhead before believing it.
 - `cache_hit_ratio` = `total_cached_input_tokens / max(total_input_tokens, 1)` rounded to 2 decimals — **but set it to `null`** when no phase reported a real cached subset (e.g. every phase was `subagent_aggregate` or `estimated`), since a 0 there would falsely read as "zero cache hits" rather than "unknown".
-- `cost_cap_usd` = `CONTEXT.cost_cap` (the active workflow recipe's `caps.max_total_cost_usd`), or `null` when the recipe declared no cap.
+- `cost_cap_usd` = `CONTEXT.cost_cap` **as resolved in 1d-0** — the active workflow recipe's `caps.max_total_cost_usd`, or the project's `cost_caps` override where one applied, or `null` when neither set a cap. Always the cap the run was actually gated on, never the recipe's shipped default: a reader comparing `total_cost_usd` against a cap that never applied would draw the wrong conclusion in both directions. When the value came from a project override, also set `cost_cap_source` to `"project:{workflow}"` or `"project:*"` (omit the key, or set `"recipe"`, otherwise) so a cross-run rollup can tell a retuned project apart from a breach of the shipped default.
 - `cap_status` = `CONTEXT.cap_status` from the Step 3d-cap gate: `"within"` (cap set and never exceeded, or no cap), `"exceeded-continued"` (user approved continuing past the cap, OR a heal attempt was stopped by the cap — see 3d-cap point 3), or `"exceeded-aborted"` (user aborted, or headless abort). A fourth value, `"exceeded-undetected"`, is written **not by you but by the enrich tool** at Step 5b(d): phase spend was over cap but the in-run gate never saw it (a `cap_gate_blind` phase priced as $0). Never write it yourself, and never "correct" it back to `"within"` — it means the gate failed, and a run that hides that is how a $0.75 cap absorbed $3.37 of spend. It travels with `cap_breach_usd` (phase spend minus cap, USD). All three `exceeded-*` values read as a breach to every consumer (report, rollup, AAR metrics). When the run was cost-aborted, also set `aborted_at_phase` to the phase that was about to run. `aborted_at_phase` is not exclusively a cost-cap field — a headless run that hits the development planning gate with no approver present (3b-special's Approval gate, step 4) sets it the same way, for the same reason: partial telemetry must still name where the run stopped even when the abort was not cost-driven.
 - `resumed` = `true` when this run entered via `--resume` (else omit or `false`).
 - `resumed_at` = ISO timestamp of the resume entry (only when `resumed`).
