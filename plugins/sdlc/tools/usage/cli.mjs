@@ -81,6 +81,12 @@ if (cmd === "phase-cost") {
         console.log(`enrich: ${r.telPath}`);
         console.log(`  enriched: ${r.enriched.join(", ") || "(none)"}`);
         if (r.skipped.length) console.log(`  skipped (no transcript): ${r.skipped.join(", ")}`);
+        if (r.timestamps_corrected) {
+          const d = r.timestamps_corrected;
+          console.error(`WARN: started_at was ${d.from} but the machine anchor says ${d.to}` +
+            (d.drift_seconds != null ? ` (off by ${d.drift_seconds}s)` : "") +
+            ` — corrected; Step 5 did not derive the ISO stamps from .checkpoint/_started_at`);
+        }
         if (r.session_mismatch) {
           console.error(`WARN: --session does not belong to this run (none of its agents are in that session) — ignored it and recovered the session from the phase transcripts`);
         }

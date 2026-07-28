@@ -24,6 +24,18 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
   wrong. Session lookup is now anchored on a dispatched `agent_id`, and `enrichTelemetry` discards
   a `--session` that holds none of the run's agents (`session_mismatch` + self-recovery from the
   phase transcripts).
+- **The report under-reported QA iterations.** The KPI keyed on a phase literally named `qa`, but
+  the loop belongs to whichever phase a recipe puts it in — `android-feature` runs it as `test`. A
+  run that spent 2 iterations rendered `0 QA iteration(s)` while `aar/metrics.mjs`, which sums,
+  reported 2 off the same telemetry. Now summed across phases, with one Signals line per phase that
+  actually ran a loop.
+- **Run timestamps were model-authored and wrong.** Step 5 asks for `started_at` / `completed_at`
+  rendered from the `.checkpoint/_started_at` epoch via `date -u -r`; an observed run instead wrote
+  its local EEST clock stamped `Z` — 3h20m off the anchor — and derived `completed_at` from it, so
+  the record was internally consistent and externally false. Pricing already ignored these strings
+  (ADR-0007), but the report header, the journal and every rollup read them. Enrichment now
+  reconciles both against the anchor (120s tolerance) and warns, leaving `wall_clock_seconds`
+  untouched.
 
 ## [1.11.1] — 2026-07-28
 

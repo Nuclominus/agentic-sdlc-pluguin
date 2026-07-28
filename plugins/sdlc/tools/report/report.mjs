@@ -268,8 +268,15 @@ function headerSection(t) {
     meta.push(`<span>${esc(clockOf(t.started_at) || "?")} → ${esc(clockOf(t.completed_at) || "?")}</span>`);
   }
   if (t.wall_clock_seconds != null) meta.push(`<span>wall clock <b>${esc(fmtDur(t.wall_clock_seconds))}</b></span>`);
-  const qa = phases.find((p) => p.phase === "qa");
-  if (qa && qa.qa_iterations_used != null) meta.push(`<span>${fmtInt(qa.qa_iterations_used)} QA iteration(s)</span>`);
+  // Summed across phases, not read off a phase literally named "qa": the QA loop belongs to
+  // whichever phase a recipe put it in (`android-feature` runs it as `test`), so keying on the
+  // name under-reports every recipe that names it differently — a run with 2 iterations in `test`
+  // rendered "0 QA iteration(s)" while aar/metrics.mjs, which sums, reported 2 off the same file.
+  const qaPhases = phases.filter((p) => p.qa_status || p.qa_iterations_used != null);
+  if (qaPhases.some((p) => p.qa_iterations_used != null)) {
+    const iters = qaPhases.reduce((s, p) => s + (Number(p.qa_iterations_used) || 0), 0);
+    meta.push(`<span>${fmtInt(iters)} QA iteration(s)</span>`);
+  }
   const healTotal = phases.reduce((s, p) => s + (Number(p.heal_attempts_used) || 0), 0);
   if (healTotal > 0) meta.push(`<span>${fmtInt(healTotal)} heal attempt(s)</span>`);
   if (t.model_enforcement_corrections != null) meta.push(`<span>${fmtInt(t.model_enforcement_corrections)} model corrections</span>`);
@@ -500,9 +507,12 @@ function economicsRow(t) {
 
 function signalsSection(t) {
   const items = [];
-  const qa = (t.phases || []).find((p) => p.phase === "qa");
-  if (qa && (qa.qa_status || qa.qa_iterations_used != null)) {
-    items.push(`QA: ${esc(qa.qa_status || "—")} (${fmtInt(qa.qa_iterations_used)} iteration(s))`);
+  // One line per phase that actually ran a QA loop, named when there is more than one — the
+  // iterations are a property of the phase that spent them, not of the phase called "qa".
+  const qaPhases = (t.phases || []).filter((p) => p.qa_status || p.qa_iterations_used != null);
+  for (const p of qaPhases) {
+    const label = qaPhases.length > 1 ? `QA · ${esc(p.phase)}` : "QA";
+    items.push(`${label}: ${esc(p.qa_status || "—")} (${fmtInt(p.qa_iterations_used)} iteration(s))`);
   }
   for (const s of t.skip_rules_applied || []) {
     items.push(`Skipped <b>${esc(s.phase_skipped)}</b> — ${esc(s.rule)}`);

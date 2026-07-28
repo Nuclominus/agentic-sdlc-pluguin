@@ -238,6 +238,30 @@ test("an ordinary recipe cap carries no override label", () => {
   assert.doesNotMatch(html, /project override/);
 });
 
+// The QA loop belongs to whichever phase the recipe put it in — `android-feature` runs it as
+// `test`, not `qa`. Keying the KPI on the name reported 0 iterations for a run that spent 2.
+test("QA iterations are summed across phases, not read off a phase named 'qa'", () => {
+  const t = JSON.parse(JSON.stringify(tel));
+  const qa = t.phases.find((p) => p.phase === "qa");
+  qa.phase = "test";                    // same loop, recipe-specific phase name
+  const html = renderReport(t);
+  assert.match(html, /2 QA iteration\(s\)/);
+  assert.doesNotMatch(html, /0 QA iteration\(s\)/);
+  assert.match(html, /QA:\s*completed \(2 iteration\(s\)\)/);
+});
+
+test("two phases running QA loops are listed separately and summed in the hero", () => {
+  const t = JSON.parse(JSON.stringify(tel));
+  const qa = t.phases.find((p) => p.phase === "qa");
+  qa.qa_iterations_used = 2;
+  t.phases.push({ phase: "qa", agent: "x-qa", status: "completed", qa_status: "completed", qa_iterations_used: 1 });
+  qa.phase = "test";
+  const html = renderReport(t);
+  assert.match(html, /3 QA iteration\(s\)/);          // hero: summed
+  assert.match(html, /QA · test:\s*completed \(2 iteration\(s\)\)/);
+  assert.match(html, /QA · qa:\s*completed \(1 iteration\(s\)\)/);
+});
+
 // A run whose Step 5b enrichment never fired keeps the in-run gate's provisional
 // `cap_status: "within"` beside a null cost. Rendering that as a verdict is how a
 // $16.50 cap "held" on a run nothing ever priced — the report must refuse to.

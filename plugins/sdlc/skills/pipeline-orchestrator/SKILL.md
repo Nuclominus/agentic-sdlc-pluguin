@@ -1981,6 +1981,11 @@ Compute the timing from the real clock captured in Step 2 (via `Bash`):
   started before this was wired), set `completed_at` to now, estimate `started_at` / `wall_clock_seconds`
   as before, and DO NOT fail. This keeps `report.mjs` / `rollup.mjs` / `aar/metrics.mjs` timing real
   whenever the anchor exists.
+- Do **not** hand-transcribe these from your own sense of the time. Read the anchor and run the
+  `date` command. An observed run wrote its **local** clock stamped `Z` — 3h20m off the anchor — and
+  derived `completed_at` from it, so the record was internally consistent and externally false.
+  Step 5b now reconciles both strings against the anchor and WARNs when they disagree by more than
+  120s; that is a repair of your output, not a substitute for doing it right.
 
 Compute aggregates from `phases[]` (these are the **live/fallback** values; Step 5b's transcript
 enrichment overwrites `total_cost_usd`, the `total_*` token aggregates, `cache_hit_ratio`, and adds
@@ -2157,6 +2162,12 @@ unless the user passed `--no-report` or the effective profile sets `report: fals
       or the recipe has a single phase and therefore no gate boundary at all. That second case is not
       a malfunction — it is the shape of a pre-dispatch gate, and it usually means the recipe's cap is
       sized below what one phase actually costs. Do not "fix" it by loosening the gate; fix the cap.
+   e. **Run-window reconciliation (automatic).** The tool also compares `started_at` against the
+      machine anchor `.checkpoint/_started_at` and rewrites `started_at` / `completed_at` when they
+      drift more than 120s apart (`wall_clock_seconds`, the anchor's own arithmetic, is left as-is).
+      Surface its `WARN: started_at was … but the machine anchor says …` line: it means Step 5's
+      timing instructions were not followed, and the report header, the Step 6 journal entry and
+      every cross-run rollup were about to read a fabricated clock.
 1. If `command -v node` fails → print `HTML report: skipped (node unavailable)` and skip to the
    final summary.
 2. Else run via `Bash`: `node "${CLAUDE_PLUGIN_ROOT}/tools/report/cli.mjs" report {task_slug}`.

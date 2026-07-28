@@ -614,6 +614,37 @@ test("enrichTelemetry prices overhead from the checkpoint epoch anchor when tele
   assert.ok(oh.cost_usd > 0);
 });
 
+// Pricing already ignores the model-authored ISO strings (ADR-0007), but the report header,
+// the journal and every rollup read them — so enrichment corrects them too. An observed run
+// recorded 14:24:17Z against an 11:04:17Z anchor: the local clock stamped `Z`, plus drift.
+test("enrichTelemetry corrects started_at/completed_at against the machine anchor", () => {
+  const { runDir, projectsRoot } = buildAnchorRun();
+  const r = enrichTelemetry(runDir, { registry: reg, projectsRoot });
+  const tel = JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8"));
+  assert.equal(tel.started_at, "2026-07-07T13:28:00.000Z");
+  assert.equal(tel.completed_at, "2026-07-07T14:18:00.000Z");   // anchor + wall_clock_seconds
+  assert.equal(tel.wall_clock_seconds, 3000, "the duration is the anchor's own arithmetic — untouched");
+  assert.equal(r.timestamps_corrected.from, "2026-07-07T01:00:00Z");
+  assert.equal(r.timestamps_corrected.drift_seconds, -44880);
+});
+
+test("enrichTelemetry leaves a correctly-derived window alone", () => {
+  const { runDir, projectsRoot } = buildAnchorRun({ telWindow: ["2026-07-07T13:28:00Z", "2026-07-07T14:18:00Z"] });
+  const r = enrichTelemetry(runDir, { registry: reg, projectsRoot });
+  const tel = JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8"));
+  assert.equal(r.timestamps_corrected, null);
+  assert.equal(tel.started_at, "2026-07-07T13:28:00Z", "not even reformatted");
+  assert.equal(tel.completed_at, "2026-07-07T14:18:00Z");
+});
+
+test("enrichTelemetry does not invent a window when there is no anchor to check against", () => {
+  const { runDir, projectsRoot } = buildAnchorRun({ withAnchor: false });
+  const r = enrichTelemetry(runDir, { registry: reg, projectsRoot });
+  const tel = JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8"));
+  assert.equal(r.timestamps_corrected, null);
+  assert.equal(tel.started_at, "2026-07-07T01:00:00Z");
+});
+
 test("enrichTelemetry falls back to the full transcript and flags it when the window excludes every main-loop turn", () => {
   // No authoritative anchor + a bogus telemetry window => the window would zero the
   // overhead. The tool must fall back to the unbounded transcript and signal it.

@@ -591,6 +591,10 @@ export function enrichTelemetry(runDir, opts = {}) {
     tel.orchestration_overhead = overhead;
   }
 
+  // Correct the run window against the machine anchor. Done AFTER overhead pricing, which
+  // reads the anchor directly and is unaffected either way.
+  const timestampsCorrected = reconcileRunWindow(tel, machineRunWindow(runDir, tel));
+
   // Totals.
   const sum = (key) => enrichedPhaseSum(phases, key);
   tel.total_input_tokens = sum("input_tokens");
@@ -607,7 +611,7 @@ export function enrichTelemetry(runDir, opts = {}) {
   writeFileSync(telPath, JSON.stringify(tel, null, 2) + "\n");
   return { telPath, enriched, skipped, total_cost_usd: tel.total_cost_usd,
     overhead_cost_usd: overhead ? overhead.cost_usd : null, overhead_window_fallback: overheadWindowFallback,
-    session_mismatch: sessionMismatch,
+    session_mismatch: sessionMismatch, timestamps_corrected: timestampsCorrected,
     cap_breach_usd: tel.cap_breach_usd ?? null, cap_status: tel.cap_status ?? null };
 }
 
@@ -656,7 +660,16 @@ function reconcileCapStatus(tel, phaseCostSum) {
  * to move the window off the real turns and zero the overhead (ADR-0007).
  */
 function overheadWindow(runDir, tel) {
-  let since = tel.started_at, until = tel.completed_at;
+  const { since, until } = machineRunWindow(runDir, tel);
+  return { since, until };
+}
+
+/**
+ * The run's wall-clock window, preferring the machine anchor over the model's prose.
+ * Returns `anchored: true` only when `.checkpoint/_started_at` was readable.
+ */
+function machineRunWindow(runDir, tel) {
+  let since = tel.started_at, until = tel.completed_at, anchored = false;
   try {
     const ep = Number(readFileSync(join(runDir, ".checkpoint", "_started_at"), "utf8").trim());
     if (Number.isFinite(ep) && ep > 0) {
@@ -664,9 +677,38 @@ function overheadWindow(runDir, tel) {
       since = new Date(startMs).toISOString();
       const wall = num(tel.wall_clock_seconds);
       until = wall > 0 ? new Date(startMs + wall * 1000).toISOString() : tel.completed_at;
+      anchored = true;
     }
   } catch { /* no readable anchor — keep the telemetry ISO window */ }
-  return { since, until };
+  return { since, until, anchored };
+}
+
+// A drift below this is rounding; above it the ISO strings were not derived from the anchor.
+const RUN_WINDOW_TOLERANCE_MS = 120_000;
+
+/**
+ * Correct `started_at` / `completed_at` against the machine anchor.
+ *
+ * Step 5 tells the orchestrator to render both from `.checkpoint/_started_at` via `date -u -r`.
+ * When it instead transcribes them by hand the result is confidently wrong: an observed run
+ * recorded `started_at: "2026-07-28T14:24:17Z"` against an anchor of `11:04:17Z` — the local
+ * EEST clock stamped `Z`, plus 20 minutes of drift — and derived `completed_at` from it, so the
+ * record was internally consistent and externally false. Pricing already ignores these strings
+ * (ADR-0007), but the report header, the journal and every cross-run rollup read them.
+ *
+ * Only the ISO strings are rewritten. `wall_clock_seconds` is the anchor's own arithmetic
+ * (`end - start`) and is left alone; correcting the start while preserving the duration keeps
+ * the two consistent.
+ */
+function reconcileRunWindow(tel, win) {
+  if (!win.anchored || !win.since) return null;
+  const stated = Date.parse(tel.started_at);
+  const anchor = Date.parse(win.since);
+  if (Number.isFinite(stated) && Math.abs(stated - anchor) <= RUN_WINDOW_TOLERANCE_MS) return null;
+  const from = tel.started_at ?? null;
+  tel.started_at = win.since;
+  if (win.until) tel.completed_at = win.until;
+  return { from, to: win.since, drift_seconds: Number.isFinite(stated) ? Math.round((stated - anchor) / 1000) : null };
 }
 
 function priceMainLoop(sessionTranscriptPath, registry, window = {}) {
