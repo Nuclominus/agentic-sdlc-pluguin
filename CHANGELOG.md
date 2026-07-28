@@ -4,11 +4,125 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
-`sdlc` → `1.10.1`. Design in ADR-0009.
+_Nothing yet._
+
+## [1.11.1] — 2026-07-28
+
+`sdlc` `1.13.0` → `1.14.0` (other plugins unchanged). Point-fix closing the cost-cap work from
+1.11.0.
 
 ### Fixed
 
-- **Orchestrator read the wrong plugin tree, ignoring `CLAUDE_CONFIG_DIR` (#70).** Plugin
+- **`--dry-run` cost preview under-reported by 6–10× (#88).** Step 1d-1 modelled a phase as a
+  *single API call* — 35k input, 60% cached, 3k output, pricing an `opus` row at `$0.16`. A phase
+  is a multi-turn agent loop, and every turn re-reads its whole accumulated prefix. Measured
+  across 56 transcript-priced phases from 10 real runs, the true shape is close to the inverse of
+  the assumption: uncached input is negligible (24–194 tokens) while **cache reads dominate the
+  bill** (670k–820k per phase) and were not modelled at all — real medians `$0.95` opus / `$0.38`
+  sonnet / `$0.15` haiku. The estimate was wrong in *shape*, not scale, which is why caps sized
+  from it sat below their own median run and breached the moment the gate began working (#82).
+  New `estimation_baselines` block in `config/models.json`, rewritten Step 1d-1 estimation, and a
+  recalibrated `development` phase multiplier.
+
+## [1.11.0] — 2026-07-28
+
+`sdlc` `1.11.0` → `1.13.0`, `android-foundation` `1.5.0` → `1.6.0`. Makes the cost cap actually
+fire, and introduces the stable `@release` install channel.
+
+### Fixed
+
+- **The cost cap had never been able to fire (#82).** `caps.max_total_cost_usd` (Step 3d-cap) was
+  not a blind spot in an edge case — it was dead code on every run. Its only input was Step 3d-1's
+  pricing of the **Agent result envelope**, which on this harness exposes a single aggregate
+  `subagent_tokens` count with no input/output/cache split (ADR-0004). A phase cannot be priced
+  from that, so 3d-1 correctly wrote `cost_usd: null` — and 3d-cap counted a `null`-priced phase
+  as `$0`. Every phase contributed `$0`, `running_cost_usd` stayed at `0` for the whole run, and
+  `running_cost_usd > cost_cap` was unreachable at any cap value. Found on the Android run
+  `flutter-to-native-migration-plan`: cap `$0.75`, actual phase spend `$3.37`, no pause,
+  `cap_status: "within"` written into telemetry — while phase 1's transcript, already on disk and
+  unread, priced at `$2.97` on its own. Phases are now priced in-run from their transcript
+  (`phaseCost()` / `cli.mjs phase-cost`, Step 3d-1b), with a Step 5b(d) reconciliation, new
+  `cap_gate_blind` / `cap_breach_usd` fields and an `"exceeded-undetected"` status.
+- **Every shipped recipe cap re-sized against measured cost.** The caps had been derived from the
+  dry-run heuristic, so once the gate worked they self-breached; all 8 `sdlc` recipes and the 3
+  `android-foundation` recipes were re-sized against real spend, and a last-dispatch overage is no
+  longer blamed on the gate.
+
+### Added
+
+- **Per-project cost-cap override (#86).** An optional `cost_caps` key in
+  `<project>/.claude/sdlc.local.yaml` retunes — or switches off — a shipped recipe's cap without
+  shadowing the whole recipe: an exact recipe name wins over a `"*"` fallback, and an explicit
+  `null` means uncapped in that project. Parsed in Step 1b, applied in Step 1d-0, recorded as
+  `cost_cap_source` in telemetry and labelled in the HTML report.
+- **Stable `@release` install channel (#78).** A `release` branch (cut from `develop` at `c1e3ac1`)
+  now backs `/plugin marketplace add Nuclominus/Agentic-SDLC-Pluguin@release`. A marketplace added
+  with a branch ref keeps updating from that ref, so `@release` only moves when a release is
+  deliberately cut, while a plain `develop` install still tracks every merge. Documented in the
+  README quickstart and `docs/INSTALLATION.md`.
+- **`/release` maintainer command.** Repo-local (`.claude/commands/release.md`, deliberately not
+  shipped in any plugin): preflight divergence/nothing-to-ship guards, a `chore(release): vX.Y.Z`
+  bump on `develop` via a temp worktree, fast-forward of `release`, and the tag — never
+  force-pushing. Includes a warn-only gate for plugins whose content changed since the last
+  release without a `plugin.json` version bump.
+
+## [1.10.0] — 2026-07-27
+
+`sdlc` `1.9.1` → `1.11.0`, `android-foundation` `1.4.0` → `1.5.0`, plus three new framework
+providers at `1.0.0`. The G1 self-healing micro-loops (ADR-0010), the E2 read-discipline contract
+(ADR-0008) and its benchmark harness, the last C2 framework providers, and the plugin-path fix
+(ADR-0009).
+
+### Added
+
+- **G1 — self-healing compiler/lint micro-loops (#77, ADR-0010).** After any guarded phase the
+  orchestrator runs the active profile's compile/lint `heal_checks`; on failure it re-dispatches
+  that phase's own agent with the tool output (max `heal.max_attempts`, default 2) instead of
+  letting broken code ride to the end of the pipeline or leak into review rounds. A `heal:`
+  workflow primitive keyed on **exit codes** (sibling of `loop:`, keyed on prose verdicts); step
+  3b-0 snapshots the pre-dispatch tree so step 3e-heal can classify failures whose diagnostics all
+  name files outside the phase's touched set as `pre-existing` at zero attempt cost; checkpoint
+  fields `heal_attempts_used` / `heal_status` (`healed | exhausted | skipped | pre-existing`) flow
+  into AAR metrics, the cross-run rollup and the HTML report. Android recipes guard
+  `development` / `qa` with compile-only checks. Validated by 8 live pipeline runs.
+- **Read-discipline contract + `sdlc-lint` guard (#68, ADR-0008).** Track E targets the pipeline's
+  dominant cost — prompt-cache reads, measured at **6.65M tokens across 117 subagent turns** on a
+  real 7-phase run (~27% fixed floor, ~73% accumulated context peaking at 101k). An audit of the
+  five agent contracts that touch the file system found the guidance contradicting itself, so the
+  contract moved into the orchestrator's `=== STABLE PREFIX ===` (served as a cache hit on every
+  subagent turn, inherited by every future agent) and four agent contracts now defer to it rather
+  than restating it. It draws one explicit line: reading from disk instead of trusting stale
+  prompt state is *kept* (correctness); re-reading the same lines, or pulling a whole file where a
+  narrower read would do, is *forbidden* (pure cost). Verification switched to targeted `grep`.
+- **E2 benchmark harness (#69) and its campaign report (#75).** `bench/` is a two-arm A/B rig —
+  `prepare.mjs` (disposable Kotlin/JVM specimen + provenance recorded *before* the run),
+  `harvest.mjs` (archives first, then validates, so a failed run's evidence survives) and
+  `compare.mjs` (medians, ranges, an engineering verdict). Three load-bearing constraints: no
+  p-values ever, strict arm alternation, provenance recorded before the run. `bench/report/e2.html`
+  is a self-contained bilingual (EN/УКР) visual twin of `bench/RESULTS.md`, rebuilt by `build.mjs`
+  from the raw results so it cannot silently drift. The campaign itself was a **null result** —
+  −10.65% inside a 55.6–64.2% within-arm spread — with the real yield being #70 and a `compare.mjs`
+  defect.
+- **C2 framework providers complete (#64).** Three additive providers — `koin-plugin` (`di`),
+  `ktor-plugin` (`network`) and `datastore-proto-plugin` (`persistence`) — each `kind: framework`,
+  shipping no agents, injecting only the `development` + `security` phases plus a conventions skill
+  and an R8/ProGuard snippet, activating only when their dependency is detected.
+  `kotlinx.serialization` was deliberately deferred: the aspect taxonomy has no `serialization`
+  category yet.
+- **Read-only roadmap board (#62).** `roadmap/generate.mjs` renders `roadmap/index.html` from the
+  vault roadmap table, which stays the single source of truth; the generator rewrites only the
+  SEED block, so curated card prose and priority flags survive every regeneration. The vault
+  absorbed the Roadmap Development Plan, seeding tracks E6–E8, F1–F2 and G1–G2.
+- **`sdlc-lint plugin-paths` drift guard.** Scans all shipped plugin text for home-anchored
+  `.claude` paths in every spelling (`~`, `$HOME`, `${HOME}`), allowing only
+  `${CLAUDE_CONFIG_DIR:-…}` (where a custom config dir still wins) plus an inline escape-hatch
+  marker that requires a stated reason; also asserts the orchestrator still references the path
+  contract. Wired into `sdlc-lint all` (`143/143 clean`) and CI. Same shape as the ADR-0008
+  `read-discipline` guard.
+
+### Fixed
+
+- **Orchestrator read the wrong plugin tree, ignoring `CLAUDE_CONFIG_DIR` (#70, ADR-0009).** Plugin
   discovery globbed a literal `~/.claude/plugins/cache/**` — 27 occurrences across 10 shipped
   files, covering foundation detection, workflow recipe lookup, the model registry (tiers *and*
   pricing), runtime-dependency declarations, skill-path fallbacks and the deps-preflight stamp.
@@ -30,14 +144,21 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
   transcript root, giving transcript-derived cost the same defect in code. New exported
   `claudeConfigDir()` resolves `CLAUDE_CONFIG_DIR` → `CLAUDE_PLUGIN_ROOT` → `$HOME`.
 
-### Added
+### Changed
 
-- **`sdlc-lint plugin-paths` drift guard.** Scans all shipped plugin text for home-anchored
-  `.claude` paths in every spelling (`~`, `$HOME`, `${HOME}`), allowing only
-  `${CLAUDE_CONFIG_DIR:-…}` (where a custom config dir still wins) plus an inline escape-hatch
-  marker that requires a stated reason; also asserts the orchestrator still references the path
-  contract. Wired into `sdlc-lint all` (`143/143 clean`) and CI. Same shape as the ADR-0008
-  `read-discipline` guard.
+- **HTML run-report restyled from the design mock (#60).** Presentation only — the renderer at
+  `plugins/sdlc/tools/report/report.mjs` stays dependency-free and the shipped SSOT, with
+  `tools/sdlc-lint/lib/report.mjs` re-exporting it so tests exercise the exact shipped code.
+- **README slimmed to a front door (#58, #66).** 618 lines down to ~115 — quickstart, a
+  documentation index, the commands and plugins tables — with every deep topic moved to a
+  topic-per-file page under `docs/` (`RECIPES`, `COST-AND-MODELS`, `CONFIGURATION`,
+  `INSTALLATION`), `docs/WORKFLOW.md` absorbing the Stack Provider Pattern prose and
+  `CONTRIBUTING.md` absorbing both "adding a plugin" sections. The intro was then rewritten in
+  plain language and the roadmap promoted to its own topic with the board screenshot.
+- **Plugin versions bumped for the G1 release (#80).** `sdlc` `1.10.1` → `1.11.0`,
+  `android-foundation` `1.4.0` → `1.5.0`. #77 shipped 32 files of G1 behavior under unchanged
+  versions, and installed plugin copies cache **by version** — so the feature existed on `develop`
+  and nowhere else until these bumps. A standing trap for any content-only PR under `plugins/`.
 
 ### Known gap
 
