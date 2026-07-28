@@ -1,0 +1,5 @@
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"node \"${CLAUDE_PLUGIN_ROOT}/tools/usage/cli.mjs\" enrich my-slug","description":"Enrich cost"}}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_2","name":"Agent","input":{"subagent_type":"session-recorder","description":"Close SDLC session"}}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_3","name":"Write","input":{"file_path":"/tmp/out.md","content":"x"}}]}}
+{"type":"user","message":{"role":"user","content":"not a tool call"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_4","na

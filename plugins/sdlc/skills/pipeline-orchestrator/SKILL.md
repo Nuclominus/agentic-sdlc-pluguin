@@ -977,6 +977,14 @@ side-effect-free: the only output is the preview block (plus the headless JSON l
 
 ### Step 2 — Generate task slug and prepare workspace
 
+```sdlc-contract
+id: 2-4-anchor
+requires: bash_match
+pattern: _started_at
+cardinality: once-per-run
+since: 2026-07-06
+```
+
 1. Generate `task_slug` from `$ARGUMENTS`: lowercase, alphanumerics + dashes, max 40 chars.
 2. Create directory `docs/plans/{task_slug}/` if it does not exist.
 3. Create `docs/plans/{task_slug}/_brief.md` with the original `$ARGUMENTS`.
@@ -1422,6 +1430,14 @@ Then compute:
   - **If the matched model has no `pricing` block:** set `cost_usd: null`, emit `WARN: no pricing for {model_id} — cost omitted` to stderr, and exclude the phase from `total_cost_usd` (Step 5). Do not abort.
   - **For a `subagent_aggregate` phase** (envelope shape 2 above — no split triple): `cost_usd` is `null` (an aggregate count can't be priced without an input/output split), and the phase is excluded from `total_cost_usd`. Its `subagent_tokens` still counts toward `total_subagent_tokens`.
 - For aspect-aware phase fan-out, push one entry **per aspect** into `phases[]` with `phase: "{phase_name}"` and `aspect: "{aspect}"` set; aspect-agnostic phases omit `aspect`.
+
+```sdlc-contract
+id: 3d-1b-phase-cost
+requires: bash_match
+pattern: usage/cli\.mjs"?\s+phase-cost
+cardinality: once-per-phase
+since: 2026-07-28
+```
 
 **3d-1b. Price the phase from its subagent transcript (REQUIRED — this is what the cost cap gates on).**
 
@@ -1898,6 +1914,7 @@ their checkpoints, not lost). Then write `docs/plans/{task_slug}/_telemetry.json
   "completed_at": "<ISO timestamp>",
   "wall_clock_seconds": 187,
   "model_enforcement_corrections": 0,
+  "plugin_version": "<written by Step 5b's enrich — do NOT hand-transcribe>",
   "phases": [
     {
       "phase": "business_analysis",
@@ -1967,6 +1984,14 @@ their checkpoints, not lost). Then write `docs/plans/{task_slug}/_telemetry.json
     { "status": "M", "path": "app/src/main/Foo.kt" }
   ]
 }
+```
+
+```sdlc-contract
+id: 5-clock
+requires: bash_match
+pattern: date -u (-r |-d @)
+cardinality: once-per-run
+since: 2026-07-06
 ```
 
 Compute the timing from the real clock captured in Step 2 (via `Bash`):
@@ -2095,6 +2120,22 @@ After `_telemetry.json` is written, first enrich it with the **real** per-phase 
 cost recovered from each phase's subagent transcript, then render a self-contained HTML report —
 unless the user passed `--no-report` or the effective profile sets `report: false`.
 
+```sdlc-contract
+id: 5b-0-enrich
+requires: bash_match
+pattern: usage/cli\.mjs"?\s+enrich
+cardinality: once-per-run
+since: 2026-07-07
+```
+
+```sdlc-contract
+id: 5b-2-report
+requires: bash_match
+pattern: report/cli\.mjs"?\s+report
+cardinality: once-per-run
+since: 2026-07-03
+```
+
 0. **Enrich cost (transcript-derived).** If `command -v node` succeeds:
    a. **Resolve this run's session transcript (best-effort)** so the tool can derive the
       phase→`agent_id` map deterministically and price orchestration overhead even when a phase's
@@ -2189,6 +2230,14 @@ multi-session picture.
 The final act of every run: dispatch the `session-recorder` agent to append one short entry to the
 cumulative run journal `docs/plans/_journal.md`. This is the orchestrator's built-in closer — it
 always runs (on every stack, every workflow), because it is wired here, not as a workflow phase.
+
+```sdlc-contract
+id: 6-journal
+requires: agent_dispatch
+pattern: session-recorder
+cardinality: once-per-run
+since: 2026-07-06
+```
 
 Dispatch via the `Agent` tool:
 - `subagent_type`: `session-recorder` (the neutral core agent; not a workflow phase, so it takes no
@@ -2419,6 +2468,13 @@ You **always**:
 - Pass agents COMPACT prompts. Never inline a previous phase's full output.
 - Save telemetry, even if the pipeline is aborted (with `aborted_at_phase` field).
 - Print final summary to the user, even on partial completion.
+
+**`sdlc-contract` blocks are not instructions.** Fenced blocks whose info string is
+`sdlc-contract` describe, for a machine, the observable trace a mandated step leaves in
+the session transcript. They are read by `sdlc-lint compliance` after the fact; they are
+never executed, never a substitute for the prose beside them, and nothing in a run depends
+on them. Ignore them while running the pipeline. When you change a step that carries one,
+change its contract in the same edit — that adjacency is the whole reason they live here.
 
 ### Prompt-caching discipline
 

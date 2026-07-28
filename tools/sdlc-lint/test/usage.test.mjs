@@ -916,3 +916,29 @@ test("fable has a baseline despite no measured run, priced at its own rates", ()
   // Same tokens, dearer tier → a strictly higher row than opus.
   assert.ok(estimateRow("fable", reg) > estimateRow("opus", reg));
 });
+
+const PLUGIN_MANIFEST = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..",
+  "plugins", "sdlc", ".claude-plugin", "plugin.json");
+
+test("enrich stamps the plugin version it ran from", () => {
+  const { runDir, sess } = buildRun();
+  enrichTelemetry(runDir, { sessionTranscript: sess, registry: reg });
+
+  const tel = JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8"));
+  const manifest = JSON.parse(readFileSync(PLUGIN_MANIFEST, "utf8"));
+  assert.equal(tel.plugin_version, manifest.version);
+});
+
+test("a run where nothing resolved is still left untouched — no stamp, no rewrite", () => {
+  const dir = mkdtempSync(join(tmpdir(), "plugin-version-"));
+  const before = JSON.stringify({ task_slug: "x", phases: [{ phase: "development" }] });
+  writeFileSync(join(dir, "_telemetry.json"), before);
+
+  const r = enrichTelemetry(dir, { projectsRoot: join(dir, "no-projects"), registry: reg });
+
+  // The stamp rides the success path only. The zero-resolve branch exists precisely
+  // to leave pre-enrich telemetry alone, and a diagnostic field is not a reason to
+  // start writing on it — an unpriced run is already visible as such.
+  assert.equal(r.skipped_all, true);
+  assert.equal(readFileSync(join(dir, "_telemetry.json"), "utf8"), before);
+});

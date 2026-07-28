@@ -65,6 +65,14 @@ transcript, and publish a **compliance rate per step**. That number decides H4's
 we do not know whether this run was an outlier or whether the orchestrator routinely skips ~20% of
 its own procedure. Diagnostic value first; CI gating second.
 
+**Implementation spec: [[planning/h1-compliance-auditor]].** Two findings from designing it change
+what H1 can deliver. `bench/` holds no telemetry, so the corpus is the downstream Android project:
+18 runs, of which only **12** carry an `agent_id` to anchor a transcript. And the steps are younger
+than the corpus — `usage/cli.mjs phase-cost` became mandatory on 2026-07-28, ~7.5h before the
+incident run, so `3d-1b` gets a denominator of ~3 and yields no usable rate. With `n=12` and no
+`plugin_version` in telemetry (this item adds it), every published rate is **provisional**, and a
+result near the 80/95% boundary is a reason to keep measuring rather than a decision on H4.
+
 ### H2 — Collapse multi-step prose into single commands
 
 Step 5b is currently four separate prose sub-steps (enrich → verify → cap reconcile → render). One
@@ -92,6 +100,19 @@ compliance stops being a property to measure and becomes a property of the progr
 
 **Gated on H1's numbers.** If compliance is ~95%, H2 + H3 + H6 are enough and this is not worth the
 rewrite. If it is ~80%, this is the only real fix. Do not start it before that data exists.
+
+**H1 answered this on 2026-07-28: 82.3%** over 15 auditable runs
+([[planning/h1-compliance-auditor]]). Near-boundary, and `provisional` — but the aggregate is not
+what decides. The **spread** does: steps that are a single command score 87–100% (`2-4-anchor` 100%,
+`5b-2-report` and `6-journal` 87%, `5b-0-enrich` 80%), while the one genuinely multi-step
+procedure — `5-clock`, which reads the anchor, computes, and renders with a BSD/GNU fallback —
+scores **67%**, the worst in the set, despite carrying the most emphatic prose in the whole file.
+
+Compliance tracks the number of separate things an instruction asks for, not how firmly it asks.
+H4 would fix the 67%; so would collapsing that step into one command (H2), at a fraction of the
+cost. **H4 stays gated — now on evidence rather than intuition.** Revisit after H2 and H3 have
+landed and 10 runs carry `plugin_version`: if compliance has not moved above ~90% by then, this
+becomes the answer.
 
 ### H5 — Prompt surface reduction
 
