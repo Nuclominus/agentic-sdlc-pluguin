@@ -56,9 +56,52 @@ pricing), not a measurement. In headless mode a machine-readable JSON line is al
 **`caps.max_total_cost_usd`** (declared in a workflow recipe, e.g. `hotfix.yaml` caps at `$0.60`)
 gates a **real run**: the orchestrator accumulates actual per-phase cost and, before dispatching the
 next phase, if the running total exceeds the cap it **pauses** for approve-continue / abort
-(interactive) or **aborts** with exit 1 (headless). Telemetry records `cost_cap_usd` and
-`cap_status` (`within` | `exceeded-continued` | `exceeded-aborted`). Both `--dry-run` and the
-real-run gate read the cap from the resolved active workflow recipe.
+(interactive) or **aborts** with exit 1 (headless). Both `--dry-run` and the real-run gate read the
+cap from the resolved active workflow recipe.
+
+Each phase is priced **from its own subagent transcript the moment it finishes** — the Agent result
+envelope reports only an aggregate token count that cannot be priced, so a gate fed from it would
+see `$0` for every phase and never fire (ADR-0011). Telemetry records `cost_cap_usd` and
+`cap_status`:
+
+| `cap_status` | meaning |
+|---|---|
+| `within` | cap set and never exceeded (or no cap declared) |
+| `exceeded-continued` | you approved continuing past the cap, or a self-heal loop was stopped by it |
+| `exceeded-aborted` | you aborted, or a headless run halted at the cap |
+| `exceeded-undetected` | the run went over cap **without the gate catching it**. Written after the fact by cost enrichment, alongside `cap_breach_usd` (phase spend minus cap). Two causes — if any phase carries `cap_gate_blind`, it could not be priced in-run and counted as `$0` (a real gate failure); if none does, the overage landed on the last dispatch, where the gate has nothing left to stop, which usually means the cap is sized below one phase's real cost |
+
+The cap gates **phase spend only**. Orchestration overhead (the orchestrator's own turns) is
+reported in `total_cost_usd` but never enters the comparison, so a run can legitimately show a total
+above the cap while `cap_status` is `within` — size recipe caps against phase spend accordingly.
+
+**Every shipped recipe declares a cap** (a lint test enforces it). An absent cap does not mean
+"generous" — it makes the gate skip entirely, which is how the default pipeline ran ungated before
+these were added. Project-local recipes under `.claude/sdlc-workflows/` may still opt out.
+
+| recipe | cap | recipe | cap |
+|---|---|---|---|
+| `docs-only` | $0.35 | `hotfix` | $9.00 |
+| `testing` | $2.00 | `android-debug` | $11.00 |
+| `analysis` | $4.25 | `default` | $12.75 |
+| `debug` | $8.50 | `android-bugfix` | $12.75 |
+| `bugfix` / `refactor` | $9.00 | `android-feature` | $16.50 |
+
+All are derived the same way: **sum of measured per-phase p90 × 1.2, rounded up to the next $0.25**,
+from 56 transcript-priced phases across 10 real runs. Each recipe's YAML carries its own arithmetic
+in a comment. Two deliberate choices worth knowing when you tune one:
+
+- **Review loops are not multiplied by `max_rounds`.** Six observed runs of the loop-bearing
+  `android-feature` shape topped out at $9.67 — below even the un-multiplied sum — so folding in
+  `max_rounds` would produce a cap no runaway could reach, which is the same as no cap.
+- **The ×1.2 is headroom, not measurement.** No heal attempt has ever fired in the sample data
+  (every observed `heal_status` is `skipped`), so heal cost is unmeasured; a worst-case heal
+  multiplier would be invented rather than derived.
+
+A cap is a **runaway stopper, not a budget**. Sized below a recipe's median run it becomes a
+tripwire that fires every time and trains people to click through it. If a workflow should cost
+less, constrain the work — fewer phases, cheaper tiers via `.claude/model.local.json` — and let the
+cap follow the measurement.
 
 **`--resume`** — continue an interrupted pipeline from the first unfinished phase (per-phase
 checkpoints in `docs/plans/{slug}/.checkpoint/`). See [How the system works](WORKFLOW.md).

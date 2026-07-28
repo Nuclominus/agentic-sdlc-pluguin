@@ -32,6 +32,7 @@
     "duration_ms": { "type": "integer", "minimum": 0 },
     "cost_usd": { "type": ["number", "null"], "minimum": 0 },
     "usage_source": { "enum": ["reported", "estimated", "subagent_aggregate", "transcript"] },
+    "cap_gate_blind": { "type": "boolean", "description": "Step 3d-1b could not price this phase from its subagent transcript, so the Step 3d-cap gate counted it as $0 and any overage it caused went undetected in-run. Recorded so a post-hoc cap breach is attributable to a specific phase." },
     "recovery": { "enum": ["sendmessage-resume", "fresh-restart"] },
     "compact_summary_chars": { "type": "integer", "minimum": 0 },
     "compact_handoff_violation": { "type": "boolean" },

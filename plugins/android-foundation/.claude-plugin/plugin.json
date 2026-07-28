@@ -1,6 +1,6 @@
 {
   "name": "android-foundation",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Android Foundation — the centerpiece Android (Kotlin + Gradle) stack provider for the Agentic SDLC marketplace. Registers the android profile via manifest.yaml (kind: foundation, aspect: android, priority 300); ships the full specialized agent roster plus convention skills for Compose UI, architecture, data and Navigation. Carries pinned house rules (Coil3, Kermit, KSP, @Serializable routes, DataStore, Play Billing); detect-don't-impose libraries (Retrofit, Room, Dagger/Hilt) attach as additive framework plugins. In-pipeline checks: detekt + unit tests + compile-check (builds CI-deferred).",
   "author": {
     "name": "Nuclominus",

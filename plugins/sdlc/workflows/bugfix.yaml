@@ -3,6 +3,11 @@ description: Fix a known bug — skip business analysis, run development through
 match:
   arguments_pattern: "\\bfix(es|ed)?\\b|\\bbug\\b|\\bissue\\b"
   loc_touched_max: 500
+caps:
+  # Measured basis (see analysis.yaml for the full method and why the 1d-1 heuristic is not used):
+  # per-phase p90 development $5.41 + qa $1.48 + security $0.40 + documentation $0.21 = $7.50.
+  # Cap = 7.50 * 1.2 = $9.00. Identical phase list to hotfix.yaml, hence the identical cap.
+  max_total_cost_usd: 9.00
 phases:
   - name: development
     heal:

@@ -8,6 +8,12 @@ match:
   # requests that merely mention "test" (e.g. "implement and test login") do NOT
   # route here. Also matches "test/code coverage".
   arguments_pattern: "\\b(add|write|backfill|improve|increase)\\s+(unit\\s+|integration\\s+)?tests?\\b|\\b(test|code)\\s+coverage\\b"
+caps:
+  # Measured basis (method: analysis.yaml): per-phase p90 qa $1.48. Cap = 1.48 * 1.2 = $1.776,
+  # rounded up to $2.00.
+  # Single-phase recipe, so — as with docs-only.yaml — the Step 3d-cap gate can never fire here
+  # (it needs a next dispatch). This cap is purely the post-hoc Step 5b(d) signal.
+  max_total_cost_usd: 2.00
 phases:
   - name: qa
     heal:

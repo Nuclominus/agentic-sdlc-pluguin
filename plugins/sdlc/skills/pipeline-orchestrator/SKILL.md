@@ -1337,6 +1337,48 @@ Then compute:
   - **For a `subagent_aggregate` phase** (envelope shape 2 above — no split triple): `cost_usd` is `null` (an aggregate count can't be priced without an input/output split), and the phase is excluded from `total_cost_usd`. Its `subagent_tokens` still counts toward `total_subagent_tokens`.
 - For aspect-aware phase fan-out, push one entry **per aspect** into `phases[]` with `phase: "{phase_name}"` and `aspect: "{aspect}"` set; aspect-agnostic phases omit `aspect`.
 
+**3d-1b. Price the phase from its subagent transcript (REQUIRED — this is what the cost cap gates on).**
+
+Runs immediately after 3d-1, before 3d-2/3d-cap, for every completed phase or aspect unit.
+
+> **Why this step exists.** 3d-1's envelope capture is not a usable cap input on this harness. The
+> Agent result envelope exposes only an aggregate `subagent_tokens` count (shape 2), which cannot be
+> priced, so `cost_usd` is `null` — and 3d-cap point 1 counts a `null`-priced phase as `$0`. With
+> every phase contributing `$0`, `CONTEXT.running_cost_usd` stays `0` for the whole run and the gate
+> **can never fire, at any cap value**. That is not an edge case: shape 2 is the ordinary envelope
+> here, so the cap was unenforceable on every run. Observed: a run under a `$0.75` cap spent `$3.37`
+> across two phases and still recorded `cap_status: "within"`. The phase's real price is already on
+> disk when the agent returns — its own subagent transcript — which is the same source Step 5b reads.
+> This step reads it **between** phases instead of only after the last one.
+
+1. Resolve the session transcript exactly as Step 5b(a) does (encode the project cwd `/`→`-`, take the
+   newest `{CONFIG_DIR}/projects/<encoded-cwd>/*.jsonl`). Resolve once per run and reuse.
+2. Run via `Bash` (`{ids}` = this unit's `agent_id`, comma-joined when the phase ran multiple passes):
+
+   ```
+   node "${CLAUDE_PLUGIN_ROOT}/tools/usage/cli.mjs" phase-cost {ids} \
+     --session "{session_transcript}" --exclude "{comma-joined CONTEXT.priced_agent_ids}" --json
+   ```
+
+   Omit `--exclude` when `CONTEXT.priced_agent_ids` is empty. `--exclude` is what stops a resumed
+   subagent that served two passes from being charged twice.
+3. Parse the JSON line. **On `resolved: true`** — overwrite this phase entry's `cost_usd`,
+   `input_tokens`, `output_tokens`, `cached_input_tokens`, `cache_creation_tokens`, `billed_tokens`,
+   `turns`, `peak_prefix_tokens`, `cache_pressure`, and set `usage_source: "transcript"`. Keep the
+   envelope's `subagent_tokens` as recorded. Append every returned `agent_id` to
+   `CONTEXT.priced_agent_ids`.
+4. **On `resolved: false`, a non-zero exit, or no `node`** — keep 3d-1's envelope-derived values
+   untouched, set `cap_gate_blind: true` on the phase entry, and print
+   `WARN: phase cost unresolved ({reason}) — cost cap is blind for {phase}`. The cap gate then
+   counts this phase as `$0`, exactly as before; the flag is what makes that visible in-run and lets
+   Step 5b attribute a post-hoc breach to a named phase. **Never fail the pipeline on this step** —
+   it is a cost-accounting read, not pipeline work.
+
+`resolved: false` always pairs with `cost_usd: null`, never `0` — an unknown cost must not reach the
+gate as a measured zero. Step 5b re-derives the same numbers from the same transcripts at the end of
+the run, so this step never competes with it: it moves the identical computation earlier, where the
+gate can still act on it.
+
 **3d-2. QA-specific telemetry** — when running the `qa` phase, parse the agent's compact summary for the lines `ITERATIONS_USED: N` (max 3, hard cap from the agent prompt) and `STATUS: complete | incomplete-blocked`. Record:
 
 - `qa_iterations_used: N`
@@ -1349,12 +1391,19 @@ workflow recipe. This check sits at the **end of Step 3d, gating the next iterat
 Step 3 phase loop** (it runs after this phase's `cost_usd` is computed in 3d-1, before the
 next phase — or the next loop round, or the next aspect in a fan-out — is dispatched).
 
-1. Maintain a running total. Initialize `CONTEXT.running_cost_usd = 0` AND
-   `CONTEXT.cap_user_approved = false` at the start of Step 3, then after each phase/aspect's
-   `cost_usd` is computed in 3d-1: `CONTEXT.running_cost_usd += cost_usd` (treat a `null`-priced
-   phase as `0` — it cannot contribute to a cost cap it has no price for).
+1. Maintain a running total. Initialize `CONTEXT.running_cost_usd = 0`,
+   `CONTEXT.priced_agent_ids = []` AND `CONTEXT.cap_user_approved = false` at the start of Step 3,
+   then after each phase/aspect's `cost_usd` is settled — by 3d-1b from the transcript (the normal
+   path), or failing that by 3d-1 from the envelope — `CONTEXT.running_cost_usd += cost_usd` (treat a
+   `null`-priced phase as `0` — it cannot contribute to a cost cap it has no price for).
    `CONTEXT.cap_user_approved` is a plain boolean, set to `true` in exactly one place in this whole
    spec (the interactive **approve** bullet below) and never elsewhere — see point 3.
+
+   ⚠️ **The `null` → `$0` rule is a fallback, not the normal path.** It is only reached when 3d-1b
+   flagged the phase `cap_gate_blind`. Before 3d-1b existed, EVERY phase took this branch on this
+   harness (the envelope is aggregate-only and unpriceable), which held `running_cost_usd` at `0`
+   for the whole run and made this entire gate dead code at any cap. If you find yourself adding
+   `$0` for a phase that is not `cap_gate_blind`, 3d-1b was skipped — go run it.
 2. If `CONTEXT.cost_cap` (resolved in Step 1d-0) is `null`, there is no cap — skip this
    gate entirely and continue.
 3. If a next dispatch exists (another phase, another loop round, another aspect, or **another heal
@@ -1881,9 +1930,14 @@ ADR-0005):
   are therefore sized against **phase** spend; read them that way when tuning one, and do not
   "reconcile" the two numbers by folding overhead into the gate — that would silently re-tighten
   every existing recipe's cap.
+
+  What this does **not** excuse is `cap_status: "within"` beside a **phase** spend over the cap.
+  That combination is always a gate failure, never a legitimate disagreement, and Step 5b(d) now
+  rewrites it to `"exceeded-undetected"` automatically. If you are reading a run where the two
+  disagree, check the difference is overhead before believing it.
 - `cache_hit_ratio` = `total_cached_input_tokens / max(total_input_tokens, 1)` rounded to 2 decimals — **but set it to `null`** when no phase reported a real cached subset (e.g. every phase was `subagent_aggregate` or `estimated`), since a 0 there would falsely read as "zero cache hits" rather than "unknown".
 - `cost_cap_usd` = `CONTEXT.cost_cap` (the active workflow recipe's `caps.max_total_cost_usd`), or `null` when the recipe declared no cap.
-- `cap_status` = `CONTEXT.cap_status` from the Step 3d-cap gate: `"within"` (cap set and never exceeded, or no cap), `"exceeded-continued"` (user approved continuing past the cap, OR a heal attempt was stopped by the cap — see 3d-cap point 3), or `"exceeded-aborted"` (user aborted, or headless abort). When the run was cost-aborted, also set `aborted_at_phase` to the phase that was about to run. `aborted_at_phase` is not exclusively a cost-cap field — a headless run that hits the development planning gate with no approver present (3b-special's Approval gate, step 4) sets it the same way, for the same reason: partial telemetry must still name where the run stopped even when the abort was not cost-driven.
+- `cap_status` = `CONTEXT.cap_status` from the Step 3d-cap gate: `"within"` (cap set and never exceeded, or no cap), `"exceeded-continued"` (user approved continuing past the cap, OR a heal attempt was stopped by the cap — see 3d-cap point 3), or `"exceeded-aborted"` (user aborted, or headless abort). A fourth value, `"exceeded-undetected"`, is written **not by you but by the enrich tool** at Step 5b(d): phase spend was over cap but the in-run gate never saw it (a `cap_gate_blind` phase priced as $0). Never write it yourself, and never "correct" it back to `"within"` — it means the gate failed, and a run that hides that is how a $0.75 cap absorbed $3.37 of spend. It travels with `cap_breach_usd` (phase spend minus cap, USD). All three `exceeded-*` values read as a breach to every consumer (report, rollup, AAR metrics). When the run was cost-aborted, also set `aborted_at_phase` to the phase that was about to run. `aborted_at_phase` is not exclusively a cost-cap field — a headless run that hits the development planning gate with no approver present (3b-special's Approval gate, step 4) sets it the same way, for the same reason: partial telemetry must still name where the run stopped even when the abort was not cost-driven.
 - `resumed` = `true` when this run entered via `--resume` (else omit or `false`).
 - `resumed_at` = ISO timestamp of the resume entry (only when `resumed`).
 - `resume_slug` = the resumed slug (only when `resumed`).
@@ -1893,6 +1947,11 @@ ADR-0005):
   `additionalProperties:false` and has no `origin` field) — it is layered on at assembly time here,
   tracked via `CONTEXT` during Step 3 (`3-resume-skip` marks skipped units `"resumed"`; freshly
   dispatched units are `"fresh"`), not read back off disk.
+- each `phases[]` element that Step 3d-1b could **not** price from its transcript carries
+  `cap_gate_blind: true` (omit the key otherwise). It means the cost gate counted that phase as $0,
+  so any breach it caused went undetected in-run — Step 5b(d) uses it to explain an
+  `"exceeded-undetected"` cap status, and the HTML report names the blind phases. A run with no
+  `cap_gate_blind` phase had a fully-sighted cap.
 - each `phases[]` element that recovered from a **mid-run agent crash** carries `recovery` recording
   the actual mechanism (distinct from `origin`, which is about cross-session checkpoint resume):
   `"sendmessage-resume"` when the crashed agent was resumed **in-session** via `SendMessage` (same
@@ -1968,6 +2027,21 @@ unless the user passed `--no-report` or the effective profile sets `report: fals
       enrich output reported `no transcripts resolved` or any `skipped` phases, print
       `WARN: cost enrichment incomplete — cost may read as aggregate/$—` so a silent cost loss is
       visible in the run log rather than surfacing only later in the report/journal.
+   d. **Cap reconciliation (automatic — do not hand-compute).** The enrich tool compares the enriched
+      **phase** spend against `cost_cap_usd` and, on a breach, records `cap_breach_usd` and — only if
+      the in-run gate had recorded `"within"` — rewrites `cap_status` to `"exceeded-undetected"`. It
+      never overwrites `"exceeded-continued"` / `"exceeded-aborted"`: those verdicts had a user in the
+      loop. When the tool prints its `WARN: phase spend exceeded the cost cap by $X` line, surface it
+      in the final summary — a breach the run only discovered after the fact is exactly the thing that
+      must not stay quiet.
+
+      `"exceeded-undetected"` has **two** causes, distinguished by whether any phase carries
+      `cap_gate_blind`. **With** blind phases: 3d-1b could not price them, they entered the gate as
+      `$0`, and the gate genuinely failed — investigate. **Without** any: the overage landed on the
+      run's LAST dispatch, where 3d-cap has nothing left to stop (point 3 requires a next dispatch),
+      or the recipe has a single phase and therefore no gate boundary at all. That second case is not
+      a malfunction — it is the shape of a pre-dispatch gate, and it usually means the recipe's cap is
+      sized below what one phase actually costs. Do not "fix" it by loosening the gate; fix the cap.
 1. If `command -v node` fails → print `HTML report: skipped (node unavailable)` and skip to the
    final summary.
 2. Else run via `Bash`: `node "${CLAUDE_PLUGIN_ROOT}/tools/report/cli.mjs" report {task_slug}`.
