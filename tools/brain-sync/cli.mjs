@@ -57,12 +57,23 @@ if (cmd === "sync" && has("--backfill")) {
   }
   console.log("note:", writeNote(loadPr(n)));
   refreshIndex();
+} else if (cmd === "reindex") {
+  // Rebuild ONLY `_moc-changes.md` from the notes already on disk. This exists because the
+  // index is machine-owned and regularly conflicts — two brain-sync follow-up PRs both append
+  // a row, so merging develop into the second one collides every time. The correct resolution
+  // is to regenerate rather than hand-merge, and the only regenerating verb used to be
+  // `sync --backfill`, which REWRITES EVERY NOTE from its PR and so destroys the enriched
+  // prose that the vault rule requires each note to carry. Resolving a one-line index conflict
+  // must not cost the hand-written half of the vault.
+  const n = (readdirSync(changesDir).filter((f) => f.endsWith(".md") && !f.startsWith("_"))).length;
+  refreshIndex();
+  console.log(`reindex: ${join(changesDir, "_moc-changes.md")} (${n} note(s))`);
 } else if (cmd === "check") {
   const problems = checkVault(vault);
   for (const p of problems) console.error("✗", p);
   console.log(`check: ${problems.length ? `${problems.length} problem(s)` : "clean"}`);
   process.exit(problems.length ? 1 : 0);
 } else {
-  console.error("commands: sync --pr <n> | sync --backfill | check   [--vault <path>]");
+  console.error("commands: sync --pr <n> | sync --backfill | reindex | check   [--vault <path>]");
   process.exit(2);
 }

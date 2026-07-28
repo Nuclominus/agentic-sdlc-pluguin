@@ -30,9 +30,13 @@ The heartbeat: **a merged PR is the trigger to update the docs.**
   `[[decisions/ADR-XXXX]]` it implements, link the `[[planning/roadmap]]` item it advances, and
   update the touched `[[components/<plugin>]]` / `architecture/` notes.
 - Run the tool locally when needed: `node tools/brain-sync/cli.mjs sync --pr <n>` (one PR),
-  `sync --backfill` (all merged PRs / index reconcile), `check` (validate structure + links).
-  Tests: `node --test tools/brain-sync/test/*.test.mjs` (the trailing-slash dir form does not
-  auto-discover on Node 22).
+  `sync --backfill` (all merged PRs), `reindex` (rebuild `_moc-changes.md` only), `check` (validate
+  structure + links). Tests: `node --test tools/brain-sync/test/*.test.mjs` (the trailing-slash dir
+  form does not auto-discover on Node 22).
+- **Two brain-sync PRs open at once will conflict on `_moc-changes.md`** — both append a row, so
+  merging `develop` into the second one collides every time. Resolve it with `reindex`, never by
+  hand and never with `sync --backfill`: backfill rewrites *every* note from its PR and destroys the
+  enriched prose. Take `develop`'s copy of the index, run `reindex`, commit.
 
 ## 3. Non-trivial decisions get an ADR
 
