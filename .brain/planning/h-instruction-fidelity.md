@@ -110,7 +110,7 @@ therefore not yet measured**, and cannot be until real runs exist on the new ver
 measurement is the one that matters: does a step that is now a single command beat the 67% it
 replaced? Re-run `sdlc-lint compliance` once ~10 runs carry the new tail.
 
-### H3 — The machine-value invariant
+### H3 — The machine-value invariant ✅
 
 A rule with lint teeth: **the model never transcribes a value a machine already holds.** Timestamps,
 costs, token counts, agent ids, iteration counters. Three of the four defects above are instances of
@@ -118,6 +118,37 @@ this. Where a value exists on disk, the contract must pass the *path*, never the
 
 **DoD:** an audit of `SKILL.md` for every place it asks the model to produce a machine-known value,
 each one either removed or justified in writing; a `sdlc-lint` check that fails on new ones.
+
+**Shipped.** `plugins/sdlc/MACHINE-VALUES.md` is the contract, the audit and the lint's own input at
+once — a fenced ` ```machine-values ` registry of `key: owner` lines, read by the new
+`sdlc-lint machine-values` verb. The check anchors on the **left-hand side** of a computation, which
+is what keeps it silent on the dozens of lines that legitimately discuss these keys. See
+[[decisions/ADR-0015-the-machine-value-invariant]].
+
+The argument for a lint over firmer wording came from the audit itself: the two definitions of
+`cache_hit_ratio` had already diverged — `SKILL.md` said `cached / max(input, 1)`, `usage.mjs:628`
+says `cached / (input + cached)` — with no symptom, because the tool overwrites the model's answer.
+
+**Measured (2026-07-29):**
+
+| | before | after |
+|---|---|---|
+| formulas over machine-owned keys in `SKILL.md` | 6 | **0** |
+| machine-owned telemetry keys the model computes | 21 | **0** |
+| escape-hatch exemptions in the tree | — | **0** |
+| `SKILL.md` lines | 2436 | 2441 |
+
+The line count **rose by five**, against this item's own expectation. Recorded as a wrong
+prediction rather than dropped: H3 removes arithmetic, and the replacement text explains *why* a
+value is not the model's. The first two rows are the real metric. H3 adds no mandated step, so it
+produces no compliance rate of its own — its effect is a smaller surface under the rates
+[[planning/h1-compliance-auditor]] already tracks.
+
+Two honest limits. The check is **lexical**: a stale Step 5 summary that still described all three
+retired envelope shapes, char/4 estimation included, passed it and was found by reading instead. And
+`total_subagent_tokens` is deliberately **not** in the registry — `finish` never writes it, so
+removing the model's sum would delete the value rather than move it. That the lint stays silent on
+exactly that one sum is the contract's machine-owned/model-owned split validating itself.
 
 ### H4 — Deterministic control flow
 
@@ -143,9 +174,16 @@ landed and 10 runs carry `plugin_version`: if compliance has not moved above ~90
 becomes the answer.
 
 **H2 landed 2026-07-29** ([[decisions/ADR-0014-the-run-tail-is-one-command]]), which removed the
-67% step rather than improving it. Half of what this gate waits on is done; the other half is H3
-plus enough runs on the new tail to re-measure. Do not revisit before that data exists — the whole
-point of the gate is that it is decided by a number, not by how the prose reads.
+67% step rather than improving it. **H3 landed the same day**
+([[decisions/ADR-0015-the-machine-value-invariant]]), removing the six remaining formulas rather
+than adding a step to check them.
+
+Both halves of the *work* this gate waited on are therefore done. What remains is only the
+**measurement**: ~10 runs carrying `plugin_version` on the new tail, then `sdlc-lint compliance`
+again. Do not revisit before that data exists — the whole point of the gate is that it is decided
+by a number, not by how the prose reads. Note that neither H2 nor H3 can be credited in advance:
+H2's own contract (`5b-finish`) still reports `n=0`, and H3 adds no contract at all, so the next
+run of the auditor is the first evidence either way.
 
 ### H5 — Prompt surface reduction
 
@@ -171,7 +209,7 @@ consumed *during* the run (the 3d-1b cap gate stays the orchestrator's responsib
 H1 (diagnose) ──► decides scope of H4
    │
    ├─► H2 (collapse) ✅ ─┐
-   ├─► H3 (invariant)   ├─► re-measure with H1
+   ├─► H3 (invariant) ✅ ├─► re-measure with H1
    └─► H6 (hook tail)  ─┘
 H5 runs alongside, shared with Track E
 ```

@@ -312,3 +312,51 @@ test("renderReportFile flags an unpriced run so the CLI can warn on stderr", () 
   rmSync(dir, { recursive: true, force: true });
   rmSync(priced, { recursive: true, force: true });
 });
+
+// --- H3: an unenriched run reaches the renderer with nulls (ADR-0015) ---
+// Since H3 the orchestrator writes the cost and token totals as `null` and lets
+// `finish` fill them. A run that stops before sealing therefore renders from nulls,
+// and every tile that would otherwise assert a measurement nobody took must say so.
+const unenriched = {
+  task_slug: "unenriched", stack: "vanilla", primary_profile: "vanilla",
+  phases: [{
+    phase: "development", agent: "developer", model: "claude-sonnet-5",
+    status: "completed", agent_id: "a1", usage_source: "pending", cost_usd: null,
+    compact_summary_chars: 900,
+  }],
+  total_input_tokens: null, total_output_tokens: null, total_cached_input_tokens: null,
+  total_cache_creation_tokens: null, total_subagent_tokens: null,
+  total_cost_usd: null, cache_hit_ratio: null, cost_basis: null,
+};
+const tiles = (html) => Object.fromEntries(
+  [...html.matchAll(/<div class="tv[^"]*">([^<]*)<\/div><div class="tl">([^<]*)<\/div>/g)]
+    .map((m) => [m[2], m[1]]),
+);
+
+test("an unenriched run renders no NaN, undefined or $null", () => {
+  const html = renderReport(unenriched);
+  for (const bad of [/NaN/, /undefined/, /\$null/]) assert.doesNotMatch(html, bad);
+});
+
+test("unknown totals render as a dash, never as a measured zero", () => {
+  const t = tiles(renderReport(unenriched));
+  // "0 output tokens" and "0 aggregate tokens" are claims, not counts — the same
+  // ambiguity total_cost_usd and cache_hit_ratio already resolve this way.
+  assert.equal(t["Total cost"], "—");
+  assert.equal(t["Cache hit"], "—");
+  assert.equal(t["Output tokens"], "—");
+  assert.equal(t["Aggregate tokens"], "—");
+});
+
+test("zero still means zero where it is a real count", () => {
+  const t = tiles(renderReport(unenriched));
+  assert.equal(t["Phases"], "1", "one phase ran");
+  assert.equal(t["Model corrections"], "0",
+    "no corrections is a genuine measurement — this must NOT become a dash");
+});
+
+test("a priced run is unaffected — real totals still render as numbers", () => {
+  const t = tiles(renderReport(tel));
+  assert.notEqual(t["Output tokens"], "—");
+  assert.match(t["Total cost"], /^\$/);
+});

@@ -9,6 +9,7 @@ import { renderReportFile } from "./lib/report.mjs";
 import { rollupWorkspace } from "./lib/rollup.mjs";
 import { checkReadDiscipline } from "./lib/read-discipline.mjs";
 import { checkPluginPaths } from "./lib/plugin-paths.mjs";
+import { checkMachineValues } from "./lib/machine-values.mjs";
 import { parseContracts } from "./lib/contracts.mjs";
 import { auditRun } from "./lib/compliance.mjs";
 import { aggregate, renderText } from "./lib/compliance-report.mjs";
@@ -60,6 +61,17 @@ function printPluginPaths(results) {
   } else {
     for (const r of failed) console.error(`✗ ${r.file}\n    ${r.errors.join("\n    ")}`);
     console.log(`plugin-paths: ${results.length - failed.length}/${results.length} clean`);
+  }
+  return failed.some(r => r.tool_error) ? 2 : failed.length ? 1 : 0;
+}
+
+function printMachineValues(results) {
+  const failed = results.filter(r => !r.ok);
+  if (jsonOut) {
+    console.log(JSON.stringify({ command: "machine-values", checked: results.length, failed: failed.length, failures: failed }));
+  } else {
+    for (const r of failed) console.error(`✗ ${r.file}\n    ${r.errors.join("\n    ")}`);
+    console.log(`machine-values: ${results.length - failed.length}/${results.length} clean`);
   }
   return failed.some(r => r.tool_error) ? 2 : failed.length ? 1 : 0;
 }
@@ -182,6 +194,7 @@ function runAll() {
     printCycles(checkAllWorkflows(root)),
     printReadDiscipline(checkReadDiscipline(root)),
     printPluginPaths(checkPluginPaths(root)),
+    printMachineValues(checkMachineValues(root)),
     printDetect2(detectRows()),
     printResumeFixtures(),
   ];
@@ -196,6 +209,7 @@ switch (cmd) {
   case "cycles": code = printCycles(checkAllWorkflows(root)); break;
   case "read-discipline": code = printReadDiscipline(checkReadDiscipline(root)); break;
   case "plugin-paths": code = printPluginPaths(checkPluginPaths(root)); break;
+  case "machine-values": code = printMachineValues(checkMachineValues(root)); break;
   case "detect": code = printDetect(); break;
   case "resume":
     code = args[1] && !args[1].startsWith("--") ? printResumeOne(resolve(root, args[1])) : printResumeFixtures();
@@ -236,9 +250,10 @@ switch (cmd) {
   case "all": code = runAll(); break;
   case undefined:
   case "--help":
-    console.log("Usage: sdlc-lint <schema|cycles|detect|resume|report|rollup|read-discipline|plugin-paths|compliance|all> [--json]");
+    console.log("Usage: sdlc-lint <schema|cycles|detect|resume|report|rollup|read-discipline|plugin-paths|machine-values|compliance|all> [--json]");
     console.log("  read-discipline   E2: contract present in the stable prefix; no re-read phrasing in agents");
     console.log("  plugin-paths      #70: no home-anchored ~/.claude paths in shipped plugin text");
+    console.log("  machine-values    H3: no prose computing a value a machine already writes");
     console.log("  compliance        H1: did the orchestrator run its own mandated steps? [--runs <glob>] [--config-dir <path>]");
     break;
   default:
