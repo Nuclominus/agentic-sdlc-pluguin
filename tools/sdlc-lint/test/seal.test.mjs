@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, utime
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
 import { resolveWorkspace } from "../../../plugins/sdlc/tools/run/reentry.mjs";
 import { findSealable, sealStale } from "../../../plugins/sdlc/tools/run/seal.mjs";
 
@@ -185,4 +186,31 @@ test("one failing run does not abort the others", () => {
   assert.equal(r.failed[0].run, "a");
   assert.equal(r.sealed.length, 1);
   assert.equal(r.sealed[0].run, "b");
+});
+
+const RUN_CLI = resolve(REPO, "plugins/sdlc/tools/run/cli.mjs");
+
+test("`seal-stale --json` seals from the CLI and reports what it did", () => {
+  const { plansRoot, runDir } = makePlans();
+  const r = spawnSync("node", [RUN_CLI, "seal-stale", "--plans-root", plansRoot,
+    "--no-report", "--json"], { encoding: "utf8" });
+
+  assert.equal(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout.trim().split("\n").pop());
+  assert.equal(out.command, "seal-stale");
+  assert.equal(out.ok, true);
+  assert.equal(out.sealed.length, 1);
+  assert.equal(out.sealed[0].run, "r");
+  assert.equal(JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8")).sealed_by, "stop-hook");
+});
+
+test("`seal-stale --json` on a plans root with nothing to do exits 0 and seals nothing", () => {
+  const { plansRoot } = makePlans({ sealed: true });
+  const r = spawnSync("node", [RUN_CLI, "seal-stale", "--plans-root", plansRoot, "--json"],
+    { encoding: "utf8" });
+
+  assert.equal(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout.trim().split("\n").pop());
+  assert.deepEqual(out.sealed, []);
+  assert.equal(out.skipped[0].reason, "sealed");
 });
