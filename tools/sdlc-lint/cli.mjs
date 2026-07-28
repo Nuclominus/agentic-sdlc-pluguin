@@ -9,6 +9,10 @@ import { renderReportFile } from "./lib/report.mjs";
 import { rollupWorkspace } from "./lib/rollup.mjs";
 import { checkReadDiscipline } from "./lib/read-discipline.mjs";
 import { checkPluginPaths } from "./lib/plugin-paths.mjs";
+import { parseContracts } from "./lib/contracts.mjs";
+import { auditRun } from "./lib/compliance.mjs";
+import { aggregate, renderText } from "./lib/compliance-report.mjs";
+import { globSync } from "tinyglobby";
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 
 const args = process.argv.slice(2);
@@ -124,6 +128,48 @@ function printResumeFixtures() {
   return failed.some(r => r.tool_error) ? 2 : failed.length ? 1 : 0;
 }
 
+function opt(name, fallback = null) {
+  const i = args.indexOf(name);
+  return i >= 0 && args[i + 1] && !args[i + 1].startsWith("--") ? args[i + 1] : fallback;
+}
+
+function printCompliance() {
+  const skill = resolve(root, "plugins/sdlc/skills/pipeline-orchestrator/SKILL.md");
+  const { contracts, errors } = parseContracts(skill);
+  for (const e of errors) console.error(`✗ contract: ${e}`);
+  if (!contracts.length) {
+    console.error("✗ compliance: no sdlc-contract blocks found — nothing to audit");
+    return 2;
+  }
+
+  const pattern = opt("--runs", "docs/plans/*");
+  const dirs = globSync(pattern, { cwd: root, absolute: true, onlyDirectories: true })
+    .filter((d) => existsSync(join(d, "_telemetry.json"))).sort();
+  if (!dirs.length) {
+    console.error(`✗ compliance: no run directories with _telemetry.json matched '${pattern}'`);
+    return 2;
+  }
+
+  // Defaults to the resolved Claude config dir inside auditRun; overridable so the
+  // fixtures — and any archived transcript tree — can be audited without touching it.
+  const configDir = opt("--config-dir");
+  const projectsRoot = configDir ? resolve(root, configDir, "projects") : undefined;
+
+  const results = dirs.map((d) => auditRun(d, contracts, { projectsRoot }));
+  const agg = aggregate(results, contracts);
+  if (jsonOut) {
+    console.log(JSON.stringify({
+      command: "compliance", contracts: agg.contracts,
+      auditable: agg.auditable, excluded: agg.excluded, runs: results,
+    }));
+  } else {
+    console.log(renderText(agg, results));
+  }
+
+  // An instrument, not a gate: findings must not fail a build until the rate is known.
+  return errors.length ? 2 : 0;
+}
+
 function runAll() {
   const codes = [
     printSchema(checkSchemas(root)),
@@ -180,12 +226,14 @@ switch (cmd) {
     }
     break;
   }
+  case "compliance": code = printCompliance(); break;
   case "all": code = runAll(); break;
   case undefined:
   case "--help":
-    console.log("Usage: sdlc-lint <schema|cycles|detect|resume|report|rollup|read-discipline|plugin-paths|all> [--json]");
+    console.log("Usage: sdlc-lint <schema|cycles|detect|resume|report|rollup|read-discipline|plugin-paths|compliance|all> [--json]");
     console.log("  read-discipline   E2: contract present in the stable prefix; no re-read phrasing in agents");
     console.log("  plugin-paths      #70: no home-anchored ~/.claude paths in shipped plugin text");
+    console.log("  compliance        H1: did the orchestrator run its own mandated steps? [--runs <glob>] [--config-dir <path>]");
     break;
   default:
     console.error(`unknown command: ${cmd}`);
