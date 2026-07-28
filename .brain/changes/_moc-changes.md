@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-07-28 | #86 | `feat` | — | [[changes/2026-07-28-PR-86-override-a-recipe-s-cost-cap-per-project-via-sdlc-local-yaml]] |
 | 2026-07-27 | #80 | `chore` | — | [[changes/2026-07-27-PR-80-sdlc-1-11-0-android-foundation-1-5-0-for-the-g1-release]] |
 | 2026-07-27 | #77 | `feat` | — | [[changes/2026-07-27-PR-77-g1-self-healing-compiler-lint-micro-loops]] |
 | 2026-07-26 | #75 | `docs` | — | [[changes/2026-07-26-PR-75-bilingual-visual-report-for-the-e2-campaign]] |
