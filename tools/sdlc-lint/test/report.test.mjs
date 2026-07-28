@@ -209,3 +209,31 @@ test("a cap breach the gate DID catch is not labelled undetected", () => {
   assert.match(html, /over by \$0\.10/);
   assert.doesNotMatch(html, /not caught in-run/);
 });
+
+test("a project-overridden cap is labelled as such", () => {
+  const t = JSON.parse(JSON.stringify(tel));
+  t.cost_cap_usd = 8.00;
+  t.cost_cap_source = "project:android-feature";
+  t.cap_status = "within";
+  const html = renderReport(t);
+  assert.match(html, /\$8\.00 cap \(project override\)/);
+});
+
+test("a cap the project switched off reads as uncapped, not as 'no cap set'", () => {
+  // `cost_caps: {hotfix: null}` is a deliberate opt-out and must not render identically to a
+  // recipe that never declared a cap — those are different facts about the run.
+  const t = JSON.parse(JSON.stringify(tel));
+  t.cost_cap_usd = null;
+  t.cost_cap_source = "project:hotfix";
+  const html = renderReport(t);
+  assert.match(html, /uncapped \(project override\)/);
+});
+
+test("an ordinary recipe cap carries no override label", () => {
+  const t = JSON.parse(JSON.stringify(tel));
+  t.cost_cap_usd = 4.25;
+  t.cost_cap_source = "recipe";
+  const html = renderReport(t);
+  assert.match(html, /\$4\.25 cap/);
+  assert.doesNotMatch(html, /project override/);
+});
