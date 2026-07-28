@@ -217,11 +217,17 @@ const SEED = [
   { id: "E", track: "Track E", title: "Pipeline cache/cost efficiency", desc: "Cut prompt-cache reads (6.65M/run baseline). E5 shipped.", pr: 50, col: "progress" },
   { id: "E6", track: "Track E", title: "Deterministic prefix ordering (prompt-cache)", desc: "Byte-identical stable prefix for max prompt-cache hits (plan §1.1).", pr: null, col: "todo" },
   { id: "E7", track: "Track E", title: "Dynamic context pruning (review loops)", desc: "Haiku summarizes failed review-loop attempts before next Dev pass (§1.2).", pr: null, col: "todo" },
-  { id: "E8", track: "Track E", title: "Micro-task batching (3–5 bugfixes)", desc: "Auto-group 3–5 bugfixes into one session; amortize init cost (§1.3).", pr: null, col: "todo", pri: true },
+  { id: "E8", track: "Track E", title: "Micro-task batching (3–5 bugfixes)", desc: "Auto-group 3–5 bugfixes into one session; amortize init cost (§1.3).", pr: null, col: "todo" },
   { id: "F1", track: "Track F", title: "Speculative TDD (QA ∥ Dev)", desc: "Run QA test-writing concurrently with Dev after BA approval (§2.1).", pr: null, col: "todo" },
   { id: "F2", track: "Track F", title: "Fast-track bugfix DAG (LOC-gated)", desc: "LOC-gated Dev→QA→Docs when change is trivial (§2.2).", pr: null, col: "todo" },
-  { id: "G1", track: "Track G", title: "Self-healing compiler/lint micro-loops", desc: "Feed compiler/lint stderr back to Dev, capped at 2 attempts (§3.1).", pr: null, col: "todo", pri: true },
+  { id: "G1", track: "Track G", title: "Self-healing compiler/lint micro-loops", desc: "Feed compiler/lint stderr back to Dev, capped at 2 attempts (§3.1).", pr: 77, col: "done" },
   { id: "G2", track: "Track G", title: "Contextual AAR lesson classification", desc: "Tag lessons; load only domain-relevant ones per phase (§3.2).", pr: null, col: "todo" },
+  { id: "H1", track: "Track H", title: "Transcript compliance auditor (sdlc-lint compliance)", desc: "", pr: null, col: "todo", pri: true },
+  { id: "H2", track: "Track H", title: "Collapse multi-step prose into single commands", desc: "", pr: null, col: "todo", pri: true },
+  { id: "H3", track: "Track H", title: "Machine-value invariant + lint", desc: "", pr: null, col: "todo", pri: true },
+  { id: "H4", track: "Track H", title: "Deterministic control flow (gated on H1)", desc: "", pr: null, col: "todo" },
+  { id: "H5", track: "Track H", title: "Prompt surface reduction / JIT procedure loading", desc: "", pr: null, col: "todo" },
+  { id: "H6", track: "Track H", title: "Stop hook sealing the run (deterministic tail)", desc: "", pr: null, col: "todo" },
 ];
 // <<SEED-END>>
 

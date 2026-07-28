@@ -1981,6 +1981,11 @@ Compute the timing from the real clock captured in Step 2 (via `Bash`):
   started before this was wired), set `completed_at` to now, estimate `started_at` / `wall_clock_seconds`
   as before, and DO NOT fail. This keeps `report.mjs` / `rollup.mjs` / `aar/metrics.mjs` timing real
   whenever the anchor exists.
+- Do **not** hand-transcribe these from your own sense of the time. Read the anchor and run the
+  `date` command. An observed run wrote its **local** clock stamped `Z` — 3h20m off the anchor — and
+  derived `completed_at` from it, so the record was internally consistent and externally false.
+  Step 5b now reconciles both strings against the anchor and WARNs when they disagree by more than
+  120s; that is a repair of your output, not a substitute for doing it right.
 
 Compute aggregates from `phases[]` (these are the **live/fallback** values; Step 5b's transcript
 enrichment overwrites `total_cost_usd`, the `total_*` token aggregates, `cache_hit_ratio`, and adds
@@ -2093,8 +2098,28 @@ unless the user passed `--no-report` or the effective profile sets `report: fals
 0. **Enrich cost (transcript-derived).** If `command -v node` succeeds:
    a. **Resolve this run's session transcript (best-effort)** so the tool can derive the
       phase→`agent_id` map deterministically and price orchestration overhead even when a phase's
-      `agent_id` never reached `_telemetry.json`. Encode the project cwd (`/`→`-`) and pick the
-      newest `{CONFIG_DIR}/projects/<encoded-cwd>/*.jsonl` (this session). Pass it as `--session`.
+      `agent_id` never reached `_telemetry.json`. Anchor the lookup on an `agent_id` this run
+      actually dispatched (read one from `_telemetry.json` or `.checkpoint/<phase>.json`) —
+      **not** on the cwd:
+
+      ```
+      ls {CONFIG_DIR}/projects/*/*/subagents/agent-{id}.jsonl
+      ```
+
+      The session transcript is that path's session dir with `.jsonl` appended
+      (`…/<session-id>/subagents/agent-<id>.jsonl` → `…/<session-id>.jsonl`). Pass it as
+      `--session`. If the lookup finds nothing, **omit `--session`** — the tool recovers the
+      session from the phase transcripts by itself.
+
+      Never encode the cwd to find it. The harness files a session under the directory it
+      **started** in, so a run that moved into a git worktree — every `/sdlc:batch` task, and any
+      worktree-isolated run — has its transcript filed under the ORIGINAL project dir while the
+      cwd now encodes to the worktree's. A cwd-derived path there resolves to an unrelated
+      session, and pricing the orchestrator's overhead against a stranger's main loop under-reports
+      the run's largest cost bucket (measured: $5.21 → $0.55) while every phase still looks
+      enriched. A wrong `--session` is worse than none. The tool rejects one whose subagents dir
+      holds none of this run's agents (WARN + falls back to self-recovery), but that guard is a
+      backstop, not the plan.
    b. Run via `Bash`:
       `node "${CLAUDE_PLUGIN_ROOT}/tools/usage/cli.mjs" enrich {task_slug}` — appending
       `--session "<path>"` when step (a) resolved one.
@@ -2113,6 +2138,15 @@ unless the user passed `--no-report` or the effective profile sets `report: fals
       enrich output reported `no transcripts resolved` or any `skipped` phases, print
       `WARN: cost enrichment incomplete — cost may read as aggregate/$—` so a silent cost loss is
       visible in the run log rather than surfacing only later in the report/journal.
+
+      This step is **not** the only thing standing between a skipped enrichment and a clean-looking
+      report, and must not be treated as such. `cost_basis != "transcript"` makes the renderer print
+      the cap as `unverified — run unpriced` (never `within`), add a `Cost: unpriced` signal naming
+      the `cap_gate_blind` phases, and emit its own stderr WARN at 5b-2. Those are machine-side and
+      fire whether or not you get here; do not "clean them up" by hand-editing `cost_basis`,
+      `cap_status`, or `total_cost_usd`. The fix for an unpriced run is to run the enrich command,
+      not to relabel the record. A run reported as priced without transcript pricing behind it is
+      the failure this whole step exists to prevent.
    d. **Cap reconciliation (automatic — do not hand-compute).** The enrich tool compares the enriched
       **phase** spend against `cost_cap_usd` and, on a breach, records `cap_breach_usd` and — only if
       the in-run gate had recorded `"within"` — rewrites `cap_status` to `"exceeded-undetected"`. It
@@ -2128,6 +2162,12 @@ unless the user passed `--no-report` or the effective profile sets `report: fals
       or the recipe has a single phase and therefore no gate boundary at all. That second case is not
       a malfunction — it is the shape of a pre-dispatch gate, and it usually means the recipe's cap is
       sized below what one phase actually costs. Do not "fix" it by loosening the gate; fix the cap.
+   e. **Run-window reconciliation (automatic).** The tool also compares `started_at` against the
+      machine anchor `.checkpoint/_started_at` and rewrites `started_at` / `completed_at` when they
+      drift more than 120s apart (`wall_clock_seconds`, the anchor's own arithmetic, is left as-is).
+      Surface its `WARN: started_at was … but the machine anchor says …` line: it means Step 5's
+      timing instructions were not followed, and the report header, the Step 6 journal entry and
+      every cross-run rollup were about to read a fabricated clock.
 1. If `command -v node` fails → print `HTML report: skipped (node unavailable)` and skip to the
    final summary.
 2. Else run via `Bash`: `node "${CLAUDE_PLUGIN_ROOT}/tools/report/cli.mjs" report {task_slug}`.

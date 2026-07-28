@@ -29,6 +29,7 @@
   "total_output_tokens": 6000,
   "total_cached_input_tokens": 45000,
   "total_cost_usd": 0.20,
+  "cost_basis": "transcript",
   "cost_cap_usd": 0.60,
   "cap_status": "within",
   "cache_hit_ratio": 0.6,

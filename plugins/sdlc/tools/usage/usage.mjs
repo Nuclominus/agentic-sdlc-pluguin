@@ -271,6 +271,45 @@ export function sessionSubagentsDir(sessionTranscriptPath) {
   return join(dir, sid, "subagents");
 }
 
+/** Every subagent id this run is known to have dispatched, from telemetry + checkpoints. */
+export function knownRunAgentIds(runDir, phases) {
+  const ids = new Set();
+  for (const p of phases || []) {
+    const a = p.agent_id ?? checkpointAgentId(runDir, p);
+    for (const id of Array.isArray(a) ? a : a ? [a] : []) ids.add(id);
+  }
+  return ids;
+}
+
+/**
+ * Does this session transcript actually belong to this run?
+ *
+ * The harness files a session under the cwd it STARTED in, not the cwd it ends up
+ * working in. A pipeline that moves into a git worktree mid-session — which is the
+ * normal shape for /sdlc:batch and for any worktree-isolated run — therefore has its
+ * transcript filed under the ORIGINAL project dir, while a caller deriving `--session`
+ * from the current cwd looks under the worktree's project dir and finds a stranger's
+ * session. Phase costs survive that (findAgentTranscript globs the whole projects
+ * root), but orchestration overhead is priced from the session's own main loop: a
+ * mismatched session silently swaps in an unrelated main loop and can under-report the
+ * run's largest single cost bucket by an order of magnitude. Wrong is worse than absent
+ * here — with no session at all, enrichTelemetry recovers the real one by walking back
+ * from a resolved phase transcript.
+ *
+ * Ownership test: at least one of the run's known agent ids has a transcript in this
+ * session's own subagents dir. When the run has NO known ids (a backfill where neither
+ * telemetry nor the checkpoints carry `agent_id`), the session's dispatch map is the
+ * only thing that can supply them — there is nothing to check it against, so trust it.
+ */
+export function sessionOwnsRun(sessionTranscriptPath, runDir, phases) {
+  const ids = knownRunAgentIds(runDir, phases);
+  if (!ids.size) return true;
+  const dir = sessionSubagentsDir(sessionTranscriptPath);
+  if (!existsSync(dir)) return false;
+  for (const id of ids) if (existsSync(join(dir, `agent-${id}.jsonl`))) return true;
+  return false;
+}
+
 /**
  * Recover a phase's subagent id from its run checkpoint when _telemetry.json
  * lacks `agent_id` (the orchestrator failed to propagate it — the primary
@@ -430,9 +469,15 @@ export function enrichTelemetry(runDir, opts = {}) {
   const phases = tel.phases || [];
 
   let subagentsDir, dispatch, byPhase = new Map();
-  if (opts.sessionTranscript) {
-    subagentsDir = sessionSubagentsDir(opts.sessionTranscript);
-    dispatch = deriveDispatchMap(opts.sessionTranscript);
+  // A `--session` that does not belong to this run is discarded rather than trusted:
+  // see sessionOwnsRun. Nulling it here lets the recovery below (walk back from a
+  // resolved phase transcript) find the session that actually ran the pipeline.
+  let sessionArg = opts.sessionTranscript || null;
+  const sessionMismatch = !!sessionArg && !sessionOwnsRun(sessionArg, runDir, phases);
+  if (sessionMismatch) sessionArg = null;
+  if (sessionArg) {
+    subagentsDir = sessionSubagentsDir(sessionArg);
+    dispatch = deriveDispatchMap(sessionArg);
     for (const d of dispatch) {
       if (!d.phase || !d.agent_id) continue;
       if (!byPhase.has(d.phase)) byPhase.set(d.phase, []);
@@ -495,14 +540,15 @@ export function enrichTelemetry(runDir, opts = {}) {
   // caller can surface it instead of silently reporting $0.00.
   if (!enriched.length) {
     return { telPath, enriched, skipped, total_cost_usd: tel.total_cost_usd ?? null,
-      overhead_cost_usd: null, overhead_window_fallback: false, skipped_all: true };
+      overhead_cost_usd: null, overhead_window_fallback: false, session_mismatch: sessionMismatch,
+      skipped_all: true };
   }
 
   // Resolve the orchestrator session transcript for overhead accounting. Explicit
   // --session wins (backfill); otherwise derive it from a resolved phase transcript
   // (…/<session>/subagents/agent-<id>.jsonl → …/<session>.jsonl), so forward runs
   // get overhead without the orchestrator having to know its own transcript path.
-  let sessionTranscript = opts.sessionTranscript;
+  let sessionTranscript = sessionArg;
   if (!sessionTranscript && firstResolved) {
     subagentsDir = subagentsDir || dirname(firstResolved);
     const cand = `${dirname(subagentsDir)}.jsonl`;
@@ -545,6 +591,10 @@ export function enrichTelemetry(runDir, opts = {}) {
     tel.orchestration_overhead = overhead;
   }
 
+  // Correct the run window against the machine anchor. Done AFTER overhead pricing, which
+  // reads the anchor directly and is unaffected either way.
+  const timestampsCorrected = reconcileRunWindow(tel, machineRunWindow(runDir, tel));
+
   // Totals.
   const sum = (key) => enrichedPhaseSum(phases, key);
   tel.total_input_tokens = sum("input_tokens");
@@ -561,6 +611,7 @@ export function enrichTelemetry(runDir, opts = {}) {
   writeFileSync(telPath, JSON.stringify(tel, null, 2) + "\n");
   return { telPath, enriched, skipped, total_cost_usd: tel.total_cost_usd,
     overhead_cost_usd: overhead ? overhead.cost_usd : null, overhead_window_fallback: overheadWindowFallback,
+    session_mismatch: sessionMismatch, timestamps_corrected: timestampsCorrected,
     cap_breach_usd: tel.cap_breach_usd ?? null, cap_status: tel.cap_status ?? null };
 }
 
@@ -609,7 +660,16 @@ function reconcileCapStatus(tel, phaseCostSum) {
  * to move the window off the real turns and zero the overhead (ADR-0007).
  */
 function overheadWindow(runDir, tel) {
-  let since = tel.started_at, until = tel.completed_at;
+  const { since, until } = machineRunWindow(runDir, tel);
+  return { since, until };
+}
+
+/**
+ * The run's wall-clock window, preferring the machine anchor over the model's prose.
+ * Returns `anchored: true` only when `.checkpoint/_started_at` was readable.
+ */
+function machineRunWindow(runDir, tel) {
+  let since = tel.started_at, until = tel.completed_at, anchored = false;
   try {
     const ep = Number(readFileSync(join(runDir, ".checkpoint", "_started_at"), "utf8").trim());
     if (Number.isFinite(ep) && ep > 0) {
@@ -617,9 +677,38 @@ function overheadWindow(runDir, tel) {
       since = new Date(startMs).toISOString();
       const wall = num(tel.wall_clock_seconds);
       until = wall > 0 ? new Date(startMs + wall * 1000).toISOString() : tel.completed_at;
+      anchored = true;
     }
   } catch { /* no readable anchor — keep the telemetry ISO window */ }
-  return { since, until };
+  return { since, until, anchored };
+}
+
+// A drift below this is rounding; above it the ISO strings were not derived from the anchor.
+const RUN_WINDOW_TOLERANCE_MS = 120_000;
+
+/**
+ * Correct `started_at` / `completed_at` against the machine anchor.
+ *
+ * Step 5 tells the orchestrator to render both from `.checkpoint/_started_at` via `date -u -r`.
+ * When it instead transcribes them by hand the result is confidently wrong: an observed run
+ * recorded `started_at: "2026-07-28T14:24:17Z"` against an anchor of `11:04:17Z` — the local
+ * EEST clock stamped `Z`, plus 20 minutes of drift — and derived `completed_at` from it, so the
+ * record was internally consistent and externally false. Pricing already ignores these strings
+ * (ADR-0007), but the report header, the journal and every cross-run rollup read them.
+ *
+ * Only the ISO strings are rewritten. `wall_clock_seconds` is the anchor's own arithmetic
+ * (`end - start`) and is left alone; correcting the start while preserving the duration keeps
+ * the two consistent.
+ */
+function reconcileRunWindow(tel, win) {
+  if (!win.anchored || !win.since) return null;
+  const stated = Date.parse(tel.started_at);
+  const anchor = Date.parse(win.since);
+  if (Number.isFinite(stated) && Math.abs(stated - anchor) <= RUN_WINDOW_TOLERANCE_MS) return null;
+  const from = tel.started_at ?? null;
+  tel.started_at = win.since;
+  if (win.until) tel.completed_at = win.until;
+  return { from, to: win.since, drift_seconds: Number.isFinite(stated) ? Math.round((stated - anchor) / 1000) : null };
 }
 
 function priceMainLoop(sessionTranscriptPath, registry, window = {}) {
