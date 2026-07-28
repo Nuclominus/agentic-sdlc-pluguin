@@ -41,6 +41,53 @@ test("cli sync is idempotent", () => {
   assert.deepEqual(first, second);
 });
 
+// `reindex` exists for one job: resolve a `_moc-changes.md` merge conflict without paying for it
+// with the vault's hand-written prose. `sync --backfill`, the only other regenerating verb, would
+// rewrite every note from its PR and wipe exactly that.
+test("cli reindex rebuilds the index from the notes on disk", () => {
+  const v = mkdtempSync(join(tmpdir(), "brain-reindex-"));
+  mkdirSync(join(v, "changes"), { recursive: true });
+  const note = (pr, date) =>
+    writeFileSync(join(v, "changes", `${date}-PR-${pr}-x.md`),
+      `---\npr: ${pr}\ndate: ${date}\ntype: fix\nroadmap: null\n---\n\n# PR #${pr}\n`);
+  note(11, "2026-07-01");
+  note(12, "2026-07-02");
+  // A stale index: missing #12 entirely, exactly what a bad conflict resolution leaves behind.
+  writeFileSync(join(v, "changes", "_moc-changes.md"), "# Changes — Index\n\n| #11 |\n");
+
+  const out = execFileSync("node", [CLI, "reindex", "--vault", v], { encoding: "utf8" });
+  assert.match(out, /2 note\(s\)/);
+  const idx = readFileSync(join(v, "changes", "_moc-changes.md"), "utf8");
+  assert.match(idx, /#11/);
+  assert.match(idx, /#12/);
+  // Reverse-chronological, same ordering contract as sync.
+  assert.ok(idx.indexOf("#12") < idx.indexOf("#11"), "newest PR first");
+});
+
+test("cli reindex leaves enriched note prose untouched", () => {
+  const v = mkdtempSync(join(tmpdir(), "brain-reindex2-"));
+  mkdirSync(join(v, "changes"), { recursive: true });
+  const path = join(v, "changes", "2026-07-05-PR-42-y.md");
+  const enriched = `---\npr: 42\ndate: 2026-07-05\ntype: feat\nroadmap: null\n---\n\n` +
+    `# PR #42\n\n## Decisions & rationale\n\nHand-written reasoning that must survive.\n`;
+  writeFileSync(path, enriched);
+
+  execFileSync("node", [CLI, "reindex", "--vault", v], { encoding: "utf8" });
+  assert.equal(readFileSync(path, "utf8"), enriched, "reindex must not touch note bodies");
+});
+
+test("cli reindex is idempotent", () => {
+  const v = mkdtempSync(join(tmpdir(), "brain-reindex3-"));
+  mkdirSync(join(v, "changes"), { recursive: true });
+  writeFileSync(join(v, "changes", "2026-07-06-PR-43-z.md"),
+    "---\npr: 43\ndate: 2026-07-06\ntype: docs\nroadmap: null\n---\n\n# PR #43\n");
+  const run = () => {
+    execFileSync("node", [CLI, "reindex", "--vault", v], { encoding: "utf8" });
+    return readFileSync(join(v, "changes", "_moc-changes.md"), "utf8");
+  };
+  assert.equal(run(), run());
+});
+
 test("cli sync keeps exactly one note per PR when the title (slug) changes", () => {
   const v = mkdtempSync(join(tmpdir(), "brain-cli3-"));
   mkdirSync(join(v, "changes"), { recursive: true });
