@@ -69,8 +69,9 @@ here when scheduled.
 On the Android run `native-chat-engine-s2-thread-list` (2026-07-28) four mandated `SKILL.md` steps
 were silently not executed in a single run — including both cost-pricing calls, which is why a
 $15.38 run reported `$— · $16.50 cap · within`. Ground truth: `tools/usage/cli.mjs` appears **zero**
-times across that session's 42 `Bash` calls. #92 made those misses loud (**ADR-0012**, landing with
-that PR); it did not make them impossible. The track's premise is that prose read by a model is a
+times across that session's 42 `Bash` calls. #92 made those misses loud
+([[decisions/ADR-0012-unpriced-runs-must-not-render-a-cap-verdict]]); it did not make them
+impossible. The track's premise is that prose read by a model is a
 probabilistic instruction, so the fix is to move load-bearing steps out of prose (H2, H3, H4, H6)
 rather than to word it more firmly — and to **measure compliance first** (H1) so the scope of the
 expensive item (H4, deterministic control flow) is decided by data instead of by this one incident.

@@ -23,9 +23,9 @@ mandated steps were silently not executed, all in the same run:
 | 5 — render timestamps from `.checkpoint/_started_at` via `date -u -r` | hand-transcribed local clock stamped `Z` | run window off by 3h20m |
 
 Ground truth: across 42 `Bash` calls in that session, `tools/usage/cli.mjs` appears **zero** times.
-Nothing failed — the steps simply did not run, and the run reported success. **ADR-0012** (landing
-with #92) records the incident and the mitigations already shipped, which make these misses *loud*
-but do not make them *impossible*.
+Nothing failed — the steps simply did not run, and the run reported success.
+[[decisions/ADR-0012-unpriced-runs-must-not-render-a-cap-verdict]] records the incident and the
+mitigations shipped in #92, which make these misses *loud* but do not make them *impossible*.
 
 This is the same lesson as
 [[decisions/ADR-0008-read-discipline-contract]] and the "machine contracts cannot live in prose"
@@ -134,9 +134,7 @@ the procedure a machine can perform or verify — and not one step further.
 
 ## Related
 
-- Incident and the shipped mitigations: `decisions/ADR-0012-unpriced-runs-must-not-render-a-cap-verdict`
-  (#92). Deliberately plain text, not a wikilink — the note lands with that PR, and a wikilink to a
-  note that does not exist yet fails `brain-sync check`. Upgrade it after the merge.
+- Incident and the shipped mitigations: [[decisions/ADR-0012-unpriced-runs-must-not-render-a-cap-verdict]] (#92)
 - Same medium/message failure, earlier instance: [[decisions/ADR-0008-read-discipline-contract]]
 - Machine anchor over model prose: [[decisions/ADR-0007-overhead-window-authoritative-anchor]]
 - Shares the prompt-size goal with Track E in [[planning/backlog]]
