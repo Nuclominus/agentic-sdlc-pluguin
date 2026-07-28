@@ -65,7 +65,7 @@ The only unit that knows the session `.jsonl` format. Input: a transcript path. 
 ordered array of facts, one per `tool_use` block found in `assistant` messages:
 
 ```js
-{ seq, tool, command, subagent_type, path, raw }
+{ seq, tool, command, subagent_type, path }
 ```
 
 `command` is set for `Bash` (from `input.command`), `subagent_type` for `Agent`, `path` for
@@ -211,11 +211,24 @@ not rest on a number that silently assumes all 12 runs ran today's `SKILL.md`.
 
 ## Telemetry addition — `plugin_version`
 
-`SKILL.md` Step 5 gains one field in `_telemetry.json`: `plugin_version`, read from the installed
-plugin's manifest rather than transcribed by the model (per H3's machine-value invariant — the
-contract passes the path, never the number). `schemas/run.schema.json` gains the optional property.
-It is optional, so every historical run stays schema-valid, and the auditor treats its absence as
-"fall back to `since`-by-date, mark provisional".
+`_telemetry.json` gains one field: `plugin_version`, so a future audit can tell whether a mandated
+step had actually reached the install that produced the run, instead of inferring it from a commit
+date in this repository.
+
+**Written by `usage/cli.mjs enrich`, not by the orchestrator.** Per H3's machine-value invariant the
+model must never transcribe a value a machine already holds: the enricher already rewrites telemetry
+and already lives inside the plugin, so it reads `../../.claude-plugin/plugin.json` relative to its
+own module URL and writes the `version` verbatim. Asking Step 5 to `cat` the manifest and copy the
+number into JSON would add exactly the class of instruction this whole track exists to remove.
+
+Two consequences, both accepted:
+
+- `_telemetry.json` has **no schema** (`schemas/run.schema.json` validates `.checkpoint/_run.json`;
+  telemetry is unvalidated). So there is no schema to extend — the field is additive and nothing
+  rejects it. Giving telemetry a schema is a worthwhile but separate change.
+- When `enrich` is skipped, `plugin_version` is absent — the very case the audit cares about. That
+  is not circular, merely uninformative: such a run already fails `5b-0-enrich`, and its date-based
+  `since` comparison stays `provisional`, exactly as for every pre-existing run.
 
 ## Output
 
@@ -248,13 +261,18 @@ Fixture-based, following the existing `tools/sdlc-lint/fixtures/` + `test/*.test
   the second session (asserts the union, not the newest-session, behaviour), one with no `agent_id`
   (`unauditable`), one predating a contract (`na: predates`), one with a skipped phase
   (`partial` with the right fraction).
-- `negative.test.mjs` / `all.test.mjs` — extended so the new verb participates in the existing
-  aggregate run.
+- `compliance-report.test.mjs` — aggregation: the rate counts `pass` only (never `partial`),
+  unauditable runs enter no denominator, a zero denominator yields `null` rather than `NaN`, and the
+  `provisional` / `thin denominator` / confounder annotations appear where they should.
+
+The verb is deliberately **not** added to `sdlc-lint all`. `all` is the CI gate and exits non-zero on
+findings; `compliance` is diagnostic and reads transcripts that exist only on a developer's machine,
+so wiring it into the gate would fail CI everywhere for reasons unrelated to the code under review.
 
 ## Definition of Done
 
 1. Six `sdlc-contract` blocks in `SKILL.md`; `contracts.mjs` parses them with zero errors.
-2. `plugin_version` written by Step 5, present in `run.schema.json` as optional.
+2. `plugin_version` written into `_telemetry.json` by `usage/cli.mjs enrich`.
 3. `node tools/sdlc-lint/cli.mjs compliance --runs "$HOME/parlor-android/docs/plans/*"` runs clean
    and produces the three-part report.
 4. The incident run is reported `fail` on `5b-0-enrich`. If it is not, the auditor is wrong.
