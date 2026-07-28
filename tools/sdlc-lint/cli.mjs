@@ -134,8 +134,14 @@ function opt(name, fallback = null) {
 }
 
 function printCompliance() {
-  const skill = resolve(root, "plugins/sdlc/skills/pipeline-orchestrator/SKILL.md");
-  const { contracts, errors } = parseContracts(skill);
+  // Live contracts sit next to the prose they describe; retired ones sit in the
+  // archive, so a run from before a step was replaced is still audited against the
+  // procedure that was actually in force.
+  const skillDir = resolve(root, "plugins/sdlc/skills/pipeline-orchestrator");
+  const { contracts, errors } = parseContracts([
+    join(skillDir, "SKILL.md"),
+    join(skillDir, "contracts-retired.md"),
+  ]);
   for (const e of errors) console.error(`✗ contract: ${e}`);
   if (!contracts.length) {
     console.error("✗ compliance: no sdlc-contract blocks found — nothing to audit");
