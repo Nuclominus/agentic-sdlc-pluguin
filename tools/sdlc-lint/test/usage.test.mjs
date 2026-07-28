@@ -756,3 +756,67 @@ test("a last-dispatch overage is reported but is NOT attributed to a blind gate"
   assert.equal(tel.cap_status, "exceeded-undetected");
   assert.ok(tel.phases.every((p) => !p.cap_gate_blind), "no phase was blind — the gate priced them all");
 });
+
+// ── dry-run estimation baselines (SKILL.md 1d-1) ─────────────────────────────
+//
+// The old baseline modelled one dispatch as a single API call (35k input, 60%
+// cached, 3k output) and priced an opus row at $0.16. A phase is a multi-turn
+// agent loop whose every turn re-reads the accumulated prefix, so real cost ran
+// 6-10x higher — and recipe caps derived from that estimate sat below their own
+// median run. These pin the corrected baselines to measured reality.
+
+// Median per-tier cost over 56 transcript-priced phases across 10 real runs,
+// excluding `development` (which carries its own x5.4 phase multiplier).
+const MEASURED_MEDIAN_USD = { opus: 0.95, sonnet: 0.38, haiku: 0.15 };
+const TIER_MODEL = { opus: "claude-opus-5", sonnet: "claude-sonnet-5", haiku: "claude-haiku-4-5-20251001", fable: "claude-fable-5" };
+
+const estimateRow = (tier, registry) => {
+  const b = registry.raw.estimation_baselines[tier];
+  return priceUsage({
+    input_tokens: b.input, cache_read_tokens: b.cache_read,
+    cache_write_5m_tokens: b.cache_write, cache_write_1h_tokens: 0, output_tokens: b.output,
+  }, TIER_MODEL[tier], registry);
+};
+
+test("the registry carries an estimation baseline for every pipeline tier", () => {
+  const b = reg.raw.estimation_baselines;
+  assert.ok(b, "estimation_baselines missing — the 1d-1 preview has nothing to price");
+  for (const tier of reg.raw.pipeline_tiers) {
+    assert.ok(b[tier], `no baseline for tier ${tier}`);
+    for (const k of ["input", "cache_read", "cache_write", "output"]) {
+      assert.equal(typeof b[tier][k], "number", `${tier}.${k} must be a number`);
+    }
+  }
+});
+
+test("each baseline reproduces its tier's measured median cost within 15%", () => {
+  for (const [tier, measured] of Object.entries(MEASURED_MEDIAN_USD)) {
+    const est = estimateRow(tier, reg);
+    const err = Math.abs(est / measured - 1);
+    assert.ok(err < 0.15, `${tier}: estimate $${est.toFixed(4)} vs measured $${measured} (${(err * 100).toFixed(1)}% off)`);
+  }
+});
+
+test("cache_read dominates every baseline — the shape the old model got wrong", () => {
+  // The pre-fix baseline assumed uncached input was the bulk of a dispatch. If a
+  // future retune reverts to that shape the estimate silently collapses again,
+  // because cache reads are where a multi-turn phase actually spends.
+  for (const tier of ["opus", "sonnet", "haiku"]) {
+    const b = reg.raw.estimation_baselines[tier];
+    assert.ok(b.cache_read > b.input * 100, `${tier}: cache_read must dominate uncached input`);
+    assert.ok(b.cache_read > b.cache_write, `${tier}: a phase re-reads more than it writes`);
+  }
+});
+
+test("the corrected baseline is far above the pre-2026-07 estimate it replaced", () => {
+  // Regression guard on the actual bug: the old opus row priced at $0.16.
+  assert.ok(estimateRow("opus", reg) > 0.5, "opus row must no longer price like a single API call");
+  assert.ok(estimateRow("sonnet", reg) > 0.2);
+});
+
+test("fable has a baseline despite no measured run, priced at its own rates", () => {
+  const b = reg.raw.estimation_baselines;
+  assert.deepEqual(b.fable, b.opus, "fable documents its opus-shaped inheritance");
+  // Same tokens, dearer tier → a strictly higher row than opus.
+  assert.ok(estimateRow("fable", reg) > estimateRow("opus", reg));
+});

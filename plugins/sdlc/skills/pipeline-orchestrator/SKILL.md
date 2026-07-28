@@ -799,31 +799,46 @@ those rows **skipped (resumed)** and EXCLUDE them from the cost estimate — the
 and only rows at or after the re-entry point are counted in step 4's totals. A real `--resume` run
 would dispatch exactly those same remaining rows, so this estimate is the cost to FINISH, not to redo.
 
-**3. Estimate cost per row from a documented token HEURISTIC** (⚠️ this is an ESTIMATE,
-not a measurement — real cost is recorded in Step 3d-1/Step 5 from actual usage). Baseline
-per-dispatch token assumptions, keyed by resolved tier:
+**3. Estimate cost per row from the registry's token BASELINES** (⚠️ this is an ESTIMATE,
+not a measurement — real cost is recorded in Step 3d-1b/Step 5b from the actual transcript).
 
-| tier | input tokens | cached fraction | output tokens |
-|---|---|---|---|
-| `opus`, `fable` | 35 000 | 60% | 3 000 |
-| `sonnet` | 28 000 | 60% | 2 500 |
-| `haiku` | 18 000 | 60% | 1 500 |
+Read the per-dispatch baseline for the row's resolved tier from the registry loaded in step 1 —
+`MODELS.estimation_baselines[<tier>]`, giving `{input, cache_read, cache_write, output}`. **Do not
+restate those numbers here**: the registry is their single source of truth, exactly as it is for
+pricing, and a second copy in this prose would drift the moment either is retuned.
 
-Per-row estimate, using registry pricing `P = MODELS.models[].pricing` for the tier
-(USD per MTok), with `cached = 0.60 × input`, `uncached = input − cached`:
+Price the baseline with the **same formula the real cost path uses** (`priceUsage` in
+`tools/usage/usage.mjs`), so an estimate and an actual differ only in their token counts, never in
+how those tokens are valued. With `P = MODELS.models[].pricing` for the tier (USD per MTok) and
+`M = MODELS.cache_write_multipliers.ephemeral_5m`:
 
 ```
-est_row = uncached/1e6 * P.input + cached/1e6 * P.cached_input + output/1e6 * P.output
+est_row = input/1e6      * P.input
+        + cache_read/1e6 * P.cached_input
+        + cache_write/1e6 * P.input * M
+        + output/1e6     * P.output
 ```
 
-(Sanity check: an `opus` row ⇒ `14k/1e6·5 + 21k/1e6·0.5 + 3k/1e6·25 = $0.16`, matching the
-Step 5 telemetry example.)
+> **Why the baseline looks the way it does.** Until 2026-07 this step assumed one dispatch ≈ a
+> single API call of 35k input (60% cached) + 3k output, which priced an `opus` row at `$0.16`. A
+> phase is not one call — it is a multi-turn agent loop, and every turn re-reads the whole
+> accumulated prefix. Measured across 56 transcript-priced phases: uncached input is *negligible*
+> (24–194 tokens), while `cache_read` runs 670k–820k and dominates the bill. The old model was
+> therefore wrong in **shape**, not just in magnitude, and under-reported real phase cost by 6–10×
+> — which is how recipe caps derived from it came to sit below their own median run. The current
+> baselines reproduce the median observed cost per tier to within ~11%.
 
 Phase-shape multipliers, applied on top of the per-row baseline (all documented, all
 heuristic):
 
-- **development** is two-pass (plan + implement); count it as **×1.6 per aspect** (plan
-  pass ≈ 0.6× a full dispatch, implement ≈ 1.0×).
+- **development** costs **×5.4 the tier baseline, per aspect** — measured, as the median of total
+  development-phase spend per run (both passes together) against the same tier's baseline, over 9
+  runs that reached the phase.
+  This replaced a ×1.6 reasoned from pass *count* (plan ≈ 0.6 + implement ≈ 1.0). That reasoning was
+  the wrong axis: the second pass is not what makes development expensive — the phase simply runs far
+  longer, and each extra turn re-reads a prefix that has itself grown (median `cache_read` for
+  development is 4.8M tokens against 725k for an ordinary sonnet phase). Counting passes cannot
+  predict that; only measurement can.
 - **Loop phase L** returning to phase R (single-run estimates `est(L)`, `est(R)`):
   iterating adds a surcharge on top of the one-time rows already counted —
   `expected` folds in `0.5 × (est(L) + est(R))` (assume ~1.5 rounds), `worst-case`

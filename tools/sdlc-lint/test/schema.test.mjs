@@ -175,9 +175,11 @@ test("android heal_checks are trimmed to compile-only — lint stays in post_pip
 });
 
 // Cost caps are sized against MEASURED transcript cost (p90 of 56 transcript-priced phases across
-// 10 real runs), not the SKILL.md 1d-1 dry-run heuristic. That heuristic prices a single API call
-// while a phase is a multi-turn agent loop, so it under-reports by 6-10x; caps derived from it sat
-// below their own recipe's MEDIAN run and were breached the moment the cost gate started working.
+// 10 real runs). Caps derived from the older SKILL.md 1d-1 estimate — which modelled a dispatch as
+// a single API call and so under-reported a multi-turn phase by 6-10x — sat below their own
+// recipe's MEDIAN run and were breached the moment the cost gate started working. That estimate is
+// now recalibrated (config/models.json `estimation_baselines`), but caps still come from measured
+// p90: an estimate predicts a typical run, a cap must clear the tail.
 // A cap below the median run is not a budget — it is a tripwire that fires every time.
 const P90 = {                    // measured per-phase p90, USD
   development: 5.41, business_analysis: 2.97, review: 0.95, qa: 1.48,

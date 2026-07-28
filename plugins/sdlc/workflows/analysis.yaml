@@ -8,11 +8,16 @@ description: >
 match:
   arguments_pattern: "\\banaly[sz]e\\b|\\baudit\\b|\\bassess(ment)?\\b"
 caps:
-  # Sized from MEASURED transcript cost, not the 1d-1 dry-run heuristic. That heuristic prices a
-  # single API call (35k in / 3k out); a phase is a multi-turn agent loop (median 12-18 turns, each
-  # re-reading its prefix), so it under-reports real phase cost by 6-10x. The old $0.75 here was
-  # derived from it and was breached by the very first run that could measure itself: $3.37 of phase
-  # spend under a $0.75 cap (`flutter-to-native-migration-plan`, BA $2.97 + security $0.40).
+  # Sized from MEASURED transcript cost. The old $0.75 was derived from the Step 1d-1 dry-run
+  # estimate back when that estimate modelled a dispatch as a single API call (35k in / 3k out) and
+  # so under-reported a real multi-turn phase by 6-10x; it was breached by the very first run able
+  # to measure itself — $3.37 of phase spend under a $0.75 cap
+  # (`flutter-to-native-migration-plan`, BA $2.97 + security $0.40).
+  #
+  # That estimate has since been recalibrated against the same measurements (its baselines now live
+  # in config/models.json `estimation_baselines`), so preview and cap no longer contradict each
+  # other. Caps still come from measured p90 rather than from the estimate: the estimate predicts a
+  # typical run, while a cap must clear the tail.
   #
   # Basis: 56 transcript-priced phases across 10 real runs. Per-phase p90 —
   #   business_analysis $2.97, security $0.40  =>  base_p90 = $3.37

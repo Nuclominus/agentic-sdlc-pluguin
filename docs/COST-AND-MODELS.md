@@ -42,16 +42,31 @@ and per-agent model tiers, the orchestrator prints a plan block and exits cleanl
 ```
 🔎 DRY RUN — no agents dispatched, no code written.
 Stack: android | Workflow: android-feature
-Phases (6):
-   1. business_analysis  → android-ba (opus)          ~$0.16
-   2. development         → android-developer (sonnet) ~$0.18
+Phases (7):
+   1. business_analysis  → android-ba (opus)          ~$0.94
+   2. development         → android-developer (sonnet) ~$1.84
    ...
-Estimated cost: ~$0.63  (worst-case $0.91)
-Cap: 0.60  → ⚠️ EXCEEDS by $0.03
+Estimated cost: ~$4.29  (worst-case $7.71)
+Cap: 16.50  → WITHIN
 ```
 
-Cost figures are a **heuristic estimate** (baseline per-phase token assumptions × model-registry
-pricing), not a measurement. In headless mode a machine-readable JSON line is also written to stdout.
+Cost figures are an **estimate** (per-tier baseline token counts × model-registry pricing), not a
+measurement. In headless mode a machine-readable JSON line is also written to stdout.
+
+The baselines live in the model registry
+([`plugins/sdlc/config/models.json`](../plugins/sdlc/config/models.json), key
+`estimation_baselines`) alongside pricing, and are priced with the **same formula** as real
+transcript cost — an estimate and an actual differ only in their token counts, never in how those
+tokens are valued.
+
+> They were recalibrated in 2026-07 from 56 transcript-priced phases. The previous model assumed one
+> dispatch ≈ a single API call (35k input, 60% cached, 3k output) and priced an opus row at `$0.16`.
+> A phase is a multi-turn agent loop that re-reads its whole prefix every turn: measured, uncached
+> input is negligible (24–194 tokens) while cache reads run 670k–820k and dominate the bill. The old
+> model was wrong in *shape*, not merely magnitude, and under-reported by 6–10× — which is how the
+> caps derived from it came to sit below their own median run. Current baselines land within ~11% of
+> the measured median per tier; `development` carries a measured **×5.4** phase multiplier (it was
+> ×1.6, reasoned from pass count rather than measured).
 
 **`caps.max_total_cost_usd`** (declared in a workflow recipe, e.g. `hotfix.yaml` caps at `$0.60`)
 gates a **real run**: the orchestrator accumulates actual per-phase cost and, before dispatching the
