@@ -89,3 +89,50 @@ test("a run whose only non-pass verdicts are na renders as compliant, not as a f
   assert.match(text, /✓ r1/);
   assert.doesNotMatch(text, /✗ r1/);
 });
+
+// H6's net leaves a mark on the run rather than in the transcript, so it is invisible
+// to every contract above. Reported beside them, never folded into them.
+const sealResults = [
+  { run: "s1", status: "auditable", date: "2026-07-30", date_source: "started_at",
+    plugin_version: "1.15.0", sealed_by: "orchestrator", verdicts: [] },
+  { run: "s2", status: "auditable", date: "2026-07-30", date_source: "started_at",
+    plugin_version: "1.15.0", sealed_by: "stop-hook", verdicts: [] },
+  { run: "s3", status: "auditable", date: "2026-07-30", date_source: "started_at",
+    plugin_version: "1.15.0", sealed_by: "orchestrator", verdicts: [] },
+  { run: "s4", status: "unauditable", reason: "no-agent-ids", date: null, date_source: "none",
+    plugin_version: null, sealed_by: "stop-hook", verdicts: [] },
+];
+
+test("the seal summary counts who sealed each auditable run", () => {
+  const agg = aggregate(sealResults, contracts);
+  assert.equal(agg.seal.orchestrator, 2);
+  assert.equal(agg.seal.hook, 1);
+  assert.equal(agg.seal.unrecorded, 0);
+  assert.equal(agg.seal.denominator, 3,
+    "an unauditable run is excluded here for the same reason it is excluded from every " +
+    "rate — s4 carries sealed_by but no resolvable transcript");
+  assert.equal(agg.seal.hook_share, 1 / 3);
+});
+
+test("a run with no sealed_by is unrecorded, never counted as the orchestrator's", () => {
+  const agg = aggregate(results, contracts);   // the older fixtures carry no sealed_by
+  assert.equal(agg.seal.orchestrator, 0);
+  assert.equal(agg.seal.hook, 0);
+  assert.equal(agg.seal.unrecorded, 2);
+  assert.equal(agg.seal.hook_share, null,
+    "no share is computable when nothing recorded who sealed — reporting 0% would " +
+    "assert the net never fired, when the truth is that nobody was looking");
+});
+
+test("renderText reports the seal split, and says what unrecorded conflates", () => {
+  const withUnrecorded = [...sealResults,
+    { run: "s5", status: "auditable", date: "2026-07-30", date_source: "started_at",
+      plugin_version: "1.15.0", verdicts: [] }];
+  const text = renderText(aggregate(withUnrecorded, contracts), withUnrecorded);
+  assert.match(text, /orchestrator=2/);
+  assert.match(text, /stop-hook=1/);
+  assert.match(text, /unrecorded=1/);
+  assert.match(text, /predates|never sealed/,
+    "unrecorded conflates a run older than the marker with a run nothing ever sealed; " +
+    "the line must say so rather than let it read as a measured zero");
+});

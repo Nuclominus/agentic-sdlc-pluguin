@@ -177,6 +177,12 @@ breaches and unpriced phases as one sealed by hand. A silent net that hides a $1
 which both documents the ownership and gives H3's lint teeth over it — the model must never write
 this key, since the whole point is that it records who did.
 
+`sdlc-lint compliance` reads the key and prints one `seal:stop-hook` line **beside** the contract
+rates, never inside them, with a share that is `n/a` rather than `0%` when nothing recorded a
+sealer — a zero there would assert the net never fired when the truth is that nobody was looking.
+The line also names what `unrecorded` conflates: a run older than the marker and a run nothing ever
+sealed are different facts.
+
 **The compliance contract `5b-finish` does not change.** The auditor reads transcripts, and a hook
 leaves no `tool_use` block, so the hook's action is invisible to it. That is the correct outcome:
 the contract measures the *model*, and H6 must not be able to flatter it. `sealed_by` is the

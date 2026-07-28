@@ -35,8 +35,31 @@ export function aggregate(results, contracts) {
   return {
     contracts: rows,
     auditable: audited.length,
+    seal: sealSplit(audited),
     excluded: results.filter((r) => r.status !== "auditable").map((r) => ({ run: r.run, reason: r.reason })),
   };
+}
+
+/**
+ * Who sealed each run — H6's net firing, counted beside the rates rather than inside them.
+ *
+ * This is NOT a contract and deliberately never becomes one. The hook leaves no `tool_use`
+ * block, so it is invisible to a transcript auditor; folding it into `5b-finish` would let
+ * the net flatter the number that decides H4, when the point is to measure the model.
+ *
+ * `hook_share` is null rather than 0 when nothing recorded a sealer. A 0% would assert the
+ * net never fired; the truth is that nobody was looking.
+ */
+function sealSplit(audited) {
+  let orchestrator = 0, hook = 0, unrecorded = 0;
+  for (const r of audited) {
+    if (r.sealed_by === "orchestrator") orchestrator += 1;
+    else if (r.sealed_by === "stop-hook") hook += 1;
+    else unrecorded += 1;
+  }
+  const denominator = orchestrator + hook;
+  return { orchestrator, hook, unrecorded, denominator,
+    hook_share: denominator ? hook / denominator : null };
 }
 
 const pct = (rate) => (rate === null ? "  n/a" : `${String(Math.round(rate * 100)).padStart(3)}%`);
@@ -49,6 +72,13 @@ export function renderText(agg, results) {
     const note = c.annotations.length ? `  [${c.annotations.join("; ")}]` : "";
     out.push(`  ${pct(c.rate)}  ${c.id.padEnd(20)} pass=${c.pass} partial=${c.partial} fail=${c.fail} na=${c.na}${note}`);
   }
+
+  const s = agg.seal;
+  out.push("");
+  out.push(`  ${pct(s.hook_share)}  ${"seal:stop-hook".padEnd(20)}` +
+    ` orchestrator=${s.orchestrator} stop-hook=${s.hook} unrecorded=${s.unrecorded}` +
+    "  [not a contract — the hook leaves no transcript trace" +
+    (s.unrecorded ? "; unrecorded = predates the marker or never sealed" : "") + "]");
 
   out.push("");
   out.push("per-run detail (non-pass verdicts only)");
