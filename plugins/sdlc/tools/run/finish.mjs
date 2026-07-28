@@ -5,9 +5,9 @@
 // Fail-open everywhere. The run has already succeeded by the time this executes — a
 // failure to price it, or to render its report, must never turn a successful run into a
 // failed one. Each stage records what happened and the next stage still runs.
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { sealRunClock } from "./clock.mjs";
+import { sealRunClock, isoSeconds } from "./clock.mjs";
 import { enrichTelemetry } from "../usage/usage.mjs";
 import { renderReportFile } from "../report/report.mjs";
 
@@ -20,6 +20,7 @@ import { renderReportFile } from "../report/report.mjs";
  * @param {boolean} [opts.noReport]     skip the HTML render only
  * @param {string} [opts.registryPath]  models.json override
  * @param {string} [opts.projectsRoot]  transcript root override
+ * @param {"orchestrator"|"stop-hook"} [opts.sealedBy]  who is sealing; default "orchestrator"
  * @param {Function} [opts.enrich]        TEST SEAM — replaces enrichTelemetry
  * @param {Function} [opts.renderReport]  TEST SEAM — replaces renderReportFile
  *
@@ -95,5 +96,28 @@ export function finishRun(runDir, opts = {}) {
     }
   }
 
-  return { runDir, telPath, clock, enrich, report, warnings };
+  // 4. The seal marker — LAST, and after enrich, which rewrites the whole telemetry
+  //    file. Writing it earlier would let enrich erase `sealed_by`, and a run that
+  //    reads as unsealed gets sealed twice: `wall_clock_seconds` is `now - anchor`, so
+  //    the second pass inflates the duration and, through the overhead window, the cost
+  //    (ADR-0014 measured 3522s -> 11144s, $12.81 -> $13.71 on a real run).
+  //    Writing it last is also why an interrupted seal is safe: no marker, so retryable.
+  const sealedBy = opts.sealedBy || "orchestrator";
+  const sealedAt = isoSeconds(Number.isFinite(opts.now) ? opts.now : Date.now());
+  let sealed = null;
+  try {
+    const tel = JSON.parse(readFileSync(telPath, "utf8"));
+    tel.sealed_by = sealedBy;
+    writeFileSync(telPath, JSON.stringify(tel, null, 2) + "\n");
+    mkdirSync(join(runDir, ".checkpoint"), { recursive: true });
+    writeFileSync(join(runDir, ".checkpoint", "_sealed"),
+      JSON.stringify({ sealed_at: sealedAt, by: sealedBy,
+        wall_clock_seconds: clock.wall_clock_seconds ?? null }, null, 2) + "\n");
+    sealed = { by: sealedBy, at: sealedAt };
+  } catch (e) {
+    warnings.push(`WARN: could not record the seal marker — ${e.message}; ` +
+      "this run may be sealed a second time and its duration inflated");
+  }
+
+  return { runDir, telPath, clock, enrich, report, sealed, warnings };
 }

@@ -11,7 +11,7 @@ import { join } from "node:path";
 
 // `%FT%TZ`, the shape the rest of the corpus carries. toISOString() alone would add
 // milliseconds and make new runs inconsistent with every older one.
-function isoSeconds(ms) {
+export function isoSeconds(ms) {
   return new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
