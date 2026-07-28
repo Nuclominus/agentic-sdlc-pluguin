@@ -1914,6 +1914,7 @@ their checkpoints, not lost). Then write `docs/plans/{task_slug}/_telemetry.json
   "completed_at": "<ISO timestamp>",
   "wall_clock_seconds": 187,
   "model_enforcement_corrections": 0,
+  "plugin_version": "<written by Step 5b's enrich — do NOT hand-transcribe>",
   "phases": [
     {
       "phase": "business_analysis",

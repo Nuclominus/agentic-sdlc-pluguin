@@ -264,6 +264,27 @@ export function findAgentTranscript(agentId, { subagentsDir, projectsRoot } = {}
   return hits[0] || null;
 }
 
+/**
+ * The version of the plugin this enricher shipped in, read from its own manifest.
+ *
+ * Stamped into telemetry so a later compliance audit can tell whether a mandated
+ * step had actually reached this install, rather than inferring it from a commit
+ * date in the marketplace repo. Read here, by the machine that already holds the
+ * value — asking the orchestrator to `cat` the manifest and copy the number into
+ * JSON would add exactly the class of hand-transcribed machine value that the
+ * instruction-fidelity work exists to remove.
+ *
+ * Best-effort: a missing or malformed manifest yields null, never a throw. Pricing
+ * must not fail over a diagnostic field.
+ */
+function pluginVersion() {
+  try {
+    const manifest = new URL("../../.claude-plugin/plugin.json", import.meta.url);
+    const v = JSON.parse(readFileSync(manifest, "utf8")).version;
+    return typeof v === "string" ? v : null;
+  } catch { return null; }
+}
+
 /** subagents dir for a session transcript path .../projects/<cwd>/<sid>.jsonl */
 export function sessionSubagentsDir(sessionTranscriptPath) {
   const dir = dirname(sessionTranscriptPath);
@@ -607,6 +628,12 @@ export function enrichTelemetry(runDir, opts = {}) {
   tel.cache_hit_ratio = denom > 0 ? Math.round((tel.total_cached_input_tokens / denom) * 100) / 100 : null;
   tel.cost_basis = "transcript";
   reconcileCapStatus(tel, phaseCostSum);
+
+  // Rides the success path only: the zero-resolve branch above returns early
+  // precisely to leave pre-enrich telemetry alone, and a diagnostic field is not a
+  // reason to start writing on it.
+  const pv = pluginVersion();
+  if (pv) tel.plugin_version = pv;
 
   writeFileSync(telPath, JSON.stringify(tel, null, 2) + "\n");
   return { telPath, enriched, skipped, total_cost_usd: tel.total_cost_usd,
