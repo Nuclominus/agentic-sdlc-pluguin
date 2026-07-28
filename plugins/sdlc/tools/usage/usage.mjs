@@ -336,6 +336,79 @@ export function deriveDispatchMap(sessionTranscriptPath) {
   });
 }
 
+// ── in-run phase pricing (the cost-cap gate's source) ─────────────────────────
+
+/**
+ * Resolve a phase's agent id(s) to existing transcript paths, dropping ids that
+ * were already priced for an earlier phase (a resumed subagent reused across two
+ * passes has ONE transcript and must be charged exactly once).
+ */
+function resolvePhaseTranscripts(agentIds, { exclude, subagentsDir, projectsRoot } = {}) {
+  const skip = exclude instanceof Set ? exclude : new Set(exclude || []);
+  const resolved = (Array.isArray(agentIds) ? agentIds : [agentIds])
+    .filter(Boolean)
+    .filter((id) => !skip.has(id))
+    .map((id) => ({ id, path: findAgentTranscript(id, { subagentsDir, projectsRoot }) }))
+    .filter((x) => x.path);
+  return { ids: resolved.map((x) => x.id), paths: resolved.map((x) => x.path) };
+}
+
+/**
+ * Price ONE finished phase from its own subagent transcript(s), for use BETWEEN
+ * phases — this is what the Step 3d-cap cost gate spends against.
+ *
+ * Why this exists separately from enrichTelemetry: the gate runs mid-pipeline,
+ * when there is no `_telemetry.json` on disk yet (Step 5 writes it) and no other
+ * phase to reconcile. The Agent result envelope this harness returns carries only
+ * an aggregate `subagent_tokens` count, so the live capture in 3d-1 cannot price
+ * a phase at all — it yields `null`, which the gate counts as $0, which made the
+ * cap unenforceable at ANY value. The phase's real price is already on disk the
+ * moment the agent returns; this reads it there.
+ *
+ * NEVER throws for a missing/unpriced transcript — it reports `resolved: false`
+ * so the caller can fall back to the aggregate path instead of failing the run.
+ * `resolved: false` always pairs with `cost_usd: null`: an unknown cost must not
+ * reach the gate as a measured $0.
+ */
+export function phaseCost(agentIds, opts = {}) {
+  const registry = opts.registry || loadRegistry(opts.registryPath);
+  const subagentsDir = opts.subagentsDir ||
+    (opts.sessionTranscript ? sessionSubagentsDir(opts.sessionTranscript) : undefined);
+  const requested = (Array.isArray(agentIds) ? agentIds : [agentIds]).filter(Boolean);
+  const miss = (reason) => ({
+    resolved: false, reason, agent_id: requested, usage_source: null, cost_usd: null,
+  });
+  if (!requested.length) return miss("no-agent-id");
+
+  const { ids, paths } = resolvePhaseTranscripts(requested, {
+    exclude: opts.exclude, subagentsDir, projectsRoot: opts.projectsRoot,
+  });
+  if (!paths.length) return miss("no-transcript");
+
+  const r = priceTranscripts(paths, registry);
+  // Same rule as enrichTelemetry: a transcript whose model(s) are all unknown to
+  // the registry is NOT a priced phase. Reporting it as `transcript` with a null
+  // cost would claim a price it does not have.
+  if (r.cost_usd == null) return miss("unpriced-model");
+
+  return {
+    resolved: true,
+    reason: null,
+    agent_id: ids,
+    usage_source: "transcript",
+    model: r.model,
+    cost_usd: r.cost_usd,
+    input_tokens: r.input_tokens,
+    output_tokens: r.output_tokens,
+    cached_input_tokens: r.cached_input_tokens,
+    cache_creation_tokens: r.cache_creation_tokens,
+    billed_tokens: r.billed_tokens,
+    turns: r.turns,
+    peak_prefix_tokens: r.peak_prefix_tokens,
+    cache_pressure: r.peak_prefix_tokens > CACHE_PRESSURE_PEAK_TOKENS,
+  };
+}
+
 // ── enrichment ─────────────────────────────────────────────────────────────────
 
 /**
@@ -387,13 +460,10 @@ export function enrichTelemetry(runDir, opts = {}) {
     if (!ids || !ids.length) { skipped.push(p.phase); continue; }
     // Drop ids already priced for an earlier phase: a two-pass phase can reuse
     // one resumed subagent whose single transcript must be counted exactly once.
-    const resolved = ids
-      .filter((id) => !pricedIds.has(id))
-      .map((id) => ({ id, path: findAgentTranscript(id, { subagentsDir, projectsRoot: opts.projectsRoot }) }))
-      .filter((x) => x.path);
-    if (!resolved.length) { skipped.push(p.phase); continue; }
-    const usedIds = resolved.map((x) => x.id);
-    const paths = resolved.map((x) => x.path);
+    const { ids: usedIds, paths } = resolvePhaseTranscripts(ids, {
+      exclude: pricedIds, subagentsDir, projectsRoot: opts.projectsRoot,
+    });
+    if (!paths.length) { skipped.push(p.phase); continue; }
     for (const id of usedIds) pricedIds.add(id);
     if (!firstResolved) firstResolved = paths[0];
     const r = priceTranscripts(paths, registry);
@@ -481,15 +551,42 @@ export function enrichTelemetry(runDir, opts = {}) {
   tel.total_output_tokens = sum("output_tokens");
   tel.total_cached_input_tokens = sum("cached_input_tokens");
   tel.total_cache_creation_tokens = sum("cache_creation_tokens");
-  const phaseCost = phases.reduce((a, p) => a + (p.usage_source === "transcript" && p.cost_usd != null ? p.cost_usd : 0), 0);
-  tel.total_cost_usd = round2(phaseCost + (overhead ? overhead.cost_usd : 0));
+  const phaseCostSum = phases.reduce((a, p) => a + (p.usage_source === "transcript" && p.cost_usd != null ? p.cost_usd : 0), 0);
+  tel.total_cost_usd = round2(phaseCostSum + (overhead ? overhead.cost_usd : 0));
   const denom = tel.total_input_tokens + tel.total_cached_input_tokens;
   tel.cache_hit_ratio = denom > 0 ? Math.round((tel.total_cached_input_tokens / denom) * 100) / 100 : null;
   tel.cost_basis = "transcript";
+  reconcileCapStatus(tel, phaseCostSum);
 
   writeFileSync(telPath, JSON.stringify(tel, null, 2) + "\n");
   return { telPath, enriched, skipped, total_cost_usd: tel.total_cost_usd,
-    overhead_cost_usd: overhead ? overhead.cost_usd : null, overhead_window_fallback: overheadWindowFallback };
+    overhead_cost_usd: overhead ? overhead.cost_usd : null, overhead_window_fallback: overheadWindowFallback,
+    cap_breach_usd: tel.cap_breach_usd ?? null, cap_status: tel.cap_status ?? null };
+}
+
+/**
+ * Last line of defense for the cost cap. The in-run gate (orchestrator Step
+ * 3d-cap) spends per-phase prices supplied by Step 3d-1b; when 3d-1b comes up
+ * blind for a phase (transcript not resolvable, no node, unpriced model) that
+ * phase enters the gate as $0 and the run can finish over cap still reporting
+ * `cap_status: "within"` — precisely the failure that made this whole path
+ * suspect. Enrichment holds the real per-phase prices, so it is the last place
+ * the record can be corrected before anyone reads it.
+ *
+ * Compared against PHASE spend only, never `total_cost_usd`: orchestration
+ * overhead is deliberately outside the gate (see Step 5), and folding it in here
+ * would retroactively re-tighten every recipe's cap.
+ *
+ * A verdict the gate already reached (`exceeded-continued` / `exceeded-aborted`)
+ * is never overwritten — that one had a user in the loop and carries meaning this
+ * function cannot reconstruct. Only a `"within"` that the numbers contradict is
+ * corrected, to `"exceeded-undetected"`.
+ */
+function reconcileCapStatus(tel, phaseCostSum) {
+  const cap = tel.cost_cap_usd;
+  if (cap == null || !(phaseCostSum > cap)) return;
+  tel.cap_breach_usd = round2(phaseCostSum - cap);
+  if (tel.cap_status == null || tel.cap_status === "within") tel.cap_status = "exceeded-undetected";
 }
 
 /**

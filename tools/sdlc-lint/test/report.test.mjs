@@ -185,3 +185,27 @@ test("a healed phase carries a per-phase heal badge", () => {
   assert.match(html, /2 heal attempt\(s\)/);   // hero
   assert.match(html, /1 heal attempt\(s\)/);   // per-phase badge — impossible without it
 });
+
+test("an undetected cap breach names the overage and the phases the gate could not price", () => {
+  const t = JSON.parse(JSON.stringify(tel));
+  t.cost_cap_usd = 0.75;
+  t.cap_status = "exceeded-undetected";
+  t.cap_breach_usd = 2.62;
+  t.phases[0].cap_gate_blind = true;
+  const html = renderReport(t);
+  assert.match(html, /exceeded-undetected/);
+  assert.match(html, /over by \$2\.62/);
+  assert.match(html, /not caught in-run/);
+  assert.match(html, new RegExp(`unpriced at gate time: ${t.phases[0].phase}`));
+});
+
+test("a cap breach the gate DID catch is not labelled undetected", () => {
+  const t = JSON.parse(JSON.stringify(tel));
+  t.cost_cap_usd = 0.10;
+  t.cap_status = "exceeded-continued";
+  t.cap_breach_usd = 0.10;
+  const html = renderReport(t);
+  assert.match(html, /exceeded-continued/);
+  assert.match(html, /over by \$0\.10/);
+  assert.doesNotMatch(html, /not caught in-run/);
+});

@@ -1,12 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import {
   loadRegistry, extractUsage, priceUsage, priceTranscripts,
   findAgentTranscript, sessionSubagentsDir, deriveDispatchMap, enrichTelemetry,
+  phaseCost,
   CACHE_PRESSURE_PEAK_TOKENS,
 } from "../lib/usage.mjs";
 
@@ -574,4 +576,171 @@ test("enrichTelemetry leaves telemetry untouched when nothing resolves (no zero-
   assert.equal(tel.total_cost_usd, null, "cost not clobbered to 0");
   assert.equal(tel.phases[0].usage_source, "subagent_aggregate");
   assert.equal(tel.phases[0].cost_usd, null);
+});
+
+// ── phaseCost — the in-run cost-cap gate's price source (Step 3d-1b) ──────────
+//
+// Regression cover for the dead cost cap: 3d-cap used to accumulate ONLY the
+// live Agent-envelope price, and this harness's envelope is aggregate-only
+// (`subagent_tokens`, no input/output/cache split), so every phase priced as
+// `null` → treated as $0 → the gate could never fire at any cap. The phase's
+// real price is on disk in its own subagent transcript the moment the agent
+// returns; these tests pin that it is readable BETWEEN phases, not only at 5b.
+
+test("phaseCost prices a single finished phase from its subagent transcript", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pc-"));
+  const sub = join(dir, "subagents");
+  writeAgent(sub, "aaaa11112222", [turn("claude-opus-4-8", {
+    input_tokens: 100000, output_tokens: 5000, cache_read_input_tokens: 200000, cache_creation_input_tokens: 50000 })]);
+  const r = phaseCost("aaaa11112222", { registry: reg, subagentsDir: sub });
+  assert.equal(r.resolved, true);
+  assert.equal(r.usage_source, "transcript");
+  assert.ok(r.cost_usd > 0);
+  assert.equal(r.input_tokens, 100000);
+  assert.equal(r.output_tokens, 5000);
+  assert.equal(r.cached_input_tokens, 200000);
+  assert.equal(r.cache_creation_tokens, 50000);
+  assert.equal(r.turns, 1);
+  assert.deepEqual(r.agent_id, ["aaaa11112222"]);
+});
+
+test("phaseCost sums a multi-pass phase and takes peak as the max across passes", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pc-multi-"));
+  const sub = join(dir, "subagents");
+  writeAgent(sub, "aaaa11112222", [turn("claude-sonnet-5", { input_tokens: 10, output_tokens: 20, cache_read_input_tokens: 90000 })]);
+  writeAgent(sub, "bbbb33334444", [turn("claude-sonnet-5", { input_tokens: 5, output_tokens: 7, cache_read_input_tokens: 40000 })]);
+  const r = phaseCost(["aaaa11112222", "bbbb33334444"], { registry: reg, subagentsDir: sub });
+  assert.equal(r.resolved, true);
+  assert.equal(r.input_tokens, 15);
+  assert.equal(r.turns, 2);
+  assert.equal(r.peak_prefix_tokens, 90000, "peak is the max single-turn cache read, not the sum");
+  assert.equal(r.cache_pressure, true);
+  assert.deepEqual(r.agent_id, ["aaaa11112222", "bbbb33334444"]);
+});
+
+test("phaseCost drops already-priced ids so a reused subagent is never double-counted", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pc-excl-"));
+  const sub = join(dir, "subagents");
+  // Million-token scale so the two costs differ by more than round2's cent.
+  writeAgent(sub, "aaaa11112222", [turn("claude-sonnet-5", { input_tokens: 1_000_000, output_tokens: 20, cache_read_input_tokens: 1000 })]);
+  writeAgent(sub, "bbbb33334444", [turn("claude-sonnet-5", { input_tokens: 500_000, output_tokens: 7, cache_read_input_tokens: 500 })]);
+  const both = phaseCost(["aaaa11112222", "bbbb33334444"], { registry: reg, subagentsDir: sub });
+  const one = phaseCost(["aaaa11112222", "bbbb33334444"], { registry: reg, subagentsDir: sub, exclude: ["aaaa11112222"] });
+  assert.equal(one.input_tokens, 500_000);
+  assert.deepEqual(one.agent_id, ["bbbb33334444"]);
+  assert.ok(one.cost_usd < both.cost_usd);
+  // Every id already priced → nothing left to charge this phase for.
+  const none = phaseCost(["aaaa11112222"], { registry: reg, subagentsDir: sub, exclude: ["aaaa11112222"] });
+  assert.equal(none.resolved, false);
+  assert.equal(none.cost_usd, null);
+});
+
+test("phaseCost reports unresolved (never throws) when no transcript exists yet", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pc-miss-"));
+  const sub = join(dir, "subagents");
+  mkdirSync(sub, { recursive: true });
+  const r = phaseCost("0000nonexistent0", { registry: reg, subagentsDir: sub, projectsRoot: dir });
+  assert.equal(r.resolved, false);
+  assert.equal(r.cost_usd, null);
+  assert.equal(r.usage_source, null);
+  assert.equal(r.reason, "no-transcript");
+});
+
+test("phaseCost reports unresolved for a resolved-but-unpriced model (no false $0 for the gate)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pc-unpriced-"));
+  const sub = join(dir, "subagents");
+  writeAgent(sub, "cccc55556666", [turn("some-unknown-model-9", { input_tokens: 10, output_tokens: 20 })]);
+  const r = phaseCost("cccc55556666", { registry: reg, subagentsDir: sub });
+  assert.equal(r.resolved, false);
+  assert.equal(r.cost_usd, null);
+  assert.equal(r.reason, "unpriced-model");
+});
+
+test("phaseCost derives the subagents dir from a session transcript path", () => {
+  const { sess, projectsRoot } = buildRun();
+  const r = phaseCost("aaaa11112222", { registry: reg, sessionTranscript: sess, projectsRoot });
+  assert.equal(r.resolved, true);
+  assert.ok(r.cost_usd > 0);
+});
+
+test("phase-cost CLI emits the gate's machine contract and never exits non-zero on a miss", () => {
+  const { sess, projectsRoot } = buildRun();
+  const CLI = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "plugins", "sdlc", "tools", "usage", "cli.mjs");
+  const run = (args) => JSON.parse(execFileSync("node", [CLI, "phase-cost", ...args, "--json"],
+    { encoding: "utf8", cwd: projectsRoot }));
+
+  const hit = run(["aaaa11112222", "--session", sess, "--registry", REGISTRY, "--projects-root", projectsRoot]);
+  assert.equal(hit.ok, true);
+  assert.equal(hit.resolved, true);
+  assert.equal(hit.usage_source, "transcript");
+  assert.ok(hit.cost_usd > 0, "the gate gets a real number between phases");
+
+  const miss = run(["0000nonexistent0", "--session", sess, "--registry", REGISTRY, "--projects-root", projectsRoot]);
+  assert.equal(miss.ok, true, "a miss is not a pipeline failure");
+  assert.equal(miss.resolved, false);
+  assert.equal(miss.cost_usd, null);
+});
+
+// ── post-run cap reconciliation (defense in depth behind the 3d-1b gate) ──────
+//
+// 3d-1b makes the in-run gate work, but it can still come up blind (transcript
+// not yet flushed, node missing, unpriced model) and fall back to counting a
+// phase as $0. When that happens the run silently finishes over cap with
+// cap_status:"within". Enrichment sees the real numbers at the end, so it is the
+// last place a breach can still be told the truth.
+
+function capRun(cap, capStatus = "within") {
+  const { runDir, sess, projectsRoot } = buildRun();
+  const tel = JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8"));
+  tel.cost_cap_usd = cap;
+  tel.cap_status = capStatus;
+  writeFileSync(join(runDir, "_telemetry.json"), JSON.stringify(tel, null, 2));
+  return { runDir, sess, projectsRoot };
+}
+const readTel = (runDir) => JSON.parse(readFileSync(join(runDir, "_telemetry.json"), "utf8"));
+
+test("enrichTelemetry flags a cap breach the in-run gate missed", () => {
+  const { runDir, sess } = capRun(0.01);
+  enrichTelemetry(runDir, { sessionTranscript: sess, registry: reg });
+  const tel = readTel(runDir);
+  assert.equal(tel.cap_status, "exceeded-undetected", "a real breach must not keep reading as 'within'");
+  assert.ok(tel.cap_breach_usd > 0);
+  const phaseCostSum = tel.phases.reduce((a, p) => a + (p.cost_usd || 0), 0);
+  assert.ok(Math.abs(tel.cap_breach_usd - (phaseCostSum - 0.01)) < 0.02, "breach is measured against PHASE spend");
+});
+
+test("enrichTelemetry does not invent a breach from orchestration overhead", () => {
+  // Cap sized above phase spend but below phase spend + overhead. Overhead is
+  // deliberately outside the gate (Step 5), so this must stay "within".
+  const probe = capRun(0.01);
+  enrichTelemetry(probe.runDir, { sessionTranscript: probe.sess, registry: reg });
+  const t0 = readTel(probe.runDir);
+  const phaseSum = t0.phases.reduce((a, p) => a + (p.cost_usd || 0), 0);
+  const overhead = t0.orchestration_overhead.cost_usd;
+  assert.ok(overhead > 0.02, "fixture must have real overhead for this test to mean anything");
+
+  const { runDir, sess } = capRun(phaseSum + overhead / 2);
+  enrichTelemetry(runDir, { sessionTranscript: sess, registry: reg });
+  const tel = readTel(runDir);
+  assert.equal(tel.cap_status, "within");
+  assert.equal(tel.cap_breach_usd, undefined);
+  assert.ok(tel.total_cost_usd > tel.cost_cap_usd, "total legitimately exceeds the cap via overhead");
+});
+
+test("enrichTelemetry leaves a breach the gate already caught untouched", () => {
+  for (const status of ["exceeded-continued", "exceeded-aborted"]) {
+    const { runDir, sess } = capRun(0.01, status);
+    enrichTelemetry(runDir, { sessionTranscript: sess, registry: reg });
+    const tel = readTel(runDir);
+    assert.equal(tel.cap_status, status, "the gate's own verdict wins — it had the user in the loop");
+    assert.ok(tel.cap_breach_usd > 0, "the overage size is still recorded");
+  }
+});
+
+test("enrichTelemetry invents no cap fields when the recipe declared no cap", () => {
+  const { runDir, sess } = buildRun();
+  enrichTelemetry(runDir, { sessionTranscript: sess, registry: reg });
+  const tel = readTel(runDir);
+  assert.equal(tel.cap_status, undefined);
+  assert.equal(tel.cap_breach_usd, undefined);
 });

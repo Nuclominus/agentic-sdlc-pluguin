@@ -485,7 +485,18 @@ function signalsSection(t) {
   for (const s of t.skip_rules_applied || []) {
     items.push(`Skipped <b>${esc(s.phase_skipped)}</b> — ${esc(s.rule)}`);
   }
-  if (t.cap_status && t.cap_status !== "within") items.push(`Cap: <b>${esc(t.cap_status)}</b>`);
+  if (t.cap_status && t.cap_status !== "within") {
+    // cap_breach_usd is phase spend minus cap — the number a reader actually needs.
+    // "exceeded-undetected" additionally means the in-run gate never fired, so name
+    // the blind phases: that is the difference between a known overspend and a
+    // broken cap.
+    const over = t.cap_breach_usd != null ? ` — over by ${fmtUsd(t.cap_breach_usd)}` : "";
+    const blind = (t.phases || []).filter((p) => p.cap_gate_blind).map((p) => p.phase);
+    const why = t.cap_status === "exceeded-undetected"
+      ? ` (not caught in-run${blind.length ? `; unpriced at gate time: ${esc(blind.join(", "))}` : ""})`
+      : "";
+    items.push(`Cap: <b>${esc(t.cap_status)}</b>${over}${why}`);
+  }
   if (t.aborted_at_phase) items.push(`Aborted at <b>${esc(t.aborted_at_phase)}</b>`);
   for (const p of t.phases || []) {
     if (p.cache_pressure) items.push(`High cache-pressure: <b>${esc(p.phase)}</b> (peak ${fmtTok(p.peak_prefix_tokens)} &gt; 80k)`);

@@ -56,9 +56,24 @@ pricing), not a measurement. In headless mode a machine-readable JSON line is al
 **`caps.max_total_cost_usd`** (declared in a workflow recipe, e.g. `hotfix.yaml` caps at `$0.60`)
 gates a **real run**: the orchestrator accumulates actual per-phase cost and, before dispatching the
 next phase, if the running total exceeds the cap it **pauses** for approve-continue / abort
-(interactive) or **aborts** with exit 1 (headless). Telemetry records `cost_cap_usd` and
-`cap_status` (`within` | `exceeded-continued` | `exceeded-aborted`). Both `--dry-run` and the
-real-run gate read the cap from the resolved active workflow recipe.
+(interactive) or **aborts** with exit 1 (headless). Both `--dry-run` and the real-run gate read the
+cap from the resolved active workflow recipe.
+
+Each phase is priced **from its own subagent transcript the moment it finishes** — the Agent result
+envelope reports only an aggregate token count that cannot be priced, so a gate fed from it would
+see `$0` for every phase and never fire (ADR-0011). Telemetry records `cost_cap_usd` and
+`cap_status`:
+
+| `cap_status` | meaning |
+|---|---|
+| `within` | cap set and never exceeded (or no cap declared) |
+| `exceeded-continued` | you approved continuing past the cap, or a self-heal loop was stopped by it |
+| `exceeded-aborted` | you aborted, or a headless run halted at the cap |
+| `exceeded-undetected` | the run went over cap **without the gate catching it** — a phase could not be priced in-run (`cap_gate_blind`) and counted as `$0`. Written after the fact by cost enrichment, alongside `cap_breach_usd` (phase spend minus cap) |
+
+The cap gates **phase spend only**. Orchestration overhead (the orchestrator's own turns) is
+reported in `total_cost_usd` but never enters the comparison, so a run can legitimately show a total
+above the cap while `cap_status` is `within` — size recipe caps against phase spend accordingly.
 
 **`--resume`** — continue an interrupted pipeline from the first unfinished phase (per-phase
 checkpoints in `docs/plans/{slug}/.checkpoint/`). See [How the system works](WORKFLOW.md).
