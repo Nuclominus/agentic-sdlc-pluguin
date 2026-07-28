@@ -1434,7 +1434,7 @@ Then compute:
 ```sdlc-contract
 id: 3d-1b-phase-cost
 requires: bash_match
-pattern: usage/cli\.mjs" phase-cost
+pattern: usage/cli\.mjs"?\s+phase-cost
 cardinality: once-per-phase
 since: 2026-07-28
 ```
@@ -2123,7 +2123,7 @@ unless the user passed `--no-report` or the effective profile sets `report: fals
 ```sdlc-contract
 id: 5b-0-enrich
 requires: bash_match
-pattern: usage/cli\.mjs" enrich
+pattern: usage/cli\.mjs"?\s+enrich
 cardinality: once-per-run
 since: 2026-07-07
 ```
@@ -2131,7 +2131,7 @@ since: 2026-07-07
 ```sdlc-contract
 id: 5b-2-report
 requires: bash_match
-pattern: report/cli\.mjs" report
+pattern: report/cli\.mjs"?\s+report
 cardinality: once-per-run
 since: 2026-07-03
 ```

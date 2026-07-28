@@ -31,7 +31,18 @@ test("the incident shape fails 5b-0-enrich", () => {
 test("a resumed run unions its sessions rather than picking one", () => {
   const res = audit("resumed");
   assert.equal(res.sessions.length, 2);
+  // The second session spells the call unquoted (`.../cli.mjs enrich`) while the
+  // first uses SKILL.md's quoted form. A pattern pinned to one of them scored a real
+  // enrichment as a miss on the first audit — the contract must match the command,
+  // not the shell quoting around its path.
   assert.equal(verdict(res, "5b-0-enrich").verdict, "pass");
+});
+
+test("agent_dispatch matches the plugin-namespaced form of the agent name", () => {
+  // The fixture's second session dispatches `sdlc:session-recorder`; the contract
+  // names the bare agent. Strict equality here reported a flat 0% on the first real
+  // audit — the contract was measuring the install namespace, not the step.
+  assert.equal(verdict(audit("resumed"), "6-journal").verdict, "pass");
 });
 
 test("a run with no resolvable agent id is unauditable and yields no verdicts", () => {

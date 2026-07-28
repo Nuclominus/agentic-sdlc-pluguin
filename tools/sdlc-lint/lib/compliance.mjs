@@ -38,9 +38,18 @@ function conditionHolds(cond, tel) {
   return cond.op === "==" ? equal : !equal;
 }
 
+// A dispatch names the agent; the `<plugin>:` prefix is an install detail. Transcripts
+// carry the namespaced form (`sdlc:session-recorder`), so a contract written against the
+// bare agent name must still match — otherwise the contract measures the namespace and
+// reports a flat 0%, which is what the first real audit run produced.
+function dispatchMatches(subagentType, pattern) {
+  return subagentType === pattern || subagentType.endsWith(`:${pattern}`);
+}
+
 function countMatches(contract, facts) {
   if (contract.requires === "agent_dispatch") {
-    return facts.filter((f) => f.tool === "Agent" && f.subagent_type === contract.pattern).length;
+    return facts.filter((f) => f.tool === "Agent" && f.subagent_type
+      && dispatchMatches(f.subagent_type, contract.pattern)).length;
   }
   const re = new RegExp(contract.pattern);
   return facts.filter((f) => f.tool === "Bash" && f.command && re.test(f.command)).length;
