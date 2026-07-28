@@ -1411,7 +1411,9 @@ MODELS = parse(Read("{SDLC_PLUGIN_ROOT}/config/models.json"))   # { pipeline_tie
 
 Resolve a tier to its concrete model ID via the `models[]` entry whose `tag` equals the declared tier. This registry is the single source of truth for model IDs **and pricing** — never hardcode either here.
 
-**3d-1. Capture per-phase telemetry** — extract from the Agent tool result. Three envelope shapes, in priority order:
+**3d-1. Capture per-phase telemetry** — extract from the Agent tool result. Record only what
+nothing on disk can give back: see `{SDLC_PLUGIN_ROOT}/MACHINE-VALUES.md` for the invariant and the
+list of keys a machine already writes. Three envelope shapes, in priority order:
 
 1. **Split triple present** — when the result envelope exposes `input_tokens`, `output_tokens`, `cached_input_tokens`, read all three and set `usage_source: "reported"` (default).
 2. **Aggregate only** — when the envelope exposes only a single aggregate count (this harness's shape: `<usage>subagent_tokens: N, tool_uses, duration_ms</usage>`) and NOT the split triple, record `subagent_tokens: N` **verbatim** on the phase entry and set `usage_source: "subagent_aggregate"`. Do NOT fabricate an `input_tokens`/`output_tokens`/`cached_input_tokens` split from it — leave those keys unset so real (unsplit) usage survives instead of being silently zeroed. `cost_usd` is left `null` **here**, but is filled in at Step 5b from the phase's subagent transcript (see below) — the aggregate count badly understates real billed usage because it ignores per-turn cache reads, so it is a fallback only.

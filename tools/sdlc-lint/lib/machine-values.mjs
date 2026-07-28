@@ -5,6 +5,10 @@
 // plugins/sdlc/tools/. The rule itself lives in plugins/sdlc/MACHINE-VALUES.md,
 // which is also the registry this reads.
 
+import { readFileSync } from "node:fs";
+import { relative, resolve } from "node:path";
+import { globSync } from "tinyglobby";
+
 export const CONTRACT_PATH = "plugins/sdlc/MACHINE-VALUES.md";
 
 // A fenced block whose info string is exactly `machine-values` — the same shape as the
@@ -100,4 +104,63 @@ export function scanText(text, keys) {
     }
   }
   return { ok: errors.length === 0, errors };
+}
+
+export const ORCHESTRATOR_PATH = "plugins/sdlc/skills/pipeline-orchestrator/SKILL.md";
+// Text that ships to consumers and is read by an LLM as instruction: skills, agents, rules,
+// commands. Excludes node_modules and per-tool test fixtures, matching lib/plugin-paths.mjs.
+export const PLUGIN_GLOB = "plugins/**/*.md";
+export const IGNORE = ["**/node_modules/**", "plugins/*/tools/*/test/**"];
+
+/**
+ * Check 1 — the orchestrator points at the contract, so the invariant has exactly one
+ * definition and the file it governs says where to find it.
+ * @param {string} text contents of pipeline-orchestrator/SKILL.md
+ * @returns {{ ok: boolean, errors: string[] }}
+ */
+export function checkContractReference(text) {
+  return text.includes("MACHINE-VALUES.md")
+    ? { ok: true, errors: [] }
+    : { ok: false, errors: [`must reference ${CONTRACT_PATH} — the machine-value invariant`] };
+}
+
+/**
+ * Checks 1–3 over a repository root.
+ * @returns {Array<{file: string, ok: boolean, errors: string[], tool_error?: boolean}>}
+ */
+export function checkMachineValues(root = process.cwd()) {
+  const results = [];
+
+  let keys = [];
+  try {
+    const { keys: parsed, errors } = parseRegistry(readFileSync(resolve(root, CONTRACT_PATH), "utf8"));
+    keys = parsed;
+    results.push({ file: CONTRACT_PATH, ok: errors.length === 0, errors });
+  } catch (e) {
+    // No registry means no key list. Returning here rather than scanning with `keys = []`
+    // keeps a missing contract from reading as a clean tree.
+    return [{ file: CONTRACT_PATH, ok: false, tool_error: true, errors: [`read: ${e.message}`] }];
+  }
+
+  try {
+    results.push({
+      file: ORCHESTRATOR_PATH,
+      ...checkContractReference(readFileSync(resolve(root, ORCHESTRATOR_PATH), "utf8")),
+    });
+  } catch (e) {
+    results.push({ file: ORCHESTRATOR_PATH, ok: false, tool_error: true, errors: [`read: ${e.message}`] });
+  }
+
+  for (const abs of globSync(PLUGIN_GLOB, { cwd: root, absolute: true, ignore: IGNORE }).sort()) {
+    const file = relative(root, abs).split("\\").join("/");
+    // The contract quotes the very formulas it retires, as the audit's evidence. Scanning it
+    // would make the document that defines the rule its own first violation.
+    if (file === CONTRACT_PATH) continue;
+    try {
+      results.push({ file, ...scanText(readFileSync(abs, "utf8"), keys) });
+    } catch (e) {
+      results.push({ file, ok: false, tool_error: true, errors: [`read: ${e.message}`] });
+    }
+  }
+  return results;
 }

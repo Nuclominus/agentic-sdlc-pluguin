@@ -3,13 +3,18 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
-import { parseRegistry, scanText, violationRe, OK_MARKER, CONTRACT_PATH } from "../lib/machine-values.mjs";
+import { execFileSync } from "node:child_process";
+import {
+  parseRegistry, scanText, violationRe, OK_MARKER, CONTRACT_PATH,
+  checkContractReference, checkMachineValues, ORCHESTRATOR_PATH,
+} from "../lib/machine-values.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIX = join(HERE, "..", "fixtures", "machine-values");
 const REPO = resolve(HERE, "..", "..", "..");
 const fixture = (name) => readFileSync(join(FIX, name), "utf8");
 const contract = () => readFileSync(resolve(REPO, CONTRACT_PATH), "utf8");
+const CLI = resolve(REPO, "tools/sdlc-lint/cli.mjs");
 
 test("the shipped contract's registry parses cleanly and is non-empty", () => {
   const { keys, owners, errors } = parseRegistry(contract());
@@ -132,4 +137,55 @@ test("violationRe captures the key it matched", () => {
 
 test("OK_MARKER is the string the error message tells authors to write", () => {
   assert.ok(scanText(fixture("violations.md"), KEYS).errors[0].includes(OK_MARKER));
+});
+
+test("SKILL.md must point at the contract, so the rule has one definition", () => {
+  assert.deepEqual(checkContractReference("… see MACHINE-VALUES.md for the rule …"), { ok: true, errors: [] });
+  const { ok, errors } = checkContractReference("no reference at all");
+  assert.equal(ok, false);
+  assert.match(errors[0], /MACHINE-VALUES\.md/);
+});
+
+// PRE-STATE TEST — Task 4 replaces this with the zero-violation assertion.
+test("the check finds the six real formulas in the live SKILL.md", () => {
+  // SKILL.md appears TWICE in the results — once for checkContractReference, once for the
+  // glob scan (lib/plugin-paths.mjs has the same double entry). `find` would return the
+  // contract-reference row and its empty errors; flatten both rows instead.
+  const errs = checkMachineValues(REPO)
+    .filter(r => r.file === ORCHESTRATOR_PATH)
+    .flatMap(r => r.errors);
+  assert.equal(errs.length, 6, `expected six violations, got:\n${errs.join("\n")}`);
+  // The 3d-1 pricing formula, the four Step 5 aggregate sums, and the cache_hit_ratio
+  // definition that had already diverged from usage.mjs:628.
+  assert.deepEqual(
+    errs.map(e => e.match(/"([a-z_]+)"/)[1]).sort(),
+    ["cache_hit_ratio", "cost_usd", "total_cached_input_tokens", "total_cost_usd",
+     "total_input_tokens", "total_output_tokens"],
+  );
+});
+
+test("no file OTHER than SKILL.md violates the invariant", () => {
+  const others = checkMachineValues(REPO).filter(r => !r.ok && r.file !== ORCHESTRATOR_PATH);
+  assert.deepEqual(others, [], "the check must be silent everywhere it has nothing to say");
+});
+
+test("the contract document itself is exempt — it quotes the formulas as evidence", () => {
+  const contractRow = checkMachineValues(REPO).find(r => r.file === CONTRACT_PATH);
+  assert.ok(contractRow, "the contract must still be checked for a well-formed registry");
+  assert.deepEqual(contractRow.errors, [],
+    "its audit table quotes removed formulas; scanning it would be circular");
+});
+
+test("a missing contract is a tool error (exit 2), not a silent all-clear", () => {
+  const results = checkMachineValues(join(FIX, "..", "vanilla-node"));
+  assert.equal(results.length, 1);
+  assert.equal(results[0].tool_error, true);
+  assert.match(results[0].errors[0], /^read:/);
+});
+
+test("the CLI verb exits 1 while SKILL.md still holds the formulas", () => {
+  let status = 0;
+  try { execFileSync("node", [CLI, "machine-values", "--json"], { cwd: REPO, encoding: "utf8" }); }
+  catch (e) { status = e.status; }
+  assert.equal(status, 1, "violations must exit 1, distinct from a tool error's 2");
 });
