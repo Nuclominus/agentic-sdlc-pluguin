@@ -5,6 +5,7 @@
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
 | 2026-07-28 | #102 | `docs` | — | [[changes/2026-07-28-PR-102-adr-0013-agent-memory-mirrors-into-the-vault]] |
+| 2026-07-28 | #100 | `fix` | — | [[changes/2026-07-28-PR-100-quote-the-release-refspec-and-verify-the-refs-actually-moved]] |
 | 2026-07-28 | #98 | `chore` | — | [[changes/2026-07-28-PR-98-bump-to-1-14-1-and-complete-the-unreleased-changelog]] |
 | 2026-07-28 | #96 | `feat` | — | [[changes/2026-07-28-PR-96-add-a-reindex-verb]] |
 | 2026-07-28 | #93 | `docs` | — | [[changes/2026-07-28-PR-93-track-h-instruction-fidelity-priority-track]] |
