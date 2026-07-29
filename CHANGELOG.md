@@ -4,12 +4,14 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+## [1.12.0] — 2026-07-29
+
 `sdlc` `1.14.1` → `1.15.0` (other plugins unchanged). Track H, instruction fidelity: the end of a
 run stops being three prose-driven steps, stops asking the model to compute values a machine
 already holds, and gains a hook that seals a run the orchestrator forgot.
 
 **The version bump matters more than usual here.** `plugin_version` in `_telemetry.json` is read
-from this file, and it is what lets the compliance auditor tell a run on the new tail apart from one
+from `plugins/sdlc/.claude-plugin/plugin.json`, and it is what lets the compliance auditor tell a run on the new tail apart from one
 on the old. Shipping these three changes under `1.14.1` would have left both eras reporting the same
 string — and the re-measurement that decides Track H's remaining item reads exactly that field.
 
