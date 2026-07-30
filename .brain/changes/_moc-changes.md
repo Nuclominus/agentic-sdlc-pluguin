@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-07-30 | #114 | `feat` | — | [[changes/2026-07-30-PR-114-explicit-tool-allowlists-reviewers-report-developer-fixes]] |
 | 2026-07-30 | #111 | `fix` | — | [[changes/2026-07-30-PR-111-anchor-the-seal-subprocess-fixtures-to-the-real-clock]] |
 | 2026-07-30 | #110 | `docs` | — | [[changes/2026-07-30-PR-110-record-the-h5-prompt-surface-measurement]] |
 | 2026-07-28 | #108 | `other` | — | [[changes/2026-07-28-PR-108-track-h-instruction-fidelity-h1-measurement-h2-collapse-h3-i]] |
