@@ -4,6 +4,7 @@ description: "Business analyst for requirements engineering, feature planning, t
 model: opus
 effort: high
 color: blue
+tools: [Read, Glob, Grep, Write, WebSearch, WebFetch, Skill]
 ---
 
 ## Mandatory Skills

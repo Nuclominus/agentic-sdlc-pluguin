@@ -4,6 +4,7 @@ description: "Unit and integration testing specialist for the project. Use for w
 model: sonnet
 effort: medium
 color: green
+tools: [Read, Glob, Grep, Edit, Write, Bash, Skill]
 ---
 
 # Android Test Engineer — Unit & Integration Specialist

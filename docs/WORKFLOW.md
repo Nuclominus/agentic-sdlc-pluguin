@@ -137,8 +137,9 @@ flowchart LR
       SEC["security<br/>android-security (Opus)<br/>MASVS / MASTG"]
       TEST["test<br/>android-tester (Sonnet)<br/>MockK / Turbine / Kover"]
     end
-    SEC --> QA["qa<br/>android-qa (Sonnet)<br/>Compose UI Test / Maestro / a11y"]
-    TEST --> QA
+    SEC --> REM{"remediation — GATED<br/>android-developer (Sonnet)<br/>runs only on Critical/High"}
+    TEST --> REM
+    REM --> QA["qa<br/>android-qa (Sonnet)<br/>Compose UI Test / Maestro / a11y"]
     QA --> DOCS["documentation<br/>android-docs (Haiku)<br/>PR + optional vault"]
 ```
 
@@ -146,7 +147,16 @@ flowchart LR
   `development` (implement pass only — the plan was already approved) with the review findings injected,
   up to 3 rounds, then escalates to the user.
 - **[security ‖ test]** is a *parallel group*: both agents are dispatched in a single message and must
-  return before `qa` begins.
+  return before the gate is evaluated.
+- **remediation** is a *gated phase*. `android-security` is READ-ONLY — it has no `Edit` tool and
+  never touches code; it classifies findings and writes a remediation for each. Once the whole
+  parallel group has returned, the orchestrator parses security's `ISSUES_FOUND:` line: on a
+  Critical or High finding it dispatches `android-developer` with the security report to apply the
+  fixes; otherwise the phase is skipped at zero cost. It is a one-way hand-off — security does not
+  re-run afterwards.
+- `android-debugger` is read-only for the same reason: it diagnoses and prescribes, and the
+  `android-debug` / `android-bugfix` recipes route the fix to `android-developer` in the next
+  phase, where it passes through the normal review loop.
 - On-demand agents (not in the pipeline; invoke directly): `android-devops`, `android-cicd`,
   `android-aar`. `android-debugger` is on-demand **and** wired as the `debugging` phase of the
   `android-debug` recipe (manifest `agents_per_phase.debugging → android-debugger`).
@@ -165,11 +175,17 @@ Phase 2: Dev      → [stack agent] (sonnet/medium)
           ↓ docs/plans/{slug}/02-development.md
 Phase 3: QA       → qa-engineer (sonnet/medium, max 3 attempts)
           ↓ docs/plans/{slug}/03-qa.md
-Phase 4: Security → security-analyst (opus/high, platform-neutral baseline)
+Phase 4: Security → security-analyst (opus/high, platform-neutral baseline; READ-ONLY)
           ↓ docs/plans/{slug}/04-security.md
-Phase 5: Docs     → document-writer (haiku/low)
+Phase 5: Remediation → [stack agent] (GATED — only on Critical/High findings)
+          ↓ docs/plans/{slug}/0X-remediation.md
+Phase 6: Docs     → document-writer (haiku/low)
           ↓ Pull Request
 ```
+
+Phase 5 is skipped at zero cost when security reports nothing at High or above, which is the
+common case. It exists so that a read-only reviewer's findings reach someone who can act on them:
+the security agent classifies and prescribes, the development agent applies.
 
 ### Framework enrichment (additive)
 

@@ -32,6 +32,4 @@ caps:
   max_total_cost_usd: 4.25
 phases:
   - business_analysis
-  - name: security
-    heal:
-      max_attempts: 2
+  - security

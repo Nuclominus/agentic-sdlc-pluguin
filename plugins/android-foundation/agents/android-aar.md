@@ -4,7 +4,7 @@ description: "After Action Review analyst for the project. Use at the end of a w
 model: sonnet
 effort: medium
 color: purple
-tools: [Read, Glob, Grep, Bash]
+tools: [Read, Glob, Grep, Bash, Skill]
 ---
 
 ## Mandatory Skills

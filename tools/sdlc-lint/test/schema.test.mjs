@@ -70,6 +70,44 @@ test("workflow.schema allows heal and loop on the same phase", () => {
   }));
 });
 
+test("workflow.schema accepts a phase with a gate block", () => {
+  const v = compile("schemas/workflow.schema.json");
+  assert.ok(v({
+    name: "xx",
+    phases: [{ name: "remediation", gate: { after: ["security"], min_severity: "high" } }],
+  }));
+});
+
+test("workflow.schema rejects a gate with no after list", () => {
+  const v = compile("schemas/workflow.schema.json");
+  assert.equal(v({ name: "xx", phases: [{ name: "remediation", gate: { min_severity: "high" } }] }), false);
+});
+
+test("workflow.schema rejects an unknown gate severity", () => {
+  const v = compile("schemas/workflow.schema.json");
+  assert.equal(
+    v({ name: "xx", phases: [{ name: "remediation", gate: { after: ["security"], min_severity: "urgent" } }] }),
+    false);
+});
+
+test("workflow.schema allows gate and heal on the same phase", () => {
+  // remediation is both conditional (gate) and code-writing (heal) — the shipped recipes use both.
+  const v = compile("schemas/workflow.schema.json");
+  assert.ok(v({
+    name: "xx",
+    phases: [{ name: "remediation", gate: { after: ["security"], min_severity: "high" }, heal: { max_attempts: 2 } }],
+  }));
+});
+
+test("workflow.schema rejects a gate inside a parallel group — members are bare strings", () => {
+  // The gate exists precisely because a parallel member cannot carry control flow: security runs
+  // inside parallel:[security, test], so its hand-off has to be a separate phase after the group.
+  const v = compile("schemas/workflow.schema.json");
+  assert.equal(
+    v({ name: "xx", phases: [{ parallel: [{ name: "security", gate: { after: ["x"], min_severity: "high" } }, "test"] }] }),
+    false);
+});
+
 test("manifest.schema accepts heal_checks", () => {
   const v = compile("schemas/manifest.schema.json");
   assert.ok(v({
@@ -106,20 +144,52 @@ const healOf = (r, phase) => {
 
 test("code-writing phases in the core recipes are heal-guarded at 2 attempts", () => {
   for (const [file, phases] of [
-    ["plugins/sdlc/workflows/default.yaml", ["development", "security", "qa"]],
-    ["plugins/sdlc/workflows/bugfix.yaml", ["development", "security", "qa"]],
-    ["plugins/sdlc/workflows/hotfix.yaml", ["development", "security", "qa"]],
-    ["plugins/sdlc/workflows/refactor.yaml", ["development", "security", "qa"]],
+    ["plugins/sdlc/workflows/default.yaml", ["development", "remediation", "qa"]],
+    ["plugins/sdlc/workflows/bugfix.yaml", ["development", "remediation", "qa"]],
+    ["plugins/sdlc/workflows/hotfix.yaml", ["development", "remediation", "qa"]],
+    ["plugins/sdlc/workflows/refactor.yaml", ["development", "remediation", "qa"]],
     ["plugins/sdlc/workflows/debug.yaml", ["development", "qa"]],
     ["plugins/sdlc/workflows/testing.yaml", ["qa"]],
-    ["plugins/sdlc/workflows/analysis.yaml", ["security"]],
-    ["plugins/android-foundation/workflows/android-bugfix.yaml", ["development", "qa"]],
+    ["plugins/sdlc/workflows/analysis.yaml", []],
+    ["plugins/android-foundation/workflows/android-bugfix.yaml", ["development", "remediation", "qa"]],
     ["plugins/android-foundation/workflows/android-debug.yaml", ["development", "test"]],
   ]) {
     const r = recipe(file);
     for (const ph of phases) {
       assert.deepEqual(healOf(r, ph), { max_attempts: 2 }, `${file} phase ${ph}`);
     }
+  }
+});
+
+test("security is NOT heal-guarded — a read-only reviewer cannot heal a compile error", () => {
+  // heal re-dispatches THIS phase's agent with the captured stderr and expects it to fix the
+  // build. security-analyst / android-security have no Edit tool by design, so a heal block on
+  // them buys nothing but a second full-price dispatch that can only report the same failure.
+  // The code-writing phase that answers their findings is `remediation`, which IS guarded above.
+  for (const file of [
+    "plugins/sdlc/workflows/default.yaml",
+    "plugins/sdlc/workflows/bugfix.yaml",
+    "plugins/sdlc/workflows/hotfix.yaml",
+    "plugins/sdlc/workflows/refactor.yaml",
+    "plugins/sdlc/workflows/analysis.yaml",
+  ]) {
+    assert.equal(healOf(recipe(file), "security"), undefined, `${file} phase security`);
+  }
+});
+
+test("every recipe running security routes its findings to a gated remediation phase", () => {
+  // A read-only security phase that nothing acts on is a phase that reports Critical
+  // vulnerabilities into a file no one opens. analysis.yaml is the deliberate exception: it is a
+  // read-only BA+security assessment that ships no code to remediate.
+  const phaseNames = (r) => r.phases.flatMap((p) =>
+    typeof p === "string" ? [p] : p.parallel ? p.parallel : [p.name]);
+  for (const file of recipeFiles()) {
+    const r = recipe(file);
+    if (!phaseNames(r).includes("security")) continue;
+    if (file.endsWith("analysis.yaml")) continue;
+    const rem = r.phases.find((p) => typeof p === "object" && p.name === "remediation");
+    assert.ok(rem, `${file} runs security but never routes its findings anywhere`);
+    assert.deepEqual(rem.gate, { after: ["security"], min_severity: "high" }, `${file} remediation gate`);
   }
 });
 
@@ -208,7 +278,11 @@ test("hotfix.yaml cap clears measured p90 phase spend (not just the heuristic ba
     "a cap below one phase's p90 can only ever fire mid-run");
   const heuristicWorst = 0.05076 * 1.6 + 0.05076 + 0.1555 + 0.01578 + 2 * (0.05076 * 1.6 + 0.05076 + 0.1555);
   assert.ok(r.caps.max_total_cost_usd > heuristicWorst);
-  assert.equal(r.caps.max_total_cost_usd, 9.00);
+  // `remediation` is gated, so it enters base_total at half a development dispatch
+  // (0.5 x $5.41 = $2.71). $7.50 + $2.71 = $10.21, x 1.2 headroom = $12.25 -> $12.50.
+  assert.ok(r.caps.max_total_cost_usd >= (measuredP90 + 0.5 * P90.development) * HEADROOM,
+    "cap must survive the gate opening — a remediation dispatch is full development cost");
+  assert.equal(r.caps.max_total_cost_usd, 12.50);
 });
 
 test("every shipped workflow recipe declares a cost cap", () => {

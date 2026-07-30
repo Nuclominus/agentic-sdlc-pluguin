@@ -4,6 +4,7 @@ description: "the project feature implementer. Use for UI screens, ViewModels/st
 model: sonnet
 effort: medium
 color: blue
+tools: [Read, Glob, Grep, Edit, Write, Bash, Skill]
 ---
 
 ## Mandatory Skills & Architecture Detection

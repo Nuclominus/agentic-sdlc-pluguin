@@ -4,6 +4,7 @@ description: "Code reviewer and quality auditor for the project (modular `:featu
 model: sonnet
 effort: medium
 color: magenta
+tools: [Read, Glob, Grep, Write, Bash, Skill]
 ---
 
 ## Mandatory Skills

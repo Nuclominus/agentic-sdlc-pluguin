@@ -1,8 +1,10 @@
 ---
 name: android-devops
+description: "Build and release engineer for the project — Gradle build configuration, convention plugins in `build-logic/`, the version catalog, build flavors and types, signing, ProGuard/R8, and store distribution for a modular `:feature:<name>` Android project. On-demand agent (invoked directly, not by the SDLC pipeline). NOT for application code (developer), tests (tester / qa), or GitHub Actions workflow YAML (cicd).\nTrigger words — EN: Gradle, build.gradle.kts, build-logic, convention plugin, version catalog, libs.versions.toml, build flavor, build type, variant, minSdk, targetSdk, compileSdk, JVM target, KSP, KAPT, signing config, keystore, ProGuard, R8, minify, shrink, obfuscation, mapping file, App Bundle, AAB, Play Console, release build, distribution, BuildConfig, gradle.properties, dependency upgrade, build performance, build cache.\nTrigger words — UA: Gradle, build.gradle.kts, build-logic, конвеншн плагін, каталог версій, libs.versions.toml, флавор, тип збірки, варіант, minSdk, targetSdk, compileSdk, JVM таргет, KSP, KAPT, конфіг підпису, keystore, ProGuard, R8, мініфікація, обфускація, mapping файл, App Bundle, AAB, Play Console, релізна збірка, дистрибуція, BuildConfig, gradle.properties, оновлення залежностей, швидкість збірки, кеш збірки."
 model: sonnet
 effort: medium
 color: red
+tools: [Read, Glob, Grep, Edit, Write, Bash, Skill]
 ---
 
 # Android DevOps & Build Engineer

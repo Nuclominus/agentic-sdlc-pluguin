@@ -20,6 +20,7 @@ Step 1  · 1a Merge active profiles (winner + PRIMARY + ADDITIVE) → 1b project
 Step 2  · Generate task slug, prepare workspace (+ capture write-once real start clock → .checkpoint/_started_at)
 Step 3  · Execute each phase: look up agent (winner/PRIMARY) → build prompt (base + injected + prior summary)
           → spawn agent → save COMPACT summary
+          shapes: plain · gated (3-gate) · loop (3-loop) · parallel (3-parallel)
 Step 4  · Run post-pipeline checks
 Step 5  · Telemetry + final summary (measured wall_clock_seconds from Step 2 clock; stack, frameworks, phases, cost, PR link)
 Step 5b · Render HTML run-report
@@ -31,6 +32,17 @@ Step 6  · Close the session: dispatch `session-recorder` → append entry to do
 renders `started_at`/`completed_at` from it. This measured timing (not an estimate) flows into
 `_telemetry.json` and therefore into `report` / `rollup` / `aar`. See
 [[decisions/ADR-0003-session-recorder-run-journal]].
+
+**Who may write code (Step 3 + agent frontmatter).** Every shipped agent declares an explicit
+`tools:` allowlist; an omitted key grants the FULL toolset, which is how a read-only reviewer ends
+up editing what it reviews. Reviewing agents (`android-reviewer`, `android-security`,
+`security-analyst`, `android-debugger`, `*-aar`) carry no `Edit` — their `Write` exists only for
+their own report under `docs/plans/{task_slug}/`. Their findings reach the codebase through the
+development agent: via the review loop, or via the **gated `remediation` phase**
+(`gate: {after: [security], min_severity: high}`, orchestrator step 3-gate), which parses the
+reporting phase's `ISSUES_FOUND:` counts and dispatches only when there is something to fix —
+otherwise it is recorded `status: "skipped"` at zero cost. One-way hand-off, not a loop.
+See [[decisions/ADR-0018-reviewers-do-not-write-code]].
 
 **Token telemetry (Step 3d-1 + Step 5).** Per-phase usage is read from the Agent result envelope in
 three shapes: a split input/output/cached triple (`usage_source: reported`), an aggregate-only
@@ -62,7 +74,7 @@ The five core fallbacks live in `plugins/sdlc/agents/`; the Android roster lives
 | business-analyst | sdlc | opus | high | Requirements errors cascade through every phase. |
 | developer | sdlc | sonnet | medium | Vanilla fallback (non-Android projects). |
 | qa-engineer | sdlc | sonnet | medium | Clear criteria; hard 3-attempt cap. |
-| security-analyst | sdlc | opus | high | Threat model; read-only. |
+| security-analyst | sdlc | opus | high | Threat model; **read-only — no `Edit`**. Reports findings; the gated `remediation` phase dispatches `developer` to apply them ([[decisions/ADR-0018-reviewers-do-not-write-code]]). |
 | document-writer | sdlc | haiku | low | Structured output from known facts. |
 | session-recorder | sdlc | haiku | low | Built-in run closer (Step 6): ~30-word journal entry from telemetry. Not a phase. |
 | **android-ba / android-developer / android-reviewer / android-security / android-tester / android-qa / android-docs** | android-foundation | opus→haiku | per role | The specialized roster that wins the `android` aspect (see the plugin README). |
@@ -101,7 +113,7 @@ that reads `model:` from the agent frontmatter and rewrites the Agent call).
 # Run
 /sdlc:start "Add a settings screen with dark-mode toggle"
 # → Detected: android → android-developer (Sonnet) for development; retrofit additive (if present)
-# → BA (Opus) → Dev → Review(⇄Dev) → [Security ‖ Test] → QA → Docs
+# → BA (Opus) → Dev → Review(⇄Dev) → [Security ‖ Test] → Remediation? → QA → Docs
 # → Post-pipeline: detekt + testDebugUnitTest + compileDebugKotlin
 ```
 

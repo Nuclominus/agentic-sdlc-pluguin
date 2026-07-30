@@ -10,14 +10,22 @@ load_when: "Once at session start; on phase transitions."
 ```
 Standard feature:
   android-ba → android-developer → (android-reviewer ⇄ android-developer, max 3 rounds)
-                → [android-security ‖ android-tester] → android-qa → android-docs
+                → [android-security ‖ android-tester] → remediation? → android-qa → android-docs
 
 Bug-fix (full gate):
   android-debugger → android-developer → (android-reviewer ⇄ android-developer, max 3 rounds)
-           → [android-security ‖ android-tester] → android-qa
+           → [android-security ‖ android-tester] → remediation? → android-qa
 ```
 
 `[android-security ‖ android-tester]` = android-security and android-tester run **in parallel** — invoke both simultaneously.
+
+`remediation?` = a **gated** phase (`gate: {after: [security], min_severity: high}`). android-security is
+read-only; once the whole parallel group has returned, the orchestrator parses its
+`ISSUES_FOUND:` counts and dispatches **android-developer** with the security report only when a
+Critical or High finding exists. Otherwise the phase is skipped at zero cost. It is a one-way
+hand-off — android-security does not re-run afterwards. Likewise android-debugger diagnoses only:
+`android-debug` / `android-bugfix` route its prescribed fix to android-developer in the next phase,
+where it passes through the normal review loop.
 
 After the pipeline ends, an **optional** retrospective step is available:
 `sdlc:aar` (After Action Review) analyzes the run's metrics dashboard and
@@ -127,11 +135,15 @@ Invoke both agents simultaneously in a single message.
 
 ### android-security
 
+**READ-ONLY** — no `Edit` tool. It audits and reports; `android-developer` applies the fixes.
+
 - Obfuscation: verify ProGuard/R8 rules cover new classes.
 - Network: TLS enforced; no plain HTTP in production.
 - Storage: sensitive data through DataStore + AndroidX Security Crypto; no plain SharedPreferences.
 - Realtime: Parse / Pusher / Retrofit / WebRTC payload models validated at boundaries.
-- Output: findings with severity ratings + handoff envelope (`phase: security`).
+- Output: findings with severity ratings, a concrete remediation per Critical/High finding, and a
+  handoff envelope (`phase: security`). The compact summary MUST end with the machine-contract line
+  `ISSUES_FOUND: critical=N high=N medium=N low=N` — the remediation gate parses it.
 
 ### android-tester
 
