@@ -31,15 +31,21 @@ const ANCHOR = 1785236400;
 
 // A docs/plans-shaped root holding one run. `phases` is the resolved DAG, `done` the
 // unit ids with a terminal checkpoint, `activityMs` the mtime stamped on every file.
+// `anchorSecs` exists because the library tests inject `now` but the SUBPROCESS tests below
+// cannot — they spawn the real CLI/hook, which reads the wall clock. Against the fixed ANCHOR
+// those runs age past findSealable's 24h window and get skipped as "stale", so the two
+// subprocess tests passed only during the day after ANCHOR and have failed on every run since.
+// Subprocess tests pass RECENT() to anchor the fixture near the real clock instead.
 function makePlans({ slug = "r", phases = ["development", "qa"], done = ["development", "qa"],
-                     runJson = true, sealed = false, activityMs = (ANCHOR + 600) * 1000 } = {}) {
+                     runJson = true, sealed = false, anchorSecs = ANCHOR,
+                     activityMs = (anchorSecs + 600) * 1000 } = {}) {
   const plansRoot = mkdtempSync(join(tmpdir(), "plans-"));
   const runDir = join(plansRoot, slug);
   const cp = join(runDir, ".checkpoint");
   mkdirSync(cp, { recursive: true });
   writeFileSync(join(runDir, "_telemetry.json"),
     JSON.stringify({ task_slug: slug, phases: [] }, null, 2) + "\n");
-  writeFileSync(join(cp, "_started_at"), `${ANCHOR}\n`);
+  writeFileSync(join(cp, "_started_at"), `${anchorSecs}\n`);
   if (runJson) {
     // A phase may be given as a bare name or as a full resolved entry (aspects, parallel
     // members) — the realistic-shape test below needs the latter.
@@ -57,6 +63,10 @@ function makePlans({ slug = "r", phases = ["development", "qa"], done = ["develo
 }
 
 const NOW = (ANCHOR + 900) * 1000;   // 5 min after the fixture's last activity
+
+// A fixture anchored to the REAL clock, for tests that spawn the CLI or the hook and so cannot
+// inject `now`. Keeps the same 600s start→last-activity gap, so wall_clock_seconds stays 600.
+const RECENT = () => ({ anchorSecs: Math.floor(Date.now() / 1000) - 600 });
 
 test("a complete, unsealed, recent run is sealable", () => {
   const { plansRoot } = makePlans();
@@ -191,7 +201,7 @@ test("one failing run does not abort the others", () => {
 const RUN_CLI = resolve(REPO, "plugins/sdlc/tools/run/cli.mjs");
 
 test("`seal-stale --json` seals from the CLI and reports what it did", () => {
-  const { plansRoot, runDir } = makePlans();
+  const { plansRoot, runDir } = makePlans(RECENT());
   const r = spawnSync("node", [RUN_CLI, "seal-stale", "--plans-root", plansRoot,
     "--no-report", "--json"], { encoding: "utf8" });
 
@@ -205,7 +215,7 @@ test("`seal-stale --json` seals from the CLI and reports what it did", () => {
 });
 
 test("`seal-stale --json` on a plans root with nothing to do exits 0 and seals nothing", () => {
-  const { plansRoot } = makePlans({ sealed: true });
+  const { plansRoot } = makePlans({ ...RECENT(), sealed: true });
   const r = spawnSync("node", [RUN_CLI, "seal-stale", "--plans-root", plansRoot, "--json"],
     { encoding: "utf8" });
 
@@ -228,10 +238,12 @@ function runHook(projectDir) {
 }
 
 // A project directory whose docs/plans is the given plans root.
+// Every caller spawns the real Stop hook, so the fixture must sit inside the real clock's
+// sealable window — hence RECENT() by default.
 function makeProject(opts) {
   const projectDir = mkdtempSync(join(tmpdir(), "proj-"));
   mkdirSync(join(projectDir, "docs"), { recursive: true });
-  const { plansRoot, slug } = makePlans(opts);
+  const { plansRoot, slug } = makePlans({ ...RECENT(), ...opts });
   renameSync(plansRoot, join(projectDir, "docs", "plans"));
   return { projectDir, runDir: join(projectDir, "docs", "plans", slug), slug };
 }
@@ -270,4 +282,20 @@ test("the hook never exits 2 — for Stop that would block the agent from stoppi
     "exit 2 on Stop means 'do not stop' and feeds stderr back as an instruction — a " +
     "sealing net that can trap the user in a loop is worse than no net");
   assert.equal(r.status, 0);
+});
+
+test("the subprocess fixtures track the real clock, not a fixed anchor", () => {
+  // Regression guard. The CLI and hook tests spawn real binaries that read the wall clock,
+  // so a fixture pinned to ANCHOR ages out of findSealable's 24h window and is skipped as
+  // "stale". That is not a loud failure — the run is simply never sealed, and the assertion
+  // that fails is about `sealed.length`, which reads like a sealing bug rather than an
+  // expired fixture. It cost two red tests on develop that looked unrelated to every PR.
+  const { plansRoot } = makePlans(RECENT());
+  const { sealable, skipped } = findSealable(plansRoot);   // no injected `now` — real clock
+  assert.equal(sealable.length, 1, `RECENT() fixture must be sealable now, got skipped: ${JSON.stringify(skipped)}`);
+  assert.deepEqual(skipped, []);
+
+  // And the fixed anchor is exactly what does NOT work against the real clock, forever.
+  const stale = makePlans();
+  assert.deepEqual(findSealable(stale.plansRoot).skipped, [{ run: "r", reason: "stale" }]);
 });
