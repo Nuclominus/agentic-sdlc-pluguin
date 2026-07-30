@@ -240,6 +240,49 @@ re-measurement showing the rate did **not** fall — H5 is refuted, not merely u
 fragmentation costs more compliance than volume was costing. That last part shares the corpus H4
 waits on, so H5's *design* is unblocked while its *acceptance* is not.
 
+**Measured 2026-07-29; nothing cut. [[planning/h5-prompt-surface]].** The arithmetic this item
+demanded instead of a benchmark came back and **inverted the item's premise** — twice over.
+
+*Text volume:* deleting `SKILL.md` outright saves $0.79–$0.95 on a $9.50–$13.29 run (7–8%); the
+largest realistic cut — the 926 judgement-free lines of Steps 0→1d — saves **~3%**. Shrinking the
+prompt does not pay for itself.
+
+*Turn count:* the same formula has a second factor the first pass omitted. The orchestrator's
+overhead is **72% cache read**, because the prefix is re-billed in full on every turn. Over 24
+sessions, the window from skill invocation to the first `Agent` dispatch — Steps 0→2, before any
+phase work exists — is a median **27 turns costing $1.42** (range 6–47 turns, $0.18–$2.84). On
+`s5-presence` it is 34 turns and **$2.21, 23% of the run**, spent on 18 `ls`/`cat`/`Read` calls.
+Collapsing that into one command is worth **~12–15% of run cost, ~5× the text-volume term**.
+
+Both terms point the same way: **the lever is removing the model's steps, not its words.**
+
+Two findings arrived with it. First, the same measurement pass sharpened H1's spread along a second
+axis — see the track-level note below. Second, the risk this item named in the abstract now has a
+number: the most obvious JIT candidate (the 196 lines of per-phase base prompts) would convert 4.9%
+of the prefix, worth ~$0.04/run, into a **once-per-phase read** — the shape measuring 40%. **Any H5
+design must forbid moving per-dispatch payload out of the prefix.** What is safe to remove is prose
+that is never needed at runtime at all (rationale, history, worked examples), and what is safe to
+*replace* is a deterministic block whose replacement is invoked **once per run**.
+
+## Track-level finding — cardinality, not just complexity (2026-07-29)
+
+H1 established that compliance tracks how many separate things an instruction asks for, not how
+firmly it asks. The 2026-07-29 measurement adds a second axis, from a cell H1 could not yet read:
+
+| rate | contract | shape | cardinality | n |
+|---:|---|---|---|---:|
+| 100% | `2-4-anchor` | one Bash line | once-per-run | 16 |
+| 40% | `3d-1b-phase-cost` | **one Bash line** | **once-per-phase** | 5 |
+
+Same command, same length, same emphasis. The only variable is **how many times it must be
+re-remembered inside one run**. `5-clock` at 67% was one step asking for three things; `3d-1b` at
+40% is one thing asked for seven times. The newest run scores `partial 6/7` — decay, not a clean
+miss.
+
+`n=5` is thin and `provisional`; a single run moves it 20 points. But it is the only live contract
+currently failing, and it names the cheapest available lever: **collapse cardinality, not lines.**
+Details, method and the resume point: [[planning/h5-prompt-surface]].
+
 ### H6 — Hooks as the deterministic tail ✅
 
 A `Stop` hook (`plugins/sdlc/hooks/seal-run.sh`) that runs `enrich` + report rendering itself, so
