@@ -55,7 +55,7 @@
     "phases": {
       "type": "array",
       "minItems": 1,
-      "description": "Ordered list of phases to execute. Each element is a phase-name string, a phase object (name + optional when/loop), or a parallel group. All control flow here is GENERIC — the active stack profile supplies the agent for each named phase.",
+      "description": "Ordered list of phases to execute. Each element is a phase-name string, a phase object (name + optional when/gate/loop/heal), or a parallel group. All control flow here is GENERIC — the active stack profile supplies the agent for each named phase.",
       "items": {
         "oneOf": [
           {
@@ -75,6 +75,24 @@
               "when": {
                 "type": "string",
                 "description": "Conditional expression evaluated after BA output (Iteration 3+). Example: 'complexity == large'."
+              },
+              "gate": {
+                "type": "object",
+                "description": "Runtime dispatch gate. ACTIVE (orchestrator Step 3-gate). Before this phase is dispatched, the orchestrator parses the `ISSUES_FOUND: critical=N high=N medium=N low=N` line from each phase named in `after`. If no phase reported a finding at or above `min_severity`, this phase is recorded with checkpoint status `skipped` and never dispatched (zero tokens); otherwise it runs normally with the `after` phases' detailed report paths injected. Unlike `loop`, this is a ONE-WAY hand-off \u2014 the gated phase does not re-run the phases in `after`. Used by the `remediation` phase to route a read-only reviewer's Critical/High findings to the development agent.",
+                "required": ["after", "min_severity"],
+                "additionalProperties": false,
+                "properties": {
+                  "after": {
+                    "type": "array",
+                    "minItems": 1,
+                    "description": "Names of EARLIER phases whose compact summaries are parsed for severity counts. A phase listed here that did not run (skipped by a skip-rule or by sdlc.local.yaml) contributes no findings.",
+                    "items": { "type": "string", "minLength": 1 }
+                  },
+                  "min_severity": {
+                    "enum": ["critical", "high", "medium", "low"],
+                    "description": "Lowest severity that opens the gate. `high` means critical>0 OR high>0."
+                  }
+                }
               },
               "loop": {
                 "type": "object",

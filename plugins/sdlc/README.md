@@ -26,13 +26,34 @@ sdlc/
 
 Used only when no platform plugin provides an agent for a phase (the vanilla path). Platform plugins override these per phase.
 
-| Agent | model | effort | Role |
-| ----- | ----- | ------ | ---- |
-| `business-analyst` | `opus` | `high` | Requirements + acceptance criteria; read-only tools |
-| `developer` | `sonnet` | `medium` | Implementation against a clear spec |
-| `qa-engineer` | `sonnet` | `medium` | Tests against criteria; hard 3-attempt cap |
-| `security-analyst` | `opus` | `high` | Platform-neutral security baseline; applies the profile-injected standard |
-| `document-writer` | `haiku` | `low` | Structured PR output from known facts |
+| Agent | model | effort | Edits code? | Role |
+| ----- | ----- | ------ | ----------- | ---- |
+| `business-analyst` | `opus` | `high` | no | Requirements + acceptance criteria |
+| `developer` | `sonnet` | `medium` | **yes** | Implementation against a clear spec; also the gated `remediation` phase |
+| `qa-engineer` | `sonnet` | `medium` | **yes** | Tests against criteria; hard 3-attempt cap |
+| `security-analyst` | `opus` | `high` | no | Platform-neutral security baseline; applies the profile-injected standard. **Read-only** — reports findings, `developer` applies them via `remediation` |
+| `document-writer` | `haiku` | `low` | no | Structured PR output from known facts |
+| `session-recorder` | `haiku` | `low` | no | Appends the run's journal entry (closing act, every run) |
+| `aar-analyst` | `sonnet` | `medium` | no | Read-only retrospective for `/sdlc:aar` |
+
+Every agent declares an explicit `tools:` allowlist in its frontmatter. An agent that omits `tools:`
+inherits **every** tool — which is how a read-only reviewer ends up quietly editing the code it is
+reviewing. Agents in the "no" column have no `Edit` tool at all; `Write` is granted only where the
+agent must produce its own report or deliverable under `docs/plans/{task_slug}/`. Any agent that
+needs to invoke a Skill must also list `Skill`, because the orchestrator injects
+`Convention skills to consider invoking:` into every phase prompt.
+
+**No agent may dispatch agents.** `Agent`, `Task`, `SendMessage`, and `Workflow` belong to the
+orchestrator alone — it runs in the main loop as a skill and holds them by default, while no
+subagent declares any of them. A subagent that spawned its own children would put that work outside
+phase accounting: no checkpoint, no `_telemetry.json` entry, no contribution to the recipe's cost
+cap, so the run's reported cost would stop being its real cost.
+
+`sdlc-lint agent-tools` enforces this in CI across `plugins/*/agents/*.md` — a declared non-empty
+`tools:`, no dispatch tool, no `Edit` on a reviewing agent, and a present `description:`. It covers
+shipped agents only: a project-local agent under `.claude/agents/` that omits `tools:` still
+inherits everything, and `sdlc.local.yaml` can bind one to a phase via `agents_per_phase`. See
+[ADR-0018](../../.brain/decisions/ADR-0018-reviewers-do-not-write-code.md).
 
 ---
 

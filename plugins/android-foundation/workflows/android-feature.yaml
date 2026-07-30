@@ -14,7 +14,11 @@ caps:
   # from an opus-5 run in the `analysis` recipe, while this recipe's BA phases measured
   # $0.71-$1.13), which inflates the total — accepted deliberately: a runaway stopper should never
   # fire on a legitimate run, and the review loop (max_rounds: 3) is not multiplied in.
-  max_total_cost_usd: 16.50
+  #
+  # `remediation` is gated (it dispatches only when security reports Critical/High), so it enters
+  # base_total at 0.5·est = 0.5 × $5.41 = $2.71 — it is a full development dispatch when it fires.
+  # 13.63 + 2.71 = $16.34; × 1.2 = $19.608, rounded up to $19.75.
+  max_total_cost_usd: 19.75
 phases:
   - business_analysis
   - name: development
@@ -25,6 +29,12 @@ phases:
       return_to: development
       max_rounds: 3
   - parallel: [security, test]
+  - name: remediation
+    gate:
+      after: [security]
+      min_severity: high
+    heal:
+      max_attempts: 2
   - name: qa
     heal:
       max_attempts: 2

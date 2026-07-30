@@ -1,5 +1,5 @@
 ---
-description: Run the full SDLC pipeline (BA → Dev → QA → Security → Docs) for a feature, with auto-detection of the framework stack.
+description: Run the full SDLC pipeline (BA → Dev → QA → Security → Remediation? → Docs) for a feature, with auto-detection of the framework stack.
 argument-hint: "<feature description> [--stack=NAME] [--dry-run] [--resume[=slug]]"
 ---
 

@@ -22,14 +22,15 @@ Matches a Gradle project that genuinely contains Kotlin (not a pure-Java/Groovy 
 The profile declares `workflow: android-feature`, so this DAG **auto-selects** on Android projects — `/sdlc:start "<feature>"` (no `--workflow=`; override with `--workflow=NAME`).
 
 ```
-business_analysis → development → review ──approved──→ [ security ‖ test ] → qa → documentation
+business_analysis → development → review ──approved──→ [ security ‖ test ] → remediation? → qa → documentation
                          ▲           │
                          └──changes──┘  (loop, max 3 rounds)
 ```
 
 - **review** is a loop phase: changes-requested → re-run `development` (implement pass only, findings injected), up to 3 rounds, then escalate.
 - **[security ‖ test]** is a parallel group (one message, two Agent calls).
-- `android-bugfix` is the same minus BA: `development → review(⇄dev) → [security ‖ test] → qa`.
+- **remediation** is a gated phase — see "Who may write code" below. It dispatches `android-developer` with the security report, and only when `android-security` reported a Critical or High finding; otherwise it is skipped at zero cost.
+- `android-bugfix` is the same minus BA: `development → review(⇄dev) → [security ‖ test] → remediation? → qa`.
 
 See the rendered diagram + a full end-to-end run in [`docs/WORKFLOW.md`](../../docs/WORKFLOW.md) and [`docs/WALKTHROUGH.md`](../../docs/WALKTHROUGH.md).
 
@@ -37,24 +38,38 @@ See the rendered diagram + a full end-to-end run in [`docs/WORKFLOW.md`](../../d
 
 ## Agent roster
 
-| Phase | Agent | model | effort | Notes |
-| ----- | ----- | ----- | ------ | ----- |
-| business_analysis | `android-ba` | `opus` | `high` | BA + embedded DDD / module placement |
-| development | `android-developer` | `sonnet` | `medium` | Architecture Detection — no imposed stack |
-| review | `android-reviewer` | `sonnet` | `medium` | Read-only; drives the ⇄developer loop |
-| security | `android-security` | `opus` | `high` | MASVS/MASTG; runs ‖ test |
-| test | `android-tester` | `sonnet` | `medium` | Unit/integration: MockK, Turbine, Kover |
-| qa | `android-qa` | `sonnet` | `medium` | E2E/UI: Compose UI Test, Maestro, a11y |
-| documentation | `android-docs` | `haiku` | `low` | Docs + optional Obsidian vault stubs |
+| Phase | Agent | model | effort | Edits code? | Notes |
+| ----- | ----- | ----- | ------ | ----------- | ----- |
+| business_analysis | `android-ba` | `opus` | `high` | no | BA + embedded DDD / module placement |
+| development | `android-developer` | `sonnet` | `medium` | **yes** | Architecture Detection — no imposed stack |
+| review | `android-reviewer` | `sonnet` | `medium` | no | Read-only; drives the ⇄developer loop |
+| security | `android-security` | `opus` | `high` | no | MASVS/MASTG; read-only, runs ‖ test |
+| remediation | `android-developer` | `sonnet` | `medium` | **yes** | Gated — applies security's Critical/High fixes |
+| test | `android-tester` | `sonnet` | `medium` | **yes** | Unit/integration: MockK, Turbine, Kover |
+| qa | `android-qa` | `sonnet` | `medium` | **yes** | E2E/UI: Compose UI Test, Maestro, a11y |
+| documentation | `android-docs` | `haiku` | `low` | **yes** | Docs + optional Obsidian vault stubs |
 
 ### On-demand agents (not in the pipeline — invoke directly)
 
-| Agent | model | effort | Purpose |
-| ----- | ----- | ------ | ------- |
-| `android-debugger` | `sonnet` | `high` | Root-cause analysis |
-| `android-devops` | `sonnet` | `medium` | Build/release tooling |
-| `android-cicd` | `sonnet` | `medium` | CI/CD pipelines (GitHub Actions) |
-| `android-aar` | `sonnet` | `medium` | Library/AAR publishing |
+| Agent | model | effort | Edits code? | Purpose |
+| ----- | ----- | ------ | ----------- | ------- |
+| `android-debugger` | `sonnet` | `high` | no | Root-cause analysis — diagnoses and prescribes; the fix goes to `android-developer` |
+| `android-devops` | `sonnet` | `medium` | **yes** | Gradle build config, signing, ProGuard/R8, distribution |
+| `android-cicd` | `sonnet` | `medium` | **yes** | CI/CD pipelines (GitHub Actions workflow YAML) |
+| `android-aar` | `sonnet` | `medium` | no | After Action Review analyst — read-only workflow retrospective |
+
+### Who may write code
+
+Every agent declares an explicit `tools:` allowlist in its frontmatter. An agent with no `tools:`
+key inherits **every** tool, which is how a read-only reviewer ends up silently editing the code it
+is reviewing — so the allowlist is mandatory, not optional, for every agent shipped here.
+
+The reviewing agents (`android-reviewer`, `android-security`, `android-debugger`, `android-aar`)
+have **no `Edit` tool by design**. `Write` is still granted to the first three for exactly one
+purpose: their own report under `docs/plans/{task_slug}/`. This is what keeps the review loop
+meaningful — a reviewer that repairs the code it reviews leaves no independent verifier behind, and
+its edits land outside the loop that guards every other change. Their findings reach the codebase
+through `android-developer`, either via the review loop or via the gated `remediation` phase.
 
 ---
 

@@ -1,8 +1,10 @@
 ---
 name: android-cicd
+description: "CI/CD pipeline engineer for the project — GitHub Actions workflows, Gradle CI tasks, lint/test/assemble stages, caching, and artifact distribution for a modular `:feature:<name>` Android project. On-demand agent (invoked directly, not by the SDLC pipeline). NOT for application code (developer), tests (tester / qa), or signing keys and Play Console infrastructure (devops).\nTrigger words — EN: CI, CD, CI/CD, GitHub Actions, workflow YAML, pipeline, build matrix, runner, job, step, action, cache Gradle, artifact upload, lint stage, test stage, assemble stage, bundle release, nightly build, PR check, status check, branch protection, release automation, distribution, Fastlane.\nTrigger words — UA: CI, CD, CI/CD, GitHub Actions, воркфлоу, пайплайн, конвеєр збірки, матриця збірки, раннер, джоб, крок, екшн, кешування Gradle, вивантаження артефактів, стадія лінту, стадія тестів, стадія збірки, нічна збірка, перевірка PR, захист гілки, автоматизація релізу, дистрибуція, Fastlane."
 model: sonnet
 effort: medium
 color: blue
+tools: [Read, Glob, Grep, Edit, Write, Bash, Skill]
 ---
 
 # Android CI/CD Engineer — GitHub Actions Specialist

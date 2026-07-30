@@ -857,12 +857,23 @@ heuristic):
 **4. Totals.**
 
 ```
-base_total     = Σ est_row over all rows (development already ×1.6/aspect)
+base_total     = Σ est_row over all rows (development already ×1.6/aspect;
+                                          gated phases already ×0.5 — see below)
 expected_total = base_total + Σ over loop phases 0.5·(est(L)+est(R))
                             + Σ over healed phases WITH non-empty heal_checks avg_rounds(H)·0.3·est(H)
 worst_total    = base_total + Σ over loop phases (max_rounds−1)·(est(L)+est(R))
                             + Σ over healed phases WITH non-empty heal_checks rounds(H)·max_attempts·est(H)
+                            + Σ over gated phases 0.5·est(G)   ← restores G to full cost
 ```
+
+**Gated phases** (`gate: {after, min_severity}`) dispatch only when an earlier phase reports a
+finding at or above the threshold, so they cost either ~`est(G)` or exactly `$0`. Weight the row at
+`0.5·est(G)` in `base_total` and print it as `{phase} (gated)` in the estimate table; `worst_total`
+adds the other half back, since the worst case is that the gate opens. Do NOT model a gated phase as
+free just because most runs skip it — a `remediation` phase that fires is a full development
+dispatch, and a cap that never anticipated it would halt a run precisely when a Critical
+vulnerability was found. A gated phase that ALSO carries `heal:` contributes its heal term at the
+same 0.5 weight in `expected_total` and at full weight in `worst_total`.
 
 where `rounds(H) = max_rounds` when guarded phase H also carries a `loop` block (or is the
 `return_to` target of one — either way it dispatches up to `max_rounds` times), else
@@ -1043,7 +1054,9 @@ compute the re-entry point without re-resolving the workflow. Shape (validated b
 `schemas/run.schema.json`): `{ task_slug, workflow: CONTEXT.active_workflow, stack: primary_stack,
 resolved_phases: [ {name, kind: "plain"|"loop"|"parallel", aspects: <ordered aspect list or null>,
 members?: [{name, aspects}] } ] }`. Derive each entry from `CONTEXT.resolved_phases`: a plain phase
-sets `kind:"plain"`; a loop phase sets `kind:"loop"`; a `{parallel:[...]}` group sets
+sets `kind:"plain"`; a **gated** phase also sets `kind:"plain"` (its gate changes whether it
+dispatches, not its resolved shape — and `schemas/run.schema.json`'s `kind` enum stays a closed set
+of three); a loop phase sets `kind:"loop"`; a `{parallel:[...]}` group sets
 `kind:"parallel"` + `members`; an aspect-aware phase sets `aspects` to the aspects resolved for it by
 the SAME deterministic 3a lookup (the profile's `agents_per_phase` map — the aspects whose agent is
 non-empty, in canonical order `database → backend → frontend → testing`), computed up front here;
@@ -1060,6 +1073,8 @@ A resolved phase entry is one of three shapes. All are generic; the active profi
 
 - **Plain phase** — a string or `{name, when}`. Executed per 3a–3e below (including 3b-0 and
   3e-heal when the phase carries a `heal:` block).
+- **Gated phase** — `{name, gate: {after, min_severity}}`. Executed per 3-gate: a plain phase whose
+  dispatch is conditional on severity counts reported by earlier phases.
 - **Loop phase** — `{name, loop: {return_to, max_rounds}}`. Executed per 3-loop.
 - **Parallel group** — `{parallel: [phaseA, phaseB, ...]}`. Executed per 3-parallel.
 
@@ -1071,10 +1086,55 @@ For `{parallel: [pA, pB, ...]}`:
 1. Resolve each listed phase's agent(s) via 3a.
 2. **MUST PRINT VERBATIM:** `▶ Phase {N}/{total}: [{pA} ‖ {pB} …] — parallel`
 3. Dispatch all listed phases in a **single assistant message** containing one `Agent` call per phase (true concurrency). Each agent gets its normal 3b prompt and writes to its own `docs/plans/{task_slug}/0X-{phase}.md`.
-4. Wait for all to return, run 3e validation on each, then advance. If a listed phase is itself aspect-aware, run its aspect fan-out within its slot; the group as a whole is still dispatched concurrently.
+4. Wait for all to return, then run the FULL per-phase tail on each member exactly as a plain
+   phase would — **3d** (save its COMPACT summary to `CONTEXT.{member}_output`), 3d-1/3d-2
+   (telemetry), 3e (validation), and 3d-3 (its own `.checkpoint/{member}.json`) — before advancing.
+   Concurrency applies to the dispatch, not to the bookkeeping: a member whose
+   `CONTEXT.{member}_output` is never populated is invisible to every later phase that reads it,
+   and `3-resume-skip`'s parallel rule needs each member's checkpoint on disk to resume the group.
+   **A `gate:` downstream reads `CONTEXT.{member}_output` directly** — skip 3d here and the gate
+   sees nothing to parse and fails open on every run. If a listed phase is itself aspect-aware, run
+   its aspect fan-out within its slot; the group as a whole is still dispatched concurrently.
 
 Parallel members are bare phase-name strings in `schemas/workflow.schema.json` — they cannot carry
 a `loop` or `heal` block; a phase needing either must run outside a parallel group.
+
+**3-gate. Gated phase execution (conditional one-way hand-off).**
+
+For a phase carrying `gate: {after, min_severity}` (e.g. `remediation` receiving `security`'s
+Critical/High findings):
+
+1. For each phase name in `gate.after`, read its compact summary from `CONTEXT.{phase}_output` —
+   populated at 3d, including for a member of a parallel group (see 3-parallel step 4) — and
+   parse the machine-contract line `ISSUES_FOUND: critical=N high=N medium=N low=N`. Sum the counts
+   at or above `min_severity` across all listed phases (`high` ⇒ `critical + high`). A phase in
+   `after` that never ran (removed by a skip-rule or by `sdlc.local.yaml`) contributes 0.
+2. **If a listed phase ran but its summary has no parsable `ISSUES_FOUND` line, treat the gate as
+   OPEN** and warn inline: `WARN: gate on {phase} — {after_phase} reported no parsable ISSUES_FOUND
+   line; opening the gate`. Failing open costs one dispatch; failing closed silently drops a
+   Critical finding on the floor. Be conservative in the direction that cannot lose a vulnerability.
+3. **Gate closed** (total == 0, every listed phase parsed cleanly) — do NOT dispatch. Write
+   `.checkpoint/{phase}.json` with `status: "skipped"` and zero tokens/cost, per the "Skipped
+   phases" bullet in 3d-3 (omit `agent` — `schemas/checkpoint.schema.json` sets
+   `additionalProperties: false`, so invent no extra fields). Append the phase to `CONTEXT.phases[]`
+   so telemetry counts it, and **MUST PRINT VERBATIM:**
+   ```
+   ⏭️ Phase {N}/{total}: {phase} → skipped (gate closed — no {min_severity}+ findings)
+   ```
+   Then advance to the next phase.
+4. **Gate open** (total > 0) — dispatch normally per 3a–3e (including 3b-0 and 3e-heal when the
+   phase carries a `heal:` block), with one addition to the 3b prompt: inject the detailed report
+   path of every `after` phase that reported a qualifying finding, as
+   `gate_findings: [docs/plans/{task_slug}/0X-{after_phase}.md, …]`. Print the normal `▶ Phase` banner
+   with the suffix ` — gate open ({critical} critical, {high} high)`.
+
+A gated phase is a **one-way hand-off, not a loop**: it never re-runs the phases in `after`. If the
+findings must be re-verified after remediation, that is a separate `loop:` phase — say so
+explicitly in the recipe rather than assuming this step re-checks anything.
+
+Because a closed gate writes a `status: "skipped"` checkpoint, resume treats a gated phase exactly
+like any other plain phase (`status ∈ {completed, skipped}` ⇒ done) — no change to
+`tools/sdlc-lint/lib/resume.mjs` is required, and none should be made.
 
 **3-loop. Loop phase (review / iterate) execution.**
 
@@ -1863,8 +1923,9 @@ rename (atomic).
 - **Dev planning pass:** right after the plan approval gate (3b-special) is approved, write
   `.checkpoint/{phase}-plan{-aspect}.json` with `status:"approved"` (no cost fields required). This
   lets resume skip the planning gate and re-enter directly at the implement pass.
-- **Skipped phases:** when a phase is skipped by a skip-rule (Step 0c) or by an empty agent map
-  (3a), write its checkpoint with `status:"skipped"` so resume treats it as done (nothing to do).
+- **Skipped phases:** when a phase is skipped by a skip-rule (Step 0c), by an empty agent map
+  (3a), or by a closed `gate:` (3-gate), write its checkpoint with `status:"skipped"` so resume
+  treats it as done (nothing to do).
 
 This write is purely additive — it creates checkpoint files and changes no phase-dispatch logic.
 
@@ -2352,16 +2413,51 @@ injected, use this platform-neutral baseline:
 - Vulnerable dependencies (outdated pinned deps; check CVEs for critical libs)
 - Logging & monitoring (secrets/PII in logs; missing audit on auth events)
 
-Fix Critical and High severity issues directly (Edit/Write).
-For Medium issues, document them as recommendations without fixing.
-Skip Low/Info unless trivially safe to fix.
+You are READ-ONLY on production code. Do NOT edit implementation, tests, or
+configuration — you have no Edit tool. Write ONLY your own report file below.
+Applying fixes is the development agent's job: the gated `remediation` phase
+dispatches it with your report whenever you report a Critical or High finding.
+
+For each Critical and High finding, write a remediation the developer can apply
+without re-deriving your analysis: exact file, exact line, exact change, every
+affected site on the path, and what to verify once applied.
+For Medium issues, document them as recommendations — not for this run.
+Skip Low/Info (note them under "Out of scope").
 
 Write detailed security report to: docs/plans/{task_slug}/04-security.md
 
+RETURN ONLY a COMPACT summary (≤2K tokens), ending with these lines VERBATIM:
+ISSUES_FOUND: critical=N high=N medium=N low=N
+REMEDIATION_REQUIRED: [file:line for each Critical+High, max 10 items]
+STATUS: clean | remediation-required | blocked
+
+The ISSUES_FOUND line is a machine contract — the `remediation` gate parses it.
+Emit explicit zeros when clean; never omit the line.
+```
+
+### remediation
+
+```
+A prior reporting phase found Critical or High severity issues. Apply the fixes.
+
+Read these reports — they are your specification:
+{for each gate.after phase that reported findings: docs/plans/{task_slug}/0X-{phase}.md}
+
+Apply ONLY the remediations for Critical and High findings. Each report names the
+exact file, line, change, and affected sites — implement them as specified. Do NOT
+re-litigate the analysis, do NOT fix Medium/Low findings, and do NOT make unrelated
+changes: this pass runs after review, so anything you touch here bypasses the review
+loop that guarded every earlier change. Keep the diff minimal and auditable.
+
+If a prescribed remediation is wrong or infeasible, do NOT silently substitute your
+own design — implement what you safely can, and report the disagreement as a blocker.
+
+Write your remediation report to: docs/plans/{task_slug}/0X-remediation.md
+
 RETURN ONLY a COMPACT summary (≤2K tokens):
-- Issues found (severity breakdown: Critical / High / Medium / Low)
-- Fixes applied (file:line references)
-- Outstanding recommendations
+- Remediations applied (file:line references)
+- Remediations skipped, with reason
+- Blockers (a prescribed fix you could not apply)
 ```
 
 ### documentation

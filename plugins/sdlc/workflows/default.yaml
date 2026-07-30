@@ -7,8 +7,12 @@ caps:
   #
   # Measured basis (method: analysis.yaml): per-phase p90 business_analysis $2.97 +
   # development $5.41 + qa $1.48 + security $0.40 + documentation $0.21 = $10.47.
-  # Cap = 10.47 * 1.2 = $12.564, rounded up to $12.75.
-  max_total_cost_usd: 12.75
+  # Base = $10.47.
+  #
+  # `remediation` is gated (dispatched only when security reports Critical/High), so it enters
+  # base_total at 0.5 x est(development) = 0.5 x $5.41 = $2.71 — a full development dispatch when
+  # it fires. 10.47 + 2.71 = $13.18; * 1.2 = $15.816, rounded up to $16.00.
+  max_total_cost_usd: 16.00
 
 phases:
   - business_analysis
@@ -18,7 +22,11 @@ phases:
   - name: qa
     heal:
       max_attempts: 2
-  - name: security
+  - security
+  - name: remediation
+    gate:
+      after: [security]
+      min_severity: high
     heal:
       max_attempts: 2
   - documentation

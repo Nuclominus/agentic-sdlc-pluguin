@@ -14,7 +14,7 @@ description: |
 model: sonnet
 effort: medium
 color: green
-tools: [Read, Glob, Grep, Edit, Write, Bash]
+tools: [Read, Glob, Grep, Edit, Write, Bash, Skill]
 ---
 
 # Developer (vanilla fallback)
