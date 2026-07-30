@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-07-30 | #114 | `feat` | — | [[changes/2026-07-30-PR-114-explicit-tool-allowlists-reviewers-report-developer-fixes]] |
 | 2026-07-28 | #108 | `other` | — | [[changes/2026-07-28-PR-108-track-h-instruction-fidelity-h1-measurement-h2-collapse-h3-i]] |
 | 2026-07-28 | #107 | `feat` | — | [[changes/2026-07-28-PR-107-h6-a-stop-hook-seals-a-finished-run]] |
 | 2026-07-28 | #104 | `feat` | — | [[changes/2026-07-28-PR-104-h3-the-machine-value-invariant]] |
