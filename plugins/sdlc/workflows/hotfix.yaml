@@ -10,7 +10,11 @@ caps:
   #
   # Basis: 56 transcript-priced phases across 10 real runs. Per-phase p90 —
   #   development $5.41, qa $1.48, security $0.40, documentation $0.21  =>  base_p90 = $7.50
-  # Cap = base_p90 * 1.2 = $9.00.
+  # Cap = (base_p90 + gated remediation) * 1.2.
+  #
+  # `remediation` is gated (dispatched only when security reports Critical/High), so it enters
+  # base_total at 0.5 x est(development) = 0.5 x $5.41 = $2.71 — a full development dispatch when
+  # it fires. 7.50 + 2.71 = $10.21; * 1.2 = $12.252, rounded up to $12.50.
   #
   # The 20% is headroom for healing and variance, NOT a measurement — no heal attempt has ever
   # fired in the data, so heal cost is unmeasured (same caveat as analysis.yaml).
@@ -21,7 +25,7 @@ caps:
   # fires on every use and trains people to click through it. If hotfix should genuinely cost less,
   # constrain the WORK (fewer phases, cheaper tiers via .claude/model.local.json), and let the cap
   # follow the measurement.
-  max_total_cost_usd: 9.00
+  max_total_cost_usd: 12.50
 phases:
   - name: development
     heal:
@@ -29,7 +33,11 @@ phases:
   - name: qa
     heal:
       max_attempts: 2
-  - name: security
+  - security
+  - name: remediation
+    gate:
+      after: [security]
+      min_severity: high
     heal:
       max_attempts: 2
   - documentation

@@ -13,6 +13,7 @@ agents_per_phase:
   development: developer
   qa: qa-engineer
   security: security-analyst
+  remediation: developer          # gated: only dispatched when security reports Critical/High
   documentation: document-writer
 
 # aar_analyst: (unset) → the neutral core's `aar-analyst` runs /sdlc:aar retrospectives.

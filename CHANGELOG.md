@@ -4,6 +4,61 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+`sdlc` `1.15.0` → `1.16.0`, `android-foundation` `1.6.0` → `1.7.0`. Agents stop inheriting every
+tool, reviewing agents stop writing code, and their findings reach the codebase through a gated
+remediation phase instead of the reviewer's own `Edit`.
+
+**The bump matters for the same reason it did in 1.12.0.** `plugin_version` in `_telemetry.json`
+comes from `plugins/sdlc/.claude-plugin/plugin.json`, and it is what tells a run whose security
+phase could edit code apart from one whose security phase only reports. Shipping this under
+`1.15.0` would leave both pipeline shapes reporting the same string.
+
+### Added
+
+- **Explicit `tools:` allowlists on every shipped agent.** The key is an allowlist, and omitting it
+  does not mean "the defaults" — it grants the FULL toolset. Ten of eleven `android-foundation`
+  agents omitted it, so `android-reviewer` ("READ-ONLY … does NOT write code") could `Edit` any
+  file, and `android-debugger` ("Writing the fix → developer") told itself four sections later to
+  "Fix root cause". Prose was the only thing holding those boundaries.
+- **A gated `remediation` phase.** New generic control flow — `gate: {after, min_severity}` in
+  `schemas/workflow.schema.json`, orchestrator step `3-gate` — parses the machine-contract line
+  `ISSUES_FOUND: critical=N high=N medium=N low=N` and dispatches the development agent only when a
+  Critical or High finding exists; otherwise the phase is recorded `status: "skipped"` at zero cost.
+  A one-way hand-off, not a loop, and necessarily separate from `loop:` because `security` runs
+  inside `parallel: [security, test]`, whose members are bare strings that cannot carry control
+  flow. It fails **open** on an unparsable producer: one needless dispatch beats a dropped Critical.
+- **`sdlc-lint agent-tools`** — CI enforcement for a declared non-empty `tools:`, no agent-dispatch
+  tool (`Agent`/`Task`/`SendMessage`/`Workflow` belong to the orchestrator alone), no `Edit` on a
+  reviewing agent, and a present `description:`. Plus gate-ordering validation in `cycles`.
+- **Descriptions for `android-cicd` and `android-devops`**, which had none and so rendered as
+  "Agent from android-foundation" — unreachable by trigger words, only by exact name.
+
+### Fixed
+
+- **`3-parallel` never said its members run `3d`.** Step 4 specified only "run 3e validation on
+  each", but 3d is what populates `CONTEXT.{phase}_output`. Since `security` is a parallel member
+  and the new gate reads that field, the gate would have failed open on every run. Step 4 now
+  spells out the full per-phase tail (3d → 3d-1/3d-2 → 3e → 3d-3).
+- **`cycles` validated `loop.return_to` ordering but not `gate.after`**, so a gate pointing at a
+  later or undeclared phase would pass CI and then silently dispatch on every run instead of never.
+- **The opposite defect in core**: `business-analyst` and `document-writer` were instructed to write
+  their deliverable with no `Write` tool, and no agent carried `Skill` even though the orchestrator
+  injects convention skills into every phase prompt — so mandatory skill invocations failed silently.
+
+### Changed
+
+- **`security` loses its `heal:` block in every recipe.** Healing re-dispatches the phase's own
+  agent to repair a build break; an agent with no `Edit` can only re-report the same failure at full
+  price. `remediation` carries the guard instead, because it is the phase that writes code.
+- **Cost caps rise on the six recipes that gained the phase** (`default` $12.75 → $16.00, `bugfix` /
+  `hotfix` / `refactor` $9.00 → $12.50, `android-feature` $16.50 → $19.75, `android-bugfix` $12.75 →
+  $16.00). A gated phase enters `base_total` at half weight and `worst_total` at full: when the gate
+  opens, `remediation` is a full development dispatch, and a cap that ignored it would halt the run
+  at exactly the moment a Critical vulnerability was found. `analysis.yaml` is the deliberate
+  exception — it ships no code to remediate.
+
+See `.brain/decisions/ADR-0018-reviewers-do-not-write-code.md`.
+
 ## [1.12.0] — 2026-07-29
 
 `sdlc` `1.14.1` → `1.15.0` (other plugins unchanged). Track H, instruction fidelity: the end of a

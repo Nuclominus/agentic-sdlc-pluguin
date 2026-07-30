@@ -31,7 +31,8 @@ agents_per_phase:
   debugging: android-debugger        # Sonnet/medium — root-cause phase (also stays on-demand); used by android-debug
   development: android-developer     # Sonnet/medium — implementer (Architecture Detection)
   review: android-reviewer           # Sonnet/medium — read-only review; ⇄developer loop (max 3)
-  security: android-security         # Opus/high — MASVS/MASTG; runs ‖ test
+  security: android-security         # Opus/high — MASVS/MASTG; READ-ONLY, runs ‖ test
+  remediation: android-developer     # gated — dispatched ONLY when security reports Critical/High
   test: android-tester               # Sonnet/medium — unit/integration (MockK/Turbine/Kover)
   qa: android-qa                     # Sonnet/medium — E2E/UI (Compose UI Test, Maestro, a11y)
   documentation: android-docs        # Haiku/low — docs + (optional) Obsidian vault

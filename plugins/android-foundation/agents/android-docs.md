@@ -4,6 +4,7 @@ description: "Technical documentation specialist for the project. Maintains the 
 model: haiku
 effort: low
 color: gray
+tools: [Read, Glob, Grep, Edit, Write, Bash, Skill]
 ---
 
 # Android Technical Documentation Specialist

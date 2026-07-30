@@ -2,6 +2,7 @@
 
 > One note per architecture decision. Newest first.
 
+- [[decisions/ADR-0018-reviewers-do-not-write-code]]
 - [[decisions/ADR-0017-the-tail-has-a-net]]
 - [[decisions/ADR-0016-amend-the-spec-and-the-plan-together]]
 - [[decisions/ADR-0015-the-machine-value-invariant]]

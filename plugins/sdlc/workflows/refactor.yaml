@@ -4,9 +4,13 @@ match:
   arguments_pattern: "\\brefactor\\b|\\bclean\\s*up\\b|\\brestructur\\w*\\b|\\bextract\\b"
 caps:
   # Measured basis (method: analysis.yaml): per-phase p90 development $5.41 + qa $1.48 +
-  # security $0.40 + documentation $0.21 = $7.50. Cap = 7.50 * 1.2 = $9.00.
+  # security $0.40 + documentation $0.21 = $7.50.
+  #
+  # `remediation` is gated (dispatched only when security reports Critical/High), so it enters
+  # base_total at 0.5 x est(development) = 0.5 x $5.41 = $2.71 — a full development dispatch when
+  # it fires. 7.50 + 2.71 = $10.21; * 1.2 = $12.252, rounded up to $12.50.
   # Same phase list as bugfix.yaml / hotfix.yaml, hence the same cap.
-  max_total_cost_usd: 9.00
+  max_total_cost_usd: 12.50
 phases:
   - name: development
     heal:
@@ -14,7 +18,11 @@ phases:
   - name: qa
     heal:
       max_attempts: 2
-  - name: security
+  - security
+  - name: remediation
+    gate:
+      after: [security]
+      min_severity: high
     heal:
       max_attempts: 2
   - documentation

@@ -4,6 +4,7 @@ description: "E2E and UI automation specialist for the project. Use for UI Test,
 model: sonnet
 effort: medium
 color: cyan
+tools: [Read, Glob, Grep, Edit, Write, Bash, Skill]
 ---
 
 # Android QA Engineer — Compose E2E & UI Automation

@@ -16,7 +16,7 @@ description: |
 model: sonnet
 effort: medium
 color: yellow
-tools: [Read, Glob, Grep, Edit, Write, Bash]
+tools: [Read, Glob, Grep, Edit, Write, Bash, Skill]
 ---
 
 # QA Engineer

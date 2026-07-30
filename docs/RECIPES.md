@@ -11,17 +11,22 @@ discovered across **all** plugins (`**/workflows/*.yaml`), validated against
 
 | Recipe          | Owner          | Phases                                                            |
 | --------------- | -------------- | ----------------------------------------------------------------- |
-| `default`       | sdlc (core)    | BA → Dev → QA → Security → Docs                                   |
-| `bugfix`        | sdlc (core)    | Dev → QA → Security → Docs                                        |
-| `hotfix`        | sdlc (core)    | Dev → QA → Security → Docs                                        |
-| `refactor`      | sdlc (core)    | Dev → QA → Security → Docs                                        |
+| `default`       | sdlc (core)    | BA → Dev → QA → Security → Remediation? → Docs                    |
+| `bugfix`        | sdlc (core)    | Dev → QA → Security → Remediation? → Docs                         |
+| `hotfix`        | sdlc (core)    | Dev → QA → Security → Remediation? → Docs                         |
+| `refactor`      | sdlc (core)    | Dev → QA → Security → Remediation? → Docs                         |
 | `docs-only`     | sdlc (core)    | Docs                                                              |
 | `analysis`      | sdlc (core)    | BA → Security (reports only — no code, no PR)                     |
 | `testing`       | sdlc (core)    | QA (backfill / verify tests)                                      |
 | `debug`         | sdlc (core)    | Dev → QA (fix-and-verify; developer does root-cause)             |
-| `android-feature` | android-foundation | BA → Dev → Review(⇄Dev ×3) → [Security ‖ Test] → QA → Docs   |
-| `android-bugfix`  | android-foundation | Dev → Review(⇄Dev ×3) → [Security ‖ Test] → QA              |
+| `android-feature` | android-foundation | BA → Dev → Review(⇄Dev ×3) → [Security ‖ Test] → Remediation? → QA → Docs |
+| `android-bugfix`  | android-foundation | Dev → Review(⇄Dev ×3) → [Security ‖ Test] → Remediation? → QA |
 | `android-debug`   | android-foundation | Debugger → Dev → Review(⇄Dev ×2) → Test                     |
+
+`Remediation?` is **gated**: the security agent is read-only and only reports. The `remediation`
+phase dispatches the *development* agent to apply the fixes, and only when security reported a
+Critical or High finding — otherwise it is skipped at zero cost. `analysis` is the deliberate
+exception: it ships no code, so there is nothing to remediate.
 
 **Built-in intents.** `analysis`, `testing`, and `debug` (core) plus `android-debug` (android) each carry
 a `match:` block so `/sdlc:start` can auto-select them from the task text — e.g. "analyze/audit/assess …"
@@ -35,7 +40,12 @@ otherwise on-demand `android-debugger` into a real pipeline phase (`debugging` �
 | ----- | ------ | ------- |
 | plain | `- development` or `- {name, when}` | run the phase |
 | loop  | `- {name: review, loop: {return_to: development, max_rounds: 3}}` | re-run `return_to` on changes-requested, capped, then escalate |
+| gate  | `- {name: remediation, gate: {after: [security], min_severity: high}}` | dispatch ONLY if a listed phase reported a finding at that severity; else skip at zero cost |
 | parallel | `- {parallel: [security, test]}` | dispatch listed phases concurrently |
+
+`gate` is a one-way hand-off, not a loop: it never re-runs the phases in `after`. It exists because
+a parallel member is a bare string and cannot carry control flow — `security` runs inside
+`[security ‖ test]`, so its hand-off to the developer has to be a separate phase after the group.
 
 ## Workflow selection precedence
 
