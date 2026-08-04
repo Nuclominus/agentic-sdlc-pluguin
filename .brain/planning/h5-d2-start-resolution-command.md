@@ -144,14 +144,31 @@ Neither boundary adds a turn to a successful run.
 ```
 plugins/sdlc/tools/resolve/
   cli.mjs        # the only unit that prints; arg parsing, exit codes
+  fsglob.mjs     # ✅ dependency-free globbing (replaces tinyglobby)
+  yaml.mjs       # ✅ dependency-free YAML subset (replaces the `yaml` package)
+  manifests.mjs  # ✅ tree vs installed loading, enablement, scope precedence
+  detect.mjs     # ✅ Step 0b — the CANONICAL detection/attachment implementation
   roots.mjs      # Step 0
-  deps.mjs       # Step 0a (fs-glob enumeration, status, policy, cache stamp)
-  detect.mjs     # Step 0b — the CANONICAL detection/attachment implementation
+  deps.mjs       # Step 0a (skill enumeration, status, policy, cache stamp)
   skiprules.mjs  # Step 0c
   profile.mjs    # Step 1 (profile merge, sdlc.local.yaml, model.local.json, workflow resolution)
   caps.mjs       # Step 1d
   plan.mjs       # composes the JSON + prints[]; no I/O of its own
 ```
+
+**Correction — "dependency-free" was under-specified.** This note said it and named only
+`tinyglobby`. It missed **YAML**, which every manifest, workflow recipe and the user-authored
+`.claude/sdlc.local.yaml` is written in, and which the plugin cannot depend on either. That added
+two modules the layout above did not anticipate. The resolution is a subset parser plus a
+**differential parity gate** (`tools/sdlc-lint/test/yaml-parity.test.mjs`): every YAML file in the
+repository, plus fixtures pinning shapes taken from real consumer projects, is parsed by both the
+shipped parser and the `yaml` package and must be deep-equal.
+
+The gate paid for itself immediately, catching three defects review had not: `|+` chomping dropping
+trailing blank lines; multi-line plain scalars unsupported and throwing on ordinary YAML; and blank
+lines counted as continuation progress, which skipped type resolution and silently turned
+`enabled: true` into the string `"true"` in nine files. That last one is precisely the failure mode
+this track exists to remove — invisible, and indistinguishable from success in the output.
 
 `tools/sdlc-lint/lib/detect.mjs` becomes a re-export shim over
 `plugins/sdlc/tools/resolve/detect.mjs`, following the template `lib/resume.mjs` already sets over
@@ -204,14 +221,30 @@ shim exists to prevent.
 
 ## Open questions
 
-- **The manifest root must be a parameter** (from check 4). The shipped command resolves from
-  `PLUGIN_CACHE_ROOT`; the dev/CI shim resolves from the marketplace working tree. `loadManifests()`
-  hard-codes `plugins/**/manifest.yaml` relative to a root and must gain a cache-shaped mode, or the
-  shim and the shipped code will disagree on production input while every fixture passes.
-- **Enabled vs. merely cached** is now on the critical path. Globbing the cache reaches every plugin
-  ever installed under that config dir; `enabledPlugins` is never consulted. This is the open
-  *Track H — plugin discovery correctness* item in [[planning/backlog]]. The prose has the same
-  defect, so this is not a regression — but it is the obvious place to close it.
+- ~~**The manifest root must be a parameter.**~~ **Resolved** — `manifests.mjs` has two modes,
+  `tree` (marketplace checkout: CI, fixtures, the dev lint) and `installed` (the production path).
+  `tools/sdlc-lint/lib/load.mjs` re-exports the tree loader, so there is one implementation.
+- ~~**Enabled vs. merely cached.**~~ **Resolved, and the cache is not globbed at all** — which
+  turned out to matter more than this note assumed. The cache keeps *every version ever installed*:
+  on the development machine `android-foundation/` holds 1.4.0 through 1.7.0 and `sdlc/` holds four
+  more. A glob returns all of them, they all satisfy `detect`, they all carry `priority: 300`, and
+  the winner is filesystem order. `installed_plugins.json` records the exact `installPath`, so the
+  ambiguity never arises instead of being resolved by heuristic.
+
+  The enablement rules are measured rather than assumed, and each is pinned by a test:
+  **absent is not disabled** (both consumer projects list only three unrelated plugins in project
+  settings, while `sdlc@agentic-sdlc` — active in every run — appears solely in the user settings,
+  so treating absence as disabled would switch the pipeline off); project settings **add** to the
+  map and win per key; the most specific install **scope** wins (`local > project > user`) with a
+  path disagreement reported rather than silently resolved; a disabled plugin is **skipped and
+  reported**, while a plugin carrying no manifest is neither — it is simply not an SDLC plugin; and
+  `extraRoots` keeps a local-path development checkout working.
+
+  This closes the *Track H — plugin discovery correctness* item in [[planning/backlog]].
+
+  **Verified on both real corpora:** `android/300 + [dagger, retrofit, room, workmanager]`, exactly
+  what `_telemetry.json` records, with `datastore-proto` correctly absent and no stale version
+  loaded — 149ms and 4ms.
 - **`datastore-proto` declares `dependency: androidx.datastore`**, which also matches
   `androidx.datastore:datastore-preferences` — a preferences-only project (parlor is one) would
   falsely attach the proto framework the moment that plugin is installed. Latent today because the
