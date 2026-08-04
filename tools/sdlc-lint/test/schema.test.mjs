@@ -327,19 +327,10 @@ test("docs-only.yaml cap clears its single measured phase", () => {
 const ORCHESTRATOR = "plugins/sdlc/skills/pipeline-orchestrator/SKILL.md";
 const skillText = () => readFileSync(resolve(REPO, ORCHESTRATOR), "utf8");
 
-test("cost_caps is documented BOTH where it is parsed (1b) and where it is applied (1d-0)", () => {
-  // The failure this guards: a config key listed in the 1b key table but never consumed in 1d-0
-  // parses silently and does nothing — the project sets a cap, sees no error, and the run is gated
-  // on the shipped value anyway. Half-documented is worse than absent.
-  const s = skillText();
-  const b = s.indexOf("#### 1b."), d0 = s.indexOf("#### 1d-0."), d1 = s.indexOf("#### 1d-1.");
-  assert.ok(b > 0 && d0 > b && d1 > d0, "1b / 1d-0 / 1d-1 section anchors must all be present in order");
-  // The KEY TABLE row specifically — a mention in the 1b-caps prose is not what the orchestrator
-  // consults when deciding which top-level keys it recognizes.
-  assert.match(s.slice(b, d0), /^\|\s*`cost_caps`\s*\|/m,
-    "1b's recognized-keys table must carry a cost_caps row");
-  assert.match(s.slice(d0, d1), /cost_caps/, "1d-0 must actually apply the override");
-});
+// RETIRED — parsing and application are no longer two places in prose. profile.mjs parses
+// cost_caps (preserving an explicit null, the only way to opt out of a shipped cap) and caps.mjs
+// applies it in one place. Both halves are asserted in profile.test.mjs and caps.test.mjs.
+
 
 test("1d-0 remains the single place the cost cap is resolved", () => {
   // Step 3d-cap's auditability rests on CONTEXT.cost_cap having exactly one writer. If an override
@@ -352,11 +343,6 @@ test("1d-0 remains the single place the cost cap is resolved", () => {
     "every CONTEXT.cost_cap assignment must live inside Step 1d-0");
 });
 
-test("the documented override precedence is exact-name over wildcard", () => {
-  const s = skillText();
-  const sec = s.slice(s.indexOf("#### 1d-0."), s.indexOf("#### 1d-1."));
-  const exact = sec.indexOf("{WORKFLOW_NAME}");
-  const star = sec.indexOf('"*"');
-  assert.ok(exact > 0 && star > exact,
-    "the exact recipe name must be checked before the \"*\" fallback");
-});
+// RETIRED — see caps.test.mjs, "an exact recipe name beats '*', and both beat the recipe" and
+// "a missing key is NOT an override". Precedence is now executable rather than documented.
+

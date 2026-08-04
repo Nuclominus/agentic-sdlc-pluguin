@@ -58,7 +58,9 @@ test("the orchestrator declares exactly the live contract set", () => {
   const { contracts } = parseContracts(
     join(REPO, "plugins/sdlc/skills/pipeline-orchestrator/SKILL.md"));
   assert.deepEqual(contracts.map((c) => c.id).sort(), [
-    "2-4-anchor", "3d-1b-phase-cost", "5b-finish", "6-journal",
+    // 0-resolve joined the set when Steps 0→1d collapsed into one command (ADR-0019). It is the
+    // shape that measures 100% over 28 runs: one Bash line, once per run.
+    "0-resolve", "2-4-anchor", "3d-1b-phase-cost", "5b-finish", "6-journal",
   ]);
   assert.equal(contracts.every((c) => c.until === null), true);
 });
@@ -75,7 +77,7 @@ test("live and retired sets parse together without a duplicate id", () => {
   const base = join(REPO, "plugins/sdlc/skills/pipeline-orchestrator");
   const { contracts, errors } = parseContracts([join(base, "SKILL.md"), join(base, "contracts-retired.md")]);
   assert.deepEqual(errors, []);
-  assert.equal(contracts.length, 7);
+  assert.equal(contracts.length, 8);
 });
 
 test("until is optional and defaults to null", () => {

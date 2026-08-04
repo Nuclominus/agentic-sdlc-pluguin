@@ -49,92 +49,50 @@ This single rule replaces the per-agent bilingual trigger keywords that were use
 
 ## Algorithm — 8 Steps
 
-### Step 0 — Resolve the plugin roots (FIRST — before any plugin read)
+### Step 0 — Resolve the run (ONE command, before anything else)
 
-Every plugin path below is expressed as `{SDLC_PLUGIN_ROOT}`, `{PLUGIN_CACHE_ROOT}` or
-`{CONFIG_DIR}`. Resolve all three **once**, with a single `Bash` call, before Step 0a:
+```sdlc-contract
+id: 0-resolve
+requires: bash_match
+pattern: resolve/cli\.mjs plan
+cardinality: once-per-run
+since: 2026-08-04
+```
+
+Everything this pipeline needs to know before it dispatches anything — plugin roots, dependency
+preflight, foundation and framework detection, skip-rule signals, profile merge, project overrides,
+model tiers, workflow resolution and the cost cap — is a deterministic function of files on disk.
+Run it:
 
 ```bash
-CFG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
-case "${CLAUDE_PLUGIN_ROOT:-}" in
-  */plugins/cache/*) CFG="${CLAUDE_PLUGIN_ROOT%%/plugins/cache/*}" ;;
-esac
-SDLC="${CLAUDE_PLUGIN_ROOT:-}"
-if [ -z "$SDLC" ]; then   # harness did not export it — find the newest cached sdlc
-  M=$(find "$CFG/plugins/cache" -path '*/sdlc/*config/models.json' 2>/dev/null | sort -V | tail -1)
-  [ -n "$M" ] && SDLC=$(dirname "$(dirname "$M")")
-fi
-printf 'CONFIG_DIR=%s\nPLUGIN_CACHE_ROOT=%s/plugins/cache\nSDLC_PLUGIN_ROOT=%s\n' "$CFG" "$CFG" "$SDLC"
+node "${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs" plan --json $ARGUMENTS
 ```
 
-Store the three values in `CONTEXT` and substitute them literally into every later `Glob`/`Read`
-path — `Glob` does not expand environment variables, so it must receive the resolved absolute path.
+Then do exactly three things:
 
-Which root for which read, and why a hard-coded `~` is a bug (issue #70), is specified once in
-`plugins/sdlc/PLUGIN-PATHS.md`. Short form:
+1. **Echo `prints[]` in order, verbatim.** Every block this pipeline owes the user — the dependency
+   preflight, the active-profile contract print, the local-override summary, the model-tier list,
+   the skip-rule announcement, the workflow line, the cap override, the `--dry-run` preview —
+   arrives already composed. Print them as given. Do not reformat, reorder, summarise or fill a
+   template: the values are the command's, not yours (`MACHINE-VALUES.md`).
+2. **Carry `plan` into `CONTEXT`** using the key map below. Later steps read those keys and nothing
+   else from this step.
+3. **On a non-zero exit: echo `{stderr}` and STOP.** Do not improvise a resolution, do not retry with
+   different flags, do not proceed with defaults. A halt here means an ambiguous or missing workflow
+   recipe, a recipe that fails schema validation, or a `block`-policy dependency — all of which are
+   the user's to fix. This is the whole degraded path; there is deliberately no fallback procedure,
+   because a second implementation of resolution is exactly what
+   [ADR-0019](../../../../.brain/decisions/ADR-0019-the-run-start-is-one-command.md) removed.
 
-- **self-referential** (`config/models.json`, `config/aspects.yaml`, `tools/**`) → `{SDLC_PLUGIN_ROOT}`;
-- **cross-plugin discovery** (`**/manifest.yaml`, `**/workflows/*.yaml`) → `{PLUGIN_CACHE_ROOT}`;
-- **session/user state** (preflight stamp, `projects/**` transcripts) → `{CONFIG_DIR}`.
+The command reads the CONSUMER's project from the current working directory and loads only itself
+from the plugin root, per `plugins/sdlc/PLUGIN-PATHS.md`.
 
-### Step 0a — External plugin dependency preflight
+#### 0a-1. Headless mode — binding on EVERY headless rule in this document
 
-Aggregate runtime dependencies from **every installed plugin's `runtime-dependencies.json`**, not just core. This allows framework plugins to declare their own external skill needs.
+`CONTEXT.headless_mode` comes from `plan.headless` (the command reads `SDLC_NONINTERACTIVE`).
 
-> Note: Claude Code's native `plugin.json → dependencies` field is a simple array of plugin names used only for intra-marketplace install-time resolution (e.g., `android-foundation` declaring it needs `sdlc`). Our runtime preflight — for external plugins like `superpowers` from another marketplace, with per-skill granularity and policies — lives in a separate `runtime-dependencies.json` file to avoid conflicting with the native schema.
-
-**Algorithm (with cache fast-path):**
-
-The preflight result is cached in `{CONFIG_DIR}/.sdlc-deps-preflight.json` to avoid repeating 11+ tool calls on every `/sdlc:start` invocation. It is keyed to the config dir on purpose: a stamp written under one `CLAUDE_CONFIG_DIR` must never be read under another.
-
-**Fast-path (cache hit):**
-
-1. If `$ARGUMENTS` contains `--force-preflight`, skip to full scan below.
-2. Read `{CONFIG_DIR}/.sdlc-deps-preflight.json` (1 tool call).
-3. If the file exists AND `all_satisfied == true`:
-   - Load `results` into `CONTEXT` (set `CONTEXT.{plugin}_unavailable = true` for any `"missing"` entries).
-   - Print: `🔧 Dependency preflight: cached (all satisfied)`
-   - Persist `deps_preflight` from cached `results` into telemetry with `"source": "cache"`.
-   - Skip to Step 0b. Done.
-4. If the file exists AND `all_satisfied == false`:
-   - Run an **abbreviated check**: only re-verify deps marked `"missing"` in the cache (not all `runtime-dependencies.json` files). If a previously-missing dep is now available, update the stamp.
-5. If the file does not exist, or `--force-preflight` was set → proceed to full scan.
-
-**Full scan (cache miss):**
-
-1. Use `Glob {PLUGIN_CACHE_ROOT}/**/runtime-dependencies.json` to find all declarations.
-2. Read each file. Parse the `dependencies` array. Skip files with empty arrays silently.
-3. Merge declarations across plugins. If two plugins declare the same external dep with different policies, the strictest wins (`block` > `warn` > `graceful-degrade`).
-
-**Write cache stamp** (after full scan completes without `block` abort):
-
-Write `{CONFIG_DIR}/.sdlc-deps-preflight.json`:
-
-```json
-{
-  "checked_at": "<ISO timestamp>",
-  "results": { "<plugin_name>": "available"|"missing" },
-  "all_satisfied": true|false
-}
-```
-
-**Cache invalidation:**
-
-- `/sdlc:doctor` always runs a fresh full scan and rewrites the stamp (see `doctor.md`).
-- `--force-preflight` flag on `/sdlc:start` bypasses cache entirely.
-- If a `block`-policy dep caused an abort, no stamp is written — ensuring the next run always re-scans.
-
-#### 0a-1. Detect headless mode
-
-```
-HEADLESS = (env SDLC_NONINTERACTIVE == "true" OR "1")
-```
-
-Persist in `CONTEXT.headless_mode` for telemetry. Affects UX of policy enforcement below (interactive prompts vs. machine-readable JSON to stdout).
-
-**What "machine-readable" can and cannot mean here — binding on EVERY headless rule in this
-document.** This orchestrator is a skill prompt, not a program. Two consequences, both verified by
-execution rather than assumed:
+**What "machine-readable" can and cannot mean here.** This orchestrator is a skill prompt, not a
+program. Two consequences, both verified by execution rather than assumed:
 
 - **Every machine-readable signal goes to `stdout`.** A prompt's output reaches stdout; nothing it
   can do writes the hosting process's stderr. (Observed: a headless run whose `warn` policy fired
@@ -146,845 +104,68 @@ execution rather than assumed:
   as status: the machine-readable stdout line, plus `aborted_at_phase` in
   `docs/plans/{task_slug}/_telemetry.json` for aborts that get that far.
 
-CI integrating a headless run must gate on those artifacts, **never on `$?`**.
+CI integrating a headless run must gate on those artifacts, **never on `$?`** of the `claude -p`
+process. (The resolve command itself is an ordinary process and *does* exit non-zero on a halt —
+that status is available to a wrapper script, but it is not the hosting session's status.)
 
-#### 0a-2. Enumerate available skills (with FS fallback)
+#### 0-context. What the plan populates
 
-Try `mcp__skills__list_skills` first. If unavailable or it errors:
-
-```
-AVAILABLE_SKILLS = set()
-For each entry in runtime-dependencies.json#dependencies:
-  For each skill_name in entry.skills_used:
-    skill_path = {PLUGIN_CACHE_ROOT}/**/{entry.name}/**/skills/{skill_name}/SKILL.md
-    if Glob finds skill_path: AVAILABLE_SKILLS.add("{entry.name}:{skill_name}")
-```
-
-If `mcp__skills__list_skills` did succeed, map its output to the `{plugin_name}:{skill_name}` form so the matching algorithm below is uniform.
-
-#### 0a-3. Compute per-dependency status
-
-```
-DEPS_STATUS = {}  # plugin_name → {"status": "available"|"missing", "missing_skills": [...]}
-
-For each entry in runtime-dependencies.json#dependencies:
-  missing = [s for s in entry.skills_used if "{entry.name}:{s}" not in AVAILABLE_SKILLS]
-  if missing == []:
-    DEPS_STATUS[entry.name] = {"status": "available", "missing_skills": []}
-  else:
-    DEPS_STATUS[entry.name] = {
-      "status": "missing",
-      "missing_skills": missing,
-      "policy": entry.policy,
-      "install_command": entry.install_command,
-      "fallback_note": entry.fallback_note
-    }
-```
-
-Persist in `CONTEXT.deps_preflight = DEPS_STATUS` for telemetry (Step 5).
-
-#### 0a-4. Enforce policy per missing dependency
-
-For each entry where `status == "missing"`:
-
-| `policy` | Interactive (HEADLESS=false) | Headless (HEADLESS=true) |
+| `plan` field | `CONTEXT` key | read by |
 |---|---|---|
-| `block` | Print install command. If `mcp__plugins__suggest_plugin_install` is available, call it. Abort the run. | Print to stdout `{ "error": "missing_dependency", "plugin": "{name}", "missing_skills": [...], "install_command": [...] }` (one JSON object per blocking dep, separated by newlines). Abort the run — dispatch no phases. |
-| `warn` | Print human warning (yellow ⚠️). Set `CONTEXT.{plugin}_unavailable = true`. Continue. | Write one-line warning to stdout: `WARN: {plugin} missing skills: {csv}`. Set `CONTEXT.{plugin}_unavailable = true`. Continue. |
-| `graceful-degrade` | Silently set `CONTEXT.{plugin}_unavailable = true`. Continue. | Silently set `CONTEXT.{plugin}_unavailable = true`. Continue. |
-
-Aggregate ALL `block` failures before aborting — print all JSON entries / install instructions, then exit. Single exit, multiple grievances.
-
-**Headless mode (`SDLC_NONINTERACTIVE=true`):**
-
-- `block` → abort the run (dispatch no phases) with machine-readable JSON `{ "missing": [...], "install_command": [...] }` written to stdout. Per 0a-1, do NOT promise an exit code — the stdout JSON is the signal.
-- `warn` → write a single line to stdout, continue.
-- `graceful-degrade` → silent.
-
-#### 0a-5. MUST PRINT VERBATIM (interactive only)
-
-If `HEADLESS == false`, print this block AFTER policy enforcement (and only if it did not abort):
-
-```
-🔌 Dependency preflight:
-   {plugin_name} ({version}, policy={policy}): {✅ available | ⚠️ degraded | ❌ missing}
-     missing: {csv of skill_names, or "—"}
-   ...
-```
-
-If `runtime-dependencies.json` had no entries, print:
-
-```
-🔌 Dependency preflight: no external dependencies declared.
-```
-
-Or, on cache hit with all satisfied:
-
-```
-🔧 Dependency preflight: cached (all satisfied)
-```
-
-If `HEADLESS == true`, suppress this print (warnings already went to stdout; success is silent).
-
-#### 0a-6. Pass downstream
-
-`CONTEXT.{plugin}_unavailable` flags propagate into agent prompts via Step 3b-1's `availability_flags:` line in the per-call CONTEXT trailer — do not duplicate that wiring here.
-
-### Step 0b — Detect the FOUNDATION (manifest.yaml, kind: foundation)
-<!-- Detection-rule semantics here are independently verified by tools/sdlc-lint (detect.mjs + fixtures). If you change file_exists/file_contains/file_glob/any/all handling, update detect.mjs and the fixture expected.json files to match. -->
-
-The orchestrator's job here is narrow: **pick the foundation, then delegate framework resolution to it.**
-All declarative profile data lives in one **`manifest.yaml` per plugin** (the plugin `.md`/`README.md`
-files are human docs the orchestrator does NOT parse). Each manifest declares `kind: foundation` (a stack
-provider) or `kind: framework` (an additive library provider). The core keeps the foundation→framework
-tree honest by handling the two kinds in separate steps.
-
-**0b-0. Load the shared aspect vocabulary** (once, used for `hosts_aspects: all` expansion and validation):
-
-```
-TAXONOMY = parse(Read("{SDLC_PLUGIN_ROOT}/config/aspects.yaml"))   # { platform: [...], functional: [...] }
-```
-
-**0b-1. Glob every manifest and split by `kind`:**
-
-```
-manifests = [ parse(f) for f in Glob("{PLUGIN_CACHE_ROOT}/**/manifest.yaml") ]
-FOUNDATIONS         = [ m for m in manifests if m.kind == "foundation" ]
-FRAMEWORK_MANIFESTS = [ m for m in manifests if m.kind == "framework" ]   # set aside; resolved in 0b-frameworks
-```
-
-Winner resolution below sees **FOUNDATIONS only** — frameworks cannot leak into it by construction.
-
-**0b-2. For each foundation manifest:**
-1. Read the parsed YAML fields: `kind`, `stack`, `priority`, `aspects`, `detect`, optional `workflow`, `hosts_aspects`, `framework_detection`, `agents_per_phase`, `convention_skills`, `phase_injections`, `extra_phases`, `pre_phase_commands`, `post_pipeline_checks`, `heal_checks`, `on_demand_agents`.
-2. Determine whether it matches the project root by evaluating its `detect` rules:
-   - `detect.any: ["*"]` → always matches.
-   - `detect.all: [...]` → all sub-rules must match.
-   - `file_exists: <path>` → check via `Glob` whether the file exists.
-   - `file_contains: { path, pattern }` → run the regex against the file at `path`. If `path` contains glob characters (`*`, `**`, `?`), `Glob` it first and match if **any** matching file contains the pattern. Glob honors `.gitignore`, so generated `build/` artifacts are skipped.
-   - `file_glob: <pattern>` → `Glob <pattern>` against the project root; matches if ≥1 file matches.
-   - nested `any: [...]` / `all: [...]` → evaluate the sub-rules recursively (OR / AND); rules may nest to any depth.
-   - **Evaluation order — short-circuit.** Evaluate the sub-rules of an `any:` block **in listed order** and **stop at the first match** (`all:` likewise stops at the first failure). Respect author order rather than reordering or evaluating everything.
-3. Score by `priority` (higher wins).
-
-If `$ARGUMENTS` includes `--stack=NAME`, restrict foundation candidates to manifests whose `stack` matches `NAME` and skip auto-detect.
-
-#### 0b-aspects — Per-aspect foundation winner resolution
-
-Foundations declare which **platform aspects** they own via the `aspects:` field in their manifest. Canonical platform aspects (v1):
-
-- `backend` — server-side application logic (controllers, models, business rules)
-- `frontend` — UI / client-side rendering
-- `database` — schema, migrations, seeders
-- `infra` — Docker, CI/CD, deployment
-- `testing` — test infrastructure (when distinct from backend/frontend conventions)
-- `messaging` — queues, events, async (rare; opt-in)
-
-Resolution algorithm (run AFTER finding all matching foundations in 0b above). Only foundations are in play here — `FRAMEWORK_MANIFESTS` were set aside in 0b-1, so frameworks cannot leak into winner resolution by construction:
-
-```
-STACK_PROFILES = matching FOUNDATIONS   # kind: foundation only; FRAMEWORK_MANIFESTS resolved later, in 0b-frameworks
-ACTIVE_PROFILES = {}              # aspect → winning foundation
-
-for each canonical_aspect in [backend, frontend, database, infra, testing, messaging]:
-  candidates = STACK_PROFILES where `aspects` array contains canonical_aspect
-  if candidates is empty:
-    ACTIVE_PROFILES[canonical_aspect] = None
-    continue
-  winner = candidate with highest priority
-  if multiple candidates share the highest priority:
-    HALT with error: "Aspect '{canonical_aspect}' has tie between {names}. Use --stack=NAME to disambiguate."
-  ACTIVE_PROFILES[canonical_aspect] = winner
-
-# Aspect-agnostic fallback
-# Phases like business_analysis, security, documentation are aspect-agnostic.
-# For these, pick a single "primary profile" from any matching STACK profile (highest priority overall).
-PRIMARY_PROFILE = STACK_PROFILE with highest priority overall (tiebreaker: alphabetical).
-# Profile-declared default workflow (generic): the primary profile MAY name its default recipe.
-PRIMARY_PROFILE.workflow  →  CONTEXT.profile_default_workflow  (or None if the profile omits it)
-
-if no profiles match at all:
-  PRIMARY_PROFILE = vanilla profile from core
-  ACTIVE_PROFILES[*] = vanilla profile (it claims all aspects)
-```
-
-If `--stack=NAME` was used, all aspect winners come from that single profile (compatibility mode).
-
-#### 0b-frameworks — Resolve each foundation's frameworks (delegated to the foundation)
-
-Framework resolution is **owned by the foundation**, not the core — this is the whole point of the
-foundation→framework tree. The core supplies only the *matching mechanics*; the **foundation declares
-WHERE to look** (its `framework_detection` block) and WHICH functional categories it accepts (its
-`hosts_aspects` block — an explicit subset, or the sugar `all` = every functional category in
-`aspects.yaml`). A framework attaches when its `enriches_aspect` is hosted AND its coordinate is found.
-The core holds no Gradle paths and no framework names, so a non-Gradle foundation needs zero core changes.
-
-Run this only after the foundation winners are known. The core inspects `FRAMEWORK_MANIFESTS` (set aside
-in 0b-1) **only here**, and always on a foundation's behalf:
-
-```
-ADDITIVE_PROFILES = []
-# The winning foundations are the tree's parent nodes: every distinct foundation that won an aspect,
-# plus PRIMARY_PROFILE (which owns the aspect-agnostic phases — in an Android-only marketplace this is
-# android-foundation, owning aspect `android`). Dedupe — one foundation may win several aspects.
-WINNING_FOUNDATIONS = unique( [ACTIVE_PROFILES[a] for a in ACTIVE_PROFILES if ACTIVE_PROFILES[a]] + [PRIMARY_PROFILE] )
-
-for F in WINNING_FOUNDATIONS:                     # each parent foundation resolves ITS frameworks
-    SEARCH = F.framework_detection               # ordered locations the FOUNDATION declares
-    HOSTED = (TAXONOMY.functional if F.hosts_aspects == "all" else (F.hosts_aspects or []))   # expand `all`; default none
-    if not SEARCH or not HOSTED:                  # no search locations OR no accepted categories ⇒ hosts nothing
-        continue                                  # (schema co-requires the two, but stay defensive)
-    for p in FRAMEWORK_MANIFESTS:
-        if p.enriches_aspect not in HOSTED:       # F must ACCEPT this framework's functional category
-            continue                              # else it belongs under a different foundation
-        # malformed-framework guards (belt-and-suspenders; schema also rejects these)
-        if p.kind != "framework":     HALT "manifest '{p.stack}' reached framework resolution but kind != framework"
-        if p.agents_per_phase exists: HALT "Framework '{p.stack}' must not declare agents_per_phase. Frameworks enrich existing agents; they do not own phases."
-        if p.workflow exists:         HALT "Framework '{p.stack}' must not declare a workflow."
-        # detect the library using the FOUNDATION-declared search (mechanics below)
-        if dependency_found(p.dependency, SEARCH):
-            ADDITIVE_PROFILES.append(p)           # attached UNDER foundation F
-```
-
-A framework whose `enriches_aspect` is in **no** winning foundation's `hosts_aspects` is never even
-considered — the tree has no branch for it. This is the *structural* form of the old runtime gate: **no
-hosting foundation ⇒ no frameworks**, by construction rather than by post-filter. `ADDITIVE_PROFILES` is
-the flat union across all winning foundations, merged into `EFFECTIVE_PROFILE` in Step 1a.
-
-**Framework authoring contract** (enforced socially + by the guards above): a framework declares a single
-functional `enriches_aspect:` (its library category — `network`/`persistence`/`di`/…), depends on **no**
-sibling plugin (its `plugin.json → dependencies` lists only `sdlc`), ships **no** agents/workflow/
-`hosts_aspects`, and must **never** hard-reference another plugin's skill by `plugin:skill` id — it defers
-to the hosting foundation's convention skills, which that foundation already injects into the shared phase
-prompt.
-
-##### Executing the foundation-declared search (`dependency_found`)
-
-`F.framework_detection` is an **ordered list of files/globs**. For each of the framework's `dependency:`
-coordinate(s) (a string, or a list — match if ANY is found), walk the list in order and **short-circuit at
-the first location that contains the coordinate**:
-
-- a plain file path (e.g. `gradle/libs.versions.toml`) → `Read` it; match if it contains the coordinate.
-- a glob (e.g. `**/build.gradle.kts`) → `Glob` it (gitignore-aware, so generated `build/` is skipped) and grep each match.
-
-The coordinate is matched as a case-insensitive **literal substring**, so `com.squareup.retrofit2` matches
-both a `module = "com.squareup.retrofit2:retrofit"` line in a catalog and an `implementation
-"com.squareup.retrofit2:retrofit:…"` line in a build file. The **core owns these mechanics once**; the
-**foundation owns the locations**. A foundation for another platform (npm, CocoaPods, …) declares different
-`framework_detection` entries and the same mechanics apply unchanged.
-
-##### Project-local framework override
-
-Then apply the optional `frameworks` override from `<project>/.claude/sdlc.local.yaml` (the same file fully parsed in Step 1b — reading the single `frameworks` key here is cheap):
-
-- `frameworks.disable: [<stack>, …]` → remove any framework whose `stack` is listed (even if its dependency was found).
-- `frameworks.enable: [<stack>, …]` → force-activate the named framework even if its dependency was **not** found — locate it among the `FRAMEWORK_MANIFESTS`. Its `enriches_aspect` must still be hosted by some winning foundation's `hosts_aspects` (else warn `WARN: frameworks.enable '{name}' — no winning foundation hosts aspect '{enriches_aspect}' — skipped` and continue). If no such profile is installed, warn `WARN: frameworks.enable '{name}' — no installed framework profile with that stack id` and continue.
-
-Unknown names in either list produce a one-line warning and are otherwise ignored.
-
-🚨 **MUST PRINT VERBATIM** (do not paraphrase, do not skip):
-
-```
-🎯 Active stack profiles:
-   primary:  {primary_stack} (priority {N}, from {plugin_name})
-   backend:  {profile or "—"}
-   frontend: {profile or "—"}
-   database: {profile or "—"}
-   infra:    {profile or "—"}
-   testing:  {profile or "—"}
-   additive: {comma-separated stacks of ADDITIVE_PROFILES, or "—"}
-   forced via --stack: {yes|no}
-```
-
-This print is a contract with the user. If you skip it, the user has no way to verify which profiles activated. If you find yourself about to call an agent without having printed this — STOP and print it first.
-
-### Step 0c — Skip-rule analysis (cost optimization)
-
-Before phase execution, determine if any phases can be skipped to save tokens. Rules are conservative: when in doubt, run the phase.
-
-#### 0c-1. Compute diff signals (single Bash invocation)
-
-Run once and reuse across all rules:
-
-```bash
-git diff --shortstat origin/main...HEAD                # → SHORTSTAT
-git diff --name-only origin/main...HEAD                # → CHANGED_FILES
-git diff --numstat origin/main...HEAD | awk '{i+=$1; d+=$2} END{print i, d}'  # → ADDED, DELETED LOC
-```
-
-Derive:
-
-- `LOC_TOUCHED = ADDED + DELETED`
-- `HAS_MIGRATIONS = any path in CHANGED_FILES matches /(database\/migrations|/migrations\/)/`
-- `CONFIG_ONLY = every path in CHANGED_FILES matches /\.(env|env\..+|ya?ml|json|toml|ini)$/i`
-- `WHITESPACE_ONLY = SHORTSTAT line equals "" OR `git diff --shortstat -w origin/main...HEAD` produces zero "insertions/deletions" while non-`-w` produced > 0`
-
-If `git` errors (no remote main, detached HEAD, etc.) — log a one-line warning, set all signals to safe defaults (`LOC_TOUCHED=999999`, `HAS_MIGRATIONS=true`, `CONFIG_ONLY=false`, `WHITESPACE_ONLY=false`) so no skip fires. Conservative when uncertain.
-
-#### 0c-2. Skip-rules table (Phase 3, ordered)
-
-Apply rules in order. A phase already removed by an earlier rule cannot be re-removed. Log each fired rule into `CONTEXT.skip_rules_applied[]` as `{rule, phase_skipped, reason}`.
-
-| # | Rule | Signal | Action |
-|---|---|---|---|
-| 1 | `typo-fix` | `$ARGUMENTS` matches `/^(typo\|fix typo\|rename .* to\|format)/i` AND `LOC_TOUCHED < 30` | Skip `business_analysis`. Use `$ARGUMENTS` directly as spec for `development`. |
-| 2 | `whitespace-only` | `WHITESPACE_ONLY == true` | Skip `business_analysis` AND `qa`. Development is still required (a maintainer should look at the changes), but BA and QA add no value over a `pint`/`prettier` post-check. |
-| 3 | `config-only` | `CONFIG_ONLY == true` AND `LOC_TOUCHED < 200` | Skip `qa`. Config files have no executable behavior to test; post-pipeline checks (lint, schema validators) cover them. |
-| 4 | `lightweight-no-db` | `LOC_TOUCHED < 50` AND `HAS_MIGRATIONS == false` AND no path matches `/(auth\|password\|crypt\|secret\|token\|jwt\|session)/i` | Skip `security`. Inject an inline secret-leak check directive into the `development` phase prompt instead (developer scans diff for hardcoded secrets via `grep` for known patterns and reports findings in the compact summary). |
-
-If a skip-rule disables a phase that the active stack profile maps to a per-aspect agent map, ALL aspects of that phase are skipped (skip-rules operate at phase granularity, not aspect granularity).
-
-**Determinism rules:**
-
-- Apply skip-rules in the order above; once a rule fires, evaluate later rules against the remaining phase set.
-- A phase that is in `EFFECTIVE_PROFILE.skip_phases` (from `sdlc.local.yaml` Step 1b) is already removed; skip-rules cannot re-add it.
-- BA cannot be skipped if the user used `--force-ba` flag (reserved for future override; not yet implemented but reserve the flag to avoid breaking callers).
-- Skip-rules can be disabled globally with `--no-skip-rules` (reserved for future use; orchestrator parses but currently ignores). When telemetry shows a skip pattern correlated with QA/Security findings in subsequent runs, tighten the rule.
-
-#### 0c-3. Recording and announcing
-
-For each fired rule, append to `CONTEXT.skip_rules_applied[]`:
-
-```json
-{
-  "rule": "config-only",
-  "phase_skipped": "qa",
-  "reason": "all 3 changed paths matched /\\.(env|ya?ml|json|toml|ini)$/i; LOC_TOUCHED=42"
-}
-```
-
-🚨 **MUST PRINT VERBATIM** if at least one rule fired (otherwise stay silent on this sub-step):
-
-```
-✂️ Skip-rules applied:
-   {rule_name} → skipped {phase}: {one-line reason}
-   ...
-```
-
-For rule `lightweight-no-db`, additionally pass an injection into `phase_prompts_injection.development` (concat after stack-supplied injections):
-
-```
-SECURITY-LITE MODE: this run skipped the dedicated security phase. Before
-returning your compact summary, run:
-  rg -n -i 'aws[_-]?access|api[_-]?key|secret|password|bearer|token' -- <changed files>
-Report any matches in your compact summary under a `SECRET-LEAK CHECK:` line
-(value: "clean" or "found: <count> — see N-development.md").
-```
-
-### Step 1 — Parse selected profile and apply project-local overrides
-
-#### 1a. Parse all active profiles
-
-The merge input is **`ACTIVE_PROFILES.values()` plus `PRIMARY_PROFILE` plus `ADDITIVE_PROFILES`** (the framework providers resolved in 0b-frameworks). Each profile is an already-parsed `manifest.yaml`, so these are direct field reads (no markdown parsing) — extract:
-- `agents_per_phase`: phase → agent name OR phase → {aspect: agent name}. **(Frameworks never supply this — guarded in 0b.)**
-- `convention_skills`: skill identifiers to apply during development.
-- `phase_injections` (manifest field) → held internally as `phase_prompts_injection`: per-phase additional instructions.
-- `extra_phases`: list of `{name, after, agent, description}` to insert.
-- `post_pipeline_checks`: shell commands to run at the end.
-- `heal_checks`: shell commands the G1 self-healing loop runs after a guarded phase (compile/lint only).
-
-Merge across profiles to build `EFFECTIVE_PROFILE`:
-
-- For aspect-agnostic phases (`business_analysis`, `security`, `documentation`): use `PRIMARY_PROFILE`'s agent. If absent in primary, fall back to vanilla (core) agent. **Additive profiles are never consulted for agent selection.**
-- For aspect-aware phases (`development`, plus `qa` if a profile declares per-aspect agents): build `EFFECTIVE_PROFILE.agents_per_phase[phase] = {aspect: agent}` by collecting from each `ACTIVE_PROFILES[aspect].agents_per_phase[phase][aspect]`.
-- `convention_skills`: union of all active profiles' arrays — stack profiles **and** additive profiles (de-duplicated). A framework's convention skill (e.g. `retrofit-plugin:retrofit-conventions`) lands here.
-- `phase_prompts_injection`: per-phase concat of all active profiles' injections — stack profiles first, then `ADDITIVE_PROFILES` in deterministic order (alphabetical by `stack`). Each framework contributes its `development` / `security` guidance.
-- `extra_phases`: union (later check for name conflicts; if any, halt with error).
-- `post_pipeline_checks`: union (de-duplicated, preserving order: PRIMARY first, stack profiles next, additive profiles last).
-- `heal_checks`: union (de-duplicated, preserving order: PRIMARY first, stack profiles next, additive profiles last) — same rule as `post_pipeline_checks`.
-
-Hold these merged values as `PROFILE` (mutable in 1b — `frameworks.enable/disable` from 0b-frameworks has already shaped which additive profiles are present here).
-
-#### 1b. Apply project-local overrides from `<project>/.claude/sdlc.local.yaml`
-
-Check whether the file exists:
-
-```
-<project_root>/.claude/sdlc.local.yaml
-```
-
-If absent — skip this sub-step silently. Continue with `PROFILE` as-is.
-
-If present — `Read` and parse it. Recognized top-level keys:
-
-| Key | Type | Merge semantics |
-|---|---|---|
-| `post_pipeline_checks` | array of strings | **REPLACES** plugin's value entirely (set to `[]` to disable default checks). |
-| `heal_checks` | array of strings | **REPLACES** plugin's value entirely (set to `[]` to disable the G1 self-healing loop project-wide without editing any recipe). |
-| `phase_command_overrides` | object | Passed as context flags to agent prompts in Step 3 (see below). Plugin defaults remain available; overrides ADD or REPLACE specific keys. |
-| `extra_phase_prompts` | object (phase → string) | **APPENDS** to `phase_prompts_injection` for that phase (additive — don't lose plugin guidance). |
-| `skip_phases` | array of strings | Phase names to remove from the canonical order in 1c. |
-| `convention_skills_extra` | array of strings | APPENDS to `convention_skills`. |
-| `frameworks` | object with optional `enable` / `disable` string arrays | Overrides additive framework activation (see 0b-frameworks). `enable` force-activates a framework whose `detect` did not match; `disable` suppresses an auto-detected one. Already applied when shaping `ADDITIVE_PROFILES`; listed here for completeness. |
-| `extensions` | object with a `skills` array | Per-agent skill mapping injected into phase prompts in Step 3b-1a. Parsed into `EFFECTIVE_PROFILE.extension_skills` (see 1b-ext). Additive — never replaces plugin behavior. |
-| `cost_caps` | object (recipe name → number \| `null`), optional `"*"` key | Per-recipe cost-cap override. Parsed into `EFFECTIVE_PROFILE.cost_caps` and applied in **1d-0**, the single place the cap is resolved. Lets a project retune a cap **without shadowing the whole recipe** (see 1b-caps). |
-
-##### 1b-caps. Parse `cost_caps` (project-local cap override)
-
-Without this key the only way to change a recipe's cap in one project is to shadow the entire
-recipe with a project-local copy under `.claude/sdlc-workflows/` (RESOLVER.md Step 1) — which
-forces the project to duplicate the phase list, `heal:` and `loop:` blocks to change one number,
-and then silently stops receiving upstream recipe updates. This key exists so retuning a cap costs
-one line.
-
-Shape:
-
-```yaml
-cost_caps:
-  "*": 5.00              # optional fallback — applies to any recipe with no exact entry
-  android-feature: 8.00  # exact recipe name always wins over "*"
-  hotfix: null           # explicit null = run this recipe uncapped in this project
-```
-
-Parse into `EFFECTIVE_PROFILE.cost_caps` (an object; absent key → `{}`). Validation is **graceful —
-never abort the pipeline**, matching every other key in this step:
-
-- Value is a number `>= 0` → accept.
-- Value is exactly `null` → accept, and it means **no cap** (not "cap of zero"). This is the only
-  way a project can opt a recipe out of a shipped cap, so it must survive parsing intact.
-- Any other value (string, negative number, nested object) → **drop that entry**, warn:
-  `WARN: cost_caps.{name} must be a number or null — ignored, using the recipe's own cap`.
-- A name that matches no known recipe is **not** an error and must not warn: recipes come from every
-  installed plugin plus the project, the set is open, and a project may legitimately carry entries
-  for recipes it does not use on this run.
-
-> **Do not apply the override here.** This step only parses. The cap is resolved in exactly one
-> place (1d-0) and read from `CONTEXT.cost_cap` everywhere else — that single-source property is
-> what makes the Step 3d-cap gate auditable, and an override applied in two places would break it.
-
-##### 1b-ext. Parse `extensions.skills` (Project Extension Manifest)
-
-The `extensions:` block lets a project request that specific Skills be invoked by named agents,
-**without editing any plugin**. It is the single new capability of the Project Extension Manifest;
-commands and hooks reuse Claude Code's native project mechanisms (`.claude/commands/`,
-`.claude/settings.json` hooks) and the existing `post_pipeline_checks` / `phase_command_overrides`
-keys — so only the per-agent SKILL mapping needs orchestrator support.
-
-Shape:
-
-```yaml
-extensions:
-  skills:
-    - skill: "<plugin>:<skill>"            # required — fully-qualified skill id
-      agents: [android-developer, android-reviewer]   # required — list of agent names, or the string "all"
-      when: "before implementing Compose UI"          # optional — human hint surfaced to the agent
-      policy: recommended                             # optional — "recommended" (default) | "mandatory"
-```
-
-Parse each row into `EFFECTIVE_PROFILE.extension_skills[]` as
-`{skill, agents, when, policy}`. Normalization and validation (graceful — never abort the pipeline):
-
-- `skill` missing/blank → **drop the row**, warn: `WARN: extensions.skills[{i}] missing 'skill' — dropped`.
-- `agents` missing/empty → **drop the row**, warn: `WARN: extensions.skills[{i}] ({skill}) has no 'agents' — dropped`. The literal string `"all"` is allowed and means every agent.
-- `policy` absent or not in {`recommended`,`mandatory`} → default to `recommended` (warn only if a non-empty unrecognized value was given).
-- `when` absent → treat as empty (no hint).
-- **Availability check:** if `skill`'s plugin is flagged `CONTEXT.{plugin}_unavailable` (from Step 0a) or `skill` is not in `AVAILABLE_SKILLS`, keep the row but force `policy: recommended` and append `(skill not installed — best-effort)` to its `when`, and warn: `WARN: extensions.skills {skill} not installed — downgraded to recommended`. A project must never be blocked because an optional extension skill is absent.
-
-Hold the cleaned list in `EFFECTIVE_PROFILE.extension_skills` for Step 3b-1a.
-
-**Example `sdlc.local.yaml`:**
-
-```yaml
-# <project>/.claude/sdlc.local.yaml
-post_pipeline_checks:
-  - ./gradlew detekt
-  - ./gradlew testDebugUnitTest
-  - ./gradlew compileDebugKotlin
-
-heal_checks:                          # compile/lint only — never unit tests
-  - ./gradlew compileDebugKotlin
-
-phase_command_overrides:
-  development:
-    gradle_runner: ./gradlew           # NOT a globally-installed gradle
-
-frameworks:
-  disable: [dagger]                    # suppress an auto-detected framework provider
-  # enable: [retrofit]                 # force-activate one whose detect didn't match
-
-extra_phase_prompts:
-  qa: |
-    Use our fake repositories in app/src/test/.../fakes for ViewModel tests.
-
-skip_phases:
-  - security                  # external SAST handles this in CI
-
-convention_skills_extra:
-  - acme:internal-api-style
-
-cost_caps:                             # retune a shipped cap WITHOUT copying the whole recipe
-  android-feature: 8.00                #   exact recipe name
-  # "*": 5.00                          #   fallback for any recipe with no exact entry
-  # hotfix: null                       #   explicit null = uncapped in this project
-```
-
-After merging, store as `EFFECTIVE_PROFILE` and use it for the rest of the pipeline.
-
-🚨 **MUST PRINT VERBATIM** if any override was applied (otherwise stay silent on this sub-step):
-
-```
-🔧 Local overrides applied from .claude/sdlc.local.yaml:
-   post_pipeline_checks: replaced (N items)
-   phase_command_overrides: <list of phase.key paths modified>
-   extra_phase_prompts: <list of phases with appended text>
-   skip_phases: <list>
-   convention_skills_extra: <list>
-   extensions.skills: <N rule(s); M mandatory, K recommended>
-   cost_caps: <N override(s)>
-```
-
-(The cap override's own effect on this run is announced separately in 1d-0, where it is resolved —
-this line only reports that the key was parsed.)
-
-If `sdlc.local.yaml` exists but parsing fails (invalid YAML, unknown top-level keys), print a warning and continue with the unmodified plugin profile:
-
-```
-⚠️ Failed to parse .claude/sdlc.local.yaml: <error>. Continuing with plugin defaults.
-```
-
-Do not abort — local override is optional, plugin profile is always usable as fallback.
-
-#### 1b-models. Load project-local model tier overrides from `<project>/.claude/model.local.json`
-
-Check whether `<project_root>/.claude/model.local.json` exists.
-
-If absent — set `CONTEXT.model_overrides = {}` and skip this sub-step silently.
-
-If present — `Read` and parse it as JSON. Recognized top-level keys:
-
-| Key | Type | Meaning |
-|---|---|---|
-| `default` | tier string | Tier applied to EVERY agent unless overridden in `agents`. |
-| `agents` | object (bare agent name → tier string) | Per-agent tier override; highest precedence. |
-
-Valid tiers are the registry `pipeline_tiers`: `opus | sonnet | haiku | fable`. Hold the parsed result as `CONTEXT.model_overrides = { default?, agents{} }`.
-
-If parsing fails (invalid JSON, or a value that is not a valid tier), warn and treat the whole file as empty — the plugin/frontmatter tiers remain fully usable (fail-open):
-
-```
-⚠️ Failed to parse .claude/model.local.json: <error>. Continuing with agent frontmatter tiers.
-```
-
-🚨 **MUST PRINT VERBATIM** if any override is present (otherwise stay silent on this sub-step):
-
-```
-🔧 Model tier overrides loaded from .claude/model.local.json:
-   default: <tier or "(none)">
-   <agent>: <tier>        (one line per agents[] entry)
-```
-
-#### 1c. Build the canonical phase order
-
-Load the workflow definition file and derive the ordered phase list by following the
-algorithm in `plugins/sdlc/workflows/RESOLVER.md` (Steps 1–5).
-
-Summary:
-
-1. **Locate:** resolve `WORKFLOW_NAME` by precedence (first hit wins): `--workflow=NAME` →
-   `sdlc.local.yaml` `active_workflow` → **match-based auto-selection** (RESOLVER.md Step 1.5 —
-   evaluate each recipe's `match:` block against the Step 0c signals + `$ARGUMENTS`; skipped when
-   `--no-auto-workflow` is present or a higher tier already resolved) → `CONTEXT.profile_default_workflow`
-   (the primary profile's declared `workflow`) → `"default"`.
-   When auto-selection fires, **MUST print** verbatim (CSV = the satisfied condition keys):
-   `🧭 Auto-selected workflow '{name}' — matched: {csv of satisfied condition keys}. Override with --workflow=NAME or --no-auto-workflow.`
-   Find the recipe — discovered across ALL plugins (core + platform plugins) via
-   `Glob {PLUGIN_CACHE_ROOT}/**/workflows/{WORKFLOW_NAME}.yaml` AND from
-   `<project>/.claude/sdlc-workflows/{WORKFLOW_NAME}.yaml` (project-local recipes take highest
-   precedence and shadow a plugin recipe of the same name). Ambiguous/missing → HALT per RESOLVER.md Step 1.
-   If not found → HALT with the error message specified in RESOLVER.md Step 1.
-2. **Read, parse, and validate:** `Read` the file, validate against
-   `schemas/workflow.schema.json`, extract the `phases` array, normalize each
-   element preserving its shape (`{name, when?, loop?}` or `{parallel:[...]}`). If validation fails → HALT per RESOLVER.md Step 2.
-3. **Validate acyclic:** if any phase `name` appears more than once in the
-   workflow file → HALT per RESOLVER.md Step 3.
-4. **Build resolved list (RESOLVER.md Step 4):** insert `extra_phases` from
-   `EFFECTIVE_PROFILE.extra_phases` at their `after:` points; re-run conflict
-   check; apply skips (Step 0c skip-rules + Step 1b `skip_phases` from
-   `sdlc.local.yaml`).
-5. **Persist and print (RESOLVER.md Step 5):** store as `CONTEXT.resolved_phases[]`,
-   persist `WORKFLOW_NAME` in `CONTEXT.active_workflow`, print one line at Step 1c.
-
-The resolved `CONTEXT.resolved_phases[]` replaces the hardcoded list for all
-downstream steps. Phase names and their semantics are unchanged.
-
-### Step 1d — Cost cap + optional dry-run plan preview
-
-Everything needed to describe the plan is known by the end of Step 1c: the active
-profiles, the resolved workflow, `CONTEXT.resolved_phases[]`, and the per-agent model
-tiers (resolvable via the Step 3b-3 precedence). This step (a) resolves the cost cap
-used by BOTH the dry-run preview and real-run enforcement (Step 3d-cap), and (b) — only
-when `--dry-run` is present — prints a resolved-plan preview and STOPS the pipeline
-before any workspace is created or any agent is dispatched.
-
-#### 1d-0. Resolve the cost cap (always — dry-run and real runs)
-
-Start from `caps.max_total_cost_usd` on the **active workflow recipe** parsed in Step 1c
-(the recipe object validated against `schemas/workflow.schema.json`), then apply the project's
-`cost_caps` override from 1b-caps, if any:
-
-```
-CONTEXT.cost_cap = <recipe>.caps.max_total_cost_usd    # a number, or null when the recipe declares no cap
-
-CAPS = EFFECTIVE_PROFILE.cost_caps                     # from 1b-caps; {} when the project set none
-IF CAPS has own key {WORKFLOW_NAME}:                   # exact recipe name wins
-    CONTEXT.cost_cap = CAPS[{WORKFLOW_NAME}]           # a number, or null meaning "uncapped here"
-ELSE IF CAPS has own key "*":
-    CONTEXT.cost_cap = CAPS["*"]
-CONTEXT.cost_cap_source = "recipe" | "project:{WORKFLOW_NAME}" | "project:*"
-```
-
-Use an **own-key** test, not a truthiness test: `cost_caps: {hotfix: null}` is a deliberate
-"uncapped in this project" and must override a shipped cap, whereas a missing key must not. A
-`null` here is indistinguishable in effect from a recipe that declares no cap — both leave the
-pipeline unbounded — but it must be reachable, or a project can only ever tighten, never loosen.
-
-An override REPLACES the recipe's number; it is never combined with it (no min/max). A project that
-writes `8.00` gets exactly `8.00`, whether the recipe shipped `4.25` or `16.50` — a "safest of the
-two" rule would silently ignore half of what the project asked for.
-
-🚨 **MUST PRINT VERBATIM** when `CONTEXT.cost_cap_source` is not `"recipe"`:
-
-```
-🔧 Cost cap overridden by .claude/sdlc.local.yaml: {CONTEXT.cost_cap or "none (uncapped)"} (was {recipe cap or "none"}) — via {cost_cap_source}
-```
-
-Both `--dry-run` (below) and the real-run gate (Step 3d-cap) read `CONTEXT.cost_cap`
-from here — the cap is never restated elsewhere. If the resolved cap is `null`, downstream logic
-treats cost as unbounded (never pauses/aborts on cost); Step 5b's post-hoc reconciliation is
-likewise skipped, since there is no cap to reconcile against.
-
-Record the resolved value in `_telemetry.json` as `cost_cap_usd` (Step 5) exactly as resolved here —
-telemetry must report the cap the run was actually gated on, not the recipe's shipped default, or a
-reader comparing spend against a cap will compare against a number that never applied.
-
-#### 1d-1. Dry-run preview (only if `$ARGUMENTS` contains `--dry-run`)
-
-If `--dry-run` is NOT present, skip the rest of Step 1d and continue to Step 2.
-
-If `--dry-run` IS present, do the following and then EXIT (see 1d-4):
-
-**0. Resume-aware pre-pass (only if `--resume` / `--resume=<slug>` is also present).**
-Resolve `task_slug` (from `resume_slug`, or derived as in Step 2). If `docs/plans/{task_slug}/`
-does not exist, print `⏭ --resume --dry-run: no workspace at docs/plans/{task_slug}/ — previewing a full run`
-and continue as an ordinary dry-run (every row estimated). Otherwise read `.checkpoint/*.json` and
-compute the already-done unit set + first unfinished phase using the SAME rules as `3-resume-skip` /
-`lib/resume.mjs` (the tested source of truth — ignore `_run.json`, `*.tmp`, and unparseable/statusless
-files; a unit is done only when its checkpoint status ∈ {completed, skipped}). Record the done rows as
-`CONTEXT.dryrun_resume_done`. This pre-pass READS ONLY — it writes no file and creates no workspace.
-
-**1. Load the model registry** for pricing exactly as Step 3d-0 does:
-
-```
-MODELS = parse(Read("{SDLC_PLUGIN_ROOT}/config/models.json"))
-```
-
-**2. Expand `CONTEXT.resolved_phases[]` into a flat list of dispatch rows.** Do NOT
-spawn any agent. For each resolved entry:
-
-- **Parallel group** `{parallel:[a,b,…]}` → expand to its members (each member is its
-  own dispatch; parallelism saves wall-clock, not tokens). Tag the group in the display.
-- **Loop phase** `{name, loop:{return_to, max_rounds}}` → one row for the loop phase,
-  flagged `loops ⇄ {return_to}, ≤{max_rounds}×` (iteration cost folded into totals in step 4).
-- **Aspect-aware phase** (`development`, or `qa` when a profile declares per-aspect
-  agents) → one row **per resolved aspect** (canonical order `database → backend →
-  frontend → testing`), reading the agent from `EFFECTIVE_PROFILE.agents_per_phase[phase][aspect]`.
-- **Plain / aspect-agnostic phase** → one row, agent from `EFFECTIVE_PROFILE.agents_per_phase[phase]`.
-
-For each row resolve the **model tier** via the Step 3b-3 precedence
-(`CONTEXT.model_overrides.agents[<bare>]` → `CONTEXT.model_overrides.default` →
-agent `.md` frontmatter `model:` → `sonnet`). No agent is spawned — this is a pure lookup.
-
-When the resume pre-pass (step 0) marked rows as already-done (`CONTEXT.dryrun_resume_done`), tag
-those rows **skipped (resumed)** and EXCLUDE them from the cost estimate — they contribute `$0.00`,
-and only rows at or after the re-entry point are counted in step 4's totals. A real `--resume` run
-would dispatch exactly those same remaining rows, so this estimate is the cost to FINISH, not to redo.
-
-**3. Estimate cost per row from the registry's token BASELINES** (⚠️ this is an ESTIMATE,
-not a measurement — real cost is recorded in Step 3d-1b/Step 5b from the actual transcript).
-
-Read the per-dispatch baseline for the row's resolved tier from the registry loaded in step 1 —
-`MODELS.estimation_baselines[<tier>]`, giving `{input, cache_read, cache_write, output}`. **Do not
-restate those numbers here**: the registry is their single source of truth, exactly as it is for
-pricing, and a second copy in this prose would drift the moment either is retuned.
-
-Price the baseline with the **same formula the real cost path uses** (`priceUsage` in
-`tools/usage/usage.mjs`), so an estimate and an actual differ only in their token counts, never in
-how those tokens are valued. With `P = MODELS.models[].pricing` for the tier (USD per MTok) and
-`M = MODELS.cache_write_multipliers.ephemeral_5m`:
-
-```
-est_row = input/1e6      * P.input
-        + cache_read/1e6 * P.cached_input
-        + cache_write/1e6 * P.input * M
-        + output/1e6     * P.output
-```
-
-> **Why the baseline looks the way it does.** Until 2026-07 this step assumed one dispatch ≈ a
-> single API call of 35k input (60% cached) + 3k output, which priced an `opus` row at `$0.16`. A
-> phase is not one call — it is a multi-turn agent loop, and every turn re-reads the whole
-> accumulated prefix. Measured across 56 transcript-priced phases: uncached input is *negligible*
-> (24–194 tokens), while `cache_read` runs 670k–820k and dominates the bill. The old model was
-> therefore wrong in **shape**, not just in magnitude, and under-reported real phase cost by 6–10×
-> — which is how recipe caps derived from it came to sit below their own median run. The current
-> baselines reproduce the median observed cost per tier to within ~11%.
-
-Phase-shape multipliers, applied on top of the per-row baseline (all documented, all
-heuristic):
-
-- **development** costs **×5.4 the tier baseline, per aspect** — measured, as the median of total
-  development-phase spend per run (both passes together) against the same tier's baseline, over 9
-  runs that reached the phase.
-  This replaced a ×1.6 reasoned from pass *count* (plan ≈ 0.6 + implement ≈ 1.0). That reasoning was
-  the wrong axis: the second pass is not what makes development expensive — the phase simply runs far
-  longer, and each extra turn re-reads a prefix that has itself grown (median `cache_read` for
-  development is 4.8M tokens against 725k for an ordinary sonnet phase). Counting passes cannot
-  predict that; only measurement can.
-- **Loop phase L** returning to phase R (single-run estimates `est(L)`, `est(R)`):
-  iterating adds a surcharge on top of the one-time rows already counted —
-  `expected` folds in `0.5 × (est(L) + est(R))` (assume ~1.5 rounds), `worst-case`
-  folds in `(max_rounds − 1) × (est(L) + est(R))` (every round hits the cap).
-- **`est(H)` (the heal term's per-dispatch estimate) is pinned to the SINGLE-dispatch `est_row`
-  of the canonical-last aspect's agent — raw, before any phase-shape multiplier.** A heal attempt
-  is one implement-only dispatch of ONE aspect's agent (3e-heal step 5/6), never the two-pass
-  plan+implement figure and never `est_row` summed or multiplied across all resolved aspects. This
-  applies even when the guarded phase is `development`: `est(H)` is that single aspect's plain
-  `est_row`, NOT the `×1.6`-per-aspect figure `base_total` already applied to `development`'s own
-  rows. (`est(R)` in the loop term above is a different, deliberately-unpinned quantity — a loop
-  re-run of `R` re-executes `R`'s FULL 3a–3e path per Step 3's loop control, which for an
-  aspect-aware `R` can mean the whole aspect fan-out, not one aspect — so the same single-dispatch
-  pin does not apply there; left as-is, out of scope for this fix.)
-
-**4. Totals.**
-
-```
-base_total     = Σ est_row over all rows (development already ×1.6/aspect;
-                                          gated phases already ×0.5 — see below)
-expected_total = base_total + Σ over loop phases 0.5·(est(L)+est(R))
-                            + Σ over healed phases WITH non-empty heal_checks avg_rounds(H)·0.3·est(H)
-worst_total    = base_total + Σ over loop phases (max_rounds−1)·(est(L)+est(R))
-                            + Σ over healed phases WITH non-empty heal_checks rounds(H)·max_attempts·est(H)
-                            + Σ over gated phases 0.5·est(G)   ← restores G to full cost
-```
-
-**Gated phases** (`gate: {after, min_severity}`) dispatch only when an earlier phase reports a
-finding at or above the threshold, so they cost either ~`est(G)` or exactly `$0`. Weight the row at
-`0.5·est(G)` in `base_total` and print it as `{phase} (gated)` in the estimate table; `worst_total`
-adds the other half back, since the worst case is that the gate opens. Do NOT model a gated phase as
-free just because most runs skip it — a `remediation` phase that fires is a full development
-dispatch, and a cap that never anticipated it would halt a run precisely when a Critical
-vulnerability was found. A gated phase that ALSO carries `heal:` contributes its heal term at the
-same 0.5 weight in `expected_total` and at full weight in `worst_total`.
-
-where `rounds(H) = max_rounds` when guarded phase H also carries a `loop` block (or is the
-`return_to` target of one — either way it dispatches up to `max_rounds` times), else
-`rounds(H) = 1`. `rounds(H)` is the WORST-CASE dispatch count and feeds `worst_total` only — this
-formula (with `rounds(H)`) is authoritative for the compounding worst case.
-
-`expected_total` uses a matching AVERAGE-case dispatch count instead, `avg_rounds(H)`, so the
-round assumption behind the heal term is consistent with the loop term's own `0.5·(est(L)+est(R))`
-average-case convention on the line above it: `avg_rounds(H) = 1.5` when guarded phase H also
-carries a `loop` block (or is the `return_to` target of one) — the SAME `~1.5 rounds` figure the
-loop term already assumes for that phase, not a fraction of `max_rounds` — else `avg_rounds(H) = 1`
-(a guarded-only phase dispatches exactly once regardless of expected vs. worst case, so there is no
-average/worst split to make there). Using `rounds(H) = max_rounds` in `expected_total` would apply
-a worst-case round count to the heal term while the loop term next to it stays average-case, making
-the WITHIN/EXCEEDS verdict (computed from `expected_total`) inconsistent with itself; `avg_rounds(H)`
-closes that gap. `worst_total` keeps the full `rounds(H)` — every round hitting the cap is exactly
-what "worst case" means there.
-
-**The heal terms are gated on `EFFECTIVE_PROFILE.heal_checks` being non-empty — a phase carrying a
-`heal:` block contributes to the sum ONLY when the active profile also supplies at least one
-check to run.** Healing cannot fire without a check to execute (3e-heal step 0), so a `heal:`
-block over an empty `heal_checks` list must add `$0` to both totals, not a phantom estimate for
-work that can never happen. This is the vanilla-stack case: `plugins/sdlc/manifest.yaml` declares
-no `heal_checks`, so under the vanilla profile `expected_total`/`worst_total` reduce to exactly
-the pre-heal, loop-only figure — `heal:` blocks on generic recipes must not inflate the estimate
-on a stack that cannot use them.
-
-A phase carrying `heal: {max_attempts: N}` **and** a non-empty `heal_checks` list can re-dispatch
-its own agent up to N times **per dispatch** of that phase. A guarded-only phase dispatches once,
-so its `worst_total` term is `1·N·est(H)`. A phase that is BOTH looped and guarded dispatches up to
-`max_rounds` times, and EACH dispatch can independently heal up to `max_attempts` times, giving
-`worst_total`'s `max_rounds·max_attempts·est(H)` — e.g. a **worst-case** 3-round loop over a
-2-attempt guarded phase (with `heal_checks` populated) is `3 × 2 = 6` heal dispatches on top of the
-3 base dispatches already counted by `base_total` plus the loop term above (9 dispatches for that
-phase in total). `expected_total`'s heal term for the same looped-and-guarded phase instead uses
-`avg_rounds(H)·0.3·est(H) = 1.5 · 0.3 · est(H)` — the average-case figure, not this worked worst-case
-count.
-
-#### 1d-2. MUST PRINT VERBATIM (dry-run contract)
-
-```
-🔎 DRY RUN — no agents dispatched, no code written.
-Stack: {primary_stack} | Workflow: {active_workflow}{ (auto-selected) if CONTEXT.workflow_autoselected}
-Phases ({N}):
-   1. {phase}{ — aspect}    → {agent} ({tier})   ~${est_row}{  ‖ parallel}{  loops ⇄ {return_to}, ≤{max_rounds}×}{  🔧 heals ≤{max_attempts}× if EFFECTIVE_PROFILE.heal_checks is non-empty}
-   2. {phase}               → {agent} ({tier})   ~${est_row}
-   ...
-   3. ⏩ {phase}{ — aspect}   → skipped (resumed from checkpoint)   $0.00
-Skip-rules applied: {csv of CONTEXT.skip_rules_applied[].rule, or "none"}
-{⚙ Healing inactive on this stack — {N_guarded} guarded phase(s) carry a heal: block, but the active profile supplies no heal_checks. Set heal_checks in .claude/sdlc.local.yaml to enable it. — printed once, only if ≥1 resolved phase carries heal: AND EFFECTIVE_PROFILE.heal_checks is empty}
-Estimated cost: ~${expected_total}  (worst-case ${worst_total})
-Cap: {CONTEXT.cost_cap or "none"}  → {WITHIN | ⚠️ EXCEEDS by $X}
-```
-
-Each `{...}` segment above is independently optional and CONCATENATED when present, not
-alternated — a phase can be both looped and guarded, in which case both segments print back to
-back. The `‖ parallel` segment is the one true alternative: parallel-group members are bare
-phase-name strings in the recipe schema and cannot carry `loop` or `heal` (see 3-parallel), so a
-row never shows `‖ parallel` together with either of the other two.
-
-**The `🔧 heals ≤{max_attempts}×` flag is SUPPRESSED when `EFFECTIVE_PROFILE.heal_checks` is
-empty**, even for a phase whose recipe entry carries a `heal:` block: the phase is nominally
-guarded, but with no checks to run, healing is inactive and the flag would misrepresent the plan.
-This is the same gate as the cost formula's — a row never shows a heal cost AND suppresses the
-flag inconsistently.
-
-When at least one resolved phase carries a `heal:` block but `EFFECTIVE_PROFILE.heal_checks` is
-empty, print the `⚙ Healing inactive on this stack …` line shown above exactly once, immediately
-after `Skip-rules applied:` — this honesty line tells the user plainly that the guarded phases they
-see in the plan cannot actually heal on this stack, and names the override (`heal_checks` in
-`.claude/sdlc.local.yaml`) that turns it on. Omit the line entirely when `heal_checks` is
-non-empty, or when no resolved phase carries `heal:` at all.
-
-`{N}` counts top-level resolved entries (a parallel group is one slot; loop re-runs are
-not separate slots), matching the `{total}` convention in Step 3. Row lines, however, are
-enumerated per dispatch (aspect fan-out and parallel members each get a line) so the cost
-math is transparent. The `Cap` verdict compares `expected_total` against
-`CONTEXT.cost_cap`: `WITHIN` when `expected_total ≤ cap` (or no cap), else
-`⚠️ EXCEEDS by ${expected_total − cap}`.
-
-When `--resume` is active, already-done rows are printed in the `⏩ … skipped (resumed from checkpoint)  $0.00` form and are excluded from `Estimated cost` (which then reflects only the remaining phases); `{N}` is unchanged.
-
-#### 1d-3. Headless dry-run
-
-If `HEADLESS == true` (Step 0a-1), 🚨 **MUST PRINT VERBATIM** — a single machine-readable line to
-stdout, on its own line, so CI can gate on it:
-
-```
-{ "dry_run": true, "workflow": "{active_workflow}", "phases": {N}, "estimated_cost_usd": {expected_total}, "worst_case_usd": {worst_total}, "cap_usd": {CONTEXT.cost_cap or null}, "cap_estimate": "within"|"exceeds", "resumed": true, "reenter_at": "{first unfinished phase}" }
-```
-
-The `resumed`/`reenter_at` fields appear only when `--resume` is combined with `--dry-run`; they let CI see the computed re-entry point without a real run.
-
-The field is deliberately named **`cap_estimate`** (values `within` | `exceeds`), NOT `cap_status`.
-It is a verdict on the *pre-run estimate* against the cap — a distinct concept from the real-run
-enforcement outcome recorded in `_telemetry.json` as `cap_status`
-(`within` | `exceeded-continued` | `exceeded-aborted`, Step 5). Keeping the keys separate means a CI
-consumer never has to disambiguate two vocabularies under one key: `cap_estimate` = "would the
-estimate breach the cap?", `cap_status` = "what actually happened during enforcement?".
-
-#### 1d-4. Clean early exit
-
-After printing the preview, STOP the pipeline cleanly:
-
-- Do NOT run Step 2 (no `docs/plans/{slug}/` workspace, no `_brief.md`). (Under `--resume`, the workspace pre-exists; the dry run still neither rewrites `_brief.md` nor writes any checkpoint — it stays read-only.)
-- Do NOT run Step 3 (no agents dispatched).
-- Do NOT run Step 4 (post-pipeline checks) or Step 5 (telemetry) — nothing ran, so there
-  is nothing to record.
-
-Exit code 0 (a dry run is a successful preview, not a failure). `--dry-run` is
-side-effect-free: the only output is the preview block (plus the headless JSON line).
+| `roots.*` | `CONFIG_DIR`, `PLUGIN_CACHE_ROOT`, `SDLC_PLUGIN_ROOT` | every later plugin read |
+| `deps_preflight` | `CONTEXT.deps_preflight` | Step 5 telemetry |
+| `availability_flags` | `CONTEXT.{plugin}_unavailable` | Step 3b-1 `availability_flags:` trailer |
+| `stack.*` | `CONTEXT.primary_profile`, `active_profiles`, `additive_profiles`, `profile_source` | Step 3, Step 5 |
+| `skip_rules.applied` | `CONTEXT.skip_rules_applied[]` *(**Step 0c**)* | Step 4 skip reporting, Step 5 |
+| `workflow.name` | `CONTEXT.active_workflow` | Step 5 |
+| `workflow.autoselected` | `CONTEXT.workflow_autoselected` | Step 1d preview |
+| `workflow.resolved_phases` | `CONTEXT.resolved_phases[]` | Step 3 — replaces any hardcoded list |
+| `profile.agents_per_phase` | `EFFECTIVE_PROFILE.agents_per_phase` | Step 3b agent selection |
+| `profile.convention_skills` | `EFFECTIVE_PROFILE.convention_skills` | Step 3b-1a |
+| `profile.phase_prompts_injection` | `EFFECTIVE_PROFILE.phase_prompts_injection` | Step 3b-1 |
+| `profile.extension_skills` | `EFFECTIVE_PROFILE.extension_skills` *(**Step 1b-ext**)* | Step 3b-1a |
+| `profile.post_pipeline_checks` | `EFFECTIVE_PROFILE.post_pipeline_checks` *(**Step 1b**)* | Step 4 |
+| `profile.heal_checks` | `EFFECTIVE_PROFILE.heal_checks` | Step 3e-heal |
+| `profile.phase_command_overrides` | `EFFECTIVE_PROFILE.phase_command_overrides` | Step 3b-1 |
+| `models` | `CONTEXT.model_overrides` | Step 3b-3 tier precedence |
+| `cost_cap`, `cost_cap_source` | `CONTEXT.cost_cap`, `CONTEXT.cost_cap_source` *(**Step 1d-0**)* | Step 3d-cap, Step 5 |
+| `headless` | `CONTEXT.headless_mode` | every headless rule |
+
+`CONTEXT.cost_cap` is resolved in exactly one place — inside the command — and read everywhere
+else. That single-source property is what makes the Step 3d-cap gate auditable; never recompute it.
+
+#### 0-boundaries. The two things the command cannot do
+
+A subprocess cannot reach the harness. Both exceptions are narrow, and neither costs a normal run
+anything:
+
+- **`mcp__skills__list_skills`** knows which skills the harness actually loaded; the command can
+  only read the filesystem (which it does thoroughly — installed *and enabled* plugin skills, plus
+  `{CONFIG_DIR}/skills/` and `{PROJECT}/.claude/skills/`). If that MCP tool is available, call it
+  first and pass the result as `--skills "<csv of plugin:skill>"`. The plan reports which source was
+  used as `skills_source`, and what a filesystem answer cannot see as `fs_blind_to`.
+- **`mcp__plugins__suggest_plugin_install`** is a tool call. When the command halts on a
+  `block`-policy dependency, its stdout already carries the machine-readable JSON per 0a-1; if that
+  MCP tool is available, call it once with the reported plugin, then stop.
+
+#### 1d-2 / 1d-4. `--dry-run` ends the run here
+
+When `$ARGUMENTS` contains `--dry-run` the command emits the resolved-plan preview (or, in headless
+mode, the single `cap_estimate` JSON line) as the last entry of `prints[]`. Echo it and **STOP**:
+create no workspace, dispatch no agent, run no post-pipeline check, write no telemetry. A dry run is
+a successful preview — nothing ran, so there is nothing to record.
+
+`cap_estimate` (`within` | `exceeds`) is a verdict on the *pre-run estimate*. It is deliberately not
+`cap_status`, which Step 5 records for what enforcement actually did.
+
+#### 0-anchors. Where the old sub-step numbers went
+
+Steps 0a, 0b, 0c, 1, 1a, 1b, 1c and 1d used to be 926 lines of procedure. The procedure is now the
+command; what survives is the *contracts* those steps carried, and later steps still cite them by
+their historical numbers. Each one is a labelled row in the key map above — `0c` (skip rules), `1b`
+(project overrides), `1b-ext` (extension skills), `1d-0` (the cap) — or a heading here: `0a-1`
+(headless), `1d-2` / `1d-4` (dry run). A citation of any other sub-step number is stale and refers
+to text that no longer exists; resolve it against `plan`, not against a memory of the prose.
 
 ### Step 2 — Generate task slug and prepare workspace
 
@@ -2125,7 +1306,8 @@ The remaining keys ARE yours — they are decisions the run made, not measuremen
   bare "resumed" label would hide. Set it from the crash-handling rule in the workflow (see
   `android-foundation/rules/workflow.md` Step 2 "Crash recovery").
 - `touched_files` (optional) = `git diff --name-status <merge-base>...HEAD` parsed into
-  `[{ "status": "A|M|D|R...", "path": "<repo-relative>" }]`, reusing the git already run in Step 0c.
+  `[{ "status": "A|M|D|R...", "path": "<repo-relative>" }]`. The base ref is `plan.skip_rules.signals.base_ref`
+  (resolved in Step 0 — never assume `origin/main`; neither downstream project uses that name).
   On any git error, **omit the key** (never fabricate). Consumed by the HTML report (Step 5b).
 
 > The split `input/output/cached` counts come from each phase's subagent transcript, read by 3d-1b and again by Step 5b's `finish`, and carry `usage_source: "transcript"`. What 3d-1 records off the envelope is only the aggregate `subagent_tokens` (`usage_source: "subagent_aggregate"`), or nothing at all (`"pending"`) — never an estimate.

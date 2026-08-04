@@ -183,3 +183,26 @@ test("an aspect-aware phase inside a parallel group still fans out", () => {
   assert.equal(rows[1].aspect, "android");
   assert.ok(rows.every((r) => r.parallel));
 });
+
+test("a looped AND healed phase: expected uses avg rounds, worst uses max_rounds (Track G1 F3)", () => {
+  // This invariant used to be guarded by a prose assertion over SKILL.md Step 1d-1. When the
+  // prose moved into code the guard had nothing to anchor on, and the invariant was briefly
+  // untested — using rounds(H)=max_rounds in expected_total would apply a worst-case round count
+  // to the heal term while the loop term beside it stays average-case, making the WITHIN/EXCEEDS
+  // verdict inconsistent with itself.
+  const base = priceBaseline(registry, "sonnet");
+  const phases = [
+    { name: "development", heal: { max_attempts: 2 } },
+    { name: "review", loop: { return_to: "development", max_rounds: 3 } },
+  ];
+  const rows = expandRows(phases, { agentsPerPhase: { development: { android: "dev" }, review: "rev" } });
+  const est = estimate(rows, registry, { healEnabled: true });
+
+  const loopPair = est.rows[0].est + est.rows[1].est;
+  const expectedHeal = est.expected_total - est.base_total - 0.5 * loopPair;
+  const worstHeal = est.worst_total - est.base_total - 2 * loopPair;
+
+  assert.ok(Math.abs(expectedHeal - 1.5 * 0.3 * base) < 1e-9, "expected: avg_rounds(H) = 1.5, the same ~1.5 the loop term assumes");
+  assert.ok(Math.abs(worstHeal - 3 * 2 * base) < 1e-9, "worst: max_rounds × max_attempts — every round hitting the cap");
+  assert.ok(worstHeal > expectedHeal * 5, "the two must not collapse into one figure");
+});
