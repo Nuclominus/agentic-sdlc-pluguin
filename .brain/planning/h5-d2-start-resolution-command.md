@@ -70,6 +70,38 @@ prose defect — it is a source-of-manifests defect in the check itself.** `load
 `datastore-proto-plugin`; the consumer's cache does not have it installed. The prose was right. See
 *Open questions* for the two constraints this imposes.
 
+## Found during implementation — the preflight was never real
+
+Step 0a asks for a **per-skill** availability check. Writing it as code produced a result that
+disagreed with every recent run, and the disagreement was the code being right.
+
+`runtime-dependencies.json` declared `superpowers` with
+`skills_used: [thinking-deeply, test-driven-development, verification-before-completion]`.
+**`thinking-deeply` has never existed in superpowers** — not removed upstream, never shipped. Both
+cached versions (6.1.1, 6.2.0) carry fourteen skills and it is not among them. The declaration dates
+to `Initial commit`, 2026-06-22.
+
+`~/.claude/.sdlc-deps-preflight.json` is stamped **the same day**, `all_satisfied: true`. So the
+very first preflight already reported a phantom skill as available, and every run since has taken
+the fast path: three consecutive runs across both consumer projects recorded
+`deps_preflight: {superpowers: {status: "available", missing_skills: []}}`.
+
+Two distinct defects, and the second is the durable one:
+
+1. **The declaration was wrong from the start.** Fixed here — `thinking-deeply` removed from
+   `runtime-dependencies.json` and from the `doctor.md` sample output. Deliberately *removed*, not
+   substituted: choosing a different skill would be a new claim about what the pipeline depends on.
+2. **The stamp cannot go stale.** The documented invalidation triggers are `/sdlc:doctor`,
+   `--force-preflight` and a `block` abort. A dependency changing underneath the stamp is not one of
+   them, so a green stamp survives every upgrade forever. `deps.mjs` keys the stamp to the versions
+   it was computed against and recomputes the status regardless — the in-process check reads
+   directories rather than making eleven tool calls, so the cache buys nothing worth a stale answer.
+   `cache_hit` is now reported rather than obeyed.
+
+This is Track H's thesis in its purest form: a mandated step that **reported success without ever
+executing**, for six weeks, with output indistinguishable from a real check. No amount of firmer
+wording in `SKILL.md` would have caught it; running it as code caught it on the first invocation.
+
 ## Shape
 
 ```

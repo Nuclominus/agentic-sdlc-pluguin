@@ -39,7 +39,7 @@ Snapshot of the pipeline's runtime environment. Reuses the same Step 0a prefligh
 Dependencies (from runtime-dependencies.json):
   superpowers >=1.0.0 [policy=warn]
     status: ✅ available
-    skills: thinking-deeply, test-driven-development, verification-before-completion
+    skills: test-driven-development, verification-before-completion
 
   acme-internal >=2.0.0 [policy=block]
     status: ❌ missing
