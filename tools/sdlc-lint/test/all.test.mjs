@@ -91,22 +91,9 @@ test("3e-heal's orchestrator-side pre-existing check (step 4a) runs BEFORE the h
     "at zero attempt cost before a dispatch that would burn one");
 });
 
-test("the dry-run cost formula gates BOTH heal terms on non-empty heal_checks", () => {
-  const text = readFileSync(SKILL, "utf8");
-  const totals = text.indexOf("**4. Totals.**");
-  // Anchor to the next subsection heading, not a fixed length — 1d-2 is the stable boundary
-  // of the Totals point, same anchoring discipline as the 3e-heal DRIFT GUARD window above.
-  const terminator = "#### 1d-2.";
-  const terminatorIdx = text.indexOf(terminator, totals);
-  assert.ok(totals > -1, "Step 1d-1 point 4 (Totals) missing");
-  assert.ok(terminatorIdx > -1, "1d-2 terminator missing");
-  const section = text.slice(totals, terminatorIdx);
-  const matches = section.match(/Σ over healed phases WITH non-empty heal_checks/g) || [];
-  assert.equal(matches.length, 2,
-    "both expected_total AND worst_total must sum their heal term only over phases whose active " +
-    "profile supplies non-empty heal_checks — otherwise a vanilla stack's inert heal: blocks " +
-    "(no heal_checks defined) inflate the dry-run estimate for healing that can never fire");
-});
+// RETIRED — the dry-run cost formula is no longer prose. It is caps.mjs, and the invariant this
+// guarded (a heal: block over an empty heal_checks list adds exactly $0 to BOTH totals) is now
+// asserted directly in caps.test.mjs, "heal costs NOTHING when the profile supplies no checks".
 
 test("total_cost_usd is null, not 0, when no phase carries a price", () => {
   const text = readFileSync(SKILL, "utf8");
@@ -142,6 +129,9 @@ test("no headless ABORT contract depends on a printed marker line — telemetry 
 
   // The two headless aborts. Each must NOT reintroduce a verbatim marker line, and each must
   // name _telemetry.json / aborted_at_phase as what a machine reads.
+  // The headless DRY-RUN line (formerly 1d-3) is no longer prose — the resolve command emits it,
+  // and caps.test.mjs / plan.test.mjs assert its shape. What remains here are the two aborts that
+  // are still the orchestrator's own to perform.
   for (const [label, marker, anchor, span] of [
     ["3b-special headless gate", "ERROR: development planning gate reached", "**Approval gate:**", 4200],
     ["3d-cap headless abort", "ERROR: cost cap exceeded", "**Headless (`HEADLESS == true`), any other next-dispatch type:**", 1400],
@@ -161,13 +151,25 @@ test("no headless ABORT contract depends on a printed marker line — telemetry 
       "only abort signal a machine can read");
   }
 
-  // 1d-3's dry-run JSON is a different case and deliberately keeps its marker: --dry-run writes NO
-  // telemetry, so stdout is the only channel that exists. Guard that it is still enforced there.
-  const dryRun = text.indexOf("#### 1d-3. Headless dry-run");
-  assert.ok(dryRun > -1, "1d-3 anchor missing");
-  assert.match(text.slice(dryRun, dryRun + 700), /MUST PRINT VERBATIM/,
-    "1d-3 has no telemetry file to fall back on, so its stdout line keeps the enforcement idiom " +
-    "(note: unlike the abort markers, this one has no execution evidence either way yet)");
+  // The headless dry-run JSON is still the one signal with NO telemetry to fall back on: --dry-run
+  // writes no file, so stdout is the only channel that exists. It is no longer its own prose step —
+  // the resolve command composes the line — so what has to be guarded here is the rule that gets it
+  // to stdout at all: Step 0's obligation to echo prints[] verbatim. Without that, a composed line
+  // is just a string in a JSON blob nobody printed.
+  const step0 = text.indexOf("### Step 0 — Resolve the run");
+  assert.ok(step0 > -1, "Step 0 anchor missing");
+  // Whitespace-collapsed: these are prose sentences in a wrapped markdown list, so where the line
+  // break falls is an editing accident. Matching the raw text made an earlier edit fail for moving
+  // a word across a newline — a guard that reports on reflow is a guard nobody trusts.
+  const resolve = text.slice(step0, step0 + 3000).replace(/\s+/g, " ");
+  assert.match(resolve, /Echo `prints\[\]` in order, verbatim/,
+    "the verbatim-echo obligation is what carries every composed signal, the headless dry-run line " +
+    "included; its shape is asserted in caps.test.mjs and plan.test.mjs");
+  assert.match(resolve, /Do not reformat, reorder, summarise or fill a template/,
+    "echoing is not paraphrasing — the values are the command's");
+  assert.match(resolve, /echo the JSON's `halt`/,
+    "under --json the command writes NOTHING to stderr — halt travels inside the stdout envelope. " +
+    "An obligation pointing at stderr echoes an empty string, and the user gets a stop with no reason");
 });
 
 test("no rule anywhere promises an exit code or a stderr write — neither is reachable from a skill prompt", () => {
@@ -247,41 +249,39 @@ test("the development planning gate defines a deterministic HEADLESS rule detect
     "where the run stopped, same as any other full-run abort");
 });
 
-test("expected_total's heal term uses an AVERAGE-case round count, distinct from worst_total's worst-case rounds(H) (Track G1 F3)", () => {
-  const text = readFileSync(SKILL, "utf8");
-  const totals = text.indexOf("**4. Totals.**");
-  const terminator = "#### 1d-2.";
-  const terminatorIdx = text.indexOf(terminator, totals);
-  assert.ok(totals > -1, "Step 1d-1 point 4 (Totals) missing");
-  assert.ok(terminatorIdx > -1, "1d-2 terminator missing");
-  const section = text.slice(totals, terminatorIdx);
+// RETIRED — see caps.test.mjs, "a looped AND healed phase: expected uses avg rounds, worst uses
+// max_rounds (Track G1 F3)". That test was written BECAUSE this guard lost its anchor: the
+// invariant was briefly uncovered, and deleting a guard without replacing it is how that happens.
 
-  // Each total is a two-line formula inside the fenced code block (the heal term wraps onto a
-  // continuation line) — slice expected_total's own span (up to worst_total's start) and
-  // worst_total's own span (up to the closing fence) rather than a single line.
-  const expectedStart = section.indexOf("expected_total");
-  const worstStart = section.indexOf("worst_total", expectedStart);
-  const fenceEnd = section.indexOf("```", worstStart);
-  assert.ok(expectedStart > -1, "expected_total formula missing");
-  assert.ok(worstStart > -1, "worst_total formula missing");
-  assert.ok(fenceEnd > -1, "closing fence of the Totals formula block missing");
-  const expectedLine = section.slice(expectedStart, worstStart);
-  const worstLine = section.slice(worstStart, fenceEnd);
 
-  assert.match(expectedLine, /avg_rounds\(H\)/,
-    "expected_total's heal term must use avg_rounds(H), an average-case round count, matching the " +
-    "loop term's own 0.5-average convention on the same line — using worst-case rounds(H) here " +
-    "over-weights the WITHIN/EXCEEDS verdict (computed from expected_total) with a worst-case " +
-    "assumption while the loop term next to it stays average-case");
-  assert.doesNotMatch(worstLine, /avg_rounds\(H\)/,
-    "worst_total must keep the full worst-case rounds(H) — every round hitting the cap is exactly " +
-    "what worst-case means; it must not be softened to the average-case avg_rounds(H)");
-  assert.match(worstLine, /(?<!avg_)rounds\(H\)/,
-    "worst_total's heal term must still use rounds(H) (worst-case dispatch count)");
+test("no shipped doc cites a Step 0/1 sub-label the collapse deleted", () => {
+  // Review finding 7 on #121, and its residue: #121 removed Steps 0a/0b/0c/1/1a/1b/1c/1d and kept
+  // only the labels 0-anchors names. Six files still delegated to the deleted text — and three of
+  // those survived the reviewer's own grep, because a hand-written sweep for "0a-2" / "1a" / "1c"
+  // does not catch a bare "Step 0b". A dangling pointer is quiet: `doctor.md` told the next reader
+  // "reuse, don't reimplement", pointed at nothing, and would have forced the parallel
+  // implementation it forbids.
+  const PRESERVED = ["0a-1", "0c", "1b", "1b-ext", "1d-0", "1d-2", "1d-4"];
+  const stale = /\bStep(?:s)? (0a|0b|1a|1c|1d)\b(?!-)|\b(0a-2|0a-3|0b-aspects|0b-frameworks|1b-caps|1b-models|1d-1|1d-3)\b/;
 
-  assert.match(section, /avg_rounds\(H\)\s*=\s*1\.5/,
-    "avg_rounds(H) must be pinned to 1.5 for a looped-and-guarded phase — the SAME ~1.5-round " +
-    "figure the loop term already assumes, not a fraction of max_rounds");
-  assert.match(section, /rounds\(H\)\s*=\s*max_rounds/,
-    "rounds(H) = max_rounds must remain the worst-case definition, unchanged, feeding worst_total only");
+  const docs = execFileSync("git", ["ls-files", "plugins/**/*.md"], { cwd: REPO, encoding: "utf8" })
+    .split("\n").filter(Boolean);
+  assert.ok(docs.length > 20, `expected many shipped docs, found ${docs.length}`);
+
+  const hits = [];
+  for (const rel of docs) {
+    const lines = readFileSync(resolve(REPO, rel), "utf8").split("\n");
+    let inAnchors = false;
+    lines.forEach((line, i) => {
+      // 0-anchors is the one place allowed to NAME the deleted labels — it exists to bury them.
+      if (/^#+ /.test(line)) inAnchors = line.includes("0-anchors");
+      if (inAnchors) return;
+      // A retarget may record what it used to cite, so the move stays traceable.
+      if (/until #121 replaced/.test(line)) return;
+      if (stale.test(line)) hits.push(`${rel}:${i + 1}: ${line.trim().slice(0, 110)}`);
+    });
+  }
+  assert.deepEqual(hits, [],
+    `these cite deleted prose; retarget at the tools/resolve/ module that implements it. ` +
+    `Labels still live: ${PRESERVED.join(", ")}\n${hits.join("\n")}`);
 });

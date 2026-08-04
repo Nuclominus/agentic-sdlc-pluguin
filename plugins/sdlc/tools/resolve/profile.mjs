@@ -257,6 +257,31 @@ export function applyLocalOverrides(profile, local, opts = {}) {
 }
 
 /** The verbatim 1b block — emitted only when something was actually overridden. */
+/**
+ * 0b — the active-profile contract print.
+ *
+ * The deleted prose called this "a contract with the user": without it nobody can verify which
+ * foundation won, at what priority, or which frameworks attached. Restored here because the
+ * command is now the only thing that knows those values — a run that prints nothing about its
+ * stack leaves the user unable to tell a wrong detection from a right one.
+ *
+ * The per-aspect rows the prose carried are deliberately NOT reproduced: this command resolves
+ * one foundation, so five rows reading either "android" or "—" would state a per-aspect
+ * resolution that did not happen. The aspects the winner declares are listed instead.
+ */
+export function renderStackPrint(stack) {
+  if (!stack || !stack.foundation) return null;
+  const source = stack.source ?? "unknown";
+  const list = (xs) => (arr(xs).length ? arr(xs).join(", ") : "—");
+  return [
+    "🎯 Active stack profiles:",
+    `   primary:  ${stack.foundation} (priority ${stack.priority ?? 0}, from ${source})`,
+    `   aspects:  ${list(stack.aspects)}`,
+    `   additive: ${list(stack.additive)}`,
+    `   forced via --stack: ${stack.forced ? "yes" : "no"}`,
+  ].join("\n");
+}
+
 export function renderOverridesPrint(applied) {
   const keys = Object.keys(applied ?? {});
   if (keys.length === 0) return null;

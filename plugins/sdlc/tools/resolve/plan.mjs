@@ -15,7 +15,7 @@ import { readInstalledPlugins, readEnabledPlugins, loadInstalledManifests, loadM
 import { resolveStack } from "./detect.mjs";
 import { preflight } from "./deps.mjs";
 import { computeDiffSignals, applySkipRules, renderSkipPrint } from "./skiprules.mjs";
-import { mergeProfiles, applyLocalOverrides, parseModelOverrides, renderOverridesPrint, renderModelPrint } from "./profile.mjs";
+import { mergeProfiles, applyLocalOverrides, parseModelOverrides, renderOverridesPrint, renderModelPrint, renderStackPrint } from "./profile.mjs";
 import { discoverRecipes, resolveWorkflowName, locateRecipe, validateWorkflow, normalizePhases, validateAcyclic, buildResolvedPhases, renderWorkflowPrint } from "./workflow.mjs";
 import { resolveCostCap, renderCapOverridePrint, expandRows, estimate, renderDryRun, renderHeadlessDryRun } from "./caps.mjs";
 import { parseYaml } from "./yaml.mjs";
@@ -48,10 +48,20 @@ const opt = (args, name) => (new RegExp(`${name}=([^\\s]+)`).exec(String(args)) 
  * Returns `{ plan, prints, halt, warnings }`. `halt` is a string when the run cannot proceed —
  * an ambiguous or missing recipe, a schema failure, a blocking dependency. The caller decides
  * what to do with it; this function never exits and never prints.
+ *
+ * **`warnings[]` is a subset of `prints[]`, not a sibling channel.** Every warning is pushed
+ * into both, in generation order. The orchestrator has exactly one obligation — echo `prints[]`
+ * — so a warning that lived only in `warnings[]` would reach nobody: the caller sends that
+ * array to stderr only in non-JSON mode, and the orchestrator always invokes with `--json`.
+ * That is how "⚠️ Failed to parse .claude/sdlc.local.yaml" became silent. The duplicate key
+ * survives for machine consumers that want the diagnostics without pattern-matching prose.
  */
 export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env, mode = "installed" } = {}) {
   const prints = [];
   const warnings = [];
+  /** Record a diagnostic in both channels — see the note above. */
+  const warn = (msg) => { warnings.push(msg); prints.push(msg); };
+  const warnAll = (msgs) => { for (const m of msgs) warn(m); };
   const headless = env.SDLC_NONINTERACTIVE === "true" || env.SDLC_NONINTERACTIVE === "1";
 
   // ---- Step 0: roots
@@ -61,37 +71,47 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
   // ---- Step 0b inputs: what is installed and enabled
   const { installs, conflicts } = readInstalledPlugins({ configDir });
   const enabled = readEnabledPlugins({ configDir, projectRoot: cwd });
-  for (const c of conflicts) warnings.push(`WARN: ${c.key} is installed at several paths; using the ${c.scope} copy (${c.chosen})`);
+  for (const c of conflicts) warn(`WARN: ${c.key} is installed at several paths; using the ${c.scope} copy (${c.chosen})`);
 
   const manifests = mode === "tree" ? loadManifestsFromTree(cwd) : loadInstalledManifests({ configDir, projectRoot: cwd });
-  for (const s of manifests.skipped ?? []) warnings.push(`WARN: ${s.key} ships a manifest but is disabled — not considered for detection`);
-  for (const e of manifests.errors ?? []) warnings.push(`WARN: unreadable manifest ${e.file}: ${e.error}`);
+  for (const s of manifests.skipped ?? []) warn(`WARN: ${s.key} ships a manifest but is disabled — not considered for detection`);
+  for (const e of manifests.errors ?? []) warn(`WARN: unreadable manifest ${e.file}: ${e.error}`);
 
   // ---- Step 0a: dependency preflight
   const deps = preflight({ configDir, projectRoot: cwd, installs, enabled, headless, force: flag(args, "--force-preflight"), skills: opt(args, "--skills") });
   prints.push(...deps.prints);
 
-  // ---- Step 0b: detection
-  const stack = resolveStack(cwd, manifests);
+  // ---- Step 0b: detection (`--stack=NAME` skips it, per 0b-2)
+  const forcedStack = opt(args, "--stack");
+  const stack = resolveStack(cwd, manifests, { forceStack: forcedStack });
+  if (stack.forced_unresolved) {
+    const known = stack.known_stacks.length ? stack.known_stacks.join(", ") : "none installed";
+    return {
+      plan: null, prints, warnings,
+      halt: `❌ --stack=${stack.forced_unresolved}: no installed foundation declares that stack.\n   Installed foundations: ${known}`,
+    };
+  }
   const primary = manifests.foundations.find((f) => f.doc?.stack === stack.foundation)?.doc ?? null;
   const vanilla = manifests.foundations.find((f) => f.doc?.stack === "vanilla")?.doc ?? null;
   const additive = manifests.frameworks.filter((f) => stack.additive.includes(f.doc?.stack)).map((f) => f.doc);
+  const stackPrint = renderStackPrint(stack);
+  if (stackPrint) prints.push(stackPrint);
 
   // ---- Step 0c: diff signals
   const signals = computeDiffSignals(cwd, { baseRef: opt(args, "--base-ref") });
-  if (signals.degraded) warnings.push(`WARN: skip-rule signals unavailable (${signals.reason ?? "git"}) — no rule will fire`);
+  if (signals.degraded) warn(`WARN: skip-rule signals unavailable (${signals.reason ?? "git"}) — no rule will fire`);
 
   // ---- Step 1: profile merge + project overrides
   const activeByAspect = primary ? { [primary.aspects?.[0] ?? stack.foundation]: primary } : {};
   const { profile: base, errors: mergeErrors } = mergeProfiles({ primary, active: activeByAspect, additive, vanilla });
-  for (const e of mergeErrors) warnings.push(`WARN: ${e.message}`);
+  for (const e of mergeErrors) warn(`WARN: ${e.message}`);
 
   const localPath = join(cwd, ".claude", "sdlc.local.yaml");
   let local = null;
   if (existsSync(localPath)) {
     local = readYaml(localPath);
     if (local?.__error) {
-      warnings.push(`⚠️ Failed to parse .claude/sdlc.local.yaml: ${local.__error}. Continuing with plugin defaults.`);
+      warn(`⚠️ Failed to parse .claude/sdlc.local.yaml: ${local.__error}. Continuing with plugin defaults.`);
       local = null;
     }
   }
@@ -99,14 +119,14 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
     availableSkills: deps.available_skills,
     unavailablePlugins: deps.flags,
   });
-  warnings.push(...overridden.warnings);
+  warnAll(overridden.warnings);
   const effective = overridden.profile;
   const overridesPrint = renderOverridesPrint(overridden.applied);
   if (overridesPrint) prints.push(overridesPrint);
 
   const modelJson = readJson(join(cwd, ".claude", "model.local.json"));
   const models = parseModelOverrides(modelJson);
-  warnings.push(...models.warnings);
+  warnAll(models.warnings);
   const modelPrint = renderModelPrint(models.overrides);
   if (modelPrint) prints.push(modelPrint);
 
@@ -148,7 +168,7 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
 
   const skipNames = [...skip.applied.map((a) => a.phase_skipped), ...(effective.skip_phases ?? [])];
   const built = buildResolvedPhases({ phases: normalized, extraPhases: effective.extra_phases, skipPhases: skipNames, workflowName: resolvedName.name, file: located.recipe.file });
-  warnings.push(...built.warnings);
+  warnAll(built.warnings);
   if (built.halt) return { plan: null, prints, warnings, halt: built.halt };
   prints.push(renderWorkflowPrint(resolvedName.name, built.phases));
 
@@ -167,7 +187,13 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
       primary_profile: stack.foundation,
       priority: stack.priority,
       additive_profiles: stack.additive,
-      profile_source: located.recipe.origin === "project" ? "project" : "manifest",
+      aspects: stack.aspects ?? [],
+      // The manifest that decided this run's agents. It was previously derived from
+      // `located.recipe.origin` — the WORKFLOW recipe's provenance, a different thing
+      // entirely — while telemetry has always documented this field as a manifest path
+      // ("android-foundation/manifest.yaml"). Read from the winning foundation now.
+      profile_source: stack.source ?? null,
+      forced: Boolean(stack.forced),
     },
     skip_rules: { applied: skip.applied, suppressed: skip.suppressed, signals },
     workflow: {
@@ -175,6 +201,7 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
       tier: resolvedName.tier,
       autoselected: resolvedName.autoselected,
       file: located.recipe.file,
+      origin: located.recipe.origin ?? null,
       shadowed: located.shadowed,
       resolved_phases: built.phases,
     },
@@ -200,7 +227,7 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
     const rows = expandRows(built.phases, { agentsPerPhase: effective.agents_per_phase, modelOverrides: models.overrides, frontmatterTiers: tiers });
     const registry = readJson(join(roots.sdlc_plugin_root ?? "", "config", "models.json"));
     if (!registry) {
-      warnings.push("WARN: model registry not found — dry-run cost preview unavailable");
+      warn("WARN: model registry not found — dry-run cost preview unavailable");
     } else {
       const healEnabled = (effective.heal_checks ?? []).length > 0;
       const est = estimate(rows, registry, { healEnabled });

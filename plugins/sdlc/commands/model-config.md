@@ -8,7 +8,7 @@ argument-hint: "[--list]"
 Interactive helper to author `<repo_root>/.claude/model.local.json` — the per-project
 reassignment of which model **tier** each SDLC agent dispatches on, **without editing any
 plugin**. Both the enforcement hook (`enforce-agent-model.sh`) and the orchestrator
-(Step 1b-models / 3b-3) resolve tiers as `agents[<bare-name>] → default → agent .md
+(`tools/resolve/profile.mjs` → `parseModelOverrides`, then Step 3b-3) resolve tiers as `agents[<bare-name>] → default → agent .md
 frontmatter → sonnet`. This command only edits config — it never runs the pipeline.
 
 ## What this command does

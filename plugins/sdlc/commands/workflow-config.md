@@ -26,7 +26,7 @@ it never runs the pipeline.
    - **Existing project recipes:** `Glob <repo_root>/.claude/sdlc-workflows/*.yaml` (for editing/shadow warnings).
    - **Plugin recipe names** (reserved / shadow detection): `Glob {PLUGIN_CACHE_ROOT}/**/workflows/*.yaml`
      → collect each file's `name`.
-   - **Available phase names:** read the ACTIVE stack's `manifest.yaml` (reuse Step 0b detection from
+   - **Available phase names:** read the ACTIVE stack's `manifest.yaml` (reuse `resolveStack` detection from
      `pipeline-orchestrator/SKILL.md`, or `Glob {PLUGIN_CACHE_ROOT}/**/manifest.yaml`) and offer the
      **keys of `agents_per_phase`** as the valid phase palette (e.g. Android: `business_analysis`,
      `debugging`, `development`, `review`, `security`, `test`, `qa`, `documentation`; vanilla:
@@ -120,8 +120,8 @@ Next:
 - **Phases from the active palette.** Offer `agents_per_phase` keys from the active manifest; warn on a
   phase no active profile maps to an agent.
 - **No pipeline run.** This command only authors config.
-- **Reuse, don't reimplement.** Phase-palette / recipe discovery mirrors `pipeline-orchestrator` Step 0b /
-  Step 1c and `RESOLVER.md`; validation reuses `schemas/workflow.schema.json`.
+- **Reuse, don't reimplement.** Phase-palette / recipe discovery lives in `tools/resolve/detect.mjs` and
+  `tools/resolve/workflow.mjs`, which implement `RESOLVER.md`; validation reuses `schemas/workflow.schema.json`.
 
 ## When to use
 

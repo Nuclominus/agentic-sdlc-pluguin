@@ -5,7 +5,7 @@ argument-hint: "[--json]"
 
 # /sdlc:doctor
 
-Snapshot of the pipeline's runtime environment. Reuses the same Step 0a preflight code-path that `/sdlc:start` runs on every invocation, but in a read-only mode that never aborts.
+Snapshot of the pipeline's runtime environment. Reuses the same preflight code-path that `/sdlc:start` runs on every invocation (`tools/resolve/deps.mjs`), but in a read-only mode that never aborts.
 
 ## What this command does
 
@@ -21,9 +21,9 @@ Snapshot of the pipeline's runtime environment. Reuses the same Step 0a prefligh
 
    If neither exists, print `🔌 Dependency preflight: no runtime-dependencies.json found.` and skip step 2.
 
-2. **Run the same preflight algorithm as Step 0a in `pipeline-orchestrator/SKILL.md`** (Step 0a-2 through 0a-3 — enumerate available skills via `mcp__skills__list_skills` with FS fallback to `{PLUGIN_CACHE_ROOT}/**/{plugin}/**/skills/{skill}/SKILL.md`, then compute per-dependency status). DO NOT enforce policy in `/sdlc:doctor` — `block` does NOT exit here. Just collect status.
+2. **Run the same preflight algorithm the pipeline runs** — `enumerateSkills` / `collectDependencies` / `computeDepsStatus` in `${CLAUDE_PLUGIN_ROOT}/tools/resolve/deps.mjs` (enumerate available skills via `mcp__skills__list_skills` with FS fallback to `{PLUGIN_CACHE_ROOT}/**/{plugin}/**/skills/{skill}/SKILL.md`, then compute per-dependency status). DO NOT enforce policy in `/sdlc:doctor` — `block` does NOT exit here. Just collect status.
 
-3. **Locate active stack profiles.** Reuse Step 0b logic from the orchestrator: `Glob {PLUGIN_CACHE_ROOT}/**/manifest.yaml`, parse each, split by `kind`, evaluate `kind: foundation` detect rules against the current project. Identify the primary profile that would be selected.
+3. **Locate active stack profiles.** Reuse the detection logic in `tools/resolve/manifests.mjs` + `detect.mjs` (`resolveStack`): `Glob {PLUGIN_CACHE_ROOT}/**/manifest.yaml`, parse each, split by `kind`, evaluate `kind: foundation` detect rules against the current project. Identify the primary profile that would be selected.
 
 3b. **Probe host capability.** Run `uname -s -m` for the OS/arch, then best-effort probe the host toolchains relevant to installed stack plugins — never fail, just report version or `not found`. Suggested probes (skip any that don't apply to the installed plugins): `node --version`, `java -version`, `./gradlew --version` (if a wrapper exists), `swift --version`, `xcodebuild -version`, `android --version`. This surfaces capability-gated checks up front (e.g. iOS lint/build needs macOS + Xcode; those post-pipeline checks SKIP rather than fail off-host).
 
@@ -124,12 +124,12 @@ If a section is absent (no baseline file, no missing deps, etc.) say so explicit
 
 - **Read-only.** Do NOT install plugins, run pipelines, or write files (other than transient log lines to stdout/stderr).
 - **Do not enforce policy.** A missing `block` dep here is just reported, not actioned.
-- **Reuse, don't reimplement.** The dependency-status algorithm is described in `pipeline-orchestrator/SKILL.md` Step 0a-2 / 0a-3. If those steps change, this command's behavior must follow — this command is documentation that delegates to those steps, not a parallel implementation.
+- **Reuse, don't reimplement.** The dependency-status algorithm now lives in code, not prose: `tools/resolve/deps.mjs` (`enumerateSkills`, `collectDependencies`, `computeDepsStatus`, `enforcePolicies`), covered by `tools/sdlc-lint/test/deps.test.mjs`. If that module changes, this command's behavior must follow — this command delegates to it, and must not become a parallel implementation. (It cited SKILL.md Steps 0a-2 / 0a-3 until #121 replaced them with the module.)
 - **Exit code semantics with `--json`:** exit 0 normally; exit 1 only if the runtime-dependencies.json file itself is malformed JSON (parse error). Missing-but-blocking deps still exit 0 — report them in the JSON and let the caller decide.
 
 ## When to use
 
 - After installing or updating a stack plugin — verify external dep wiring still resolves.
-- Before kicking off a long pipeline run — confirm `/sdlc:start` won't abort at Step 0a.
+- Before kicking off a long pipeline run — confirm `/sdlc:start` won't abort on a `block`-policy dependency.
 - In CI / automation — `/sdlc:doctor --json` gives a machine-checkable health report.
 - When a cost regression is suspected — compare current `cost_baseline` against historical values.

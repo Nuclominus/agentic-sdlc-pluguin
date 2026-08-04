@@ -1,8 +1,9 @@
 # Workflow Resolver — Algorithm Reference
 
 This document specifies how the pipeline orchestrator loads, validates, and
-applies a workflow recipe file. Referenced from `pipeline-orchestrator/SKILL.md`
-Step 1c.
+applies a workflow recipe file. It is implemented by
+`plugins/sdlc/tools/resolve/workflow.mjs`, which the orchestrator invokes as part of Step 0's
+single resolve command; `tools/sdlc-lint/test/workflow.test.mjs` holds it to this spec.
 
 ## Step 1: Locate the workflow file
 
@@ -79,7 +80,7 @@ profile default) when ANY of these hold:
 - `$ARGUMENTS` contains `--no-auto-workflow`, OR
 - tier 1 (`--workflow=NAME`) or tier 2 (`active_workflow`) already resolved a name.
 
-**Signals available by Step 1c** (computed in Step 0c): `LOC_TOUCHED` (integer),
+**Signals available at selection time** (computed by Step 0c's `computeDiffSignals`): `LOC_TOUCHED` (integer),
 `HAS_MIGRATIONS` (boolean), `CONFIG_ONLY` (boolean), and the raw `$ARGUMENTS` string.
 
 ### Candidate set
@@ -182,7 +183,7 @@ Start with the normalized `phases` from Step 2 (already in order for Iteration 0
 
 ### Insert extra_phases from stack profiles
 
-For each entry in `EFFECTIVE_PROFILE.extra_phases` (merged in Step 1a):
+For each entry in `EFFECTIVE_PROFILE.extra_phases` (merged by `tools/resolve/profile.mjs`):
 
 - Find the index of the phase named `extra_phase.after` in the list.
 - If found: insert the extra phase immediately after that index.
@@ -214,7 +215,8 @@ Remove all phases whose `name` is in the combined skip set.
 Store the resolved list as `CONTEXT.resolved_phases[]`. Persist `WORKFLOW_NAME` in
 `CONTEXT.active_workflow`.
 
-Print a new line **at Step 1c** (not part of the earlier Step 0b block):
+Print a new line **after workflow resolution** (a separate entry in `prints[]`, not part of the earlier
+`🎯 Active stack profiles` block):
 
 ```text
    workflow: {WORKFLOW_NAME}  ({N} phases after skips)

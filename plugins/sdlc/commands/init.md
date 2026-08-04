@@ -84,7 +84,9 @@ Wrote:
 - **Idempotent.** Create-if-absent only. Never overwrite `.claude/sdlc.local.yaml`; never clobber `CLAUDE.md` content outside the managed block.
 - **Generic only.** The scaffolded file uses the platform-neutral override fields — no platform-specific block. Platform specifics are detected at runtime by the platform agents.
 - **No pipeline run.** This command only scaffolds and reports; it does not invoke `/sdlc:start`.
-- **Reuse, don't reimplement.** Detection delegates to Step 0b in `pipeline-orchestrator/SKILL.md`.
+- **Reuse, don't reimplement.** Detection delegates to `tools/resolve/detect.mjs` (`resolveStack`),
+  fed by `tools/resolve/manifests.mjs` — the same code `/sdlc:start` runs. (It cited
+  `pipeline-orchestrator/SKILL.md` Step 0b until #121 replaced that prose with the module.)
 
 ## When to use
 

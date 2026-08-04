@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   mergeProfiles, applyLocalOverrides, parseCostCaps, parseExtensionSkills,
-  parseModelOverrides, renderOverridesPrint, renderModelPrint,
+  parseModelOverrides, renderOverridesPrint, renderModelPrint, renderStackPrint,
 } from "../../../plugins/sdlc/tools/resolve/profile.mjs";
 
 const vanilla = {
@@ -163,4 +163,13 @@ test("only development and per-aspect declarations fan out; flat phases stay fla
   const { profile: p2 } = mergeProfiles({ primary: perAspect, active: { android: perAspect }, additive: [], vanilla });
   assert.equal(p2.agents_per_phase.test, "t", "a flatly-declared phase stays a plain agent name");
   assert.equal(typeof p2.agents_per_phase.qa, "object", "a phase DECLARED per-aspect does fan out");
+});
+
+test("the stack banner degrades to em-dashes rather than fabricating aspects", () => {
+  const out = renderStackPrint({ foundation: "x", priority: 0, source: "core/manifest.yaml", aspects: [], additive: [], forced: true });
+  assert.match(out, /aspects: {2}—/);
+  assert.match(out, /additive: —/);
+  assert.match(out, /forced via --stack: yes/);
+  assert.equal(renderStackPrint({ foundation: null }), null, "no winning foundation, no banner");
+  assert.equal(renderStackPrint(null), null);
 });

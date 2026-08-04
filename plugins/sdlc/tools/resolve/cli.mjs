@@ -47,7 +47,8 @@ const { plan, prints, warnings, halt, deps_abort: depsAbort } = result;
 if (jsonOut) {
   console.log(JSON.stringify({ ok: !halt, plan, prints, warnings, halt: halt ?? null }));
 } else {
-  for (const w of warnings) console.error(w);
+  // `warnings` is a subset of `prints` (see resolvePlan) — echoing it here too would print
+  // every diagnostic twice. It stays in the JSON envelope for machine consumers only.
   for (const p of prints) console.log(p);
   if (halt) console.error(halt);
 }
