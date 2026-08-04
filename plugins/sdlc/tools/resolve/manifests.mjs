@@ -20,9 +20,9 @@
 // not have to be resolved by heuristic — it never has to arise.
 
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, resolve } from "node:path";
 import { iterFiles } from "./fsglob.mjs";
+import { resolveConfigDir } from "./roots.mjs";
 import { parseYaml } from "./yaml.mjs";
 
 /** Scope precedence: the most specific install wins. */
@@ -32,14 +32,16 @@ function readJson(file) {
   try { return JSON.parse(readFileSync(file, "utf8")); } catch { return null; }
 }
 
-/** `${CLAUDE_CONFIG_DIR:-~/.claude}`, or the config dir this module was installed under. */
+/**
+ * The config dir, resolved by Step 0's rules — one implementation, in ./roots.mjs.
+ *
+ * An earlier draft of this module inverted the precedence, preferring CLAUDE_CONFIG_DIR over
+ * a CLAUDE_PLUGIN_ROOT sitting inside a cache. The shell block it replaces does the opposite,
+ * and the shell block is right: if this code is executing from a cache, that cache's config
+ * dir is where the plugin actually lives, whatever an environment variable claims.
+ */
 export function defaultConfigDir(env = process.env) {
-  if (env.CLAUDE_CONFIG_DIR) return env.CLAUDE_CONFIG_DIR;
-  const pluginRoot = env.CLAUDE_PLUGIN_ROOT || fileURLToPath(new URL("../../..", import.meta.url));
-  const marker = `${"/plugins/cache/"}`;
-  const at = pluginRoot.indexOf(marker);
-  if (at !== -1) return pluginRoot.slice(0, at);
-  return join(env.HOME || "", ".claude");
+  return resolveConfigDir(env).value;
 }
 
 function classify(records) {
