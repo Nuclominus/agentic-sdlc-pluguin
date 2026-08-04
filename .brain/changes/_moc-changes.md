@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-08-04 | #117 | `docs` | — | [[changes/2026-08-04-PR-117-re-measure-track-h-on-two-corpora-adr-0019-collapses-the-run]] |
 | 2026-07-30 | #114 | `feat` | — | [[changes/2026-07-30-PR-114-explicit-tool-allowlists-reviewers-report-developer-fixes]] |
 | 2026-07-30 | #111 | `fix` | — | [[changes/2026-07-30-PR-111-anchor-the-seal-subprocess-fixtures-to-the-real-clock]] |
 | 2026-07-30 | #110 | `docs` | — | [[changes/2026-07-30-PR-110-record-the-h5-prompt-surface-measurement]] |
