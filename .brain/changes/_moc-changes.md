@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-08-04 | #119 | `feat` | — | [[changes/2026-08-04-PR-119-resolve-steps-0-1d-in-one-shipped-command-adr-0019]] |
 | 2026-07-30 | #114 | `feat` | — | [[changes/2026-07-30-PR-114-explicit-tool-allowlists-reviewers-report-developer-fixes]] |
 | 2026-07-30 | #111 | `fix` | — | [[changes/2026-07-30-PR-111-anchor-the-seal-subprocess-fixtures-to-the-real-clock]] |
 | 2026-07-30 | #110 | `docs` | — | [[changes/2026-07-30-PR-110-record-the-h5-prompt-surface-measurement]] |
