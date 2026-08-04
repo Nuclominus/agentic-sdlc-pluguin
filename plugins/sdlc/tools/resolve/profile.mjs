@@ -39,10 +39,18 @@ export function mergeProfiles({ primary, active = {}, additive = [], vanilla = n
     const chosen = fromPrimary ?? fromVanilla;
     if (chosen != null) agents[phase] = chosen;
   }
-  // Aspect-aware phases: collect each aspect's own agent for that phase.
+  // Aspect-aware phases fan out per aspect; everything else stays a flat agent name.
+  //
+  // The set is NOT "anything not aspect-agnostic". Step 1a names it exactly: `development`
+  // always, plus any phase a profile declares AS a per-aspect mapping. An earlier draft made
+  // every remaining phase an aspect map, which turned `test: android-tester` into
+  // `{android: android-tester}` — harmless in the merge, and printed as `[object Object]` the
+  // moment a dry-run row read the agent. Real project data caught it; synthetic fixtures did not.
+  const isAspectAware = (phase, mapping) => phase === "development" || isPlainObject(mapping);
   for (const [aspect, profile] of Object.entries(active)) {
     for (const [phase, mapping] of Object.entries(profile?.agents_per_phase ?? {})) {
       if (ASPECT_AGNOSTIC.includes(phase)) continue;
+      if (!isAspectAware(phase, mapping)) continue;
       const agent = isPlainObject(mapping) ? mapping[aspect] : mapping;
       if (agent == null) continue;
       if (!isPlainObject(agents[phase])) agents[phase] = {};

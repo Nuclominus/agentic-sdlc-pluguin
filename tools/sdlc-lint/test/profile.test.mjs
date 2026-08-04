@@ -147,3 +147,20 @@ test("the verbatim blocks are silent when nothing was overridden", () => {
   assert.match(renderOverridesPrint({ skip_phases: "security" }), /^🔧 Local overrides applied.*\n {3}skip_phases: security$/s);
   assert.match(renderModelPrint({ agents: { qa: "haiku" } }), /default: \(none\)\n {3}qa: haiku/);
 });
+
+test("only development and per-aspect declarations fan out; flat phases stay flat", () => {
+  // Found on real project data, not in a fixture: making every non-agnostic phase an aspect
+  // map turned `test: android-tester` into `{android: android-tester}`, which the dry-run row
+  // then printed as `[object Object]`. Step 1a names the aspect-aware set exactly.
+  const { profile } = merged();
+  assert.deepEqual(profile.agents_per_phase.development, { android: "android-developer" }, "development always fans out");
+  assert.equal(profile.agents_per_phase.security, "android-security");
+
+  const perAspect = {
+    stack: "multi",
+    agents_per_phase: { development: "d", qa: { android: "qa-android", backend: "qa-backend" }, test: "t" },
+  };
+  const { profile: p2 } = mergeProfiles({ primary: perAspect, active: { android: perAspect }, additive: [], vanilla });
+  assert.equal(p2.agents_per_phase.test, "t", "a flatly-declared phase stays a plain agent name");
+  assert.equal(typeof p2.agents_per_phase.qa, "object", "a phase DECLARED per-aspect does fan out");
+});
