@@ -286,6 +286,8 @@ overhead is **72% cache read**, because the prefix is re-billed in full on every
 sessions, the window from skill invocation to the first `Agent` dispatch — Steps 0→2, before any
 phase work exists — is a median **27 turns costing $1.42** (range 6–47 turns, $0.18–$2.84). On
 `s5-presence` it is 34 turns and **$2.21, 23% of the run**, spent on 18 `ls`/`cat`/`Read` calls.
+(Those 34 are assistant JSONL lines; in API calls the same window is 13 — unit correction in
+[[decisions/ADR-0019-the-run-start-is-one-command]], PR #125. The cost is unaffected.)
 Collapsing that into one command is worth **~12–15% of run cost, ~5× the text-volume term**.
 
 Both terms point the same way: **the lever is removing the model's steps, not its words.**

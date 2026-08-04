@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { locateWindow, toolHistogram, priceWindow, countAssistantLines, aggregate, renderText } from "../lib/start-window.mjs";
+import { locateWindow, toolHistogram, priceWindow, countAssistantLines, measureRun, aggregate, renderText } from "../lib/start-window.mjs";
 
 // The registry in its NORMALISED shape — what loadRegistry() returns and priceUsage() consumes.
 // Building it by hand here rather than through a temp models.json keeps the pricing path under
@@ -161,7 +161,7 @@ test("an unpriceable model yields null cost, never a measured zero", () => {
   try {
     const r = priceWindow([s.path], "2026-08-05T10:00:00Z", "2026-08-05T10:00:10Z", REGISTRY);
     assert.equal(r.cost_usd, null, "ADR-0012's rule: an unknown must not reach a comparison as $0");
-    assert.equal(r.unpriced_model, "m-unpriced");
+    assert.deepEqual(r.unpriced_models, ["m-unpriced"]);
     assert.equal(r.cache_read_tokens, 5_000_000, "the tokens are still real and still reported");
   } finally { rmSync(s.dir, { recursive: true, force: true }); }
 });
@@ -231,4 +231,154 @@ test("assistant lines are reported alongside turns, because they are a different
     assert.equal(priceWindow([s.path], win, end, REGISTRY).turns, 2, "API calls");
     assert.equal(countAssistantLines([s.path], win, end), 3, "JSONL lines, subagent lines still excluded");
   } finally { rmSync(s.dir, { recursive: true, force: true }); }
+});
+
+// ---- the boundary convention, pinned at both ends -------------------------------------
+//
+// Review finding on #125: every pricing test above sat strictly INSIDE its window, so nothing
+// encoded whether an end was open or closed — which is exactly how the JSDoc came to say
+// `[since, until)` while extractUsage compares `t < s || t > u`. These two are the convention.
+
+test("a turn exactly ON `since` is INSIDE the window", () => {
+  const s = session([turn("edge", "2026-08-05T10:00:00Z", "m-opus", { cache_read_input_tokens: 1_000 })]);
+  try {
+    assert.equal(priceWindow([s.path], "2026-08-05T10:00:00Z", "2026-08-05T10:00:10Z", REGISTRY).turns, 1);
+    assert.equal(countAssistantLines([s.path], "2026-08-05T10:00:00Z", "2026-08-05T10:00:10Z"), 1);
+  } finally { rmSync(s.dir, { recursive: true, force: true }); }
+});
+
+test("a turn exactly ON `until` is ALSO inside — the window is closed at both ends", () => {
+  // Deliberate, not inherited: the turn that emits the dispatch spent its tokens deciding to
+  // dispatch, i.e. on the window's own work. It biases the figure up by one turn — the most
+  // expensive one, since cache-read grows across a window — and that bias cancels in a
+  // before/after measured the same way. It does NOT cancel when an absolute number is quoted.
+  const s = session([turn("edge", "2026-08-05T10:00:10Z", "m-opus", { cache_read_input_tokens: 1_000 })]);
+  try {
+    assert.equal(priceWindow([s.path], "2026-08-05T10:00:00Z", "2026-08-05T10:00:10Z", REGISTRY).turns, 1,
+      "if this ever flips to exclusive, the header's boundary convention must flip with it");
+    assert.equal(countAssistantLines([s.path], "2026-08-05T10:00:00Z", "2026-08-05T10:00:10Z"), 1,
+      "lines and turns must agree with each other even where they disagree with tool_calls");
+  } finally { rmSync(s.dir, { recursive: true, force: true }); }
+});
+
+test("the anchor SPLIT needs a write — a read of the same path is not Step 2", () => {
+  // locateWindow takes the FIRST match, so a future step that merely inspects the anchor before
+  // Step 2 would silently become the split and fabricate the number being measured.
+  const read = [
+    fact("Skill", { skill: "pipeline-orchestrator" }),
+    fact("Bash", { command: "cat docs/plans/x/.checkpoint/_started_at" }),
+    fact("Agent"),
+  ];
+  assert.equal(locateWindow(read).split, null, "a read must not open Step 2");
+
+  // Step 2's real command carries BOTH forms in one Bash call, and must still match.
+  const real = [
+    fact("Skill", { skill: "pipeline-orchestrator" }),
+    fact("Bash", { command: "[ -f docs/plans/x/.checkpoint/_started_at ] || date -u +%s > docs/plans/x/.checkpoint/_started_at" }),
+    fact("Agent"),
+  ];
+  assert.equal(locateWindow(real).split, 1);
+
+  const teed = [
+    fact("Skill", { skill: "pipeline-orchestrator" }),
+    fact("Bash", { command: "date -u +%s | tee docs/plans/x/.checkpoint/_started_at" }),
+    fact("Agent"),
+  ];
+  assert.equal(locateWindow(teed).split, 1, "tee writes too");
+});
+
+// ---- measureRun end to end, over a run directory on disk ------------------------------
+
+/** A consumer's run: telemetry naming one agent, a session transcript, its subagent transcript. */
+function world({ startAt = "2026-08-05T10:00:00Z", dispatchAt = "2026-08-05T10:00:20Z", anchorAt = "2026-08-05T10:00:09Z", total = 10 } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-swrun-"));
+  const runDir = join(dir, "docs", "plans", "add-billing");
+  const projects = join(dir, "projects");
+  const sid = "sess-1";
+  const subagents = join(projects, "proj", sid, "subagents");
+  mkdirSync(runDir, { recursive: true });
+  mkdirSync(subagents, { recursive: true });
+  writeFileSync(join(runDir, "_telemetry.json"), JSON.stringify({
+    task_slug: "add-billing", total_cost_usd: total,
+    phases: [{ phase: "business_analysis", agent_id: "aaaa111122223333" }],
+  }));
+  writeFileSync(join(subagents, "agent-aaaa111122223333.jsonl"), "");
+
+  const tool = (ts, name, input) => JSON.stringify({
+    timestamp: ts, message: { role: "assistant", content: [{ type: "tool_use", name, input }] },
+  });
+  const priced = (id, ts) => JSON.stringify({
+    timestamp: ts, message: { id, role: "assistant", model: "m-opus", usage: { cache_read_input_tokens: 1_000_000 }, content: [{ type: "text", text: "x" }] },
+  });
+  writeFileSync(join(projects, "proj", `${sid}.jsonl`), [
+    tool("2026-08-05T09:59:00Z", "Read", { file_path: "/before" }),
+    priced("m0", "2026-08-05T09:59:00Z"),
+    tool(startAt, "Skill", { skill: "sdlc:pipeline-orchestrator" }),
+    priced("m1", startAt),
+    tool("2026-08-05T10:00:05Z", "Bash", { command: "node …/resolve/cli.mjs plan --json" }),
+    priced("m2", "2026-08-05T10:00:05Z"),
+    tool(anchorAt, "Bash", { command: "date -u +%s > docs/plans/add-billing/.checkpoint/_started_at" }),
+    priced("m3", anchorAt),
+    tool("2026-08-05T10:00:12Z", "Write", { file_path: "/brief" }),
+    priced("m4", "2026-08-05T10:00:12Z"),
+    tool(dispatchAt, "Agent", { subagent_type: "sdlc:business-analyst" }),
+    priced("m5", dispatchAt),
+    priced("m6", "2026-08-05T10:10:00Z"),
+  ].join("\n"));
+  return { dir, runDir, projects };
+}
+
+test("measureRun walks a real run directory to a priced window", () => {
+  const w = world();
+  try {
+    const r = measureRun(w.runDir, { projectsRoot: w.projects, registry: REGISTRY });
+    assert.equal(r.measurable, true);
+    assert.equal(r.slug, "add-billing");
+    assert.equal(r.window.tool_calls, 4, "Skill, Bash, Bash, Write — the dispatch is excluded");
+    assert.equal(r.window.turns, 5, "m1..m5 — the dispatch's own turn IS priced (closed window)");
+    assert.ok(!("m0" in (r.window.histogram ?? {})), "work before the Skill invocation is not the orchestrator's");
+    assert.deepEqual(r.window.histogram, { Bash: 2, Skill: 1, Write: 1 });
+    assert.equal(r.collapsible.tool_calls, 2, "Skill and the resolve call; the anchor write starts Step 2");
+    assert.equal(r.collapsible.turns, 3, "m1, m2, and m3 — the anchor turn is the closing bound and IS counted");
+    // 5 turns x 1M cache-read x $0.50 = $2.50 of a $10.00 run.
+    assert.ok(Math.abs(r.window.cost_usd - 2.5) < 1e-9, `got ${r.window.cost_usd}`);
+    assert.ok(Math.abs(r.window.share_of_run - 0.25) < 1e-9);
+    assert.equal(r.run_total_cost_usd, 10);
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("a run whose bounds run backwards is unmeasurable, not a silent $0", () => {
+  // resolveRunSessions orders sessions by file MTIME, not chronology (compliance.mjs). A run
+  // resumed into an older-mtime session can put the dispatch before the Skill invocation.
+  const w = world({ dispatchAt: "2026-08-05T09:00:00Z" });
+  try {
+    const r = measureRun(w.runDir, { projectsRoot: w.projects, registry: REGISTRY });
+    assert.equal(r.measurable, false);
+    assert.match(r.reason, /bounds run backwards/);
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("a run with no telemetry, and one with no resolvable session, are both named", () => {
+  const w = world();
+  try {
+    rmSync(join(w.runDir, "_telemetry.json"));
+    assert.match(measureRun(w.runDir, { projectsRoot: w.projects, registry: REGISTRY }).reason, /no _telemetry\.json/);
+    const empty = mkdtempSync(join(tmpdir(), "sdlc-swempty-"));
+    writeFileSync(join(empty, "_telemetry.json"), JSON.stringify({ phases: [] }));
+    assert.match(measureRun(empty, { projectsRoot: w.projects, registry: REGISTRY }).reason, /no session transcript/);
+    rmSync(empty, { recursive: true, force: true });
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("a run with no priced total reports no share, and the report says the median lost a run", () => {
+  const w = world({ total: 0 });
+  try {
+    const r = measureRun(w.runDir, { projectsRoot: w.projects, registry: REGISTRY });
+    assert.equal(r.run_total_cost_usd, null, "a zero total is unknown, not free");
+    assert.equal(r.window.share_of_run, null);
+    const agg = aggregate([r, { ...r, slug: "other", run_total_cost_usd: 10, window: { ...r.window, share_of_run: 0.25 } }]);
+    assert.equal(agg.window.turns.n, 2);
+    assert.equal(agg.window.share_of_run.n, 1, "the share median has a smaller denominator");
+    assert.match(renderText(agg, null), /\[n=1\]/, "and the report must say so rather than print 2 run(s) above it");
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });

@@ -15,6 +15,7 @@ import { parseContracts } from "./lib/contracts.mjs";
 import { auditRun } from "./lib/compliance.mjs";
 import { aggregate, renderText } from "./lib/compliance-report.mjs";
 import { measureRun, aggregate as aggregateWindows, renderText as renderWindows } from "./lib/start-window.mjs";
+import { loadRegistry } from "../../plugins/sdlc/tools/usage/usage.mjs";
 import { globSync } from "tinyglobby";
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 
@@ -173,7 +174,14 @@ function printStartWindow() {
   const configDir = opt("--config-dir");
   const projectsRoot = configDir ? resolve(root, configDir, "projects") : undefined;
 
-  const rows = dirs.map((d) => measureRun(d, { projectsRoot }));
+  // One registry load for the whole corpus — measureRun would otherwise re-read and re-normalise
+  // models.json per run directory.
+  let registry;
+  try { registry = loadRegistry(); } catch (e) {
+    console.error(`✗ start-window: ${e.message}`);
+    return 2;
+  }
+  const rows = dirs.map((d) => measureRun(d, { projectsRoot, registry }));
   const agg = aggregateWindows(rows);
   if (jsonOut) console.log(JSON.stringify({ command: "start-window", ...agg, runs: rows }));
   else console.log(renderWindows(agg, rows));

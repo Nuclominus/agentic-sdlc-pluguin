@@ -10,11 +10,28 @@
 // from a change in how it was measured. The whole point of the DoD is a BEFORE/AFTER comparison,
 // which requires both halves to come out of the same code.
 //
-// It re-parses nothing. `extractFactsFrom` owns the wire format, `resolveRunSessions` owns which
-// transcripts belong to a run, and `extractUsage`/`priceUsage` own tokens and money. This module
-// contributes exactly one thing: where the window starts, splits and ends.
+// It re-implements nothing. `extractFactsFrom` owns the wire format, `resolveRunSessions` owns
+// which transcripts belong to a run, and `extractUsage`/`priceUsage` own tokens and money. This
+// module contributes exactly one thing: where the window starts, splits and ends. (One function
+// here, `countAssistantLines`, does re-read the JSONL — it counts lines and extracts no meaning
+// from them, which is a different thing from a second parser, but it is not "parses nothing".)
+//
+// BOUNDARY CONVENTION, stated once and binding on everything below. Two counters bound the same
+// window and they do NOT agree, deliberately:
+//
+//   - `tool_calls` is [start, end) — the dispatch is the first thing the window is not.
+//   - `turns` / `assistant_lines` / `cost_usd` are [start, end], because `extractUsage` compares
+//     `t < since || t > until`. The assistant turn that EMITS the dispatch is priced in.
+//
+// The second is inherited from `extractUsage` and kept on purpose: that turn's tokens were spent
+// deciding to dispatch, i.e. by the window's own work. It biases both the window and the
+// collapsible half UPWARD by exactly one turn — the most expensive one, since cache-read grows
+// monotonically across a window. On a median of 9 turns that is >1/9 of the figure ADR-0019's
+// lever rests on. It cancels in a before/after measured the same way, which is what the DoD is;
+// it does not cancel if someone quotes an absolute number. Tests pin both ends.
 
 import { readFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import { extractFactsFrom } from "./transcript-facts.mjs";
 import { resolveRunSessions } from "./compliance.mjs";
 import { extractUsage, priceUsage, loadRegistry } from "../../../plugins/sdlc/tools/usage/usage.mjs";
@@ -26,14 +43,20 @@ const ORCHESTRATOR = /(^|:)pipeline-orchestrator$/;
 const DISPATCH = new Set(["Agent", "Task"]);
 
 /**
- * Where Step 2 begins: the machine anchor's write.
+ * Where Step 2 begins: the machine anchor's WRITE.
  *
  * ADR-0014 made `.checkpoint/_started_at` the run's only clock, and Step 2 writes it. That makes
  * it the one boundary in the window that is not a judgement call — everything before it is
  * resolution (Steps 0→1d, the collapsible part), everything after is workspace creation, which is
  * real work and stays. Quoting the whole window as "collapsible" overstates the lever by ~45%.
+ *
+ * The redirect is required. A bare `/_started_at/` also matches a READ, and `locateWindow` takes
+ * the FIRST match — so any future step that merely inspects the anchor before Step 2 would
+ * silently become the split, fabricating the exact number this measurement exists to establish.
+ * Step 2's own command (`SKILL.md:199`) is `[ -f …/_started_at ] || date -u +%s > …/_started_at`,
+ * one Bash call carrying both forms, so the stricter pattern still matches it.
  */
-const ANCHOR = /_started_at/;
+const ANCHOR = /(>>?|\|\s*tee(\s+-a)?)\s*\S*_started_at/;
 
 const readJson = (f) => { try { return JSON.parse(readFileSync(f, "utf8")); } catch { return null; } };
 
@@ -107,7 +130,8 @@ export function countAssistantLines(sessionPaths, since, until) {
 }
 
 /**
- * Price the assistant turns whose timestamp falls in `[since, until)`.
+ * Price the assistant turns whose timestamp falls in `[since, until]` — INCLUSIVE at both ends,
+ * per the boundary convention at the top of this file.
  *
  * Cache-read dominates a window like this by construction: every turn re-reads the whole prefix,
  * so the bill is (prefix size × turn count), which is exactly why removing TURNS is worth more
@@ -117,7 +141,9 @@ export function countAssistantLines(sessionPaths, since, until) {
  */
 export function priceWindow(sessionPaths, since, until, registry) {
   let turns = 0, cacheRead = 0, output = 0, input = 0, cost = 0;
-  let unpriced = null;
+  // EVERY unpriceable model, not the last one seen: a corpus that hits two of them should not
+  // report one name and leave the other invisible.
+  const unpriced = new Set();
   for (const p of sessionPaths) {
     const { byModel } = extractUsage(p, { onlyMainLoop: true, since, until });
     for (const [model, u] of Object.entries(byModel)) {
@@ -129,13 +155,17 @@ export function priceWindow(sessionPaths, since, until, registry) {
       // `lookupPricing` and silently omitted cache WRITES — a second implementation of the one
       // thing ADR-0011 put in one place, introduced inside the tool built to defend ADR-0019.
       const c = priceUsage(u, model, registry);
-      if (c == null) { unpriced = model; continue; }
+      if (c == null) { unpriced.add(model); continue; }
       cost += c;
     }
   }
   // An unpriceable model must not reach a comparison as a measured $0 — the same rule
   // ADR-0012 applies to a run's cap verdict.
-  return { turns, cache_read_tokens: cacheRead, output_tokens: output, input_tokens: input, cost_usd: unpriced ? null : cost, unpriced_model: unpriced };
+  return {
+    turns, cache_read_tokens: cacheRead, output_tokens: output, input_tokens: input,
+    cost_usd: unpriced.size ? null : cost,
+    unpriced_models: [...unpriced].sort(),
+  };
 }
 
 /**
@@ -147,8 +177,8 @@ export function priceWindow(sessionPaths, since, until, registry) {
  * denominator nobody can see.
  */
 export function measureRun(runDir, { projectsRoot, registry } = {}) {
-  const slug = runDir.split("/").filter(Boolean).pop();
-  const tel = readJson(`${runDir}/_telemetry.json`);
+  const slug = basename(runDir);
+  const tel = readJson(join(runDir, "_telemetry.json"));
   if (!tel) return { slug, dir: runDir, measurable: false, reason: "no _telemetry.json" };
 
   const sessions = resolveRunSessions(runDir, tel.phases ?? [], { projectsRoot });
@@ -162,8 +192,18 @@ export function measureRun(runDir, { projectsRoot, registry } = {}) {
   if (!t(w.start) || !t(w.end)) {
     return { slug, dir: runDir, measurable: false, reason: "window boundary carries no timestamp — cannot bound the token window" };
   }
+  // The bounds must run forwards. `extractFactsFrom` concatenates sessions in `resolveRunSessions`
+  // order, which is session-file MTIME, not content chronology — so a run whose Skill invocation
+  // is in the newer file and whose first dispatch is in the older one (aborted before dispatching,
+  // resumed without re-invoking the skill) yields since > until. `extractUsage` would then match
+  // nothing and this run would report measurable with 0 turns and $0.00: a silent measured zero,
+  // which is what `cost_usd: null` and `measurable: false` exist to prevent everywhere else here.
+  // The mtime-derived ordering it rides on is the same shape as issue #116.
+  if (Date.parse(t(w.end)) < Date.parse(t(w.start))) {
+    return { slug, dir: runDir, measurable: false, reason: "window bounds run backwards (sessions ordered by mtime, not chronology)" };
+  }
 
-  const reg = registry ?? loadRegistry();
+  const reg = registry ?? loadRegistry();   // hoisted by the caller for a corpus; see printStartWindow
   const whole = priceWindow(sessions, t(w.start), t(w.end), reg);
   whole.assistant_lines = countAssistantLines(sessions, t(w.start), t(w.end));
   const collapsible = w.split == null ? null : priceWindow(sessions, t(w.start), t(w.split), reg);
@@ -212,7 +252,13 @@ const range = (xs) => {
 /** Medians, ranges and a pooled histogram over the measurable runs, plus what was excluded. */
 export function aggregate(rows) {
   const ok = rows.filter((r) => r.measurable);
-  const pick = (sel) => ({ median: median(ok.map(sel)), range: range(ok.map(sel)) });
+  // `n` is per METRIC, not per run: a run with an unpriceable model contributes turns but no
+  // cost, so the cost median has a smaller denominator. Printing one run count above five medians
+  // is the same defect measureRun refuses elsewhere — a median over a denominator nobody can see.
+  const pick = (sel) => {
+    const vals = ok.map(sel).filter((x) => Number.isFinite(x));
+    return { median: median(vals), range: range(vals), n: vals.length };
+  };
   const pool = (sel) => {
     const out = {};
     for (const r of ok) for (const [k, v] of Object.entries(sel(r) ?? {})) out[k] = (out[k] ?? 0) + v;
@@ -226,6 +272,7 @@ export function aggregate(rows) {
     cost_usd: pick((r) => r[key]?.cost_usd),
     share_of_run: pick((r) => r[key]?.share_of_run),
     histogram: pool((r) => r[key]?.histogram),
+    unpriced_models: [...new Set(ok.flatMap((r) => r[key]?.unpriced_models ?? []))].sort(),
   });
   return {
     measurable: ok.length,
@@ -246,11 +293,15 @@ export function renderText(agg, rows) {
   for (const [label, s] of [["Skill → first dispatch", agg.window], ["Steps 0→1d (before the _started_at anchor)", agg.collapsible]]) {
     if (!s.runs) { out.push(``, `  ${label}: no run carried this boundary`); continue; }
     out.push(``, `  ${label} — ${s.runs} run(s)`);
-    out.push(`    turns        median ${s.turns.median ?? "—"}   range ${span(s.turns.range)}   (API calls)`);
-    out.push(`    jsonl lines  median ${s.assistant_lines.median ?? "—"}   range ${span(s.assistant_lines.range)}   (the unit ADR-0019's "24" was measured in)`);
-    out.push(`    tool calls   median ${s.tool_calls.median ?? "—"}   range ${span(s.tool_calls.range)}`);
-    out.push(`    cost         median ${money(s.cost_usd.median)}   range ${span(s.cost_usd.range, money)}`);
-    out.push(`    share of run median ${pct(s.share_of_run.median)}   range ${span(s.share_of_run.range, pct)}`);
+    // Only printed when a metric's denominator differs from the header's, so the common case
+    // stays quiet and the case that would mislead cannot.
+    const over = (m) => (m.n === s.runs ? "" : `   [n=${m.n}]`);
+    out.push(`    turns        median ${s.turns.median ?? "—"}   range ${span(s.turns.range)}   (API calls)${over(s.turns)}`);
+    out.push(`    jsonl lines  median ${s.assistant_lines.median ?? "—"}   range ${span(s.assistant_lines.range)}   (the unit ADR-0019's "24" was measured in)${over(s.assistant_lines)}`);
+    out.push(`    tool calls   median ${s.tool_calls.median ?? "—"}   range ${span(s.tool_calls.range)}${over(s.tool_calls)}`);
+    out.push(`    cost         median ${money(s.cost_usd.median)}   range ${span(s.cost_usd.range, money)}${over(s.cost_usd)}`);
+    out.push(`    share of run median ${pct(s.share_of_run.median)}   range ${span(s.share_of_run.range, pct)}${over(s.share_of_run)}`);
+    if (s.unpriced_models.length) out.push(`    unpriced     ${s.unpriced_models.join(", ")} — those runs are absent from the cost and share medians`);
     const hist = Object.entries(s.histogram).map(([k, v]) => `${k} ${v}`).join(", ");
     if (hist) out.push(`    tools        ${hist}`);
   }
