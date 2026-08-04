@@ -38,6 +38,14 @@ audit corpus is the downstream Android project, `~/parlor-android/docs/plans/`:
 `cost_basis: "subagent_aggregate"` and is the corpus's **known-positive fixture**: the auditor is
 wrong if that run does not fail `5b-0-enrich`.
 
+**Second corpus, added 2026-08-04.** `~/work/Citrus-Android/docs/plans/` — 9 auditable, 2 excluded
+(`no-agent-ids`), plus **5 directories carrying no `_telemetry.json` at all**, which the auditor
+does not see and does not report even as excluded. It is a materially cleaner corpus (100% on every
+live contract) and mostly older, with a single run on `plugin_version` 1.16.0. Combined with parlor
+the audit covers **28 auditable runs**. Note `--runs` takes exactly one glob — a second `--runs` is
+**silently ignored**, not merged — so a combined figure means copying both trees into one directory,
+and that copy must preserve mtimes (see *Follow-ups*).
+
 **The steps are younger than the corpus.** `git log -S` over `SKILL.md` dates each mandated step:
 
 | step | mandatory in `SKILL.md` since |
@@ -379,6 +387,13 @@ moved above ~90% after H2 and H3 have landed, H4 is the answer.
   with its own change note.
 - **Record report suppression** (`--no-report` / `report: false`) in telemetry, so `5b-2-report`
   can carry a real `applies_when` instead of a confounding annotation.
+- **The run date must not depend on mtime** (found 2026-08-04, issue #116, see [[planning/backlog]]).
+  `runDate()` in `lib/compliance.mjs:67` falls back to `statSync(_telemetry.json).mtimeMs` when
+  `started_at` is absent — 6 of the parlor corpus and 3 of the auditable runs. mtime is not a
+  property of the run: copying, restoring, archiving or syncing a run directory rewrites it, and the
+  auditor then silently re-dates the run and flips `na: predates` verdicts in both directions. A
+  `cp -R` of the corpus moved three published rates by up to 37 points with no warning. `--runs`
+  accepting only one glob is what forces such a copy in the first place, so the two defects compose.
 
 ## Related
 

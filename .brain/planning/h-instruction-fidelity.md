@@ -185,6 +185,40 @@ by a number, not by how the prose reads. Note that neither H2 nor H3 can be cred
 H2's own contract (`5b-finish`) still reports `n=0`, and H3 adds no contract at all, so the next
 run of the auditor is the first evidence either way.
 
+**Re-measured 2026-08-04 — the threshold is met, the sample size is not.** The audit now runs over
+**two** downstream corpora: `~/parlor-android` (19 auditable, was 16) and a second, previously
+unaudited project `~/work/Citrus-Android` (9 auditable). Combined **28 auditable, 6 excluded**.
+
+| rate | contract | n | was (2026-07-29) |
+|---:|---|---:|---|
+| 100% | `2-4-anchor` | 28 | 100% |
+| 100% | `5b-finish` | **5** | 100% · n=1 |
+| 93% | `6-journal` | 28 | 88% |
+| 67% | `3d-1b-phase-cost` | 9 | 40% · n=5 |
+
+Overall on **live** contracts: **92.9%** (parlor alone 90.0%, Citrus alone 100.0%); 87.8% including
+the three retired ones. `seal:stop-hook`: orchestrator 5, stop-hook 4, unrecorded 19.
+
+Against this gate's own wording — *"if compliance has not moved above ~90% by then, this becomes the
+answer"* — **92.9% clears it**, and the step that motivated H4 in the first place is gone: `5-clock`
+at 67% was replaced by `5b-finish`, which is **5/5**. That is the first real evidence H2 worked.
+
+But the gate's *other* half is unmet. Nine runs carry `plugin_version`; only **five** are on the new
+tail, so `5b-finish` has `n=5` and a single failure drops it to 80%. The gate asked for ~10 for
+exactly this reason.
+
+**H4 stays gated, but the reading has changed from undecided to leaning against.** Nothing measured
+here argues for the deterministic-runner rewrite; the aggregate cleared the bar and the one step it
+was going to fix no longer exists. Roughly five more runs on the new tail settle it.
+
+Note also that H5's re-measurement found the **start window** (Steps 0→1d, before any phase work) is
+**17% of run cost** and growing, and that it is now being collapsed into one shipped command —
+[[decisions/ADR-0019-the-run-start-is-one-command]], specified in
+[[planning/h5-d2-start-resolution-command]]. That is a larger, separately-gated lever and is
+explicitly **not** what this gate waited on: H4 concerns phase sequencing, gates and telemetry
+assembly being model-owned, while resolution is deterministic input-gathering. Shipping ADR-0019
+must not be read as evidence about H4 in either direction.
+
 ### H5 — Prompt surface reduction
 
 `SKILL.md` is itself a compliance risk, on two claims the original wording ran together and this
@@ -269,19 +303,21 @@ that is never needed at runtime at all (rationale, history, worked examples), an
 H1 established that compliance tracks how many separate things an instruction asks for, not how
 firmly it asks. The 2026-07-29 measurement adds a second axis, from a cell H1 could not yet read:
 
-| rate | contract | shape | cardinality | n |
-|---:|---|---|---|---:|
-| 100% | `2-4-anchor` | one Bash line | once-per-run | 16 |
-| 40% | `3d-1b-phase-cost` | **one Bash line** | **once-per-phase** | 5 |
+| rate | contract | shape | cardinality | n (2026-07-29) | n (2026-08-04) |
+|---:|---|---|---|---:|---:|
+| 100% | `2-4-anchor` | one Bash line | once-per-run | 16 → 100% | 28 → **100%** |
+| 40% | `3d-1b-phase-cost` | **one Bash line** | **once-per-phase** | 5 → 40% | 9 → **67%** |
 
 Same command, same length, same emphasis. The only variable is **how many times it must be
 re-remembered inside one run**. `5-clock` at 67% was one step asking for three things; `3d-1b` at
-40% is one thing asked for seven times. The newest run scores `partial 6/7` — decay, not a clean
-miss.
+40% is one thing asked for seven times. The `partial 6/7` run scores decay, not a clean miss.
 
-`n=5` is thin and `provisional`; a single run moves it 20 points. But it is the only live contract
-currently failing, and it names the cheapest available lever: **collapse cardinality, not lines.**
-Details, method and the resume point: [[planning/h5-prompt-surface]].
+**Updated 2026-08-04.** The thin cell was re-measured on a corpus nearly twice the size and moved
+**40% → 67%** — against the finding. The direction survives (`3d-1b` is still the worst live
+contract and the only failing one, still the same one-line shape as the 28/28 `2-4-anchor`), but a
+60-point gap became a 33-point one at `n=9`, still one run short of the `n≈10` bar the measurement
+set itself. **Treat "collapse cardinality, not lines" as directional, not established.** Details,
+method and the resume point: [[planning/h5-prompt-surface]].
 
 ### H6 — Hooks as the deterministic tail ✅
 
