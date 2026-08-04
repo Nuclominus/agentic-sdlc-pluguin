@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-08-04 | #123 | `docs` | — | [[changes/2026-08-04-PR-123-merge-the-outstanding-brain-sync-pr-before-the-next-feature]] |
 | 2026-08-04 | #121 | `feat` | — | [[changes/2026-08-04-PR-121-collapse-steps-0-1d-into-the-resolve-command-818-lines]] |
 | 2026-08-04 | #119 | `feat` | — | [[changes/2026-08-04-PR-119-resolve-steps-0-1d-in-one-shipped-command-adr-0019]] |
 | 2026-08-04 | #117 | `docs` | — | [[changes/2026-08-04-PR-117-re-measure-track-h-on-two-corpora-adr-0019-collapses-the-run]] |
