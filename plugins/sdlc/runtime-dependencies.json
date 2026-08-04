@@ -1,5 +1,5 @@
 {
-  "_comment": "Runtime plugin dependencies for the SDLC pipeline. Read by pipeline-orchestrator/SKILL.md (Step 0a) at the start of /sdlc:start. This is OUR custom preflight mechanism — separate from Claude Code's native plugin.json/dependencies array, which only handles intra-marketplace install-time resolution. External plugins (other marketplaces) and per-skill availability checks live here.",
+  "_comment": "Runtime plugin dependencies for the SDLC CORE pipeline. Read by pipeline-orchestrator/SKILL.md (Step 0a) at the start of /sdlc:start, which aggregates this file across EVERY installed plugin. Declare only what THIS plugin's own runtime invokes — a plugin that mandates a skill declares it itself (see android-foundation/runtime-dependencies.json). This is OUR custom preflight mechanism, separate from Claude Code's native plugin.json/dependencies array, which only handles intra-marketplace install-time resolution. Authoring-time skills are deliberately NOT listed: /sdlc:create-pluguin invokes superpowers:writing-skills, but the preflight runs on /sdlc:start and must not warn about a tool this run will never call.",
   "dependencies": [
     {
       "name": "superpowers",
@@ -7,10 +7,9 @@
       "version": ">=1.0.0",
       "policy": "warn",
       "skills_used": [
-        "test-driven-development",
-        "verification-before-completion"
+        "using-superpowers"
       ],
-      "fallback_note": "Pipeline runs without these but with reduced rigor in BA, QA, and Security phases.",
+      "fallback_note": "The orchestrator skips its skill-discovery step (SKILL.md Step 3b-1a) and agents fall back to their own frontmatter guidance.",
       "install_command": [
         "/plugin marketplace add obra/superpowers",
         "/plugin install superpowers@superpowers"

@@ -102,6 +102,39 @@ This is Track H's thesis in its purest form: a mandated step that **reported suc
 executing**, for six weeks, with output indistinguishable from a real check. No amount of firmer
 wording in `SKILL.md` would have caught it; running it as code caught it on the first invocation.
 
+### And a third defect, found by reading the fix
+
+Removing the phantom left two skills declared. Grepping for what the marketplace *actually* mandates
+found **eight**, and the declaration was not merely incomplete — it was **inverted**:
+
+| skill | mandated by | was declared by |
+|---|---|---|
+| `brainstorming` | `android-ba`, before any requirements formulation | **nobody** |
+| `verification-before-completion` | five android agents | `sdlc` |
+| `test-driven-development` | `android-developer`, `android-tester` | `sdlc` |
+| `requesting-code-review` | `android-reviewer` | **nobody** |
+| `receiving-code-review` | `android-reviewer` | **nobody** |
+| `systematic-debugging` | `android-debugger` | **nobody** |
+| `using-superpowers` | the orchestrator's own base prompt | **nobody** |
+| `writing-skills` | `/sdlc:create-pluguin` (authoring-time) | **nobody** |
+
+`sdlc` declared two skills **none of its own agents use** — the vanilla agents reference superpowers
+nowhere — while `android-foundation`, where every one of those mandates lives, declared an empty
+array. `brainstorming` is the sharpest case: it is the BA phase's core discipline and nothing
+anywhere claimed to depend on it.
+
+Fixed along the split the files' own `_comment` already describes — Step 0a aggregates across every
+installed plugin, so **each plugin declares what its own runtime invokes**. `sdlc` now declares
+`using-superpowers` (its orchestrator genuinely invokes it, guarded by `superpowers_unavailable`);
+`android-foundation` declares the six its agents mandate. `writing-skills` is deliberately excluded:
+`/sdlc:create-pluguin` is authoring, the preflight runs on `/sdlc:start`, and warning about a tool
+this run will never call is noise. A consequence worth stating: a **vanilla** consumer now gets no
+warning about skills its pipeline never touches.
+
+Note the shape of this one. It was not found by the auditor, the tests, or the code — it was found
+by *asking what the fix implied*. The instrument narrowed the question far enough that the real
+answer became visible; it did not produce the answer itself.
+
 ## Shape
 
 ```
