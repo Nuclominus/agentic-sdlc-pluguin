@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
+import { readFileSync } from "node:fs";
 import { parseContracts } from "../lib/contracts.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -111,4 +112,33 @@ test("an id duplicated ACROSS files is reported once and excluded", () => {
     join(FIX, "skill-contracts-ok.md"), join(FIX, "skill-contracts-ok.md")]);
   assert.match(errors.join("\n"), /duplicate id '5b-0-enrich'/);
   assert.equal(contracts.filter((c) => c.id === "5b-0-enrich").length, 1);
+});
+
+test("every bash_match pattern matches a command this document actually tells you to run", () => {
+  // Review finding 1 on #121: `0-resolve` shipped as `resolve/cli\.mjs plan`, while the command it
+  // guards is `node "…/resolve/cli.mjs" plan` — a closing quote where the pattern wanted a space.
+  // It compiled, it parsed, it appeared in the live set, and it reported a flat 0% on every run.
+  // The two sibling contracts already carried `"?\s+` for exactly this reason; nothing checked.
+  //
+  // compliance.mjs tests these patterns against transcript Bash commands, so an unmatchable one
+  // is indistinguishable from a step the orchestrator never performed — the failure mode this
+  // whole contract mechanism exists to detect.
+  const file = join(REPO, "plugins/sdlc/skills/pipeline-orchestrator/SKILL.md");
+  const { contracts } = parseContracts(file);
+  const text = readFileSync(file, "utf8");
+  // Every fenced block except the contract declarations themselves — most shell in this document
+  // is in untagged fences nested inside numbered lists, so filtering on ```bash finds two of them.
+  const commands = [...text.matchAll(/^[ \t]*```(\w*)[^\n]*\n([\s\S]*?)^[ \t]*```/gm)]
+    .filter((m) => m[1] !== "sdlc-contract")
+    .map((m) => m[2]);
+  assert.ok(commands.length > 20, `expected many fenced blocks, found ${commands.length} — the extraction is wrong, not the doc`);
+
+  const bashContracts = contracts.filter((c) => c.requires === "bash_match");
+  assert.ok(bashContracts.length > 0);
+  for (const c of bashContracts) {
+    const re = new RegExp(c.pattern);
+    assert.ok(commands.some((cmd) => re.test(cmd)),
+      `contract '${c.id}' pattern /${c.pattern}/ matches no shell block in SKILL.md. A pattern that ` +
+      "cannot match reports 0% compliance forever, and reads as a step the orchestrator skipped");
+  }
 });

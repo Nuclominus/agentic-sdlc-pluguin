@@ -95,7 +95,6 @@ test("3e-heal's orchestrator-side pre-existing check (step 4a) runs BEFORE the h
 // guarded (a heal: block over an empty heal_checks list adds exactly $0 to BOTH totals) is now
 // asserted directly in caps.test.mjs, "heal costs NOTHING when the profile supplies no checks".
 
-
 test("total_cost_usd is null, not 0, when no phase carries a price", () => {
   const text = readFileSync(SKILL, "utf8");
   // H3 removed the `- `total_cost_usd` = …` bullet (the formula is finish's now, ADR-0015), so
@@ -159,12 +158,18 @@ test("no headless ABORT contract depends on a printed marker line — telemetry 
   // is just a string in a JSON blob nobody printed.
   const step0 = text.indexOf("### Step 0 — Resolve the run");
   assert.ok(step0 > -1, "Step 0 anchor missing");
-  const resolve = text.slice(step0, step0 + 2500);
+  // Whitespace-collapsed: these are prose sentences in a wrapped markdown list, so where the line
+  // break falls is an editing accident. Matching the raw text made an earlier edit fail for moving
+  // a word across a newline — a guard that reports on reflow is a guard nobody trusts.
+  const resolve = text.slice(step0, step0 + 3000).replace(/\s+/g, " ");
   assert.match(resolve, /Echo `prints\[\]` in order, verbatim/,
     "the verbatim-echo obligation is what carries every composed signal, the headless dry-run line " +
     "included; its shape is asserted in caps.test.mjs and plan.test.mjs");
-  assert.match(resolve, /Do not reformat, reorder, summarise or fill a\s+template/,
+  assert.match(resolve, /Do not reformat, reorder, summarise or fill a template/,
     "echoing is not paraphrasing — the values are the command's");
+  assert.match(resolve, /echo the JSON's `halt`/,
+    "under --json the command writes NOTHING to stderr — halt travels inside the stdout envelope. " +
+    "An obligation pointing at stderr echoes an empty string, and the user gets a stop with no reason");
 });
 
 test("no rule anywhere promises an exit code or a stderr write — neither is reachable from a skill prompt", () => {

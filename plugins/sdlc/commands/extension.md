@@ -100,7 +100,7 @@ Next:
 - **Validate, don't block.** Unknown skills/agents produce warnings, not hard failures — an
   uninstalled extension skill is downgraded to best-effort `recommended` by the orchestrator at runtime.
 - **No pipeline run.** This command only authors config.
-- **Reuse, don't reimplement.** Skill/agent discovery mirrors `pipeline-orchestrator` Step 0a-2 / 3b-3.
+- **Reuse, don't reimplement.** Skill discovery lives in `tools/resolve/deps.mjs` (`enumerateSkills`); agent tier selection is `pipeline-orchestrator` Step 3b-3.
 
 ## When to use
 

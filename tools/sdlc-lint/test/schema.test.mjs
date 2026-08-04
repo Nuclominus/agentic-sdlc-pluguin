@@ -331,16 +331,16 @@ const skillText = () => readFileSync(resolve(REPO, ORCHESTRATOR), "utf8");
 // cost_caps (preserving an explicit null, the only way to opt out of a shipped cap) and caps.mjs
 // applies it in one place. Both halves are asserted in profile.test.mjs and caps.test.mjs.
 
-
-test("1d-0 remains the single place the cost cap is resolved", () => {
-  // Step 3d-cap's auditability rests on CONTEXT.cost_cap having exactly one writer. If an override
-  // is ever applied in a second place, the gate and the telemetry can disagree about the cap.
-  const s = skillText();
-  const writes = s.split("\n").filter((l) => /^\s*CONTEXT\.cost_cap\s*=/.test(l));
-  const d0 = s.indexOf("#### 1d-0."), d1 = s.indexOf("#### 1d-1.");
-  const inSection = s.slice(d0, d1).split("\n").filter((l) => /^\s*CONTEXT\.cost_cap\s*=/.test(l));
-  assert.equal(writes.length, inSection.length,
-    "every CONTEXT.cost_cap assignment must live inside Step 1d-0");
+test("the cost cap is resolved in the command, never in prose", () => {
+  // This used to bound CONTEXT.cost_cap assignments to Step 1d-0's section. That section is gone,
+  // so both `indexOf` calls returned -1, the slice was empty, and the assertion compared 0 to 0 —
+  // it passed by construction while guarding nothing. What survives the collapse is the stronger
+  // invariant: Step 3d-cap's auditability rests on CONTEXT.cost_cap having exactly one writer, and
+  // that writer is now caps.mjs. A prose assignment reappearing would restore the two-places
+  // failure the gate depends on not having.
+  const writes = skillText().split("\n").filter((l) => /^\s*CONTEXT\.cost_cap\s*=/.test(l));
+  assert.equal(writes.length, 0,
+    `CONTEXT.cost_cap must be assigned only by tools/resolve/caps.mjs; prose assigns it at: ${writes.join(" | ")}`);
 });
 
 // RETIRED — see caps.test.mjs, "an exact recipe name beats '*', and both beat the recipe" and

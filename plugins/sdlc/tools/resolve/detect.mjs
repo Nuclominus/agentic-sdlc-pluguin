@@ -75,17 +75,44 @@ function dependencyPresent(root, paths, coordinate) {
 }
 
 /**
+ * "which plugin's manifest is this" — `android-foundation/manifest.yaml`.
+ *
+ * Prefers the install key (`<plugin>@<marketplace>`); a development checkout has none, and
+ * there the directory holding the manifest IS the plugin name.
+ */
+function sourceLabel(record) {
+  if (!record) return null;
+  const name = record.key ? String(record.key).split("@")[0] : String(record.file ?? "").split("/").slice(-2)[0];
+  return name ? `${name}/manifest.yaml` : (record.file ?? null);
+}
+
+/**
  * The winning foundation for a project, plus the frameworks that attach to it.
  *
  * Highest `priority` among foundations whose `detect` matches. A framework attaches when
  * the winner hosts its `enriches_aspect` AND its coordinate is found. `additive` is sorted
  * so the result is stable across filesystem ordering — telemetry compares against it.
+ *
+ * `forceStack` is Step 0b's `--stack=NAME`: *"restrict foundation candidates to manifests
+ * whose `stack` matches NAME and skip auto-detect."* Detection is skipped entirely, not
+ * merely filtered — that is the point of the flag, which exists so a user can override a
+ * wrong (or tied) detection. A NAME no manifest declares resolves to nothing and is
+ * reported as `forced_unresolved`; the caller must halt rather than fall through to
+ * vanilla, because a forced flag that silently picks something else is worse than absent.
  */
-export function resolveStack(evalRoot, { foundations, frameworks }) {
-  const winner = (foundations || [])
-    .filter((f) => evalRule(f.doc.detect, evalRoot))
-    .sort((a, b) => (b.doc.priority ?? 0) - (a.doc.priority ?? 0))[0];
-  if (!winner) return { foundation: null, priority: null, additive: [] };
+export function resolveStack(evalRoot, { foundations, frameworks }, { forceStack = null } = {}) {
+  const candidates = forceStack
+    ? (foundations || []).filter((f) => f.doc.stack === forceStack)
+    : (foundations || []).filter((f) => evalRule(f.doc.detect, evalRoot));
+  const winner = [...candidates].sort((a, b) => (b.doc.priority ?? 0) - (a.doc.priority ?? 0))[0];
+  if (!winner) {
+    return {
+      foundation: null, priority: null, additive: [], source: null,
+      forced: Boolean(forceStack),
+      forced_unresolved: forceStack && !winner ? forceStack : null,
+      known_stacks: (foundations || []).map((f) => f.doc?.stack).filter(Boolean).sort(),
+    };
+  }
 
   const hosts = winner.doc.hosts_aspects;
   const paths = winner.doc.framework_detection ?? [];
@@ -94,5 +121,19 @@ export function resolveStack(evalRoot, { foundations, frameworks }) {
     const hosted = hosts === "all" || (Array.isArray(hosts) && hosts.includes(fw.doc.enriches_aspect));
     if (hosted && dependencyPresent(evalRoot, paths, fw.doc.dependency)) additive.push(fw.doc.stack);
   }
-  return { foundation: winner.doc.stack, priority: winner.doc.priority ?? 0, additive: additive.sort() };
+  return {
+    foundation: winner.doc.stack,
+    priority: winner.doc.priority ?? 0,
+    additive: additive.sort(),
+    // Where the winning profile came from. Telemetry has always documented `profile_source`
+    // as a manifest path ("android-foundation/manifest.yaml"), and it is the only field that
+    // answers "which installed plugin decided this run's agents". The install `key` is what
+    // names the plugin: an installed manifest lives at `<cache>/<market>/<plugin>/<version>/
+    // manifest.yaml`, so the last two path segments would read "1.7.0/manifest.yaml".
+    source: sourceLabel(winner),
+    source_file: winner.file ?? null,
+    aspects: Array.isArray(winner.doc.aspects) ? winner.doc.aspects : [],
+    forced: Boolean(forceStack),
+    forced_unresolved: null,
+  };
 }

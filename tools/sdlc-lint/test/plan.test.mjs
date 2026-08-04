@@ -228,3 +228,54 @@ test("a disabled plugin drops out of detection entirely", () => {
     assert.match(halt, /not found/);
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
+
+test("every warning reaches prints[], because prints[] is the orchestrator's only obligation", () => {
+  // Review finding 3 on #121: `warnings[]` was a sibling channel the caller wrote to stderr in
+  // non-JSON mode only — and the orchestrator always invokes with --json. A project whose
+  // sdlc.local.yaml failed to parse therefore ran on plugin defaults with nothing said.
+  const w = world({ localYaml: "post_pipeline_checks:\n\t- broken tab\n" });
+  try {
+    const { plan, prints, warnings } = resolvePlan({ cwd: w.proj, args: "", env: w.env });
+    const parseWarning = warnings.find((x) => x.includes("Failed to parse .claude/sdlc.local.yaml"));
+    assert.ok(parseWarning, "the unparseable override file is reported");
+    assert.ok(prints.includes(parseWarning), "and it is in the channel that actually reaches the user");
+    assert.deepEqual(plan.profile.post_pipeline_checks, ["echo plugin-check"], "the run continues on plugin defaults");
+    for (const x of warnings) assert.ok(prints.includes(x), `warning not echoed: ${x}`);
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("the stack banner is printed on an ordinary run", () => {
+  const w = world();
+  try {
+    const { prints } = resolvePlan({ cwd: w.proj, args: "", env: w.env });
+    const banner = prints.find((p) => p.startsWith("🎯 Active stack profiles:"));
+    assert.ok(banner, "without it the user cannot tell a wrong detection from a right one");
+    assert.match(banner, /primary: {2}demo \(priority 300, from demo\/manifest\.yaml\)/);
+    assert.match(banner, /forced via --stack: no/);
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("profile_source is the winning foundation's manifest, not the workflow recipe's origin", () => {
+  const w = world();
+  try {
+    const { plan } = resolvePlan({ cwd: w.proj, args: "", env: w.env });
+    assert.equal(plan.stack.profile_source, "demo/manifest.yaml");
+    assert.equal(plan.stack.priority, 300, "the key map promises priority, so the plan must carry it");
+    assert.equal(plan.workflow.origin, "plugin", "recipe provenance keeps its own field");
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("--stack forces the profile, and an unknown one halts instead of falling back to vanilla", () => {
+  const w = world();
+  try {
+    const forced = resolvePlan({ cwd: w.proj, args: "--stack=vanilla --workflow=demo-flow", env: w.env });
+    assert.equal(forced.halt, null);
+    assert.equal(forced.plan.stack.primary_profile, "vanilla", "demo detects at priority 300 and is overridden anyway");
+    assert.equal(forced.plan.stack.forced, true);
+
+    const bogus = resolvePlan({ cwd: w.proj, args: "--stack=cobol", env: w.env });
+    assert.equal(bogus.plan, null);
+    assert.match(bogus.halt, /--stack=cobol: no installed foundation declares that stack/);
+    assert.match(bogus.halt, /demo, vanilla/);
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});

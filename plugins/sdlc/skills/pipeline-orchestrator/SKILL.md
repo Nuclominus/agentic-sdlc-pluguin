@@ -54,7 +54,7 @@ This single rule replaces the per-agent bilingual trigger keywords that were use
 ```sdlc-contract
 id: 0-resolve
 requires: bash_match
-pattern: resolve/cli\.mjs plan
+pattern: resolve/cli\.mjs"?\s+plan
 cardinality: once-per-run
 since: 2026-08-04
 ```
@@ -65,23 +65,32 @@ model tiers, workflow resolution and the cost cap — is a deterministic functio
 Run it:
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs" plan --json $ARGUMENTS
+node "${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs" plan --json "$ARGUMENTS"
 ```
+
+`$ARGUMENTS` is quoted because it is the user's free text: unquoted, a description containing
+`` ` ``, `$(…)`, `;` or `&&` would execute rather than describe, and a multi-word `--skills "<csv>"`
+would word-split. The command only regex-scans it for flags, so quoting costs nothing.
 
 Then do exactly three things:
 
 1. **Echo `prints[]` in order, verbatim.** Every block this pipeline owes the user — the dependency
-   preflight, the active-profile contract print, the local-override summary, the model-tier list,
-   the skip-rule announcement, the workflow line, the cap override, the `--dry-run` preview —
-   arrives already composed. Print them as given. Do not reformat, reorder, summarise or fill a
-   template: the values are the command's, not yours (`MACHINE-VALUES.md`).
+   preflight, the active-profile contract print, every `WARN:` / `⚠️` diagnostic, the
+   local-override summary, the model-tier list, the skip-rule announcement, the workflow line, the
+   cap override, the `--dry-run` preview — arrives already composed. Print them as given. Do not
+   reformat, reorder, summarise or fill a template: the values are the command's, not yours
+   (`MACHINE-VALUES.md`). The JSON also carries a `warnings[]` key; it is a **subset of `prints[]`**,
+   repeated there for machine consumers. Echoing `prints[]` discharges it — do not print it twice.
 2. **Carry `plan` into `CONTEXT`** using the key map below. Later steps read those keys and nothing
    else from this step.
-3. **On a non-zero exit: echo `{stderr}` and STOP.** Do not improvise a resolution, do not retry with
-   different flags, do not proceed with defaults. A halt here means an ambiguous or missing workflow
-   recipe, a recipe that fails schema validation, or a `block`-policy dependency — all of which are
-   the user's to fix. This is the whole degraded path; there is deliberately no fallback procedure,
-   because a second implementation of resolution is exactly what
+3. **On a non-zero exit: echo the JSON's `halt` — or `error`, if the command crashed — and STOP.**
+   Under `--json` *everything* is on stdout, including the reason it stopped; **stderr is empty and
+   echoing it prints nothing**. Do not improvise a resolution, do not retry with different flags, do
+   not proceed with defaults. A halt here means an ambiguous or missing workflow recipe, a recipe
+   that fails schema validation, a `--stack=NAME` no installed foundation declares, or a
+   `block`-policy dependency — all of which are the user's to fix. This is the whole degraded path;
+   there is deliberately no fallback procedure, because a second implementation of resolution is
+   exactly what
    [ADR-0019](../../../../.brain/decisions/ADR-0019-the-run-start-is-one-command.md) removed.
 
 The command reads the CONSUMER's project from the current working directory and loads only itself
@@ -115,7 +124,7 @@ that status is available to a wrapper script, but it is not the hosting session'
 | `roots.*` | `CONFIG_DIR`, `PLUGIN_CACHE_ROOT`, `SDLC_PLUGIN_ROOT` | every later plugin read |
 | `deps_preflight` | `CONTEXT.deps_preflight` | Step 5 telemetry |
 | `availability_flags` | `CONTEXT.{plugin}_unavailable` | Step 3b-1 `availability_flags:` trailer |
-| `stack.*` | `CONTEXT.primary_profile`, `active_profiles`, `additive_profiles`, `profile_source` | Step 3, Step 5 |
+| `stack.*` | `CONTEXT.primary_profile`, `priority`, `aspects`, `additive_profiles`, `profile_source` | Step 3, Step 5 |
 | `skip_rules.applied` | `CONTEXT.skip_rules_applied[]` *(**Step 0c**)* | Step 4 skip reporting, Step 5 |
 | `workflow.name` | `CONTEXT.active_workflow` | Step 5 |
 | `workflow.autoselected` | `CONTEXT.workflow_autoselected` | Step 1d preview |
@@ -145,8 +154,10 @@ anything:
   first and pass the result as `--skills "<csv of plugin:skill>"`. The plan reports which source was
   used as `skills_source`, and what a filesystem answer cannot see as `fs_blind_to`.
 - **`mcp__plugins__suggest_plugin_install`** is a tool call. When the command halts on a
-  `block`-policy dependency, its stdout already carries the machine-readable JSON per 0a-1; if that
-  MCP tool is available, call it once with the reported plugin, then stop.
+  `block`-policy dependency, the machine-readable JSON is inside `halt` — **echo it**, per
+  obligation 3, or a headless CI consumer never receives the abort signal this document defines as
+  an artifact rather than a status. Then, if that MCP tool is available, call it once with the
+  reported plugin, and stop.
 
 #### 1d-2 / 1d-4. `--dry-run` ends the run here
 
@@ -810,7 +821,7 @@ next phase — or the next loop round, or the next aspect in a fan-out — is di
      `aborted_at_phase: {next_phase}`) and print the final summary.
 
    **Headless (`HEADLESS == true`), any other next-dispatch type:** treat a cap-exceed as an
-   **abort** (consistent with Step 0a's headless `block` handling). Set `CONTEXT.cap_status = "exceeded-aborted"`,
+   **abort** (consistent with the headless `block` handling in Step 0's obligation 3). Set `CONTEXT.cap_status = "exceeded-aborted"`,
    stop dispatching, and announce the halt — naming the running total, the cap, and the phase that
    would have run next — then proceed to Step 5 and emit partial telemetry with
    `aborted_at_phase: {next_phase}` and `cap_status: "exceeded-aborted"` set.
@@ -1147,9 +1158,8 @@ their checkpoints, not lost). Then write `docs/plans/{task_slug}/_telemetry.json
   "task_slug": "...",
   "stack": "android",
   "primary_profile": "android",
-  "active_profiles": {
-    "android": "android"
-  },
+  "priority": 300,
+  "aspects": ["android"],
   "additive_profiles": ["retrofit"],
   "profile_source": "android-foundation/manifest.yaml",
   "narrative_language": "uk",

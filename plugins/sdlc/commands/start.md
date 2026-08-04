@@ -15,7 +15,9 @@ You MUST follow these steps **in order**, **printing each announcement verbatim*
 
 If `$ARGUMENTS` is empty: ask the user for a feature description and stop. Do NOT proceed.
 
-If `$ARGUMENTS` contains `--stack=NAME`: extract the value and remember it as `forced_stack`. Strip it from the description.
+If `$ARGUMENTS` contains `--stack=NAME`: remember the value for the echo below, but **leave it in the
+description** — the resolve command parses it itself (`tools/resolve/detect.mjs`, `forceStack`), and
+stripping it here would silently disable the override.
 
 If `$ARGUMENTS` contains `--resume` or `--resume=<slug>`: set `resume` mode. For `--resume=<slug>`
 remember `<slug>` as `resume_slug`; for bare `--resume` the slug is derived from the description
@@ -31,9 +33,9 @@ Print verbatim:
 
 ### Step 2 — Invoke the pipeline-orchestrator skill
 
-Use the Skill tool to load and execute the `pipeline-orchestrator` skill. Pass the cleaned-up description and `forced_stack` flag as inputs. **Do not improvise or inline the orchestration logic — delegate to the skill.**
+Use the Skill tool to load and execute the `pipeline-orchestrator` skill. Pass `$ARGUMENTS` through unchanged apart from `--resume`. **Do not improvise or inline the orchestration logic — delegate to the skill.**
 
-The skill enforces its own MUST-print protocol for stack detection (`🎯 Detected stack: ...`), phase boundaries (`▶ Phase N/M: ...`), and the final summary. If you find yourself not printing these — stop, re-read the skill, and start over.
+The skill enforces its own MUST-print protocol for stack detection (`🎯 Active stack profiles:`), phase boundaries (`▶ Phase N/M: ...`), and the final summary. If you find yourself not printing these — stop, re-read the skill, and start over.
 
 ### Step 3 — Hard rules during orchestration
 
@@ -54,13 +56,11 @@ If any phase fails fatally (e.g. agent crashes, post-validation impossible to sa
 
 (For your reference — the skill itself contains the authoritative algorithm.)
 
-1. **Step 0a** — dependency preflight (reads `runtime-dependencies.json`, checks superpowers etc.).
-2. **Step 0b** — stack detection via Glob `{PLUGIN_CACHE_ROOT}/**/manifest.yaml` (split by `kind`; the cache root is resolved in Step 0 from the running install, never a literal `~`). Picks highest-priority foundation. Prints `🎯 Detected stack: ...` (MANDATORY).
-3. **Step 0c** — skip-rules for trivial changes.
-4. **Step 1-2** — parse profile, generate `task_slug`, create `docs/plans/{task_slug}/`.
-5. **Step 3** — execute each phase (BA → Dev → [extras] → QA → Sec → Docs) via specialist agents. Compact handoffs.
-6. **Step 4** — post-pipeline checks (lint, tests, route:list).
-7. **Step 5** — telemetry + final summary (MANDATORY printed).
+1. **Step 0** — one command (`tools/resolve/cli.mjs plan --json`) resolves the whole run: plugin roots, dependency preflight, stack detection (highest-priority foundation, or the one `--stack=NAME` names), skip-rules, profile merge, project overrides, model tiers, workflow and cost cap. The orchestrator echoes what it returns; it does not re-derive any of it (ADR-0019).
+2. **Step 2** — generate `task_slug`, create `docs/plans/{task_slug}/`.
+3. **Step 3** — execute each phase (BA → Dev → [extras] → QA → Sec → Docs) via specialist agents. Compact handoffs.
+4. **Step 4** — post-pipeline checks (lint, tests, route:list).
+5. **Step 5** — telemetry + final summary (MANDATORY printed).
 
 ---
 
@@ -77,10 +77,10 @@ If any phase fails fatally (e.g. agent crashes, post-validation impossible to sa
 
 Add `--dry-run` to any invocation to see the resolved plan **without dispatching a single
 agent or writing any code**. The orchestrator resolves the stack, workflow, phases, and
-per-agent model tiers (Step 1c), then prints a preview and **exits cleanly** — no
+per-agent model tiers in one command, then prints a preview and **exits cleanly** — no
 `docs/plans/{slug}/` workspace is created, no phases run, no post-checks, no telemetry.
 
-It prints (Step 1d in `pipeline-orchestrator/SKILL.md`):
+It prints (Step 1d-2 in `pipeline-orchestrator/SKILL.md`):
 
 ```
 🔎 DRY RUN — no agents dispatched, no code written.
