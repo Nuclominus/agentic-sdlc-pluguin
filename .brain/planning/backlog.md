@@ -190,7 +190,7 @@ with lesson count.
 
 ## Track H — plugin discovery correctness
 
-### H1 — Filter foundation discovery to *enabled* plugins
+### H1 — Filter foundation discovery to *enabled* plugins — **done, ADR-0019**
 [[decisions/ADR-0009-plugin-root-resolution]] fixed **which tree** gets globbed (issue #70), but
 discovery still reads the plugin **cache**, which holds every plugin ever installed under that
 config dir — enabled or not. `enabledPlugins` in the config is never consulted, so a cached but
@@ -204,6 +204,26 @@ legitimately detects but has not enabled should warn rather than be skipped, and
 development checkout (plugin loaded from a local path, never "installed") should mean.
 **DoD:** foundation selection considers only plugins enabled for the active config dir; a detected
 but disabled foundation is reported, not silently used; a local-path development plugin still works.
+
+**Met, in `plugins/sdlc/tools/resolve/manifests.mjs`** ([[decisions/ADR-0019-the-run-start-is-one-command]],
+spec [[planning/h5-d2-start-resolution-command]]). All three open design questions this item listed
+are answered by measurement rather than by choice:
+
+- *Where enablement lives* — `enabledPlugins`, merged across user `settings.json`, project
+  `.claude/settings.json` and `settings.local.json`, later scope winning per key. **Absent is not
+  disabled**: both real consumer projects list only three unrelated plugins in project settings while
+  `sdlc@agentic-sdlc` appears solely in the user map, so the opposite rule would switch the pipeline
+  off entirely. Only an explicit `false` disables.
+- *Warn vs. skip* — a disabled plugin is **skipped and reported** (`skipped[]` with a reason). A
+  plugin carrying no manifest is neither: it is simply not an SDLC plugin.
+- *Development checkouts* — `extraRoots`, added last so an installed copy cannot shadow the tree the
+  developer is editing.
+
+One thing the item did not anticipate and the implementation had to face: **the cache holds every
+version ever installed** (`android-foundation/` 1.4.0 → 1.7.0, `sdlc/` four more). Globbing it
+returns them all, they all satisfy `detect` at the same `priority`, and the winner is filesystem
+order. So the fix is not to filter the glob but to stop globbing: `installed_plugins.json` carries
+the exact `installPath` per plugin and scope.
 
 ---
 

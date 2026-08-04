@@ -70,6 +70,71 @@ prose defect — it is a source-of-manifests defect in the check itself.** `load
 `datastore-proto-plugin`; the consumer's cache does not have it installed. The prose was right. See
 *Open questions* for the two constraints this imposes.
 
+## Found during implementation — the preflight was never real
+
+Step 0a asks for a **per-skill** availability check. Writing it as code produced a result that
+disagreed with every recent run, and the disagreement was the code being right.
+
+`runtime-dependencies.json` declared `superpowers` with
+`skills_used: [thinking-deeply, test-driven-development, verification-before-completion]`.
+**`thinking-deeply` has never existed in superpowers** — not removed upstream, never shipped. Both
+cached versions (6.1.1, 6.2.0) carry fourteen skills and it is not among them. The declaration dates
+to `Initial commit`, 2026-06-22.
+
+`~/.claude/.sdlc-deps-preflight.json` is stamped **the same day**, `all_satisfied: true`. So the
+very first preflight already reported a phantom skill as available, and every run since has taken
+the fast path: three consecutive runs across both consumer projects recorded
+`deps_preflight: {superpowers: {status: "available", missing_skills: []}}`.
+
+Two distinct defects, and the second is the durable one:
+
+1. **The declaration was wrong from the start.** Fixed here — `thinking-deeply` removed from
+   `runtime-dependencies.json` and from the `doctor.md` sample output. Deliberately *removed*, not
+   substituted: choosing a different skill would be a new claim about what the pipeline depends on.
+2. **The stamp cannot go stale.** The documented invalidation triggers are `/sdlc:doctor`,
+   `--force-preflight` and a `block` abort. A dependency changing underneath the stamp is not one of
+   them, so a green stamp survives every upgrade forever. `deps.mjs` keys the stamp to the versions
+   it was computed against and recomputes the status regardless — the in-process check reads
+   directories rather than making eleven tool calls, so the cache buys nothing worth a stale answer.
+   `cache_hit` is now reported rather than obeyed.
+
+This is Track H's thesis in its purest form: a mandated step that **reported success without ever
+executing**, for six weeks, with output indistinguishable from a real check. No amount of firmer
+wording in `SKILL.md` would have caught it; running it as code caught it on the first invocation.
+
+### And a third defect, found by reading the fix
+
+Removing the phantom left two skills declared. Grepping for what the marketplace *actually* mandates
+found **eight**, and the declaration was not merely incomplete — it was **inverted**:
+
+| skill | mandated by | was declared by |
+|---|---|---|
+| `brainstorming` | `android-ba`, before any requirements formulation | **nobody** |
+| `verification-before-completion` | five android agents | `sdlc` |
+| `test-driven-development` | `android-developer`, `android-tester` | `sdlc` |
+| `requesting-code-review` | `android-reviewer` | **nobody** |
+| `receiving-code-review` | `android-reviewer` | **nobody** |
+| `systematic-debugging` | `android-debugger` | **nobody** |
+| `using-superpowers` | the orchestrator's own base prompt | **nobody** |
+| `writing-skills` | `/sdlc:create-pluguin` (authoring-time) | **nobody** |
+
+`sdlc` declared two skills **none of its own agents use** — the vanilla agents reference superpowers
+nowhere — while `android-foundation`, where every one of those mandates lives, declared an empty
+array. `brainstorming` is the sharpest case: it is the BA phase's core discipline and nothing
+anywhere claimed to depend on it.
+
+Fixed along the split the files' own `_comment` already describes — Step 0a aggregates across every
+installed plugin, so **each plugin declares what its own runtime invokes**. `sdlc` now declares
+`using-superpowers` (its orchestrator genuinely invokes it, guarded by `superpowers_unavailable`);
+`android-foundation` declares the six its agents mandate. `writing-skills` is deliberately excluded:
+`/sdlc:create-pluguin` is authoring, the preflight runs on `/sdlc:start`, and warning about a tool
+this run will never call is noise. A consequence worth stating: a **vanilla** consumer now gets no
+warning about skills its pipeline never touches.
+
+Note the shape of this one. It was not found by the auditor, the tests, or the code — it was found
+by *asking what the fix implied*. The instrument narrowed the question far enough that the real
+answer became visible; it did not produce the answer itself.
+
 ## Shape
 
 ```
@@ -144,14 +209,31 @@ Neither boundary adds a turn to a successful run.
 ```
 plugins/sdlc/tools/resolve/
   cli.mjs        # the only unit that prints; arg parsing, exit codes
+  fsglob.mjs     # ✅ dependency-free globbing (replaces tinyglobby)
+  yaml.mjs       # ✅ dependency-free YAML subset (replaces the `yaml` package)
+  manifests.mjs  # ✅ tree vs installed loading, enablement, scope precedence
+  detect.mjs     # ✅ Step 0b — the CANONICAL detection/attachment implementation
   roots.mjs      # Step 0
-  deps.mjs       # Step 0a (fs-glob enumeration, status, policy, cache stamp)
-  detect.mjs     # Step 0b — the CANONICAL detection/attachment implementation
+  deps.mjs       # Step 0a (skill enumeration, status, policy, cache stamp)
   skiprules.mjs  # Step 0c
   profile.mjs    # Step 1 (profile merge, sdlc.local.yaml, model.local.json, workflow resolution)
   caps.mjs       # Step 1d
   plan.mjs       # composes the JSON + prints[]; no I/O of its own
 ```
+
+**Correction — "dependency-free" was under-specified.** This note said it and named only
+`tinyglobby`. It missed **YAML**, which every manifest, workflow recipe and the user-authored
+`.claude/sdlc.local.yaml` is written in, and which the plugin cannot depend on either. That added
+two modules the layout above did not anticipate. The resolution is a subset parser plus a
+**differential parity gate** (`tools/sdlc-lint/test/yaml-parity.test.mjs`): every YAML file in the
+repository, plus fixtures pinning shapes taken from real consumer projects, is parsed by both the
+shipped parser and the `yaml` package and must be deep-equal.
+
+The gate paid for itself immediately, catching three defects review had not: `|+` chomping dropping
+trailing blank lines; multi-line plain scalars unsupported and throwing on ordinary YAML; and blank
+lines counted as continuation progress, which skipped type resolution and silently turned
+`enabled: true` into the string `"true"` in nine files. That last one is precisely the failure mode
+this track exists to remove — invisible, and indistinguishable from success in the output.
 
 `tools/sdlc-lint/lib/detect.mjs` becomes a re-export shim over
 `plugins/sdlc/tools/resolve/detect.mjs`, following the template `lib/resume.mjs` already sets over
@@ -204,14 +286,30 @@ shim exists to prevent.
 
 ## Open questions
 
-- **The manifest root must be a parameter** (from check 4). The shipped command resolves from
-  `PLUGIN_CACHE_ROOT`; the dev/CI shim resolves from the marketplace working tree. `loadManifests()`
-  hard-codes `plugins/**/manifest.yaml` relative to a root and must gain a cache-shaped mode, or the
-  shim and the shipped code will disagree on production input while every fixture passes.
-- **Enabled vs. merely cached** is now on the critical path. Globbing the cache reaches every plugin
-  ever installed under that config dir; `enabledPlugins` is never consulted. This is the open
-  *Track H — plugin discovery correctness* item in [[planning/backlog]]. The prose has the same
-  defect, so this is not a regression — but it is the obvious place to close it.
+- ~~**The manifest root must be a parameter.**~~ **Resolved** — `manifests.mjs` has two modes,
+  `tree` (marketplace checkout: CI, fixtures, the dev lint) and `installed` (the production path).
+  `tools/sdlc-lint/lib/load.mjs` re-exports the tree loader, so there is one implementation.
+- ~~**Enabled vs. merely cached.**~~ **Resolved, and the cache is not globbed at all** — which
+  turned out to matter more than this note assumed. The cache keeps *every version ever installed*:
+  on the development machine `android-foundation/` holds 1.4.0 through 1.7.0 and `sdlc/` holds four
+  more. A glob returns all of them, they all satisfy `detect`, they all carry `priority: 300`, and
+  the winner is filesystem order. `installed_plugins.json` records the exact `installPath`, so the
+  ambiguity never arises instead of being resolved by heuristic.
+
+  The enablement rules are measured rather than assumed, and each is pinned by a test:
+  **absent is not disabled** (both consumer projects list only three unrelated plugins in project
+  settings, while `sdlc@agentic-sdlc` — active in every run — appears solely in the user settings,
+  so treating absence as disabled would switch the pipeline off); project settings **add** to the
+  map and win per key; the most specific install **scope** wins (`local > project > user`) with a
+  path disagreement reported rather than silently resolved; a disabled plugin is **skipped and
+  reported**, while a plugin carrying no manifest is neither — it is simply not an SDLC plugin; and
+  `extraRoots` keeps a local-path development checkout working.
+
+  This closes the *Track H — plugin discovery correctness* item in [[planning/backlog]].
+
+  **Verified on both real corpora:** `android/300 + [dagger, retrofit, room, workmanager]`, exactly
+  what `_telemetry.json` records, with `datastore-proto` correctly absent and no stale version
+  loaded — 149ms and 4ms.
 - **`datastore-proto` declares `dependency: androidx.datastore`**, which also matches
   `androidx.datastore:datastore-preferences` — a preferences-only project (parlor is one) would
   falsely attach the proto framework the moment that plugin is installed. Latent today because the

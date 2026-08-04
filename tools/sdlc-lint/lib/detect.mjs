@@ -1,48 +1,18 @@
+// Dev/CI re-export shim. The canonical, dependency-free implementation is SHIPPED
+// with the sdlc plugin at plugins/sdlc/tools/resolve/detect.mjs (so marketplace consumers
+// resolving a run execute the same code CI tests). This file keeps the detect test-suite
+// pointed at that single source of truth, so it exercises the exact code that ships —
+// the same arrangement lib/resume.mjs already has over tools/run/reentry.mjs.
+//
+// What stays here rather than moving: the fixture helpers. They read manifests, and manifest
+// PARSING is YAML, which the shipped side cannot depend on. Loading is the lint's job;
+// evaluating an already-parsed manifest is the plugin's.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { globSync } from "tinyglobby";
 import { loadManifests } from "./load.mjs";
+import { resolveStack } from "../../../plugins/sdlc/tools/resolve/detect.mjs";
 
-export function evalRule(rule, root) {
-  if (rule === "*") return true;
-  if (rule == null || typeof rule !== "object") return false;
-  if ("file_exists" in rule) return existsSync(join(root, rule.file_exists));
-  if ("file_glob" in rule) return globSync(rule.file_glob, { cwd: root, dot: true }).length > 0;
-  if ("file_contains" in rule) {
-    const { path, pattern } = rule.file_contains;
-    const re = new RegExp(pattern);
-    return globSync(path, { cwd: root, absolute: true, dot: true })
-      .some(f => re.test(readFileSync(f, "utf8")));
-  }
-  if ("any" in rule) return rule.any.some(r => evalRule(r, root));
-  if ("all" in rule) return rule.all.every(r => evalRule(r, root));
-  return false;
-}
-
-function dependencyPresent(root, paths, coordinate) {
-  if (!coordinate) return false;
-  for (const p of paths) {
-    for (const f of globSync(p, { cwd: root, absolute: true, dot: true })) {
-      if (readFileSync(f, "utf8").includes(coordinate)) return true;
-    }
-  }
-  return false;
-}
-
-export function resolveStack(evalRoot, { foundations, frameworks }) {
-  const winner = foundations
-    .filter(f => evalRule(f.doc.detect, evalRoot))
-    .sort((a, b) => (b.doc.priority ?? 0) - (a.doc.priority ?? 0))[0];
-  if (!winner) return { foundation: null, priority: null, additive: [] };
-  const hosts = winner.doc.hosts_aspects;
-  const paths = winner.doc.framework_detection ?? [];
-  const additive = [];
-  for (const fw of frameworks) {
-    const hosted = hosts === "all" || (Array.isArray(hosts) && hosts.includes(fw.doc.enriches_aspect));
-    if (hosted && dependencyPresent(evalRoot, paths, fw.doc.dependency)) additive.push(fw.doc.stack);
-  }
-  return { foundation: winner.doc.stack, priority: winner.doc.priority ?? 0, additive: additive.sort() };
-}
+export { evalRule, resolveStack } from "../../../plugins/sdlc/tools/resolve/detect.mjs";
 
 export function listFixtures(fixturesDir) {
   return readdirSync(fixturesDir, { withFileTypes: true })
