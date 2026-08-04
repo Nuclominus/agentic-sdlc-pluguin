@@ -39,8 +39,16 @@ The heartbeat: **a merged PR is the trigger to update the docs.**
   its own links and passes every other test, yet is unreachable by anyone browsing the vault: that
   is how ADR-0014 and ADR-0015 both shipped unlisted while `check` reported "clean". Adding an ADR
   therefore means adding its MOC row in the same commit.
+- **Never leave a brain-sync PR unmerged while you merge the next feature PR.** Merging to
+  `develop` triggers the Action, which opens the next `brain-sync/pr-<n>` immediately — so an
+  outstanding one becomes *two open at once*, and the conflict below is guaranteed. The order that
+  avoids it: **merge the outstanding brain-sync PR first, then the feature PR.** The new stub then
+  opens alone, against a `develop` that already carries the previous index row, and there is nothing
+  to collide with. (Confirmed 2026-08-04: #120 merged 14 s before #121; #122 opened clean, no
+  `reindex` needed.)
 - **Two brain-sync PRs open at once will conflict on `_moc-changes.md`** — both append a row, so
-  merging `develop` into the second one collides every time. Resolve it with `reindex`, never by
+  merging `develop` into the second one collides every time. This is the *repair*; the bullet above
+  is the *prevention*, and it is cheaper. Resolve it with `reindex`, never by
   hand and never with `sync --backfill`: backfill rewrites *every* note from its PR and destroys the
   enriched prose. Take `develop`'s copy of the index, run `reindex`, commit.
 
