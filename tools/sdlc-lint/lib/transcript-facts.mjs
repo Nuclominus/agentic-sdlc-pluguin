@@ -33,6 +33,12 @@ export function extractFacts(transcriptPath) {
         command: typeof input.command === "string" ? input.command : null,
         subagent_type: typeof input.subagent_type === "string" ? input.subagent_type : null,
         path: typeof input.file_path === "string" ? input.file_path : null,
+        // `timestamp` and `skill` carry no SDLC meaning — they are wire-format fields like the
+        // rest. A consumer that needs to bound a token window (start-window.mjs) needs the
+        // clock, and one that needs to know WHICH skill was loaded needs the name; without
+        // them it would have to re-parse the JSONL, which is what this module exists to prevent.
+        timestamp: typeof d.timestamp === "string" ? d.timestamp : null,
+        skill: typeof input.skill === "string" ? input.skill : null,
       });
     }
   }

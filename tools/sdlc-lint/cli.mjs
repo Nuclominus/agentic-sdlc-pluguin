@@ -14,6 +14,7 @@ import { checkAgentTools } from "./lib/agent-tools.mjs";
 import { parseContracts } from "./lib/contracts.mjs";
 import { auditRun } from "./lib/compliance.mjs";
 import { aggregate, renderText } from "./lib/compliance-report.mjs";
+import { measureRun, aggregate as aggregateWindows, renderText as renderWindows } from "./lib/start-window.mjs";
 import { globSync } from "tinyglobby";
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 
@@ -157,6 +158,30 @@ function opt(name, fallback = null) {
   return i >= 0 && args[i + 1] && !args[i + 1].startsWith("--") ? args[i + 1] : fallback;
 }
 
+function printStartWindow() {
+  // ADR-0019's Definition of Done is a BEFORE/AFTER on this number, so it has to come out of one
+  // committed implementation. The `before` half (median 24 turns / 14 calls / $1.31 / 11.8%) was
+  // produced by a script nobody kept — see lib/start-window.mjs for why that is a defect and not
+  // just an inconvenience.
+  const pattern = opt("--runs", "docs/plans/*");
+  const dirs = globSync(pattern, { cwd: root, absolute: true, onlyDirectories: true })
+    .filter((d) => existsSync(join(d, "_telemetry.json"))).sort();
+  if (!dirs.length) {
+    console.error(`✗ start-window: no run directories with _telemetry.json matched '${pattern}'`);
+    return 2;
+  }
+  const configDir = opt("--config-dir");
+  const projectsRoot = configDir ? resolve(root, configDir, "projects") : undefined;
+
+  const rows = dirs.map((d) => measureRun(d, { projectsRoot }));
+  const agg = aggregateWindows(rows);
+  if (jsonOut) console.log(JSON.stringify({ command: "start-window", ...agg, runs: rows }));
+  else console.log(renderWindows(agg, rows));
+
+  // An instrument, not a gate — same rule as compliance. It reports; it never fails a build.
+  return 0;
+}
+
 function printCompliance() {
   // Live contracts sit next to the prose they describe; retired ones sit in the
   // archive, so a run from before a step was replaced is still audited against the
@@ -261,15 +286,17 @@ switch (cmd) {
     break;
   }
   case "compliance": code = printCompliance(); break;
+  case "start-window": code = printStartWindow(); break;
   case "all": code = runAll(); break;
   case undefined:
   case "--help":
-    console.log("Usage: sdlc-lint <schema|cycles|detect|resume|report|rollup|read-discipline|plugin-paths|machine-values|agent-tools|compliance|all> [--json]");
+    console.log("Usage: sdlc-lint <schema|cycles|detect|resume|report|rollup|read-discipline|plugin-paths|machine-values|agent-tools|compliance|start-window|all> [--json]");
     console.log("  read-discipline   E2: contract present in the stable prefix; no re-read phrasing in agents");
     console.log("  plugin-paths      #70: no home-anchored ~/.claude paths in shipped plugin text");
     console.log("  machine-values    H3: no prose computing a value a machine already writes");
     console.log("  agent-tools       ADR-0018: every agent declares tools; none may dispatch agents; reviewers hold no Edit");
     console.log("  compliance        H1: did the orchestrator run its own mandated steps? [--runs <glob>] [--config-dir <path>]");
+    console.log("  start-window      ADR-0019 DoD: turns/cost between loading the orchestrator and its first dispatch [--runs <glob>] [--config-dir <path>]");
     break;
   default:
     console.error(`unknown command: ${cmd}`);
