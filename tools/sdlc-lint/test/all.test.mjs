@@ -253,3 +253,35 @@ test("the development planning gate defines a deterministic HEADLESS rule detect
 // max_rounds (Track G1 F3)". That test was written BECAUSE this guard lost its anchor: the
 // invariant was briefly uncovered, and deleting a guard without replacing it is how that happens.
 
+
+test("no shipped doc cites a Step 0/1 sub-label the collapse deleted", () => {
+  // Review finding 7 on #121, and its residue: #121 removed Steps 0a/0b/0c/1/1a/1b/1c/1d and kept
+  // only the labels 0-anchors names. Six files still delegated to the deleted text — and three of
+  // those survived the reviewer's own grep, because a hand-written sweep for "0a-2" / "1a" / "1c"
+  // does not catch a bare "Step 0b". A dangling pointer is quiet: `doctor.md` told the next reader
+  // "reuse, don't reimplement", pointed at nothing, and would have forced the parallel
+  // implementation it forbids.
+  const PRESERVED = ["0a-1", "0c", "1b", "1b-ext", "1d-0", "1d-2", "1d-4"];
+  const stale = /\bStep(?:s)? (0a|0b|1a|1c|1d)\b(?!-)|\b(0a-2|0a-3|0b-aspects|0b-frameworks|1b-caps|1b-models|1d-1|1d-3)\b/;
+
+  const docs = execFileSync("git", ["ls-files", "plugins/**/*.md"], { cwd: REPO, encoding: "utf8" })
+    .split("\n").filter(Boolean);
+  assert.ok(docs.length > 20, `expected many shipped docs, found ${docs.length}`);
+
+  const hits = [];
+  for (const rel of docs) {
+    const lines = readFileSync(resolve(REPO, rel), "utf8").split("\n");
+    let inAnchors = false;
+    lines.forEach((line, i) => {
+      // 0-anchors is the one place allowed to NAME the deleted labels — it exists to bury them.
+      if (/^#+ /.test(line)) inAnchors = line.includes("0-anchors");
+      if (inAnchors) return;
+      // A retarget may record what it used to cite, so the move stays traceable.
+      if (/until #121 replaced/.test(line)) return;
+      if (stale.test(line)) hits.push(`${rel}:${i + 1}: ${line.trim().slice(0, 110)}`);
+    });
+  }
+  assert.deepEqual(hits, [],
+    `these cite deleted prose; retarget at the tools/resolve/ module that implements it. ` +
+    `Labels still live: ${PRESERVED.join(", ")}\n${hits.join("\n")}`);
+});

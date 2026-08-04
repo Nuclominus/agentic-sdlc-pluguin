@@ -127,7 +127,7 @@ that status is available to a wrapper script, but it is not the hosting session'
 | `stack.*` | `CONTEXT.primary_profile`, `priority`, `aspects`, `additive_profiles`, `profile_source` | Step 3, Step 5 |
 | `skip_rules.applied` | `CONTEXT.skip_rules_applied[]` *(**Step 0c**)* | Step 4 skip reporting, Step 5 |
 | `workflow.name` | `CONTEXT.active_workflow` | Step 5 |
-| `workflow.autoselected` | `CONTEXT.workflow_autoselected` | Step 1d preview |
+| `workflow.autoselected` | `CONTEXT.workflow_autoselected` | Step 1d-2 preview |
 | `workflow.resolved_phases` | `CONTEXT.resolved_phases[]` | Step 3 — replaces any hardcoded list |
 | `profile.agents_per_phase` | `EFFECTIVE_PROFILE.agents_per_phase` | Step 3b agent selection |
 | `profile.convention_skills` | `EFFECTIVE_PROFILE.convention_skills` | Step 3b-1a |

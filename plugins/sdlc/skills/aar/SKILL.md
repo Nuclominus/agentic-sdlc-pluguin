@@ -35,8 +35,9 @@ costs by hand.
 
 ## Step 4 — Resolve and dispatch the analyst
 
-1. Determine the active foundation profile (reuse the orchestrator's Step 0b
-   detection). If its `manifest.yaml` declares `aar_analyst: <agent>`, dispatch
+1. Determine the active foundation profile (reuse `resolveStack` from
+   `${CLAUDE_PLUGIN_ROOT}/tools/resolve/detect.mjs` — the same detection
+   `/sdlc:start` runs). If its `manifest.yaml` declares `aar_analyst: <agent>`, dispatch
    that agent; otherwise dispatch `aar-analyst` (the neutral default).
 2. Dispatch it with a single `Task` call, passing: `slug`, `transcript_path` (or
    a note that it's unavailable), and the `metrics_json` from Step 3. Instruct it

@@ -1,8 +1,9 @@
 # Workflow Resolver — Algorithm Reference
 
 This document specifies how the pipeline orchestrator loads, validates, and
-applies a workflow recipe file. Referenced from `pipeline-orchestrator/SKILL.md`
-Step 1c.
+applies a workflow recipe file. It is implemented by
+`plugins/sdlc/tools/resolve/workflow.mjs`, which the orchestrator invokes as part of Step 0's
+single resolve command; `tools/sdlc-lint/test/workflow.test.mjs` holds it to this spec.
 
 ## Step 1: Locate the workflow file
 
