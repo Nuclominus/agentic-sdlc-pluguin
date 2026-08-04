@@ -279,6 +279,10 @@ export function preflight({ configDir, projectRoot, installs, enabled, skills = 
 
   return {
     deps_preflight: status,
+    // The enumerated set travels with the result: Step 1b-ext needs it to decide whether an
+    // extension skill exists, and recomputing it there would be a second enumeration that
+    // could disagree with this one.
+    available_skills: available.skills,
     skills_source: available.source,
     fs_blind_to: available.fs_blind_to,
     skill_roots: available.roots,
