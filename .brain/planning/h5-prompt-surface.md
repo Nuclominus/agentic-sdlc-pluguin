@@ -102,6 +102,51 @@ cutting the model's turns is worth ~15%.** Both point away from "shrink the prom
 "remove remembered steps", which is the same direction Measurement 2 arrives at independently.
 Any future revision of this note must price a change on **both** terms.
 
+### Re-measured 2026-08-04 — the start window has not improved; it got worse
+
+Re-derived per **run** (not per session) over both corpora, 28 runs with a resolvable orchestrator
+session. Window: the `pipeline-orchestrator` `Skill` invocation → the first `Task` dispatch. Cost is
+`cache_read_input_tokens` summed over assistant messages in the window × opus `cached_input`
+$0.50/MTok.
+
+| | all 28 runs | the 9 runs carrying `plugin_version` |
+|---|---|---|
+| turns | median **33**, range 16–48 | median **34**, range 23–44 |
+| tool calls | median **18.5**, range 8–24 | median **18**, range 13–24 |
+| cache-read billed | median **$1.80**, range $0.61–$2.77 | median **$2.05** |
+| share of total run cost | median **14.5%**, range 3.4–46.1% | median **17.0%**, range 12.6–21.6% |
+
+Tool histogram inside the window across all 28 runs: `Bash` 296, `Read` 107, `Write` 53, `Skill` 28
+(one per run — the invocation itself), `AskUserQuestion` 6, `TaskCreate` 5, `ToolSearch` 4,
+`getJiraIssue` 4, `TaskUpdate` 1. Still overwhelmingly `ls`/`cat`-shaped resolution work.
+
+**The estimate in the section above was low.** It put the window at ~12–15% of run cost from a
+median of $1.42; on the newest cohort it is **17.0% median and $2.05**, and no run in that cohort
+falls below 12.6%. Two reasons the earlier figure understated it: it pooled 24 orchestrator
+*sessions* across the whole corpus, including older and cheaper runs, and `SKILL.md` has since grown
+from 2449 to **2544 lines**, so the prefix re-billed on every one of those ~34 turns is larger.
+
+Per-run detail for that cohort, worst first: `s5-presence` 21.6% ($2.05 of $9.50), `s4-unread` 20.8%
+($2.77 of $13.29), `s3-messages` 20.6%, `phase1` 17.7%, `s6-connectivity` 17.0%, `s8-teardown`
+14.5%, `s2-thread-list` 14.0%, `s7-cutover` 13.7%, `implement-cit-491` 12.6% ($1.90 of $15.06).
+
+**Refinement, same day.** Splitting the window at the `.checkpoint/_started_at` write separates
+Steps 0→1d from Step 2's workspace creation, which is real work and stays: the **collapsible** part
+is median **24 turns / 14 calls / $1.31 = 11.8% of run cost** (8.5–17.2%), and Step 2 is the
+remaining ~7 turns / $0.45. Quote 11.8%, not 17%, for anything scoped to resolution. The same split
+shows the collapsible part costing **16–36 turns** across nine runs of one deterministic
+procedure — a 2.2× spread that is its own argument, independent of cost.
+
+**This is now the largest measured lever in the note**, and unlike the compliance cell it moved in
+the direction that *strengthens* the case: Direction 2 (Steps 0→1d become one shipped command) is
+worth ~11.8% of run cost, against ~3% for the whole text-volume term and an unquantified compliance
+gain for Direction 1. Nothing about its gating changed — whether Steps 0→1d fall inside H4's scope
+is still a reading to confirm — but its size is no longer in question.
+
+For contrast: tool calls in the window top out at **24** and the *turns* at **48**. A run that feels
+like "60 calls before the first agent" is not represented in this corpus; the observed ceiling is 24
+calls / 48 turns, and the number that grows fastest is turns, not calls.
+
 ## Measurement 2 — cardinality predicts compliance
 
 `sdlc-lint compliance --runs "$HOME/parlor-android/docs/plans/*"`, 2026-07-29, **16 auditable runs**
@@ -137,6 +182,49 @@ Five of the twenty corpus runs carry `plugin_version`; the gate wants ~10.
 
 `seal:stop-hook` (H6, not a contract): orchestrator 1, stop-hook 4, unrecorded 11. The net fired
 on four of five recorded runs.
+
+### Re-measured 2026-08-04 — the cell moved, the finding survives weakened
+
+The corpus was rechecked against **two** downstream projects: `~/parlor-android` (19 auditable, was
+16) and a second, previously unaudited one, `~/work/Citrus-Android` (9 auditable). Combined:
+**28 auditable, 6 excluded** (`no-agent-ids`). Known-positive verified first —
+`native-chat-engine-s2-thread-list` still fails `5b-0-enrich` and `5-clock`.
+
+| rate | contract | n | was (2026-07-29, parlor only) |
+|---:|---|---:|---|
+| 100% | `2-4-anchor` | 28 | 100% · n=16 |
+| 100% | `5b-finish` | **5** | 100% · n=1 |
+| 93% | `6-journal` | 28 | 88% · n=16 |
+| **67%** | `3d-1b-phase-cost` | **9** | **40% · n=5** |
+| 70% / 87% / 91% | `5-clock` / `5b-0-enrich` / `5b-2-report` | 23 | 67% / 80% / 87% · retired |
+
+Overall on **live** contracts: **92.9%** combined (parlor alone 90.0%, Citrus alone 100.0%). All
+contracts including retired: 87.8%. `seal:stop-hook`: orchestrator 5, stop-hook 4, unrecorded 19.
+
+`3d-1b-phase-cost` nearly doubled — 40% → 67% — as its denominator went 5 → 9. The four runs added
+to the cell (`s6-connectivity`, `s7-cutover`, `s8-teardown`, `implement-cit-491`) all pass. So the
+open number this note flagged as *"the whole cardinality finding rests on this cell"* moved, and it
+moved **against** the finding.
+
+What survives: `3d-1b` is still the **worst live contract and the only failing one**, and the shape
+argument is untouched — it is the same one-line Bash command as `2-4-anchor`, which is 28/28, and
+the only variable between them is still once-per-phase vs. once-per-run. The `partial 6/7` decay
+signature on `s5-presence` is still the only partial in the corpus.
+
+What does not: *"40% vs 100%"* was a 60-point gap that made cardinality look like the dominant term.
+At *"67% vs 100%"* it is a 33-point gap over `n=9`, and the note's own resume condition (`n≈10`) is
+still one run short. Direction 1 remains the cheapest available lever and the one the data points
+at, but the case for spending on it is **materially weaker than it looked on 2026-07-29** and should
+not be treated as settled by this rerun either.
+
+**Instrument caveat, found during this rerun.** The auditor takes a single `--runs` glob — a second
+`--runs` is silently ignored, not merged — so combining corpora means copying run directories into
+one tree. Doing that with `cp -R` (no `-p`) resets mtimes, and `runDate()` falls back to the mtime
+of `_telemetry.json` for any run without `started_at`. Three parlor runs are `date-inferred`; restamped
+to today they stopped predating the contracts, and three rates moved (`3d-1b` 67→50%, `5b-finish`
+100→63%, `5-clock` 70→80%) with no warning. The figures above are from a `cp -Rp` merge whose
+per-run verdicts match the union of the two separate audits exactly. Filed as
+[[planning/backlog]] *Track H-audit — run date must not depend on mtime*.
 
 ## Measurement 3 — where the prose is
 
@@ -198,15 +286,37 @@ That reading should be confirmed before acting on it, not assumed.
 Direction 1 is the one the data currently points at. Direction 3 carries no risk and no argument
 against it. Neither is committed here.
 
+**Superseded 2026-08-04 — Direction 2 is chosen.** The re-measurement above moved it from
+~12–15% to a measured **17.0% of run cost**, while the recheck of `3d-1b` weakened Direction 1's
+evidence (40% → 67%). Direction 2 is now both the largest lever and the better-evidenced one, and it
+carries the lowest compliance risk of the three — the shape replacing 926 lines of prose is a
+once-per-run Bash line, which measures 100% over 28 runs. Decided in
+[[decisions/ADR-0019-the-run-start-is-one-command]]; specified in
+[[planning/h5-d2-start-resolution-command]]. Directions 1 and 3 remain open and uncommitted, and the
+gating caveat above is unchanged: this does **not** close the H4 gate.
+
 ## Resume point — what closes this
 
-Return when the corpus can answer the two open numbers:
+**Updated 2026-08-04.** Both open numbers moved; neither closed.
 
-1. **~10 runs carrying `plugin_version` on the new tail** (5 of 20 today) → re-run
-   `node tools/sdlc-lint/cli.mjs compliance --runs "$HOME/parlor-android/docs/plans/*"`.
-   `5b-finish` gets a real denominator, and H2's own effect becomes measurable for the first time.
-2. **`3d-1b-phase-cost` past `n≈10`** → is 40% the real rate for a once-per-phase step, or an
-   artefact of five runs? The whole cardinality finding rests on this cell.
+1. **~10 runs on the new tail.** `5b-finish` is now `n=5` (was 1), **5/5 pass**. Nine runs carry
+   `plugin_version`, but only five are on the new tail. One failure would drop it to 80%, so this
+   still does not settle H2's own effect. Need ~5 more runs.
+2. **`3d-1b-phase-cost` past `n≈10`.** Now `n=9`, **67%** (was 40% at `n=5`). One run short of the
+   bar this note set, and it moved *against* the cardinality finding. See the re-measurement under
+   Measurement 2.
+
+The corpus is now two projects. Re-run both, and merge with `cp -Rp` (never `cp -R` — see the
+instrument caveat) or audit them separately and add the counts:
+
+```
+node tools/sdlc-lint/cli.mjs compliance --runs "$HOME/parlor-android/docs/plans/*"
+node tools/sdlc-lint/cli.mjs compliance --runs "$HOME/work/Citrus-Android/docs/plans/*"
+```
+
+A third number is now open and is the largest of the three: **the start window is 17% of run cost
+and rising** (Measurement 1, re-measured). That one needs no more corpus — it needs a decision on
+Direction 2.
 
 Before trusting any rerun, verify the known-positive first
 (`native-chat-engine-s2-thread-list` must fail `5b-0-enrich`) — the first real runs of this auditor

@@ -207,5 +207,38 @@ but disabled foundation is reported, not silently used; a local-path development
 
 ---
 
+## Track H-audit — compliance auditor correctness
+
+Defects in the **instrument**, not the pipeline. Distinct from the Track H above (plugin discovery)
+and from Track H in [[planning/h-instruction-fidelity]] (instruction fidelity) — the name is
+overloaded three ways; this section is about `sdlc-lint compliance` itself.
+
+### Run date must not depend on mtime *(correctness; found 2026-08-04; issue #116)*
+
+`runDate()` (`tools/sdlc-lint/lib/compliance.mjs:67`) uses `telemetry.started_at`, and when that is
+absent falls back to `statSync(_telemetry.json).mtimeMs`, flagged `date-inferred` in the output. The
+run date decides every `na: predates` verdict, and therefore every contract's denominator.
+
+**mtime is not a property of the run.** Copying, restoring from backup, archiving, or syncing a run
+directory rewrites it. Found while merging two corpora for the 2026-08-04 re-measurement: a `cp -R`
+(without `-p`) restamped the three `date-inferred` parlor runs to the current day, so contracts they
+had legitimately predated became applicable, and three published rates moved silently — `3d-1b`
+67→50%, `5b-finish` 100→63%, `5-clock` 70→80%. No warning, no annotation beyond the pre-existing
+`date-inferred` tag, and the wrong numbers are indistinguishable from right ones in the output.
+
+This composes with a second defect: **`--runs` accepts exactly one glob** and silently ignores a
+second, so auditing more than one corpus as a single population *requires* copying trees together —
+the operation that triggers the bug.
+
+**DoD:** a run whose date cannot be established from its own content is either excluded (like
+`no-agent-ids`) or its mtime-derived date is annotated as unreliable and its `predates` verdicts
+reported separately, so a corpus copy cannot silently move a rate; `--runs` either accepts repeats
+or errors on a second occurrence rather than dropping it. Candidate content-derived fallbacks in
+preference order: `.checkpoint/_started_at`, the oldest phase checkpoint, the owning session
+transcript's first message. Recorded in [[planning/h1-compliance-auditor]] *Follow-ups*; the
+measurement it distorted is [[planning/h5-prompt-surface]].
+
+---
+
 _All other `CORE-TODO.md` sections are `DONE`/`DROPPED` — no legacy remainder to carry forward._
 _Tracks E6–E8, F, and G derive from the repo-root `Roadmap Development Plan.md`._
