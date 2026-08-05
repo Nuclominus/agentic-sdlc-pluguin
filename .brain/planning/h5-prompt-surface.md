@@ -225,14 +225,39 @@ still one run short. Direction 1 remains the cheapest available lever and the on
 at, but the case for spending on it is **materially weaker than it looked on 2026-07-29** and should
 not be treated as settled by this rerun either.
 
-**Instrument caveat, found during this rerun.** The auditor takes a single `--runs` glob — a second
-`--runs` is silently ignored, not merged — so combining corpora means copying run directories into
-one tree. Doing that with `cp -R` (no `-p`) resets mtimes, and `runDate()` falls back to the mtime
-of `_telemetry.json` for any run without `started_at`. Three parlor runs are `date-inferred`; restamped
-to today they stopped predating the contracts, and three rates moved (`3d-1b` 67→50%, `5b-finish`
-100→63%, `5-clock` 70→80%) with no warning. The figures above are from a `cp -Rp` merge whose
-per-run verdicts match the union of the two separate audits exactly. Filed as
-[[planning/backlog]] *Track H-audit — run date must not depend on mtime*.
+**Instrument caveat, found during this rerun — fixed in PR #128.** The auditor took a single
+`--runs` glob — a second was silently ignored, not merged — so combining corpora meant copying run
+directories into one tree. Doing that with `cp -R` (no `-p`) reset mtimes, and `runDate()` fell back
+to the mtime of `_telemetry.json` for any run without `started_at`. Three parlor runs were
+`date-inferred`; restamped to today they stopped predating the contracts, and three rates moved
+(`3d-1b` 67→50%, `5b-finish` 100→63%, `5-clock` 70→80%) with no warning. The figures above are from
+a `cp -Rp` merge whose per-run verdicts match the union of the two separate audits exactly.
+
+### Re-measured 2026-08-05 with the fixed instrument — no copying, no filesystem in the answer
+
+`--runs` is repeatable now and dates come from the run's own content, so both corpora audit **in
+place**. Every one of the 29 runs dates from its own content: **26 from `started_at`, 3 from the
+`.checkpoint/_started_at` anchor** — those three being exactly the runs that used to be
+`date-inferred`. `undated = 0`.
+
+| | 2026-08-04 (`cp -Rp` merge) | 2026-08-05 (in place) |
+|---|---|---|
+| auditable | 28 | **29** (Citrus 9 → **10**) |
+| `2-4-anchor` | 100% · n=28 | 100% · n=29 |
+| `5b-finish` | 100% · n=5 | 100% · n=**6** |
+| `6-journal` | 93% · n=28 | 93% · n=29 |
+| `3d-1b-phase-cost` | 67% · n=9 | **60%** · n=10 |
+| live overall | 92.9% | **91.9%** (parlor 90.0%, Citrus 95.8%) |
+
+The corrections are small and they are **not** the mtime bug resurfacing — the `cp -Rp` merge
+preserved mtimes and was right. They come from the corpus having grown by one Citrus run, which
+fails `3d-1b`. Parlor alone is **90.0%, unchanged to the decimal**, which is the strongest evidence
+the two instruments agree where the corpus did not move.
+
+`3d-1b` at 60% · n=10 finally reaches the `n≈10` resume condition this note set, and it lands
+**between** the two earlier readings (40% at n=5, 67% at n=9) — the cell is noisy at this size, and
+that is now measured rather than suspected. `0-resolve` (new 2026-08-04) reports 0% on its single
+qualifying run; n=1, provisional, and worth watching rather than quoting.
 
 ## Measurement 3 — where the prose is
 

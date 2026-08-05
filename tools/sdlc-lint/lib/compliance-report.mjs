@@ -92,6 +92,10 @@ export function renderText(agg, results) {
     // answered is the difference between an exact machine anchor and a model-typed checkpoint.
     const from = r.date_source && r.date_source !== "started_at" ? ` (${r.date_source.replace(/_/g, " ")})` : "";
     const date = `${r.date ?? "?"}${from}`;
+    // An undated run has all-`na` verdicts, so `bad` is empty and it would render as ✓ — a run
+    // scored against NOTHING showing as a run that passed everything. That is the exact "both
+    // outputs look equally healthy" failure #116 was filed for, reproduced one level up.
+    if (r.date == null) { out.push(`  ? ${r.run}  undated — scored against no contract`); continue; }
     if (!bad.length) { out.push(`  ✓ ${r.run}  ${date}`); continue; }
     const detail = bad.map((v) => v.verdict === "partial"
       ? `${v.id}=partial ${v.matched}/${v.expected}`

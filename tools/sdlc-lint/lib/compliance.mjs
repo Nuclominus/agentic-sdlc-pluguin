@@ -133,7 +133,17 @@ function oldestCheckpointTime(dir) {
   return best;
 }
 
+/**
+ * The EARLIEST timestamp across ALL the run's sessions — never the first one in list order.
+ *
+ * `resolveRunSessions` sorts sessions by file **mtime**. Taking the first session's first
+ * timestamp would therefore have left this whole chain depending on the filesystem at its last
+ * link, which is the defect it was written to remove: a copy that reorders two sessions' mtimes
+ * would pick a different one and re-date the run. Scanning every session and keeping the minimum
+ * is order-independent, so mtime cannot reach the answer.
+ */
 function firstTranscriptTime(sessions) {
+  let best = null;
   for (const p of sessions) {
     let raw;
     try { raw = readFileSync(p, "utf8"); } catch { continue; }
@@ -142,10 +152,12 @@ function firstTranscriptTime(sessions) {
       let d;
       try { d = JSON.parse(line); } catch { continue; }
       const t = Date.parse(d?.timestamp ?? "");
-      if (Number.isFinite(t)) return t;
+      // The first parseable timestamp in a session IS that session's start — the log is
+      // append-only — so one hit per file is enough; it is the choice ACROSS files that matters.
+      if (Number.isFinite(t)) { if (best == null || t < best) best = t; break; }
     }
   }
-  return null;
+  return best;
 }
 
 function evaluate(contract, { facts, tel, phaseCount, date }) {

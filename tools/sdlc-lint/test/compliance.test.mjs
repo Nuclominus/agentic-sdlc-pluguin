@@ -1,11 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { tmpdir } from "node:os";
-import { statSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, cpSync } from "node:fs";
+import { statSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, cpSync, utimesSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { auditRun } from "../lib/compliance.mjs";
 import { parseContracts } from "../lib/contracts.mjs";
+import { aggregate, renderText } from "../lib/compliance-report.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIX = join(HERE, "..", "fixtures", "compliance");
@@ -218,4 +219,46 @@ test("#116 acceptance: a copy WITHOUT -p produces the same verdicts as the origi
     rmSync(w.dir, { recursive: true, force: true });
     rmSync(copyRoot, { recursive: true, force: true });
   }
+});
+
+test("#116 chain 4 does not depend on which session mtime happens to sort first", () => {
+  // resolveRunSessions orders sessions by MTIME. Taking the first session's first timestamp
+  // would leave the "content-derived" chain resting on the filesystem at its last link — the
+  // very defect it exists to remove. The earliest timestamp across ALL sessions is order-free.
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-date2-"));
+  try {
+    const runDir = join(dir, "run");
+    const projects = join(dir, "projects", "proj");
+    mkdirSync(join(runDir, ".checkpoint"), { recursive: true });
+    writeFileSync(join(runDir, "_telemetry.json"), JSON.stringify({
+      task_slug: "r",
+      phases: [{ phase: "development", agent_id: "aaa" }, { phase: "qa", agent_id: "bbb" }],
+    }));
+    // Two sessions: the OLDER run happened in `late.jsonl`'s file, whose mtime we make newest.
+    for (const [sid, agent, ts] of [["early", "aaa", "2026-07-20T08:00:00Z"], ["late", "bbb", "2026-07-25T08:00:00Z"]]) {
+      mkdirSync(join(projects, sid, "subagents"), { recursive: true });
+      writeFileSync(join(projects, sid, "subagents", `agent-${agent}.jsonl`), "");
+      writeFileSync(join(projects, `${sid}.jsonl`), JSON.stringify({ timestamp: ts, message: { role: "assistant", content: [] } }));
+    }
+    const dateWith = (newest) => {
+      // Restamp so `newest` sorts last, then first — the answer must not move.
+      utimesSync(join(projects, "early.jsonl"), new Date(newest === "early" ? 3e9 : 1e9), new Date(newest === "early" ? 3e9 : 1e9));
+      utimesSync(join(projects, "late.jsonl"), new Date(newest === "late" ? 3e9 : 1e9), new Date(newest === "late" ? 3e9 : 1e9));
+      return auditRun(runDir, contracts, { projectsRoot: projects });
+    };
+    const a = dateWith("early"), b = dateWith("late");
+    assert.equal(a.date_source, "session_transcript");
+    assert.equal(a.date, "2026-07-20", "the EARLIEST session dates the run");
+    assert.equal(b.date, a.date, "and reordering the files' mtimes must not move it");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("an undated run does not render as a ✓ in the per-run detail", () => {
+  // All-`na` means `bad` is empty, so the old renderer printed the same ✓ a fully compliant run
+  // gets. "Both outputs look equally healthy" is the sentence issue #116 was filed over.
+  const res = audit("no-date");
+  const text = renderText(aggregate([res], contracts), [res]);
+  assert.ok(!/✓\s+no-date/.test(text), "a run scored against nothing must not read as one that passed");
+  assert.match(text, /\?\s+no-date\s+undated — scored against no contract/);
+  assert.match(text, /undated — scored against nothing, so absent from every rate above \(1\)/);
 });
