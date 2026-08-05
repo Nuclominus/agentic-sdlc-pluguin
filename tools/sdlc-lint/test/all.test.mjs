@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const CLI = resolve(REPO, "tools/sdlc-lint/cli.mjs");
@@ -344,4 +345,82 @@ test("--runs is repeatable, so two corpora need not be copied into one tree (#11
   // `cp -R`, which is the operation that restamped mtimes and moved three published rates.
   const json = JSON.parse(cli(["compliance", "--runs", "no-such-a/*", "--runs", "no-such-b/*", "--json"]).stdout.trim());
   assert.match(json.error, /'no-such-a\/\*' or 'no-such-b\/\*'/, "the second glob must not be silently dropped");
+});
+
+test("compliance --json emits its documented success shape, not just parseable JSON", () => {
+  // #126's table asserts every verb PARSES. It says nothing about what the success path contains,
+  // so a renamed key ships green — and these keys are what every published Track H figure is read
+  // out of. Run against the checked-in fixtures so the assertion is deterministic.
+  const { stdout } = cli(["compliance",
+    "--runs", "tools/sdlc-lint/fixtures/compliance/runs/*",
+    "--config-dir", "tools/sdlc-lint/fixtures/compliance", "--json"]);
+  const j = JSON.parse(stdout.trim().split("\n").pop());
+
+  assert.equal(j.command, "compliance");
+  assert.deepEqual(Object.keys(j).sort(), ["auditable", "command", "contracts", "excluded", "runs", "seal"]);
+  assert.ok(j.auditable > 0);
+
+  const row = j.contracts[0];
+  assert.deepEqual(Object.keys(row).sort(),
+    ["annotations", "denominator", "fail", "id", "na", "partial", "pass", "rate"]);
+  assert.equal(row.denominator, row.pass + row.partial + row.fail, "na never enters a denominator");
+  for (const c of j.contracts) {
+    assert.equal(c.rate === null, c.denominator === 0, "a zero denominator yields null, never NaN or 0");
+    if (c.rate !== null) assert.ok(Math.abs(c.rate - c.pass / c.denominator) < 1e-12);
+  }
+
+  assert.deepEqual(Object.keys(j.seal).sort(), ["denominator", "hook", "hook_share", "orchestrator", "unrecorded"]);
+  for (const e of j.excluded) assert.ok(e.run && e.reason, "an excluded run is named with its reason");
+  for (const r of j.runs) {
+    assert.ok(typeof r.run === "string" && typeof r.status === "string");
+    assert.ok(["started_at", "checkpoint_anchor", "checkpoint_completed_at", "session_transcript", "unresolved", "none"]
+      .includes(r.date_source), `unknown date_source '${r.date_source}' — mtime must never come back (#116)`);
+  }
+});
+
+test("start-window --json emits its documented success shape", () => {
+  // Built on disk rather than checked in: the window needs a Skill invocation and a dispatch in
+  // one session, which no compliance fixture carries.
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-sw-cli-"));
+  try {
+    const runDir = join(dir, "docs", "plans", "demo");
+    const subagents = join(dir, "cfg", "projects", "proj", "s1", "subagents");
+    mkdirSync(runDir, { recursive: true });
+    mkdirSync(subagents, { recursive: true });
+    writeFileSync(join(runDir, "_telemetry.json"), JSON.stringify({
+      task_slug: "demo", total_cost_usd: 8, phases: [{ phase: "business_analysis", agent_id: "z9z9z9z9z9z9" }],
+    }));
+    writeFileSync(join(subagents, "agent-z9z9z9z9z9z9.jsonl"), "");
+    const tool = (ts, name, input) => JSON.stringify({ timestamp: ts, message: { role: "assistant", content: [{ type: "tool_use", name, input }] } });
+    const priced = (id, ts) => JSON.stringify({ timestamp: ts, message: { id, role: "assistant", model: "claude-opus-4-8", usage: { cache_read_input_tokens: 500000 }, content: [{ type: "text", text: "x" }] } });
+    writeFileSync(join(dir, "cfg", "projects", "proj", "s1.jsonl"), [
+      tool("2026-08-05T10:00:00Z", "Skill", { skill: "sdlc:pipeline-orchestrator" }),
+      priced("a", "2026-08-05T10:00:00Z"),
+      tool("2026-08-05T10:00:05Z", "Bash", { command: "date -u +%s > docs/plans/demo/.checkpoint/_started_at" }),
+      priced("b", "2026-08-05T10:00:05Z"),
+      tool("2026-08-05T10:00:20Z", "Agent", { subagent_type: "sdlc:business-analyst" }),
+      priced("c", "2026-08-05T10:00:20Z"),
+    ].join("\n"));
+
+    const { stdout } = cli(["start-window", "--runs", join(dir, "docs", "plans", "*"),
+      "--config-dir", join(dir, "cfg"), "--json"]);
+    const j = JSON.parse(stdout.trim().split("\n").pop());
+
+    assert.equal(j.command, "start-window");
+    assert.equal(j.measurable, 1, "the synthetic run must actually measure, not merely parse");
+    const row = j.runs[0];
+    assert.equal(row.measurable, true);
+    for (const half of ["window", "collapsible"]) {
+      assert.ok(row[half], `${half} missing`);
+      for (const k of ["turns", "assistant_lines", "tool_calls", "cost_usd", "share_of_run", "histogram"]) {
+        assert.ok(k in row[half], `${half}.${k} missing — a renamed key would ship green without this`);
+      }
+    }
+    assert.ok(row.window.turns >= row.collapsible.turns, "the collapsible half cannot exceed the whole");
+    for (const half of ["window", "collapsible"]) {
+      for (const k of ["turns", "assistant_lines", "tool_calls", "cost_usd", "share_of_run"]) {
+        assert.ok("n" in j[half][k], `aggregate ${half}.${k} must carry its own denominator (#125)`);
+      }
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
