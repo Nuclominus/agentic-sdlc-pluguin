@@ -211,6 +211,31 @@ exactly this reason.
 here argues for the deterministic-runner rewrite; the aggregate cleared the bar and the one step it
 was going to fix no longer exists. Roughly five more runs on the new tail settle it.
 
+**Re-measured 2026-08-05 with the instrument fixed (PR #128, issue #116) — the gate still clears.**
+The figures above came from a `cp -Rp` merge of two corpora, because the auditor took one `--runs`
+glob and derived a missing run date from `_telemetry.json`'s mtime. Both are fixed: `--runs` is
+repeatable, and the date comes from the run's own content. All 29 runs date from content — 26 from
+`started_at`, 3 from the `.checkpoint/_started_at` anchor, **0 undated**.
+
+| rate | contract | n | was (2026-08-04) |
+|---:|---|---:|---|
+| 100% | `2-4-anchor` | 29 | 100% · n=28 |
+| 100% | `5b-finish` | **6** | 100% · n=5 |
+| 93% | `6-journal` | 29 | 93% · n=28 |
+| 60% | `3d-1b-phase-cost` | **10** | 67% · n=9 |
+
+Overall on live contracts: **91.9%** (parlor alone **90.0%**, unchanged to the decimal; Citrus
+95.8%). Excluding `0-resolve` — shipped 2026-08-04, so only one run qualifies and it fails — because
+quoting a rate off `n=1` is what the `provisional` annotation exists to prevent.
+
+**The decision does not move.** 92.9% → 91.9% still clears the gate's own *"above ~90%"* wording,
+`5b-finish` is now 6/6 rather than 5/5, and the sample-size half is still unmet: six runs on the new
+tail against the ~10 asked for. H4 remains gated and still leaning against the rewrite.
+
+The 1-point drop is **not** the mtime bug resurfacing — the `cp -Rp` merge preserved mtimes and was
+right. It is one additional Citrus run, which fails `3d-1b`. That parlor alone reproduces to the
+decimal is the check that the two instruments agree where the corpus did not change.
+
 Note also that H5's re-measurement found the **start window** (Steps 0→1d, before any phase work) is
 **17% of run cost** and growing, and that it is now being collapsed into one shipped command —
 [[decisions/ADR-0019-the-run-start-is-one-command]], specified in

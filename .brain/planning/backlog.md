@@ -233,7 +233,7 @@ Defects in the **instrument**, not the pipeline. Distinct from the Track H above
 and from Track H in [[planning/h-instruction-fidelity]] (instruction fidelity) — the name is
 overloaded three ways; this section is about `sdlc-lint compliance` itself.
 
-### Run date must not depend on mtime *(correctness; found 2026-08-04; issue #116)*
+### Run date must not depend on mtime — **done, PR #128** *(correctness; found 2026-08-04; issue #116)*
 
 `runDate()` (`tools/sdlc-lint/lib/compliance.mjs:67`) uses `telemetry.started_at`, and when that is
 absent falls back to `statSync(_telemetry.json).mtimeMs`, flagged `date-inferred` in the output. The
@@ -257,6 +257,16 @@ or errors on a second occurrence rather than dropping it. Candidate content-deri
 preference order: `.checkpoint/_started_at`, the oldest phase checkpoint, the owning session
 transcript's first message. Recorded in [[planning/h1-compliance-auditor]] *Follow-ups*; the
 measurement it distorted is [[planning/h5-prompt-surface]].
+
+**Resolved (PR #128).** mtime is gone from `runDate()` entirely — the chain is `started_at` →
+`.checkpoint/_started_at` (the ADR-0014 anchor, epoch seconds) → the oldest checkpoint's
+`completed_at` (model-typed, so weaker, but run-specific) → the owning session transcript's first
+message (harness-written but dates the *session*, so last). A run none of them can date is
+`date_source: "unresolved"` and yields `na: undated` for every contract rather than a confident
+verdict from a filesystem timestamp. `--runs` is repeatable, so both corpora now audit as one
+population with no copying at all: 29 auditable runs, 3 of them dated by a non-telemetry link.
+The acceptance test is the literal reproduction — a `cpSync` (which restamps mtime, as `cp -R`
+did) must produce identical verdicts.
 
 ---
 

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
 import { readFileSync } from "node:fs";
@@ -284,4 +284,64 @@ test("no shipped doc cites a Step 0/1 sub-label the collapse deleted", () => {
   assert.deepEqual(hits, [],
     `these cite deleted prose; retarget at the tools/resolve/ module that implements it. ` +
     `Labels still live: ${PRESERVED.join(", ")}\n${hits.join("\n")}`);
+});
+
+// ---- issue #126: --json must parse on EVERY exit code, for EVERY verb -------------------
+
+/** Run the CLI and return `{ code, stdout }` — a non-zero exit is data here, not a throw. */
+function cli(argv) {
+  const r = spawnSync("node", [CLI, ...argv], { cwd: REPO, encoding: "utf8" });
+  return { code: r.status, stdout: r.stdout ?? "" };
+}
+
+test("every verb's --json output parses, on the success path and on the error path", () => {
+  // The point of the issue, and the reason it is a TEST rather than six edits: `compliance` set
+  // the pattern of writing its diagnosis to stderr and nothing to stdout, and `start-window`
+  // reproduced it by copying. Without this table the next verb does the same. A caller running
+  // `cli.mjs <verb> --json | jq` got a parse error instead of a diagnosis, and could not tell
+  // "the tool failed" from "the tool had nothing to say" — #121's halt-on-a-dead-channel again.
+  const cases = [
+    ["schema", []],
+    ["cycles", []],
+    ["detect", []],
+    ["resume", []],
+    ["read-discipline", []],
+    ["plugin-paths", []],
+    ["machine-values", []],
+    ["agent-tools", []],
+    ["compliance", ["--runs", "no-such-dir/*"]],          // error path: no runs matched
+    ["start-window", ["--runs", "no-such-dir/*"]],        // error path: no runs matched
+    ["report", []],                                        // error path: missing argument
+    ["rollup", ["/no/such/workspace"]],                    // error path: unwritable target
+    ["resume", ["/no/such/run"]],                          // error path: unresolvable workspace
+    ["nosuchverb", []],                                    // error path: unknown verb
+    [null, []],                                            // no verb at all — the help path
+  ];
+  for (const [verb, extra] of cases) {
+    const label = verb ?? "<no verb>";
+    const { stdout } = cli([...(verb ? [verb] : []), ...extra, "--json"]);
+    const last = stdout.trim().split("\n").pop() ?? "";
+    assert.notEqual(last, "",
+      `${label}: --json wrote nothing to stdout. A JSON consumer gets an empty parse and cannot ` +
+      "tell a failure from silence — write the {command, ok, error} envelope");
+    let parsed;
+    assert.doesNotThrow(() => { parsed = JSON.parse(last); }, `${label}: --json stdout is not JSON: ${last.slice(0, 120)}`);
+    assert.equal(typeof parsed.command, "string", `${label}: the envelope must name its command`);
+  }
+});
+
+test("an error envelope carries the same message the human path prints", () => {
+  const json = JSON.parse(cli(["compliance", "--runs", "no-such-dir/*", "--json"]).stdout.trim());
+  assert.equal(json.ok, false);
+  assert.match(json.error, /no run directories with _telemetry\.json matched 'no-such-dir\/\*'/);
+  const human = spawnSync("node", [CLI, "compliance", "--runs", "no-such-dir/*"], { cwd: REPO, encoding: "utf8" });
+  assert.match(human.stderr, /no run directories with _telemetry\.json matched 'no-such-dir\/\*'/,
+    "one message, two renderings — a JSON consumer must not get a worse diagnosis than a human");
+});
+
+test("--runs is repeatable, so two corpora need not be copied into one tree (#116)", () => {
+  // The compounding half of #116: taking only the first glob made merging corpora require a
+  // `cp -R`, which is the operation that restamped mtimes and moved three published rates.
+  const json = JSON.parse(cli(["compliance", "--runs", "no-such-a/*", "--runs", "no-such-b/*", "--json"]).stdout.trim());
+  assert.match(json.error, /'no-such-a\/\*' or 'no-such-b\/\*'/, "the second glob must not be silently dropped");
 });
