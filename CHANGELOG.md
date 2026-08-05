@@ -4,9 +4,19 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
-`sdlc` `1.15.0` → `1.16.0`, `android-foundation` `1.6.0` → `1.7.0`. Agents stop inheriting every
-tool, reviewing agents stop writing code, and their findings reach the codebase through a gated
-remediation phase instead of the reviewer's own `Edit`.
+## [1.13.0] — 2026-08-05
+
+`sdlc` `1.15.0` → `1.16.0`, `android-foundation` `1.6.0` → `1.7.0`. Two changes to the shape of a
+run, both of them about the difference between what an instruction says and what a program does.
+
+**Reviewing agents stop writing code.** Agents stop inheriting every tool, and a reviewer's findings
+reach the codebase through a gated `remediation` phase instead of the reviewer's own `Edit`.
+
+**The run's start stops being prose.** Steps 0 → 1d of `pipeline-orchestrator/SKILL.md` — roots,
+dependency preflight, stack detection, profile merge, project overrides, model tiers, workflow
+resolution, skip-rules and the cost cap — become one shipped command that answers in **0.77 s** what
+the prose cost a measured median of 24 turns / 14 tool calls / $1.31 to discover. `SKILL.md` loses
+808 lines (−31.8%, ~40.6k → ~28.2k tokens).
 
 **The bump matters for the same reason it did in 1.12.0.** `plugin_version` in `_telemetry.json`
 comes from `plugins/sdlc/.claude-plugin/plugin.json`, and it is what tells a run whose security
@@ -32,6 +42,27 @@ phase could edit code apart from one whose security phase only reports. Shipping
   reviewing agent, and a present `description:`. Plus gate-ordering validation in `cycles`.
 - **Descriptions for `android-cicd` and `android-devops`**, which had none and so rendered as
   "Agent from android-foundation" — unreachable by trigger words, only by exact name.
+- **The `resolve` command** — `node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs plan --dry-run`.
+  Eleven dependency-free modules under `plugins/sdlc/tools/resolve/`, because the plugin ships no
+  `package.json`. `tools/sdlc-lint/lib/detect.mjs` and `lib/load.mjs` become re-export shims, ending
+  a double implementation the orchestrator prose had documented rather than fixed. Two things had to
+  be reimplemented for the same reason — YAML and workflow schema validation — and each is allowed
+  only under a **differential gate** that runs it against `yaml` / `ajv` over the same inputs in CI
+  and requires agreement. The YAML gate earned its place immediately, catching blank lines counted as
+  continuation progress, which had silently turned `enabled: true` into the string `"true"` in nine
+  files.
+- **`sdlc-lint start-window`** — the instrument ADR-0019's Definition of Done depends on. It measures
+  from the `pipeline-orchestrator` `Skill` invocation to the first agent dispatch, split at the
+  `.checkpoint/_started_at` write so the collapsible steps are separated from Step 2's workspace
+  creation. The figure it was built to defend had been produced by a script that was never committed:
+  quoted in an ADR and two planning notes, re-derivable by nobody. It reproduces that figure exactly
+  in that figure's own unit — and in doing so exposed the unit. The published counts were assistant
+  **JSONL lines**, one per content block; deduped by `message.id` (real API calls) the same corpus is
+  median 13 whole / 9 collapsible, a 2.10× ratio. Both units are now reported side by side, and the
+  DoD is restated in API calls: **9 → 2–3**.
+- **A repeatable `--runs`** on `sdlc-lint`, which previously took only the first glob — so auditing
+  two corpora as one population *required* copying trees together, which is the operation that
+  triggered the mtime defect below.
 
 ### Fixed
 
@@ -44,6 +75,48 @@ phase could edit code apart from one whose security phase only reports. Shipping
 - **The opposite defect in core**: `business-analyst` and `document-writer` were instructed to write
   their deliverable with no `Write` tool, and no agent carried `Skill` even though the orchestrator
   injects convention skills into every phase prompt — so mandatory skill invocations failed silently.
+- **Five defects the resolve command found by *running* a step rather than reading it.**
+  `thinking-deeply` was declared as a runtime dependency since `Initial commit` and exists in no
+  version of superpowers, yet three consecutive runs recorded `missing_skills: []`. The preflight
+  stamp could not go stale — its documented invalidation triggers did not include *a dependency
+  changing underneath it* — so a green preflight stood for six weeks over a dependency that was never
+  satisfiable; it is keyed to the versions it was computed against now. The dependency declaration
+  was inverted: `sdlc` declared two skills none of its own agents use while `android-foundation`,
+  where all six mandates live, declared an empty array, leaving `brainstorming` claimed by nobody.
+  Plugin discovery globbed a cache that holds every version ever installed and let filesystem order
+  pick the winner; it reads the exact `installPath` from `installed_plugins.json` now. Plus two
+  `[object Object]` defects invisible to unit fixtures, which is why `plan.test.mjs` builds a
+  synthetic consumer on disk.
+- **Three signals wired to dead channels**, all found reviewing the prose collapse. The compliance
+  contract measuring this very change reported a flat 0%, because its pattern wanted `cli.mjs plan`
+  and the command it guards is `node "…/cli.mjs" plan` — a closing quote where the pattern wanted a
+  space. The degraded path echoed stderr, which is empty under `--json`, so a halt reached the user
+  with no reason. And `warnings[]` was written to stderr in non-JSON mode only, while the
+  orchestrator always invokes with `--json` — a project whose `sdlc.local.yaml` failed to parse ran
+  on plugin defaults *silently*. `contracts.test.mjs` now asserts every `bash_match` pattern matches
+  some fenced block in the document it guards.
+- **`--stack=NAME` was advertised in four places and did nothing.** It skips detection now rather
+  than filtering it — the distinction is the flag's whole purpose — and an unknown name halts instead
+  of falling through to vanilla. The `🎯 Active stack profiles` print, which the deleted prose called
+  "a contract with the user", is restored.
+- **`profile_source` read the workflow recipe's origin**, so a project-local *recipe* would make the
+  *stack profile* report `"project"`. Split into `stack.profile_source` and `workflow.origin`.
+- **The run date came from `mtime`** (#116). mtime is not a property of a run — copying, restoring or
+  syncing rewrites it — and the run date decides every `predates` verdict and therefore every
+  contract's denominator. A `cp -R` without `-p` while merging two corpora moved three published
+  rates by up to 37 points, and both outputs looked equally healthy. Four content-derived links
+  replace it (telemetry `started_at` → `.checkpoint/_started_at` → the oldest checkpoint's
+  `completed_at` → the owning session's earliest transcript timestamp); when none resolves, every
+  contract scores `na: undated`, and an undated run no longer renders as a compliant `✓`.
+- **`sdlc-lint --json` emitted no envelope on some error paths** (#126), so a caller piping to `jq`
+  got a parse error rather than a diagnosis and could not tell *"the tool failed"* from *"the tool
+  had nothing to say"*. A per-verb table test now asserts `--json` parses on every exit code a verb
+  can return.
+- **Two `seal.test.mjs` fixtures aged out of their own window**, leaving `develop` red from
+  2026-07-29 and handing two unrelated PRs a red baseline. A fixture for a **subprocess** cannot use
+  an injected clock — the child reads `Date.now()` — so against the suite's fixed anchor those
+  fixtures drifted past `findSealable`'s 24 h window and were skipped as `"stale"`. The failure
+  surfaced as `sealed.length === 0`, which reads like a bug in the sealer.
 
 ### Changed
 
@@ -57,7 +130,42 @@ phase could edit code apart from one whose security phase only reports. Shipping
   at exactly the moment a Critical vulnerability was found. `analysis.yaml` is the deliberate
   exception — it ships no code to remediate.
 
-See `.brain/decisions/ADR-0018-reviewers-do-not-write-code.md`.
+### Removed
+
+- **Steps 0a/0b/0c/1/1a/1b/1c/1d leave `pipeline-orchestrator/SKILL.md`** — 2544 → 1736 lines
+  (−808, −31.8%; 162,436 → 112,883 chars). The `resolve` command shipped first, deliberately without
+  touching `SKILL.md`, so a regression in either half stays attributable.
+
+  **Breaking for anything citing those step labels.** All thirteen cross-references into the deleted
+  region were retargeted at the modules that now implement them, and `0-anchors` keeps seven
+  historical labels alive as key-map rows (`0a-1`, `0c`, `1b`, `1b-ext`, `1d-0`, `1d-2`, `1d-4`)
+  while declaring every other sub-step number stale. A hand-written sweep missed three of six
+  dangling citations — a grep for `0a-2` does not catch a bare `Step 0b` — so `all.test.mjs` now
+  walks every shipped `.md` and fails on a citation of a deleted label.
+
+### Measurement & docs
+
+- **Track H re-measured on a corpus nearly twice the size** — 29 auditable runs, live-contract
+  compliance **91.9%**. `5b-finish`, the contract that replaced the 67% `5-clock`, is 6/6: the first
+  real evidence ADR-0014 worked, though still short of the ~10 runs its gate asked for. The
+  cardinality finding weakened as its denominator grew (`3d-1b-phase-cost` 40% → 60%), so "collapse
+  cardinality, not lines" is now directional rather than established.
+- **The H5 prompt-surface measurement inverted its own premise and nothing was cut for cost.** The
+  saving from moving tokens out of the stable prefix is arithmetic, not an experiment
+  (`removed_prefix_tokens × main_loop_turns × cached_input_price`) — and benchmarking it would have
+  been worse than useless, since the 55.6–64.2% run-to-run spread on cache-read swallows the effect
+  whole. Recorded as `measured`, not `decided`.
+- **A brain-sync ordering rule**: merge the outstanding vault-sync PR *before* the next feature PR.
+  Merging to `develop` opens the next sync PR immediately, so an unmerged one does not sit
+  harmlessly — it becomes two open at once, and the `_moc-changes.md` collision stops being likely
+  and becomes certain. Fourteen seconds of ordering replaces a checkout → merge → `reindex` loop.
+- **Six tests closing the two real gaps from #129** — happy-path JSON shape for both verbs, and
+  `resolveRunSessions` directly. Two of that issue's four claimed gaps did not exist; the correction
+  was made on the issue publicly rather than by quietly narrowing scope. One assertion pins the
+  `date_source` allowlist so mtime cannot come back at the contract level.
+
+See `.brain/decisions/ADR-0018-reviewers-do-not-write-code.md` and
+`.brain/decisions/ADR-0019-the-run-start-is-one-command.md`.
 
 ## [1.12.0] — 2026-07-29
 
