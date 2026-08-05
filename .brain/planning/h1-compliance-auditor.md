@@ -31,7 +31,7 @@ audit corpus is the downstream Android project, `~/parlor-android/docs/plans/`:
 | total run directories with `_telemetry.json` | 18 |
 | with at least one `agent_id` (anchor to resolve a transcript) | **12** |
 | without any `agent_id` → unauditable | 6 |
-| without `started_at` → run date inferred from mtime | 6 |
+| without `started_at` → run date from a content fallback *(was: mtime, until PR #128)* | 6 |
 | date range | 2026-07-06 … 2026-07-28 |
 
 `native-chat-engine-s2-thread-list` (the ADR-0012 incident run) carries
@@ -44,7 +44,8 @@ does not see and does not report even as excluded. It is a materially cleaner co
 live contract) and mostly older, with a single run on `plugin_version` 1.16.0. Combined with parlor
 the audit covers **28 auditable runs**. Note `--runs` takes exactly one glob — a second `--runs` is
 **silently ignored**, not merged — so a combined figure means copying both trees into one directory,
-and that copy must preserve mtimes (see *Follow-ups*).
+and, until PR #128, that copy had to preserve mtimes. It no longer does — `--runs` takes several
+globs, so the corpora are audited in place.
 
 **The steps are younger than the corpus.** `git log -S` over `SKILL.md` dates each mandated step:
 
@@ -262,9 +263,12 @@ silently dilute it — 6 of the 18 corpus runs are in this state.
 
 ### Temporal validity, and the honest caveat
 
-The run's date is `telemetry.started_at`; when absent, the mtime of `_telemetry.json`, flagged
-`date-inferred` in the output. A contract whose `since` is later than the run date yields
-`na: predates`.
+The run's date comes from the run's own content, never the filesystem (PR #128, issue #116):
+`telemetry.started_at` → `.checkpoint/_started_at` → the oldest checkpoint's `completed_at` → the
+owning session transcript's first message. The source is named in the output. A run none of those
+can date yields `na: undated` for every contract — it contributes to no rate, which is visible,
+rather than to all of them, which is not. A contract whose `since` is later than the run date
+yields `na: predates`.
 
 `since` is a commit date in **this** repository — an upper bound on when the step could have reached
 a downstream install, not evidence that it did. Until `plugin_version` appears in telemetry (added by
@@ -387,13 +391,11 @@ moved above ~90% after H2 and H3 have landed, H4 is the answer.
   with its own change note.
 - **Record report suppression** (`--no-report` / `report: false`) in telemetry, so `5b-2-report`
   can carry a real `applies_when` instead of a confounding annotation.
-- **The run date must not depend on mtime** (found 2026-08-04, issue #116, see [[planning/backlog]]).
-  `runDate()` in `lib/compliance.mjs:67` falls back to `statSync(_telemetry.json).mtimeMs` when
-  `started_at` is absent — 6 of the parlor corpus and 3 of the auditable runs. mtime is not a
-  property of the run: copying, restoring, archiving or syncing a run directory rewrites it, and the
-  auditor then silently re-dates the run and flips `na: predates` verdicts in both directions. A
-  `cp -R` of the corpus moved three published rates by up to 37 points with no warning. `--runs`
-  accepting only one glob is what forces such a copy in the first place, so the two defects compose.
+- ~~**The run date must not depend on mtime**~~ — **done, PR #128** (issue #116). mtime is out of
+  `runDate()` entirely; see *Temporal validity* above for the content-derived chain that replaced
+  it, and [[planning/backlog]] for the reproduction. `--runs` is repeatable now, which removes the
+  reason to copy corpora together in the first place — the two defects composed, and so do the
+  fixes.
 
 ## Related
 

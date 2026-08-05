@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { extractFactsFrom } from "./transcript-facts.mjs";
 import { knownRunAgentIds, findAgentTranscript } from "./usage.mjs";
@@ -64,29 +64,105 @@ function expectedPhases(phases) {
   }).length;
 }
 
-function runDate(runDir, tel) {
+const day = (ms) => new Date(ms).toISOString().slice(0, 10);
+
+/**
+ * When did this run happen — from the run's CONTENT, never from the filesystem.
+ *
+ * Issue #116: this used to fall back to the mtime of `_telemetry.json`. mtime is not a property
+ * of a run. Copying, restoring, archiving or syncing a directory rewrites it, and the run date
+ * decides every `predates` verdict and therefore every contract's denominator. A `cp -R` without
+ * `-p` while merging two corpora moved three published rates by up to 37 points — `5b-finish`
+ * from 100% to 63% — and both outputs looked equally healthy.
+ *
+ * The chain, best first. Every link is something the run wrote about itself:
+ *
+ *   1. `_telemetry.json` → `started_at`, written by Step 5b's `finish` from the machine anchor.
+ *   2. `.checkpoint/_started_at`, the anchor itself (ADR-0014) — epoch seconds, written by
+ *      `date -u +%s`. Machine truth, exact, and run-specific.
+ *   3. The oldest `.checkpoint/*.json` `completed_at`. Model-typed, so weaker than the anchor
+ *      (ADR-0015 exists because a model transcribing a clock gets it wrong) — but it is still
+ *      about THIS run, which is why it outranks the next one.
+ *   4. The owning session transcript's first message. Harness-written and therefore reliable,
+ *      but it dates the SESSION: a resumed or long-lived session can start days before the run
+ *      it later performs, which would wrongly age the run and turn live contracts into
+ *      `predates`. Last resort only.
+ *
+ * No link resolves → `date: null`, `date_source: "unresolved"`, and `evaluate` returns
+ * `na("undated")` for every date-gated contract rather than guessing. An undated run then
+ * contributes to no rate at all, which is visible; a misdated one contributes to all of them,
+ * which is not.
+ */
+function runDate(runDir, tel, sessions = []) {
   const iso = typeof tel.started_at === "string" ? Date.parse(tel.started_at) : NaN;
-  if (Number.isFinite(iso)) {
-    return { date: new Date(iso).toISOString().slice(0, 10), date_source: "started_at" };
+  if (Number.isFinite(iso)) return { date: day(iso), date_source: "started_at" };
+
+  const anchor = readAnchor(join(runDir, ".checkpoint", "_started_at"));
+  if (anchor != null) return { date: day(anchor), date_source: "checkpoint_anchor" };
+
+  const cp = oldestCheckpointTime(join(runDir, ".checkpoint"));
+  if (cp != null) return { date: day(cp), date_source: "checkpoint_completed_at" };
+
+  const t = firstTranscriptTime(sessions);
+  if (t != null) return { date: day(t), date_source: "session_transcript" };
+
+  return { date: null, date_source: "unresolved" };
+}
+
+/** `.checkpoint/_started_at` holds ONE integer: epoch seconds (SKILL.md Step 2). */
+function readAnchor(file) {
+  let raw;
+  try { raw = readFileSync(file, "utf8").trim(); } catch { return null; }
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  // Tolerate a millisecond value: an anchor written by something other than `date -u +%s` must
+  // not be read as a date in 1970, which would age the run past every contract's `since`.
+  return n > 1e11 ? n : n * 1000;
+}
+
+function oldestCheckpointTime(dir) {
+  let files;
+  try { files = readdirSync(dir).filter((f) => f.endsWith(".json")); } catch { return null; }
+  let best = null;
+  for (const f of files) {
+    let cp;
+    try { cp = JSON.parse(readFileSync(join(dir, f), "utf8")); } catch { continue; }
+    const t = Date.parse(cp?.completed_at ?? "");
+    if (Number.isFinite(t) && (best == null || t < best)) best = t;
   }
-  try {
-    const m = statSync(join(runDir, "_telemetry.json")).mtimeMs;
-    return { date: new Date(m).toISOString().slice(0, 10), date_source: "mtime" };
-  } catch {
-    return { date: null, date_source: "none" };
+  return best;
+}
+
+function firstTranscriptTime(sessions) {
+  for (const p of sessions) {
+    let raw;
+    try { raw = readFileSync(p, "utf8"); } catch { continue; }
+    for (const line of raw.split("\n")) {
+      if (!line.trim()) continue;
+      let d;
+      try { d = JSON.parse(line); } catch { continue; }
+      const t = Date.parse(d?.timestamp ?? "");
+      if (Number.isFinite(t)) return t;
+    }
   }
+  return null;
 }
 
 function evaluate(contract, { facts, tel, phaseCount, date }) {
   const na = (reason) => ({ id: contract.id, verdict: "na", reason, matched: 0, expected: 0 });
 
+  // An undated run cannot be placed relative to a contract's window, so it is scored against
+  // NOTHING rather than scored as if the contract had always applied. Issue #116: the previous
+  // code reached here with an mtime-derived date and produced confident pass/fail verdicts from
+  // a filesystem timestamp. Silence is the honest answer; a guess is not.
+  if (!date) return na("undated");
   // Lexicographic on two YYYY-MM-DD strings is exactly chronological. `since` is
   // validated to that shape by parseContracts; `date` is built from toISOString().
-  if (date && contract.since > date) return na("predates");
+  if (contract.since > date) return na("predates");
   // Retired: the step existed, then was replaced. The contract still audits the runs
   // from its era — that is what keeps a published rate reproducible after the procedure
   // it measured is gone — but says nothing about a run that postdates the change.
-  if (date && contract.until && contract.until < date) return na("retired");
+  if (contract.until && contract.until < date) return na("retired");
   for (const c of contract.applies_when) if (!conditionHolds(c, tel)) return na("not-applicable");
 
   const matched = countMatches(contract, facts);
@@ -122,14 +198,16 @@ export function auditRun(runDir, contracts, opts = {}) {
                    status: "unauditable", reason: "unreadable-telemetry" }; }
 
   const phases = tel.phases || [];
-  const { date, date_source } = runDate(runDir, tel);
+  // Sessions are resolved BEFORE the date, because the transcript is the last link in the date
+  // chain. Ordering it the other way would have made the session fallback unreachable.
+  const sessions = resolveRunSessions(runDir, phases, opts);
+  const { date, date_source } = runDate(runDir, tel, sessions);
   const plugin_version = typeof tel.plugin_version === "string" ? tel.plugin_version : null;
   // Which path sealed the run (H6). Orthogonal to every verdict below: the hook leaves
   // no tool_use block, so it is invisible to the contracts and must never enter a rate.
   const sealed_by = typeof tel.sealed_by === "string" ? tel.sealed_by : null;
   const head = { ...base, date, date_source, plugin_version, sealed_by };
 
-  const sessions = resolveRunSessions(runDir, phases, opts);
   if (!sessions.length) {
     return { ...head, status: "unauditable", reason: "no-agent-ids" };
   }

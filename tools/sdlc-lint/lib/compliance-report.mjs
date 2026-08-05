@@ -87,12 +87,23 @@ export function renderText(agg, results) {
     // step, or the step has since been replaced). Listing it here made runs that did
     // everything asked of them render as ✗.
     const bad = r.verdicts.filter((v) => v.verdict !== "pass" && v.verdict !== "na");
-    const date = `${r.date ?? "?"}${r.date_source === "mtime" ? " (date-inferred)" : ""}`;
+    // Every date now comes from the run's own content (#116). A source other than telemetry's
+    // own `started_at` is named rather than tagged "inferred", because which link of the chain
+    // answered is the difference between an exact machine anchor and a model-typed checkpoint.
+    const from = r.date_source && r.date_source !== "started_at" ? ` (${r.date_source.replace(/_/g, " ")})` : "";
+    const date = `${r.date ?? "?"}${from}`;
     if (!bad.length) { out.push(`  ✓ ${r.run}  ${date}`); continue; }
     const detail = bad.map((v) => v.verdict === "partial"
       ? `${v.id}=partial ${v.matched}/${v.expected}`
       : `${v.id}=${v.verdict}${v.reason ? `:${v.reason}` : ""}`).join("  ");
     out.push(`  ✗ ${r.run}  ${date}  ${detail}`);
+  }
+
+  const undated = results.filter((x) => x.status === "auditable" && x.date == null);
+  if (undated.length) {
+    out.push("");
+    out.push(`undated — scored against nothing, so absent from every rate above (${undated.length})`);
+    for (const u of undated) out.push(`  – ${u.run}  no started_at, no checkpoint anchor, no dated checkpoint, no dated transcript`);
   }
 
   out.push("");
