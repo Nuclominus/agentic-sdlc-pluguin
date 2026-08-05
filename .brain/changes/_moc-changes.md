@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-08-05 | #128 | `fix` | — | [[changes/2026-08-05-PR-128-close-116-and-126-a-date-that-is-a-property-of-the-run-and-a]] |
 | 2026-08-05 | #125 | `feat` | — | [[changes/2026-08-05-PR-125-ship-the-start-window-instrument-adr-0019-s-dod-depends-on]] |
 | 2026-08-04 | #123 | `docs` | — | [[changes/2026-08-04-PR-123-merge-the-outstanding-brain-sync-pr-before-the-next-feature]] |
 | 2026-08-04 | #121 | `feat` | — | [[changes/2026-08-04-PR-121-collapse-steps-0-1d-into-the-resolve-command-818-lines]] |
