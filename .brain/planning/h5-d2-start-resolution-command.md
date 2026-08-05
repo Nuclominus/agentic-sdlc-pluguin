@@ -46,13 +46,16 @@ Not one of the 18 requires judgement. Every one is a read of a file or a `git` f
 
 | | Steps 0 → 1d | Step 2 |
 |---|---|---|
-| turns | median **24** (16–36) | median 7 |
+| turns *(JSONL lines — see the unit note below)* | median **24** (16–36) | median 7 |
+| turns *(API calls — the unit the DoD is now fixed in)* | median **9** (5–15) | median 2–3 |
 | calls | median **14** (9–20) | median 4 |
 | cost | median **$1.31** | median $0.45 |
 | % of run | median **11.8%** (8.5–17.2%) | ~4% |
 
 **This corrected the ADR's headline number from ~17% to ~11.8%**, and its turn projection from
-"34 → 4–6" to "24 collapsible turns → 2–3, whole window ~10". The first draft priced the entire
+"34 → 4–6" to "24 collapsible turns → 2–3, whole window ~10". A SECOND correction followed in
+PR #125: those turn counts are JSONL lines, and the DoD is now fixed in API calls (9 → 2–3) —
+see [[decisions/ADR-0019-the-run-start-is-one-command]], "corrected twice". The first draft priced the entire
 window as if all of it collapsed.
 
 **3. The same procedure costs 16–36 turns.** Nine runs, most on one project, executing one

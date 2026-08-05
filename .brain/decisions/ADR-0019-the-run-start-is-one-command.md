@@ -120,15 +120,39 @@ without it, because that plugin exists in the repo and is **not installed** in t
 was right and the one-off invocation was wrong. A single hard-coded root would make the shim and the
 shipped code disagree on production input while all fixtures pass.
 
-**Expected effect, corrected against the split above and still an estimate:** the collapsible
-**24 turns → 2–3** (the command plus the echo), leaving the whole start window at roughly **10 turns
-instead of 34** once Step 2's untouched ~7 remain. Worth about **$1.2/run ≈ 11.8% of run cost**,
-plus the ~3% byte term as 926 lines leave the prefix — together **~14–15%**.
+**Expected effect, corrected twice, and still an estimate.** Every turn figure below now names its
+unit, because the two available units differ by ~2.4x and the earlier drafts did not say which they
+used:
 
-An earlier draft of this ADR claimed ~17% and "34 turns → 4–6". Both were wrong in the same way:
-they priced the whole measured window as if all of it collapsed. The number is recorded here as
-corrected rather than quietly replaced, because the DoD is to publish what the collapse actually
-buys, not what it was hoped to buy.
+| | JSONL lines | API calls |
+|---|---|---|
+| collapsible window, before | **24** | **9** |
+| whole start window, before | **34** | **13** |
+| projected after | 5–7 | **2–3** |
+
+The collapsible part goes to **2–3 API calls** (the command plus the echo), leaving the whole start
+window at roughly **5–6 calls instead of 13** once Step 2's untouched ~4 remain. Worth about
+**$1.2/run ≈ 11.8% of run cost**, plus the ~3% byte term as 926 lines leave the prefix — together
+**~14–15%**. The money and the share are unaffected by the unit question; only the turn counts are.
+
+**Correction 1 (during drafting).** An earlier draft claimed ~17% and "34 turns → 4–6". Both were
+wrong in the same way: they priced the whole measured window as if all of it collapsed.
+
+**Correction 2 (PR #125, after the fact).** "24 turns → 2–3" compared a **line count** against a
+target anyone would naturally read as API calls, and so implied an ~8–12x reduction where the honest
+claim is ~3x. Claude Code writes one JSONL line per content block of a turn — a thinking block, each
+parallel `tool_use` — and every line repeats the same `message.usage`; the ad-hoc script that
+produced "24" counted lines, `tools/sdlc-lint/lib/start-window.mjs` counts both. Measured inflation
+on `native-chat-engine-s5-presence`: **21 lines / 10 API calls = 2.10x**. The committed instrument
+reproduces the published figure exactly in its own unit (whole window median 31, range 16–48 against
+the published median 33, range 16–48), which is what established that the difference was a unit and
+not a defect.
+
+Both corrections are recorded rather than quietly replaced, because the DoD is to publish what the
+collapse actually buys, not what it was hoped to buy — and a projection stated in an unnamed unit
+cannot be checked against a run at all. **The DoD is hereby fixed in API calls**, the unit the
+instrument reports first, with lines carried alongside for continuity with everything published
+before 2026-08-05.
 
 ## Consequences
 

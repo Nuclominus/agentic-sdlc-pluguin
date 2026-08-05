@@ -137,6 +137,14 @@ remaining ~7 turns / $0.45. Quote 11.8%, not 17%, for anything scoped to resolut
 shows the collapsible part costing **16–36 turns** across nine runs of one deterministic
 procedure — a 2.2× spread that is its own argument, independent of cost.
 
+> **Unit correction, 2026-08-05 (PR #125).** Every turn count in this section is in **assistant
+> JSONL lines**, not API calls. Claude Code writes one line per content block of a turn and repeats
+> the same `message.usage` on each, so the two units differ by ~2.4x (measured 2.10x on
+> `s5-presence`: 21 lines / 10 calls). The committed instrument
+> `sdlc-lint start-window` reproduces these figures in their own unit — whole window median 31,
+> range **16–48**, against the median 33, range 16–48 recorded here — and reports both units. In API
+> calls the same corpus is median **13** whole / **9** collapsible. Costs and shares are unaffected.
+
 **This is now the largest measured lever in the note**, and unlike the compliance cell it moved in
 the direction that *strengthens* the case: Direction 2 (Steps 0→1d become one shipped command) is
 worth ~11.8% of run cost, against ~3% for the whole text-volume term and an unquantified compliance
