@@ -4,9 +4,10 @@ import { tmpdir } from "node:os";
 import { statSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, cpSync, utimesSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
-import { auditRun } from "../lib/compliance.mjs";
+import { auditRun, resolveRunSessions } from "../lib/compliance.mjs";
 import { parseContracts } from "../lib/contracts.mjs";
 import { aggregate, renderText } from "../lib/compliance-report.mjs";
+import { extractFactsFrom } from "../lib/transcript-facts.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIX = join(HERE, "..", "fixtures", "compliance");
@@ -261,4 +262,60 @@ test("an undated run does not render as a ✓ in the per-run detail", () => {
   assert.ok(!/✓\s+no-date/.test(text), "a run scored against nothing must not read as one that passed");
   assert.match(text, /\?\s+no-date\s+undated — scored against no contract/);
   assert.match(text, /undated — scored against nothing, so absent from every rate above \(1\)/);
+});
+
+// ---- resolveRunSessions, directly (#129) ------------------------------------------------
+//
+// It was exercised only transitively, through the `resumed` fixture. Its ordering contract is
+// what decides fact `seq` order across files, and therefore once-per-phase counting — so it
+// deserves assertions of its own rather than inheriting them from a run-level test.
+
+test("resolveRunSessions returns every session owning one of the run's agents, oldest mtime first", () => {
+  const sessions = resolveRunSessions(run("resumed"),
+    [{ phase: "development", agent_id: "ddd444" }, { phase: "qa", agent_id: "eee555" }],
+    { projectsRoot: PROJECTS });
+  assert.deepEqual(sessions.map((s) => s.split("/").pop()), ["sess-a.jsonl", "sess-b.jsonl"]);
+
+  // The ORDER is mtime, not argument order — restamping must reorder the result. This is the
+  // property #128 deliberately kept the run DATE independent of; the fact stream still rides on
+  // it, which is why it is pinned here rather than assumed either way.
+  const [a, b] = sessions;
+  utimesSync(a, new Date(3e9), new Date(3e9));
+  utimesSync(b, new Date(1e9), new Date(1e9));
+  try {
+    const flipped = resolveRunSessions(run("resumed"),
+      [{ phase: "development", agent_id: "ddd444" }, { phase: "qa", agent_id: "eee555" }],
+      { projectsRoot: PROJECTS });
+    assert.deepEqual(flipped.map((s) => s.split("/").pop()), ["sess-b.jsonl", "sess-a.jsonl"]);
+  } finally {
+    // Fixtures are checked-in files: leave their mtimes as found, or the next test inherits them.
+    utimesSync(a, new Date(2e9), new Date(2e9));
+    utimesSync(b, new Date(2e9), new Date(2e9));
+  }
+});
+
+test("resolveRunSessions de-duplicates a session that owns several of the run's agents", () => {
+  const sessions = resolveRunSessions(run("compliant"),
+    [{ phase: "development", agent_id: "aaa111" }, { phase: "qa", agent_id: "bbb222" }],
+    { projectsRoot: PROJECTS });
+  assert.equal(sessions.length, 1, "aaa111 and bbb222 both live in sess-a — that is one session");
+});
+
+test("resolveRunSessions yields nothing when no agent id resolves, rather than guessing", () => {
+  assert.deepEqual(resolveRunSessions(run("compliant"), [], { projectsRoot: PROJECTS }), []);
+  assert.deepEqual(
+    resolveRunSessions(run("compliant"), [{ phase: "x", agent_id: "no-such-agent" }], { projectsRoot: PROJECTS }), [],
+    "an unresolvable id makes the run unauditable — it must never fall back to some other session");
+});
+
+test("a run spanning two sessions is audited as ONE fact stream", () => {
+  // The reason resolveRunSessions exists. `6-journal` is performed in the second session; scoring
+  // only the first would report it as a miss, which is the failure mode the union prevents.
+  const res = audit("resumed");
+  assert.equal(res.sessions.length, 2);
+  assert.equal(verdict(res, "6-journal").verdict, "pass");
+  const facts = extractFactsFrom(res.sessions);
+  assert.deepEqual(facts.map((f) => f.seq), facts.map((_, i) => i),
+    "seq is renumbered across files, so a contract counting occurrences sees one ordered stream");
+  assert.equal(new Set(facts.map((f) => f.source)).size, 2, "and both files really did contribute");
 });
