@@ -60,7 +60,8 @@ Enter plan mode for any task that meets ONE of:
 - Enter plan mode for ANY non-trivial task (see definition above).
 - If something goes sideways, STOP and re-plan — don't keep pushing.
 - Use subagents to keep main context clean.
-- Debug logs are session-only. Remove before Done. See `${CLAUDE_PLUGIN_ROOT}/rules/logging.md`.
+- Diagnostics belong in a development source set or behind a lazy severity gate — never a runtime
+  flag inside production logic. See `${CLAUDE_PLUGIN_ROOT}/rules/logging.md`.
 - ALWAYS check vault impact when creating a PR.
 
 ## Handoff Contract
