@@ -157,3 +157,9 @@ Acceptable because it is one line, in configuration, not in logic.
 - [ ] No logging added to a hot path.
 - [ ] Verified against **both** a debug and a release variant build — a
       release-source-set DI gap is invisible to a debug-only build.
+
+Most of this list is checked mechanically at publish time: the `git-guard` PreToolUse hook blocks
+`git commit`, `git push` and `gh pr create` on Tier 1 constructs, eager construction, hand-rolled
+debug guards, decorator placement, and a `src/debug/**` DI provider with no release counterpart.
+It **reports only** — it never edits code, because the fix for a misplaced trace is a refactor.
+PII, hot paths and "adds no behaviour" stay human review. See `enforcement.md`.

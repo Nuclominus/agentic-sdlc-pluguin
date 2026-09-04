@@ -24,8 +24,27 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 - `rules/workflow.md` no longer contradicts the rule it links to — its General Rules bullet said
   "Debug logs are session-only. Remove before Done." while pointing straight at `logging.md`.
 
-Enforcement is unchanged: `println`, `android.util.Log.*` and `.printStackTrace()` in production
-Kotlin are still blocked by the `validate-kotlin.sh` hook and `rules/snippets/non-negotiable.md`.
+### Added
+
+- **A publish-time gate for the logging rule.** `hooks/git-guard.sh` (`PreToolUse(Bash)`) blocks
+  `git commit`, `git push` and `gh pr create` when the code being published violates
+  `rules/logging.md`, and `hooks/validate-logging.sh` is the per-file checker behind it. This closes
+  a real gap: `kotlin-guard.sh` is `PostToolUse(Edit|Write)`, so it only ever sees files edited
+  through those tools — a hand edit, a `sed` in a Bash call, a merge, a rebase or a cherry-pick
+  reached the commit unchecked. The gate re-scans the staged diff on `commit`, and the branch's
+  commits over its base on `push` / `pr create`.
+  It checks Tier 1 constructs (`println(`, `android.util.Log.*`, `.printStackTrace()`) plus the
+  ADR-0020 rules: eager message construction, hand-rolled `if (BuildConfig.DEBUG)` guards around a
+  log call, a `Development*` decorator outside a development source set, and a `src/debug/**` DI
+  provider with no `src/release/**` counterpart. Test sources are exempt throughout.
+  **It reports `file:line` and blocks; it never edits code** — the fix for a misplaced trace is to
+  move it into a decorator, which is a refactor, and deleting a legitimately-placed log is itself a
+  violation under the new rule. It fails open on every condition it cannot evaluate (no `jq`, not a
+  git repo, an undeterminable base).
+
+Enforcement of the forbidden constructs themselves is unchanged: `println`, `android.util.Log.*`
+and `.printStackTrace()` in production Kotlin are still blocked at write time by the
+`validate-kotlin.sh` hook and `rules/snippets/non-negotiable.md`.
 
 ## [1.13.0] — 2026-08-05
 

@@ -16,6 +16,34 @@ Automated guardrails that run outside the agents themselves.
 
 Both fire on `Write|Edit`. Test sources (`src/test/**`, `src/androidTest/**`, `*Test.kt`, `*Spec.kt`) are exempt from validate-kotlin (see `snippets/non-negotiable.md`).
 
+## PreToolUse Gate — publishing commands
+
+| Hook | Script | Purpose | Behaviour |
+|------|--------|---------|-----------|
+| git-guard | `${CLAUDE_PLUGIN_ROOT}/hooks/git-guard.sh` (via `validate-logging.sh`) | Gates `git commit`, `git push` and `gh pr create` on `logging.md` (ADR-0020) | **Blocking** — exit 2 with a `file:line` report; **never edits code** |
+
+`kotlin-guard.sh` is `PostToolUse(Edit|Write)`, so it only ever sees files edited **through those
+tools**. A hand edit, a `sed` in a Bash call, a merge, a rebase or a cherry-pick reaches the commit
+unchecked. `git-guard` is that net: on a publishing command it re-scans the staged diff (for
+`commit`) or the branch's commits over its base (for `push` / `pr create`).
+
+What it checks, over production Kotlin only (test sources exempt throughout):
+
+- **Tier 1** — `println(`, `android.util.Log.*`, `.printStackTrace()`. Same constructs as
+  `validate-kotlin`, re-checked because the file may never have passed through `Edit|Write`.
+- **Tier 2 (ADR-0020)** — eager message construction (`logger.d("…")` instead of `logger.d { "…" }`),
+  hand-rolled `if (BuildConfig.DEBUG)` / `if (isDebugBuild)` guards around a log call, a
+  `Development*` decorator declared outside a development source set, and a `src/debug/**` DI
+  provider with no `src/release/**` counterpart.
+
+**It reports; it does not clean.** Under ADR-0020 a log line is not something to delete — the fix
+for a misplaced trace is to move it into a `Development*` decorator, which is a refactor no script
+can apply safely, and deleting a legitimately-placed log is itself a violation. Silently rewriting
+a staged diff would also mean committing code that was never reviewed.
+
+**Fails open.** No `jq`, not a git repo, an undeterminable base, an unreadable file — none of these
+are a violation, and none block the command.
+
 ## Documentation tooling (Node, non-blocking — NOT hooks)
 
 Unlike the blocking `validate-kotlin.sh` hook, the vault tooling runs **on demand** (android-docs
@@ -40,6 +68,9 @@ confirmation (global CLAUDE.md).
 - Hook silently does nothing → check `chmod +x .claude/scripts/*.sh`.
 - Hook blocks legitimate code → verify file path matches the exemption rules in the script; do NOT relax the regex.
 - New forbidden pattern needed → add a regex to `validate-kotlin.sh` AND a row to `snippets/non-negotiable.md`.
+- New **logging** rule needed → add it to `validate-logging.sh` AND to `logging.md`; `git-guard.sh` picks it up.
+- `git commit` blocked unexpectedly → the report names `file:line` and the fix. It is never a formatting
+  complaint; re-run after fixing and re-staging. It cannot be silenced per-file by design.
 
 ## Roadmap — Detekt Custom Rules
 

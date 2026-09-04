@@ -101,6 +101,18 @@ and a development-configured release build from shipping them.
   facade, a third-party library, or a platform log call, and a foundation may substitute the API
   its project actually uses without touching the doctrine.
 
+- **The rule is gated at publish time, and the gate reports rather than cleans.** `kotlin-guard.sh`
+  is `PostToolUse(Edit|Write)` and therefore only sees files edited through those tools; a hand
+  edit, a `sed` in a Bash call, a merge or a rebase reaches the commit unchecked. A new
+  `git-guard.sh` `PreToolUse(Bash)` hook closes that by re-scanning the staged diff on `git commit`
+  and the branch's commits on `git push` / `gh pr create`. It **blocks and reports `file:line`; it
+  never edits code.** Auto-cleaning was considered and rejected twice over: under this ADR a log
+  line is not something to delete, so a script that strips one re-implements the doctrine this ADR
+  retires; and the correct fix — move the trace into a `Development*` decorator, add the variant DI
+  provider — is a refactor no regex can perform. Silently rewriting a staged diff would also mean
+  the author commits code they never reviewed. The gate fails open on every condition it cannot
+  evaluate.
+
 ## Related
 - Implemented by: #135
 - Relates to: [[decisions/ADR-0015-the-machine-value-invariant]] / [[decisions/ADR-0018-reviewers-do-not-write-code]]
