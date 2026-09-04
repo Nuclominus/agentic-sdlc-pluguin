@@ -24,12 +24,13 @@ status: in-progress
 | F2 | fast-track bugfix DAG (LOC-gated) | planned     | — |
 | G1 | self-healing compiler/lint micro-loops | done | #77 |
 | G2 | contextual AAR lesson classification | planned  | — |
-| H1 | transcript compliance auditor (`sdlc-lint compliance`) | done | #101 |
+| H1 | transcript compliance auditor (`sdlc-lint compliance`) | done | #101, re-measured #117 |
 | H2 | collapse multi-step prose into single commands (`run/cli.mjs finish`) | done | #103 |
 | H3 | machine-value invariant + lint (`sdlc-lint machine-values`) | done | #104 |
-| H4 | deterministic control flow (gated on H1) | planned | — |
-| H5 | prompt surface reduction / JIT procedure loading | planned | — |
-| H6 | `Stop` hook sealing the run (deterministic tail) | planned | — |
+| H4 | deterministic control flow (gated on H1) | gated, leaning against | — |
+| H5 | prompt surface reduction / JIT procedure loading | measured, not decided | #110, #117 |
+| H5-D2 | the run start is one command (`resolve/cli.mjs plan`, ADR-0019) | landed, DoD unmeasured | #119, #121, #125 |
+| H6 | `Stop` hook sealing the run (deterministic tail) | done | #107 |
 
 _Remaining: B3. (`kotlinx.serialization` deferred — needs a `serialization` aspect decision before
 it can land as a provider.)_
@@ -93,3 +94,15 @@ the top item on the cost track: a cost optimisation is worth less while the cost
 unreliable. The plan summary's other flagged item, G1 (self-healing), already shipped in #77 (see
 [[decisions/ADR-0010-self-healing-micro-loop]]), which is why it no longer appears here as a next
 step.
+
+**Track H, state on 2026-09-04.** H6 shipped in #107. H5 was measured in #110 and re-measured on a
+doubled corpus in #117 (28 auditable runs, live-contract compliance 92.9%); the broad H5 decision
+stays deferred, but its Direction 2 — the run start as one command,
+[[decisions/ADR-0019-the-run-start-is-one-command]] — landed: the resolve command in #119, the
+−808-line prose removal in #121, and the `sdlc-lint start-window` instrument its DoD depends on in
+#125 (with #128 fixing the run-date chain that instrument reads). **The track's next step is still
+the re-measurement**: ADR-0019's DoD is a before/after on the start window in API calls
+(median 9 → 2–3) that needs real downstream runs on the new version, and H4 stays gated on ~10 runs
+carrying the new tail (5 exist, all 5/5 on `5b-finish`). See [[planning/h-instruction-fidelity]],
+[[planning/h5-prompt-surface]], [[planning/h5-d2-start-resolution-command]],
+[[planning/h6-hook-deterministic-tail]].
