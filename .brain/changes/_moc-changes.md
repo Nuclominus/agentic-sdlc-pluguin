@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-09-04 | #133 | `docs` | — | [[changes/2026-09-04-PR-133-reconcile-the-roadmap-table-board-and-screenshot-with-track]] |
 | 2026-08-05 | #131 | `test` | — | [[changes/2026-08-05-PR-131-cover-the-two-real-gaps-from-129-happy-path-json-shape-and-r]] |
 | 2026-08-05 | #128 | `fix` | — | [[changes/2026-08-05-PR-128-close-116-and-126-a-date-that-is-a-property-of-the-run-and-a]] |
 | 2026-08-05 | #125 | `feat` | — | [[changes/2026-08-05-PR-125-ship-the-start-window-instrument-adr-0019-s-dod-depends-on]] |
