@@ -40,6 +40,8 @@ control neither, a constraint stated in Step 0a-1 and enforced doc-wide by sdlc-
 - `plugins/sdlc/agents/session-recorder.md`
 - `plugins/sdlc/PLUGIN-PATHS.md` (path-resolution contract; orchestrator Step 0 resolves it)
 - `plugins/sdlc/skills/pipeline-orchestrator/SKILL.md` (Step 0 roots, Step 2 clock, Step 5 timing, Step 6 close)
+- `plugins/sdlc/config/models.json` (model registry — the single source of truth for `tag → model_id`
+  and per-MTok pricing; bare tag = current generation, suffixed tag = superseded pin)
 - `plugins/sdlc/tools/usage/` (transcript-derived pricing; `enrich` is the authoritative cost path,
   and it self-recovers the session from the run's `agent_id`s — never from the cwd)
 - `plugins/sdlc/tools/report/` (HTML run report; refuses to render a cap verdict on an unpriced run)
@@ -60,6 +62,11 @@ knowing before reading any report:
 - `started_at` / `completed_at` are reconciled at enrichment against the machine anchor
   `.checkpoint/_started_at`; `wall_clock_seconds` is the anchor's own arithmetic and is authoritative
   ([[decisions/ADR-0007-overhead-window-authoritative-anchor]]).
+- `cost_usd` is only as current as `config/models.json`. A tier whose `model_id` lags the model
+  actually serving sessions prices every phase on that tier to `null` — silently, because enrichment
+  reports it as a missing transcript (open follow-up from #137). When a new model generation ships,
+  repoint the tier in the registry first; twice now (#137, and the July `opus` repoint) that was the
+  whole fix.
 
 ## Decisions
 - [[decisions/ADR-0001-stack-provider-pattern]]
