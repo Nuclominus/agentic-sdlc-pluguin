@@ -1,6 +1,6 @@
 {
   "$schema": "../../../schemas/models.schema.json",
-  "description": "Model registry — the SINGLE SOURCE OF TRUTH for tag -> model_id AND pricing. A `tag` is the short alias used across local files and the plugin (agent `.md` frontmatter `model: <tag>`); `model_id` is the real Claude model string, used both to invoke the model and for telemetry. `pricing` (USD per MTok: input/cached_input/output) is authoritative for telemetry cost accounting — the pipeline reads it from here, never restates rates elsewhere. `cache_write_multipliers` price prompt-cache CREATION relative to the model's input rate (Anthropic standard: 5-minute TTL = 1.25x, 1-hour TTL = 2x); the usage tool multiplies the per-turn ephemeral_5m/ephemeral_1h cache-creation token split by these. To bump a model or its price, edit it HERE (README/CORE-TODO/SKILL link here). `pipeline_tiers` lists the tags the pipeline actually dispatches and that hooks/enforce-agent-model.sh enforces (mirror of its is_valid_tier list — keep in sync); the remaining `models` entries are reference/pin-only. NOTE: `sonnet` carries intro pricing through 2026-08-31 — see its pricing.note.",
+  "description": "Model registry — the SINGLE SOURCE OF TRUTH for tag -> model_id AND pricing. A `tag` is the short alias used across local files and the plugin (agent `.md` frontmatter `model: <tag>`); `model_id` is the real Claude model string, used both to invoke the model and for telemetry. `pricing` (USD per MTok: input/cached_input/output) is authoritative for telemetry cost accounting — the pipeline reads it from here, never restates rates elsewhere. `cache_write_multipliers` price prompt-cache CREATION relative to the model's input rate (Anthropic standard: 5-minute TTL = 1.25x, 1-hour TTL = 2x); the usage tool multiplies the per-turn ephemeral_5m/ephemeral_1h cache-creation token split by these. To bump a model or its price, edit it HERE (README/CORE-TODO/SKILL link here). `pipeline_tiers` lists the tags the pipeline actually dispatches and that hooks/enforce-agent-model.sh enforces (mirror of its is_valid_tier list — keep in sync); the remaining `models` entries are reference/pin-only.",
   "pipeline_tiers": [
     "opus",
     "sonnet",
@@ -55,8 +55,7 @@
       "pricing": {
         "input": 2.0,
         "cached_input": 0.2,
-        "output": 10.0,
-        "note": "intro pricing through 2026-08-31; standard is 3.00/0.30/15.00"
+        "output": 10.0
       }
     },
     {
@@ -70,6 +69,15 @@
     },
     {
       "tag": "fable",
+      "model_id": "claude-fable-5-1",
+      "pricing": {
+        "input": 10.0,
+        "cached_input": 0.25,
+        "output": 50.0
+      }
+    },
+    {
+      "tag": "fable-5",
       "model_id": "claude-fable-5",
       "pricing": {
         "input": 10.0,
@@ -105,6 +113,15 @@
       }
     },
     {
+      "tag": "opus-4-5",
+      "model_id": "claude-opus-4-5",
+      "pricing": {
+        "input": 5.0,
+        "cached_input": 0.5,
+        "output": 25.0
+      }
+    },
+    {
       "tag": "sonnet-4-6",
       "model_id": "claude-sonnet-4-6",
       "pricing": {
@@ -114,7 +131,25 @@
       }
     },
     {
+      "tag": "sonnet-4-5",
+      "model_id": "claude-sonnet-4-5",
+      "pricing": {
+        "input": 3.0,
+        "cached_input": 0.3,
+        "output": 15.0
+      }
+    },
+    {
       "tag": "mythos",
+      "model_id": "claude-mythos-5-1",
+      "pricing": {
+        "input": 10.0,
+        "cached_input": 0.25,
+        "output": 50.0
+      }
+    },
+    {
+      "tag": "mythos-5",
       "model_id": "claude-mythos-5",
       "pricing": {
         "input": 10.0,

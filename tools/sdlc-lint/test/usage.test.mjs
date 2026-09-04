@@ -864,7 +864,19 @@ test("a last-dispatch overage is reported but is NOT attributed to a blind gate"
 // Median per-tier cost over 56 transcript-priced phases across 10 real runs,
 // excluding `development` (which carries its own x5.4 phase multiplier).
 const MEASURED_MEDIAN_USD = { opus: 0.95, sonnet: 0.38, haiku: 0.15 };
-const TIER_MODEL = { opus: "claude-opus-5", sonnet: "claude-sonnet-5", haiku: "claude-haiku-4-5-20251001", fable: "claude-fable-5" };
+// Derived from the registry so the map cannot drift when a tag is repointed. The
+// derivation alone guards nothing, so the current tier ids are pinned explicitly below.
+const TIER_MODEL = Object.fromEntries(reg.raw.models.map((m) => [m.tag, m.model_id]));
+
+test("every pipeline tier resolves to exactly one registry entry with the expected id", () => {
+  const tags = reg.raw.models.map((m) => m.tag);
+  assert.deepEqual([...new Set(tags)], tags, "duplicate tag — the estimator and this map would price different entries");
+  for (const tier of reg.raw.pipeline_tiers) assert.ok(TIER_MODEL[tier], `tier ${tier} has no registry entry`);
+  assert.deepEqual(
+    Object.fromEntries(reg.raw.pipeline_tiers.map((t) => [t, TIER_MODEL[t]])),
+    { opus: "claude-opus-5", sonnet: "claude-sonnet-5", haiku: "claude-haiku-4-5-20251001", fable: "claude-fable-5-1" },
+  );
+});
 
 const estimateRow = (tier, registry) => {
   const b = registry.raw.estimation_baselines[tier];
@@ -915,6 +927,10 @@ test("fable has a baseline despite no measured run, priced at its own rates", ()
   assert.deepEqual(b.fable, b.opus, "fable documents its opus-shaped inheritance");
   // Same tokens, dearer tier → a strictly higher row than opus.
   assert.ok(estimateRow("fable", reg) > estimateRow("opus", reg));
+  // Pinned: Fable 5.1 at $10 / $0.25 (0.025x cache read) / $50 on the opus shape. A `>`
+  // alone held for both claude-fable-5 ($1.889) and claude-fable-5-1 ($1.387), so it
+  // could not catch a wrong cached_input.
+  assert.ok(Math.abs(estimateRow("fable", reg) - 1.38655) < 1e-6, `fable row ${estimateRow("fable", reg)}`);
 });
 
 const PLUGIN_MANIFEST = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..",
