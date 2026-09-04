@@ -864,7 +864,9 @@ test("a last-dispatch overage is reported but is NOT attributed to a blind gate"
 // Median per-tier cost over 56 transcript-priced phases across 10 real runs,
 // excluding `development` (which carries its own x5.4 phase multiplier).
 const MEASURED_MEDIAN_USD = { opus: 0.95, sonnet: 0.38, haiku: 0.15 };
-const TIER_MODEL = { opus: "claude-opus-5", sonnet: "claude-sonnet-5", haiku: "claude-haiku-4-5-20251001", fable: "claude-fable-5" };
+// Derived from the registry rather than restated: a hardcoded copy silently priced the
+// legacy id after every tier repoint (opus → claude-opus-5, fable → claude-fable-5-1).
+const TIER_MODEL = Object.fromEntries(reg.raw.models.map((m) => [m.tag, m.model_id]));
 
 const estimateRow = (tier, registry) => {
   const b = registry.raw.estimation_baselines[tier];

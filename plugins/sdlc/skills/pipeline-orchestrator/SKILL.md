@@ -1174,7 +1174,7 @@ their checkpoints, not lost). Then write `docs/plans/{task_slug}/_telemetry.json
       "phase": "business_analysis",
       "aspect": null,
       "agent": "business-analyst",
-      "model": "claude-opus-4-8",
+      "model": "claude-opus-5",
       "status": "completed",
       "agent_id": "ac70de3f30beff161",
       "subagent_tokens": 73206,

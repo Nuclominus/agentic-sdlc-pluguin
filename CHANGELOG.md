@@ -4,9 +4,25 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
-`android-foundation` `1.7.0` → `1.8.0`.
+`sdlc` `1.16.0` → `1.17.0`, `android-foundation` `1.7.0` → `1.8.0`.
 
 ### Changed
+
+- **Model registry refreshed against Anthropic's current pricing** (`plugins/sdlc/config/models.json`,
+  checked 2026-09-04). The `fable` tier now resolves to **Claude Fable 5.1** (`claude-fable-5-1`)
+  instead of the legacy `claude-fable-5` — the same failure shape as the earlier `opus` repoint:
+  sessions are served by Fable 5.1, so a fable-tier phase priced against the old id resolved
+  `cost_usd: null`. Fable 5.1 also prices cache reads at **0.025×** input (`$0.25/MTok`) rather than
+  the standard 0.1×, so `cached_input` moves from `1.00` to `0.25`; input/output stay `$10/$50`.
+  Sonnet 5's `$2 / $0.20 / $10` is now Anthropic's standard price (the scheduled 2026-09-01 rise to
+  `$3/$15` was cancelled), so the `pricing.note` that flagged it as intro pricing is gone. New
+  pin-only entries keep every active id priceable: `fable-5` (`claude-fable-5`, old rates),
+  `mythos-5-1` (`claude-mythos-5-1`), `opus-4-5` (`claude-opus-4-5-20251101`) and `sonnet-4-5`
+  (`claude-sonnet-4-5-20250929`). No tier was added, so `pipeline_tiers`, the hook and both schemas
+  are untouched.
+- The usage test's `TIER_MODEL` map is now derived from the registry instead of restated — the
+  hardcoded copy silently priced the legacy id after every repoint. The orchestrator's
+  `_telemetry.json` example shows `claude-opus-5` for an opus-tier phase, not `claude-opus-4-8`.
 
 - **Logging is separated, not deleted.** `android-foundation/rules/logging.md` was "Logging
   Hygiene": logs were a temporary debugging aid, and the rule's operative section was a pre-Done
