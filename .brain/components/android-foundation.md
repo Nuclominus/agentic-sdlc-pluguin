@@ -23,6 +23,9 @@ compile-check (builds CI-deferred).
 
 ## Decisions
 - [[decisions/ADR-0001-stack-provider-pattern]]
+- [[decisions/ADR-0020-logging-lives-in-a-development-artifact]] — diagnostics separate at compile
+  time (`Development*` decorator in the debug source set) rather than being deleted before Done;
+  gated at publish time by the `git-guard` PreToolUse hook.
 
 ## Change history
 _Backlinks from `changes/` accumulate here._
