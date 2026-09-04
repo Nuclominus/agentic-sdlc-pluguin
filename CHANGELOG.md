@@ -4,6 +4,48 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+`android-foundation` `1.7.0` → `1.8.0`.
+
+### Changed
+
+- **Logging is separated, not deleted.** `android-foundation/rules/logging.md` was "Logging
+  Hygiene": logs were a temporary debugging aid, and the rule's operative section was a pre-Done
+  cleanup sweep that deleted every log statement added during a session. It is now organised around
+  *which artifact a log line is compiled into* — a `Development<Type>` decorator bound by DI in the
+  debug source set (preferred), a lazy runtime severity gate where there is no seam to decorate
+  (baseline), or a build-flag level set once at a third-party component's configuration point (the
+  narrow exception). Hand-rolled `if (isDebugBuild)` guards inside business logic are forbidden;
+  decorators carry logging and no behaviour; substitution keys on the build-type axis, not the
+  flavor axis. Recorded as ADR-0020.
+- The rule's audience widens from `[developer, reviewer]` to
+  `[developer, reviewer, debugger, tester, security-scanner]`, and `rules/INDEX.md` is updated in
+  step. It now cross-references the test-source exemption in `rules/testing.md`, so an agent reading
+  "one facade only" does not read it as a ban in `src/test/`.
+- `rules/workflow.md` no longer contradicts the rule it links to — its General Rules bullet said
+  "Debug logs are session-only. Remove before Done." while pointing straight at `logging.md`.
+
+### Added
+
+- **A publish-time gate for the logging rule.** `hooks/git-guard.sh` (`PreToolUse(Bash)`) blocks
+  `git commit`, `git push` and `gh pr create` when the code being published violates
+  `rules/logging.md`, and `hooks/validate-logging.sh` is the per-file checker behind it. This closes
+  a real gap: `kotlin-guard.sh` is `PostToolUse(Edit|Write)`, so it only ever sees files edited
+  through those tools — a hand edit, a `sed` in a Bash call, a merge, a rebase or a cherry-pick
+  reached the commit unchecked. The gate re-scans the staged diff on `commit`, and the branch's
+  commits over its base on `push` / `pr create`.
+  It checks Tier 1 constructs (`println(`, `android.util.Log.*`, `.printStackTrace()`) plus the
+  ADR-0020 rules: eager message construction, hand-rolled `if (BuildConfig.DEBUG)` guards around a
+  log call, a `Development*` decorator outside a development source set, and a `src/debug/**` DI
+  provider with no `src/release/**` counterpart. Test sources are exempt throughout.
+  **It reports `file:line` and blocks; it never edits code** — the fix for a misplaced trace is to
+  move it into a decorator, which is a refactor, and deleting a legitimately-placed log is itself a
+  violation under the new rule. It fails open on every condition it cannot evaluate (no `jq`, not a
+  git repo, an undeterminable base).
+
+Enforcement of the forbidden constructs themselves is unchanged: `println`, `android.util.Log.*`
+and `.printStackTrace()` in production Kotlin are still blocked at write time by the
+`validate-kotlin.sh` hook and `rules/snippets/non-negotiable.md`.
+
 ## [1.13.0] — 2026-08-05
 
 `sdlc` `1.15.0` → `1.16.0`, `android-foundation` `1.6.0` → `1.7.0`. Two changes to the shape of a

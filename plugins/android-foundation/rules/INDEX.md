@@ -7,7 +7,7 @@ Each rules file is **lazy**: agents read it only when their role appears in the 
 | `workflow.md` | orchestrator / main thread | Once at session start, then on phase transitions |
 | `skills.md` | android-ba, android-developer, android-reviewer, android-debugger (mandatory); android-tester, android-qa, android-docs, android-devops, android-cicd, android-aar (recommended) | BEFORE phase work — single source of truth for Skill invocations, project-extension self-read rules + Android CLI capability bindings |
 | `testing.md` | android-tester | Before writing tests |
-| `logging.md` | android-developer (pre-Done cleanup), android-reviewer (enforcement check) | Before claiming Done / during review |
+| `logging.md` | android-developer, android-reviewer, android-debugger, android-tester, android-security | Before writing a log line / when adding tracing / during review |
 | `documentation.md` | **every agent** | Before answering project-specific questions (vault lookup); android-docs before PR; android-reviewer during review |
 | `git-operations.md` | android-docs (PR step), any agent on commit request | Only when about to commit / open PR |
 | `enforcement.md` | android-debugger (hook troubleshooting), android-devops (hook scripts), main thread on hook failure | Only when hooks misbehave |

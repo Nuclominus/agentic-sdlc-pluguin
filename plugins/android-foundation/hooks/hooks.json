@@ -21,6 +21,16 @@
             "description": "Block edits to build/, .gradle/, and generated files."
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/git-guard.sh\"",
+            "description": "Gate git commit/push and gh pr create on rules/logging.md (ADR-0020). Reports violations and blocks; never edits code."
+          }
+        ]
       }
     ],
     "PostToolUse": [
