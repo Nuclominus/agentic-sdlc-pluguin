@@ -16,12 +16,14 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
   the standard 0.1×, so `cached_input` moves from `1.00` to `0.25`; input/output stay `$10/$50`.
   Sonnet 5's `$2 / $0.20 / $10` is now Anthropic's standard price (the scheduled 2026-09-01 rise to
   `$3/$15` was cancelled), so the `pricing.note` that flagged it as intro pricing is gone. New
-  pin-only entries keep every active id priceable: `fable-5` (`claude-fable-5`, old rates),
-  `mythos-5-1` (`claude-mythos-5-1`), `opus-4-5` (`claude-opus-4-5-20251101`) and `sonnet-4-5`
-  (`claude-sonnet-4-5-20250929`). No tier was added, so `pipeline_tiers`, the hook and both schemas
-  are untouched.
-- The usage test's `TIER_MODEL` map is now derived from the registry instead of restated — the
-  hardcoded copy silently priced the legacy id after every repoint. The orchestrator's
+  `mythos` moves to `claude-mythos-5-1` (same 0.025× cache-read rate). Pin-only entries keep every
+  active id priceable: `fable-5` (`claude-fable-5`) and `mythos-5` (`claude-mythos-5`) at the old
+  rates, `opus-4-5` (`claude-opus-4-5`) and `sonnet-4-5` (`claude-sonnet-4-5`). Pins are keyed on
+  the bare id — the pricing lookup strips a snapshot date, never adds one, so a dated key would not
+  resolve from its alias. No tier was added, so `pipeline_tiers`, the hook and both schemas are
+  untouched.
+- The usage test's `TIER_MODEL` map is derived from the registry so it cannot drift on a repoint,
+  with the current tier ids, tag uniqueness and the Fable 5.1 estimate row pinned explicitly. The orchestrator's
   `_telemetry.json` example shows `claude-opus-5` for an opus-tier phase, not `claude-opus-4-8`.
 
 - **Logging is separated, not deleted.** `android-foundation/rules/logging.md` was "Logging

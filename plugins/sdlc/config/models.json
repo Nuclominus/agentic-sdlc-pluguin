@@ -114,7 +114,7 @@
     },
     {
       "tag": "opus-4-5",
-      "model_id": "claude-opus-4-5-20251101",
+      "model_id": "claude-opus-4-5",
       "pricing": {
         "input": 5.0,
         "cached_input": 0.5,
@@ -132,7 +132,7 @@
     },
     {
       "tag": "sonnet-4-5",
-      "model_id": "claude-sonnet-4-5-20250929",
+      "model_id": "claude-sonnet-4-5",
       "pricing": {
         "input": 3.0,
         "cached_input": 0.3,
@@ -140,7 +140,7 @@
       }
     },
     {
-      "tag": "mythos-5-1",
+      "tag": "mythos",
       "model_id": "claude-mythos-5-1",
       "pricing": {
         "input": 10.0,
@@ -149,7 +149,7 @@
       }
     },
     {
-      "tag": "mythos",
+      "tag": "mythos-5",
       "model_id": "claude-mythos-5",
       "pricing": {
         "input": 10.0,
