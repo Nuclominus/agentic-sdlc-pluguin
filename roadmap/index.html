@@ -188,7 +188,7 @@
 
   <footer class="note">
     Snapshot generated from <code>.brain/planning/roadmap.md</code> by <code>node roadmap/generate.mjs</code> · re-run after roadmap edits.<br>
-    ★ = highest-ROI next step per the Roadmap Development Plan.
+    ★ = priority — the vault's PRIORITY track (Track H) or a highest-ROI next step per the Roadmap Development Plan.
   </footer>
 
 <script>
@@ -222,12 +222,13 @@ const SEED = [
   { id: "F2", track: "Track F", title: "Fast-track bugfix DAG (LOC-gated)", desc: "LOC-gated Dev→QA→Docs when change is trivial (§2.2).", pr: null, col: "todo" },
   { id: "G1", track: "Track G", title: "Self-healing compiler/lint micro-loops", desc: "Feed compiler/lint stderr back to Dev, capped at 2 attempts (§3.1).", pr: 77, col: "done" },
   { id: "G2", track: "Track G", title: "Contextual AAR lesson classification", desc: "Tag lessons; load only domain-relevant ones per phase (§3.2).", pr: null, col: "todo" },
-  { id: "H1", track: "Track H", title: "Transcript compliance auditor (sdlc-lint compliance)", desc: "", pr: 101, col: "done" },
-  { id: "H2", track: "Track H", title: "Collapse multi-step prose into single commands (run/cli.mjs finish)", desc: "", pr: 103, col: "done" },
-  { id: "H3", track: "Track H", title: "Machine-value invariant + lint (sdlc-lint machine-values)", desc: "", pr: 104, col: "done" },
-  { id: "H4", track: "Track H", title: "Deterministic control flow (gated on H1)", desc: "", pr: null, col: "todo" },
-  { id: "H5", track: "Track H", title: "Prompt surface reduction / JIT procedure loading", desc: "", pr: null, col: "todo" },
-  { id: "H6", track: "Track H", title: "Stop hook sealing the run (deterministic tail)", desc: "", pr: null, col: "todo" },
+  { id: "H1", track: "Track H", title: "Transcript compliance auditor (sdlc-lint compliance)", desc: "Audit transcripts for mandated steps the orchestrator skipped. 92.9% on 28 runs (#117).", pr: 101, col: "done" },
+  { id: "H2", track: "Track H", title: "Collapse multi-step prose into single commands (run/cli.mjs finish)", desc: "Run tail is one command (ADR-0014). 5b-finish 5/5 so far.", pr: 103, col: "done" },
+  { id: "H3", track: "Track H", title: "Machine-value invariant + lint (sdlc-lint machine-values)", desc: "Never ask the model to recompute a machine-known value (ADR-0015).", pr: 104, col: "done" },
+  { id: "H4", track: "Track H", title: "Deterministic control flow (gated on H1)", desc: "Deterministic control flow. Gated on ~10 runs on the new tail; 5 exist, leaning against.", pr: null, col: "todo", pri: true },
+  { id: "H5", track: "Track H", title: "Prompt surface reduction / JIT procedure loading", desc: "Prose costs ~3%; cardinality predicts compliance. Decision deferred (#110, #117).", pr: 110, col: "todo", pri: true },
+  { id: "H5-D2", track: "Track H", title: "The run start is one command (resolve/cli.mjs plan, ADR-0019)", desc: "Steps 0→1d as one shipped command (ADR-0019), −808 lines. DoD: start window 9 → 2–3 calls, unmeasured.", pr: 119, col: "review", pri: true },
+  { id: "H6", track: "Track H", title: "Stop hook sealing the run (deterministic tail)", desc: "Stop hook seals a finished run; state, not enforcement.", pr: 107, col: "done" },
 ];
 // <<SEED-END>>
 
@@ -242,7 +243,7 @@ function cardEl(c) {
     <div class="card-top">
       <span class="badge">${c.id}</span>
       <span class="track">${c.track}</span>
-      ${c.pri ? '<span class="star" title="Highest-ROI next step">★</span>' : ""}
+      ${c.pri ? '<span class="star" title="Priority item">★</span>' : ""}
     </div>
     <h3>${c.title}</h3>
     ${c.desc ? `<p>${c.desc}</p>` : ""}

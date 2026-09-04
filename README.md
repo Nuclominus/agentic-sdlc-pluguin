@@ -59,8 +59,8 @@ Top priorities right now:
 
 | Priority | Task | Status |
 | -------- | ---- | ------ |
-| 1 | Pipeline cache & cost efficiency | In progress |
-| 2 | Self-healing compiler/lint micro-loops | Planned |
+| 1 | Instruction fidelity (Track H) — re-measure the collapsed run start/tail before deciding H4 | In progress |
+| 2 | Pipeline cache & cost efficiency | In progress |
 | 3 | Micro-task batching (3–5 bugfixes per run) | Planned |
 
 <a href="docs/assets/roadmap-board.jpg" target="_blank"><img src="docs/assets/roadmap-board.jpg" alt="SDLC Roadmap board" width="100%"></a>

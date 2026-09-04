@@ -1,5 +1,5 @@
 ---
-status: planned
+status: shipped
 ---
 
 # H5 D2 — the run start is one command

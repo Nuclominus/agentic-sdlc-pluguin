@@ -27,6 +27,17 @@ const STATUS_TO_COL = {
   "in review": "review",
   "planned": "todo",
 };
+// Compound statuses ("landed, DoD unmeasured", "gated, leaning against", "measured, not decided")
+// resolve by their leading word: landed/shipped = in review until the DoD is measured; anything
+// gated or merely measured is still queued.
+function statusToCol(status) {
+  const key = status.toLowerCase().trim();
+  if (STATUS_TO_COL[key]) return STATUS_TO_COL[key];
+  const head = key.split(/[,\s(]/)[0];
+  if (STATUS_TO_COL[head]) return STATUS_TO_COL[head];
+  if (head === "landed" || head === "shipped") return "review";
+  return "todo";
+}
 
 // Curated one-line descriptions (not carried in the roadmap table). Keyed by item id.
 // Add an entry when a new track item appears; falls back to "" if absent.
@@ -47,6 +58,13 @@ const DESCRIPTIONS = {
   F2: "LOC-gated Dev→QA→Docs when change is trivial (§2.2).",
   G1: "Feed compiler/lint stderr back to Dev, capped at 2 attempts (§3.1).",
   G2: "Tag lessons; load only domain-relevant ones per phase (§3.2).",
+  H1: "Audit transcripts for mandated steps the orchestrator skipped. 92.9% on 28 runs (#117).",
+  H2: "Run tail is one command (ADR-0014). 5b-finish 5/5 so far.",
+  H3: "Never ask the model to recompute a machine-known value (ADR-0015).",
+  H4: "Deterministic control flow. Gated on ~10 runs on the new tail; 5 exist, leaning against.",
+  H5: "Prose costs ~3%; cardinality predicts compliance. Decision deferred (#110, #117).",
+  "H5-D2": "Steps 0→1d as one shipped command (ADR-0019), −808 lines. DoD: start window 9 → 2–3 calls, unmeasured.",
+  H6: "Stop hook seals a finished run; state, not enforcement.",
 };
 
 // Presentation overrides where the table title is terse. Keyed by item id.
@@ -65,6 +83,9 @@ for (const line of md.split("\n")) {
     for (const m of line.matchAll(/\b([A-Z][0-9])\b/g)) priority.add(m[1]);
   }
 }
+// "**Track H — … PRIORITY track …**" flags the whole track; resolved to item ids after parsing.
+const priorityTracks = new Set();
+for (const m of md.matchAll(/\*\*Track ([A-Z])\b[^\n]*?PRIORITY track/g)) priorityTracks.add(m[1]);
 
 // ---- parse the roadmap table ----
 function cleanTitle(raw) {
@@ -79,9 +100,9 @@ for (const line of md.split("\n")) {
   const cells = line.split("|").slice(1, -1).map(c => c.trim());
   if (cells.length < 4) continue;
   const [id, item, status, landed] = cells;
-  if (!/^[A-Z]\d*$/.test(id)) continue;                    // skips header + separator rows
+  if (!/^[A-Z]\d*(-[A-Z0-9]+)?$/.test(id)) continue;       // skips header + separator rows; allows H5-D2
 
-  const col = STATUS_TO_COL[status.toLowerCase()] ?? "todo";
+  const col = statusToCol(status);
   const prMatch = landed.match(/#(\d+)/);
   cards.push({
     id,
@@ -90,7 +111,7 @@ for (const line of md.split("\n")) {
     desc: DESCRIPTIONS[id] ?? "",
     pr: prMatch ? Number(prMatch[1]) : null,
     col,
-    pri: priority.has(id) || undefined,
+    pri: priority.has(id) || (priorityTracks.has(id[0]) && col !== "done") || undefined,
   });
 }
 
