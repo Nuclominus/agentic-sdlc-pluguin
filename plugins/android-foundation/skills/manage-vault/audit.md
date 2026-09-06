@@ -5,7 +5,7 @@ Loaded by `manage-vault` phase 4.6. Consumes the `to_flag_drift` lists from [sca
 ## Principle
 
 A vault note exists for an artifact that no longer exists in the codebase. The skill does **not**
-delete — deletion is an `android-docs`/human decision that may require an ADR (deprecation,
+delete — deletion is an `document-writer`/human decision that may require an ADR (deprecation,
 supersession). `manage-vault` only annotates.
 
 ## Drift marker
@@ -13,7 +13,7 @@ supersession). `manage-vault` only annotates.
 Append a single HTML comment after the frontmatter (just below the closing `---`):
 
 ```
-<!-- DRIFT: source artifact not found on <DATE> by manage-vault. android-docs must verify and either rewire, mark `#status/deprecated`, or delete. -->
+<!-- DRIFT: source artifact not found on <DATE> by manage-vault. document-writer must verify and either rewire, mark `#status/deprecated`, or delete. -->
 ```
 
 Idempotency: if a `<!-- DRIFT:` marker is already present, replace its date in place — do not append a
@@ -45,7 +45,7 @@ node .claude/scripts/validate-docs.mjs
 
 It reports path-qualification, unresolved edges, prose↔frontmatter drift, layer violations, and cycles.
 `manage-vault` only **reports** — it never rewrites edges to make the validator pass. Layer violations
-are real architectural findings: surface them and recommend an `android-docs`/human decision.
+are real architectural findings: surface them and recommend an `document-writer`/human decision.
 
 ## What is NOT drift
 
@@ -62,5 +62,5 @@ drift detected (N):
   business-logic/old-checkout.md
 ```
 
-Include paths so the user can open them in Obsidian. Recommend running `android-docs` (or a manual
+Include paths so the user can open them in Obsidian. Recommend running `document-writer` (or a manual
 cleanup PR) next.

@@ -63,8 +63,17 @@ Ask for the **plugin name** (human form). Derive and CONFIRM:
   the `detect:` rules (project-structure signals), an optional default `workflow:`, the
   `framework_detection:` search locations (where to look for framework coordinates), and `hosts_aspects:`
   (`all` or an explicit subset).
-- Ask the **agent name per phase** (`agents_per_phase`) and any `on_demand_agents`. (Authoring the agents
-  themselves is out of scope here — this scaffolds the manifest + skill; note which agents must exist.)
+- Ask for the **per-role expertise** (`role_expertise`). A foundation ships **no agents** (ADR-0021):
+  the roster is the core's, and what a stack provider contributes is what those core roles need to know.
+  For each CORE role the platform has something to say about — `business-analyst`, `developer`,
+  `reviewer`, `tester`, `qa-engineer`, `security-analyst`, `document-writer`, `debugger`, `devops`,
+  `cicd`, `aar-analyst` — ask for up to three things:
+  - `invariants` — the always-on non-negotiables. Capped at **1400 characters** because this text rides
+    in every turn's stable prefix; a long checklist belongs in a skill instead.
+  - `rules` — paths (relative to the manifest) the role may `Read`, each with a `note` saying when.
+  - `skills` — `{skill, policy, when}` rows. Keep mandatory rows to **≤3 per role**: compliance tracks
+    the number of things an agent must remember, not how emphatically you say them.
+  Skip a role entirely rather than inventing filler for it — an empty declaration is a real answer.
 
 ## Phase 2 — Scaffold the file tree (idempotent — add only what is MISSING)
 
@@ -78,8 +87,9 @@ plugins/<slug>/
 └── README.md                         # human docs (the manifest is the machine source)
 ```
 
-Foundations additionally own `agents/` (the roster you named) — flag those as TODO if they don't exist;
-do not fabricate agent bodies here.
+No plugin but the core ships `agents/`. If the platform needs a role the core roster does not have,
+that is a change to `plugins/sdlc/`, not a directory here — `sdlc-lint roster` fails any other plugin
+that ships one.
 
 ### manifest.yaml — framework template
 ```yaml
@@ -112,29 +122,36 @@ detect:
 hosts_aspects: all             # or an explicit subset
 framework_detection:
   - <where to look for a framework coordinate, in order>
-agents_per_phase:
-  business_analysis: <agent>
-  development: <agent>
-  # … one per phase
-on_demand_agents: []
+role_expertise:                # per CORE role — this is what a foundation contributes
+  developer:
+    invariants: |
+      <the always-on non-negotiables for this platform — ≤1400 chars, it rides in every prefix>
+    rules:
+      - { path: rules/snippets/non-negotiable.md, note: "forbidden patterns — before the first edit" }
+    skills:
+      - { skill: <slug>:<slug>-conventions, when: "before writing production code" }
+  # … one entry per role the platform has something to say about
 convention_skills: []
-extra_phases: []
+extra_phases: []               # a new phase names the CORE role that runs it: { name, after, agent }
 pre_phase_commands: []
-phase_injections:
-  development: |
-    <guidance>
 post_pipeline_checks: []
 ```
+
+`agents_per_phase`, `on_demand_agents` and `aar_analyst` are **forbidden** here — the schema rejects
+them on any foundation but the core's own `stack: vanilla` profile.
 
 ## Phase 3 — Author the content (ALWAYS ASK auto vs. manual)
 
 For BOTH the `phase_injections` text AND the conventions skill body, ask the user **each time**:
 **"draft it automatically (I'll propose, you approve) or will you write it?"**
 
-- **Phase injections** (`development`, `security`, and any others): auto → draft concise, imperative
-  house-style guidance for the library/platform; show it; let the user edit before it lands in
-  `manifest.yaml`. Frameworks **defer** layer/architecture principles to "the hosting foundation's
-  conventions" and **never** hard-reference another plugin's `plugin:skill` id.
+- **Expertise text** — a framework's `phase_injections`, a foundation's `role_expertise.<role>.invariants`:
+  auto → draft concise, imperative house-style guidance for the library/platform; show it; let the user
+  edit before it lands in `manifest.yaml`. Frameworks **defer** layer/architecture principles to "the
+  hosting foundation's conventions" and **never** hard-reference another plugin's `plugin:skill` id.
+  A foundation's `rules/**` must not name the plugin-root variable: those files are read by an agent
+  living in `plugins/sdlc`, where it resolves to the wrong plugin. The resolver emits each declared
+  rule path absolute — refer to a sibling file by name in the prose.
 - **Conventions skill** (`skills/<slug>-conventions/SKILL.md`): auto → invoke `superpowers:writing-skills`
   to produce a well-structured skill (frontmatter `name` + `description` with triggers, focused body of
   library-specific idioms). Manual → leave a clear stub the user fills.
@@ -155,7 +172,12 @@ For BOTH the `phase_injections` text AND the conventions skill body, ask the use
    tool is unavailable, parse the YAML and check the guards by hand).
 2. **Kind guards** — framework: has `enriches_aspect` + `dependency`; has **no** `agents_per_phase` /
    `workflow` / `framework_detection` / `hosts_aspects` / non-empty `aspects`. foundation: has `detect` +
-   `aspects`; has **no** `enriches_aspect` / `dependency`.
+   `aspects`; has **no** `enriches_aspect` / `dependency` / `agents_per_phase` / `on_demand_agents` /
+   `aar_analyst`.
+2b. **Roster** — `node tools/sdlc-lint/cli.mjs roster --json` (part of `all`): no `agents/` outside the
+   core, every `role_expertise` key is a core role, every declared rule path exists, every own-plugin
+   skill exists, every external skill is declared in `runtime-dependencies.json`, and no retired agent
+   name or plugin-root path survives in the new plugin.
 3. **JSON** — `plugin.json` and `marketplace.json` parse.
 4. **Aspect** — `enriches_aspect` ∈ `aspects.yaml.functional`; a foundation's `hosts_aspects` ⊆
    `functional` (or `all`).
@@ -163,7 +185,7 @@ For BOTH the `phase_injections` text AND the conventions skill body, ask the use
    in the foundation's `framework_detection` locations; report would-attach / would-not-attach.
 
 🚨 **MUST PRINT** a final summary: files created, the chosen `kind` + `stack` + aspect, validation result,
-and any TODOs (e.g. "create the agents named in `agents_per_phase`", "fill the conventions skill stub",
+and any TODOs (e.g. "fill the conventions skill stub", "write the `role_expertise.<role>.invariants`",
 "no foundation hosts `<aspect>` yet").
 
 ## Hard rules
@@ -171,7 +193,9 @@ and any TODOs (e.g. "create the agents named in `agents_per_phase`", "fill the c
 - **Never clobber** an existing file — create only what is missing; if a target exists, show a diff and ask.
 - **Never** put declarative data in the plugin `.md`/`README.md` — it lives in `manifest.yaml`. READMEs are
   human docs only.
-- A **framework** ships **no** agents, **no** workflow, exactly **one** `enriches_aspect`, and depends on
-  **no** sibling plugin (`plugin.json → dependencies` lists only `sdlc`).
+- **No plugin but `sdlc` ships agents.** A framework additionally ships **no** workflow, exactly **one**
+  `enriches_aspect`, and depends on **no** sibling plugin (`plugin.json → dependencies` lists only
+  `sdlc`). A foundation owns a workflow and platform aspects, and declares `role_expertise` — never a
+  roster (ADR-0021).
 - Keep the schema enums and `aspects.yaml` **in sync** whenever you touch the taxonomy.
 - Match the marketplace's existing voice and the manifest field order shown in the templates.

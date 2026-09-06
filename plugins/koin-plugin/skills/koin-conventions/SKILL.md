@@ -121,5 +121,5 @@ val dataModule = module {
 
 - [[android-data]] — dispatcher qualifiers & layer principles (authoritative; not restated here).
 - `koin-plugin/rules/snippets/koin-proguard.md` — R8/ProGuard notes (Koin Annotations only).
-- `android-security` agent — lifetime of security-sensitive `single` definitions, `KoinComponent`
+- `security-analyst` agent — lifetime of security-sensitive `single` definitions, `KoinComponent`
   exposure.

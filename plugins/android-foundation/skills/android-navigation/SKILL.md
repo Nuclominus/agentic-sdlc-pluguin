@@ -23,7 +23,7 @@ rule wins — "detect" only applies where the rule is silent.
 - **Back-stack discipline.** Be explicit about `popUpTo`/`launchSingleTop`/inclusive semantics;
   avoid accidental duplicate destinations on the stack.
 - **Deep links are a trust boundary.** Validate and sanitize all deep-link / external Intent
-  arguments before use — coordinate with the `android-security` agent.
+  arguments before use — coordinate with the `security-analyst` agent.
 
 ## Patterns
 
@@ -59,5 +59,5 @@ unvalidated deep-link arguments reaching the data layer.
 ## References
 
 - `${CLAUDE_PLUGIN_ROOT}/rules/snippets/non-negotiable.md` — forbidden patterns (string routes).
-- `android-security` agent — deep-link / Intent validation.
+- `security-analyst` agent — deep-link / Intent validation.
 - Sibling skills: [[android-architecture]], [[android-compose-ui]], [[android-data]].

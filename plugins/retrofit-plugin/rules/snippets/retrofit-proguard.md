@@ -1,5 +1,5 @@
 ---
-loaded_by: [android-security, android-devops]
+loaded_by: [security-analyst, devops]
 load_when: "ProGuard/R8 rules review or edit on a project that uses Retrofit/OkHttp."
 ---
 

@@ -4,7 +4,15 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
-`sdlc` `1.16.0` → `1.18.0`, `android-foundation` `1.7.0` → `1.8.0`.
+`sdlc` `1.16.0` → `2.0.0`, `android-foundation` `1.7.0` → `2.0.0`, marketplace `1.13.0` → `1.14.0`.
+
+**Why both plugins go major.** ADR-0021 removes a documented extension point: a foundation manifest
+could bind `agents_per_phase` / `on_demand_agents` / `aar_analyst`, and now the schema rejects those
+keys and the resolver ignores them. That breaks any third-party stack provider written against the
+old contract, so the core carries the major too — not only the Android plugin whose roster moved.
+A project that merely *uses* the marketplace sees no breakage beyond the agent names in its own
+`.claude/sdlc.local.yaml` and `.claude/model.local.json`, which `/sdlc:doctor` migrates with your
+approval.
 
 ### Changed
 
@@ -44,7 +52,7 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ### Added
 
-- **Agents live in the core; foundations carry expertise — PR-1 of 3 (ADR-0021, `sdlc` 1.18.0).**
+- **Agents live in the core; foundations carry expertise — PR-1 of 3 (ADR-0021, `sdlc` 2.0.0).**
   The core now ships the whole roster: `reviewer`, `tester` (3-attempt cap), `debugger`
   (read-only), `devops` and `cicd` join the existing seven, and `plugins/sdlc/manifest.yaml` binds
   every phase (`review`, `test`, `debugging` included) plus the on-demand agents. Every role agent
@@ -92,6 +100,23 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
   row's anchor phrase is literally present in the destination — and, while the agent files are still
   on disk, that the mapping is a bijection. The agent files stay one more PR for side-by-side
   review; PR-3 deletes them.
+- **`plugins/android-foundation/agents/` is gone — PR-3 of 3 (ADR-0021, `android-foundation` 2.0.0).**
+  **Breaking for plugin authors:** `agents_per_phase`, `on_demand_agents` and `aar_analyst` are now
+  rejected by `schemas/manifest.schema.json` on any foundation but the core's own `stack: vanilla`
+  profile, and `mergeProfiles` **ignores** a roster that reaches it anyway (PR-1 honored it with a
+  deprecation warning) — the phase falls back to the core binding and the run prints one WARN naming
+  `role_expertise` as the replacement. Honoring it would dispatch a roster that no longer ships, and
+  the failure would land at dispatch rather than at resolve. Nothing changes for a project that just
+  *uses* the marketplace beyond the agent names in its own config, which `/sdlc:doctor` migrates.
+  `sdlc-lint roster` gains the two checks that make the split irreversible: **home** — no `agents/`
+  outside `plugins/sdlc`; and **stragglers** — no retired `android-<role>` name and no plugin-root
+  variable inside a foundation's `rules/**` anywhere under `plugins/`, exempting only
+  `config/agent-migrations.json` and the doctor command that applies it. The sweep those checks
+  forced touched 24 files (framework ProGuard snippets, convention skills, `manage-vault`, the vault
+  template, both bug-fix recipes). `create-pluguin` now asks a new foundation for `role_expertise`
+  instead of a roster and scaffolds no `agents/`; CONTRIBUTING, the root README, `workflow-config`
+  (the phase palette is the CORE manifest's keys plus the profile's `extra_phases`), `extension` and
+  `model-config` follow. ADR-0021 is `accepted`.
 - **`/sdlc:doctor` migrates a project's config across an agent rename — and there are no runtime
   aliases.** An agent name is used exactly as written: the key in `.claude/model.local.json`, the
   name dispatched, the `role_expertise` key and the file on disk are one string. A first cut of this

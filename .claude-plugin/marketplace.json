@@ -1,6 +1,6 @@
 {
   "name": "agentic-sdlc",
-  "version": "1.13.0",
+  "version": "1.14.0",
   "description": "AI-assisted SDLC pipelines for ANDROID development (Kotlin + Gradle) in Claude Code. Android Foundation is the centerpiece stack provider; framework plugins (Retrofit, Room, Dagger/Hilt, …) attach additively to the orchestrator-managed flow via the Stack Provider Pattern. The generic sdlc core owns the pipeline; providers register themselves via manifest.yaml profiles (kind: foundation | framework). Adapted from AratKruglik/claude-sdlc (MIT).",
   "owner": {
     "name": "Nuclominus",
@@ -32,7 +32,7 @@
     {
       "name": "android-foundation",
       "source": "./plugins/android-foundation",
-      "description": "Android Foundation — the centerpiece stack provider (Kotlin + Gradle, aspect android, priority 300, auto-detected via Gradle-AND-Kotlin). Full specialized roster: android-ba (Opus), android-developer, android-reviewer, android-security (Opus, MASVS/MASTG), android-tester, android-qa, android-docs (Haiku), plus on-demand android-debugger/devops/cicd/aar. Plugin-resident rules, optional Obsidian vault (manage-vault skill), optional Android CLI advisory, ktlint/detekt + non-negotiable hooks. Carries pinned house rules (Coil3, Kermit, KSP, @Serializable routes, DataStore, Play Billing). Workflow android-feature: BA->Dev->Review(<->Dev x3)->[Security||Test]->QA->Docs, auto-selected on Android projects."
+      "description": "Android Foundation — the centerpiece stack provider (Kotlin + Gradle, aspect android, priority 300, auto-detected via Gradle-AND-Kotlin). Ships NO agents (ADR-0021): the roster is the core's, and this plugin declares the Android EXPERTISE those core roles consume — role_expertise for all 11 roles (invariants, rule paths, mandatory skills) plus 13 skills: android-requirements, android-review, android-security-masvs (MASVS/MASTG), android-testing, android-e2e, android-docs-vault, android-debugging, android-build-release, android-ci, and the four convention skills for Compose UI, architecture, data and Navigation. Plugin-resident rules, optional Obsidian vault (manage-vault skill), optional Android CLI advisory, ktlint/detekt + non-negotiable hooks. Carries pinned house rules (Coil3, Kermit, KSP, @Serializable routes, DataStore, Play Billing). Workflow android-feature: BA->Dev->Review(<->Dev x3)->[Security||Test]->QA->Docs, auto-selected on Android projects."
     },
     {
       "name": "retrofit-plugin",

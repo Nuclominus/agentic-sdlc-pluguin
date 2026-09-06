@@ -2,7 +2,7 @@
   "_comment": "Agent renames across marketplace versions — the data /sdlc:doctor migrates a project's config with. THIS IS NOT A RUNTIME ALIAS TABLE: nothing resolves a name through it at dispatch, tier lookup or prompt assembly (ADR-0021 ships no aliases, precisely because four copies of one map disagreed in six places). It exists so a rename is a one-time, visible, approved edit to the user's own files rather than a permanent translation layer. Append a new entry per release that renames an agent; `renamed` maps the OLD name to the NEW one, and a name must never appear as both a key and a value across the merged set (a rename chain has to be flattened when it is added).",
   "migrations": [
     {
-      "since": "sdlc@1.18.0",
+      "since": "sdlc@2.0.0",
       "reason": "ADR-0021 — agents live in the core; foundations carry expertise. The android-foundation roster moved into plugins/sdlc/agents/ under platform-neutral names.",
       "renamed": {
         "android-ba": "business-analyst",

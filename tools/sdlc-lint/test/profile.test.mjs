@@ -32,21 +32,24 @@ function merged(extra = {}) {
   return mergeProfiles({ primary: android, active: { android }, additive: [room, retrofit], vanilla, ...extra });
 }
 
-test("aspect-agnostic phases come from the primary, falling back to vanilla", () => {
+test("aspect-agnostic phases come from the CORE, whatever the foundation declares (ADR-0021)", () => {
   const { profile } = merged();
-  assert.equal(profile.agents_per_phase.business_analysis, "android-ba");
-  assert.equal(profile.agents_per_phase.documentation, "document-writer", "absent in primary -> vanilla");
+  assert.equal(profile.agents_per_phase.business_analysis, "business-analyst",
+    "the foundation's `android-ba` is ignored — the core manifest is the only roster");
+  assert.equal(profile.agents_per_phase.documentation, "document-writer");
 });
 
-test("aspect-aware phases build a {aspect: agent} map", () => {
+test("aspect-aware phases build a {aspect: agent} map around the core role", () => {
   const { profile } = merged();
-  assert.deepEqual(profile.agents_per_phase.development, { android: "android-developer" });
+  assert.deepEqual(profile.agents_per_phase.development, { android: "developer" },
+    "the core's flat `development: developer` fans out over the active aspects");
 });
 
-test("additive profiles never supply agents", () => {
+test("neither a framework nor a foundation can win an agent slot", () => {
   const sneaky = { stack: "sneaky", agents_per_phase: { security: "sneaky-agent" } };
   const { profile } = mergeProfiles({ primary: android, active: { android }, additive: [sneaky], vanilla });
-  assert.equal(profile.agents_per_phase.security, "android-security", "a framework must not win an agent slot");
+  assert.equal(profile.agents_per_phase.security, "security-analyst",
+    "the framework is excluded from agent selection and the foundation's roster is ignored (ADR-0021)");
 });
 
 test("injections concatenate stack-first, then additive alphabetically by stack", () => {
@@ -157,14 +160,16 @@ test("only development and per-aspect declarations fan out; flat phases stay fla
   // map turned `test: android-tester` into `{android: android-tester}`, which the dry-run row
   // then printed as `[object Object]`. Step 1a names the aspect-aware set exactly.
   const { profile } = merged();
-  assert.deepEqual(profile.agents_per_phase.development, { android: "android-developer" }, "development always fans out");
-  assert.equal(profile.agents_per_phase.security, "android-security");
+  assert.deepEqual(profile.agents_per_phase.development, { android: "developer" }, "development always fans out");
+  assert.equal(profile.agents_per_phase.security, "security-analyst");
 
-  const perAspect = {
-    stack: "multi",
+  // The roster now lives in the core manifest, so that is where a per-aspect declaration lives too.
+  const core = {
+    stack: "vanilla",
     agents_per_phase: { development: "d", qa: { android: "qa-android", backend: "qa-backend" }, test: "t" },
   };
-  const { profile: p2 } = mergeProfiles({ primary: perAspect, active: { android: perAspect }, additive: [], vanilla });
+  const host = { stack: "multi" };
+  const { profile: p2 } = mergeProfiles({ primary: host, active: { android: host }, additive: [], vanilla: core });
   assert.equal(p2.agents_per_phase.test, "t", "a flatly-declared phase stays a plain agent name");
   assert.equal(typeof p2.agents_per_phase.qa, "object", "a phase DECLARED per-aspect does fan out");
 });
@@ -212,11 +217,20 @@ test("renderSkillsBlock resolves an equal-policy collision deterministically, by
   assert.match(forward, /— alpha\./);
 });
 
-test("a foundation still binding agents_per_phase is honored but warned about (deprecated, ADR-0021)", () => {
+test("a foundation binding agents_per_phase is IGNORED and warned about (ADR-0021 PR-3)", () => {
+  // PR-1 honored the override with a warning so the two rosters could coexist for one release.
+  // The roster is now the core's alone: the binding is dropped and the phase falls back to what the
+  // core manifest says. Honoring it silently is how the split would never finish; honoring it
+  // loudly still leaves a project dispatching a roster that no longer ships.
   const { profile, warnings } = merged();
-  assert.equal(profile.agents_per_phase.business_analysis, "android-ba", "PR-1 keeps the override alive");
+  assert.equal(profile.agents_per_phase.business_analysis, "business-analyst",
+    "the core binding wins — the foundation's `android-ba` names an agent that no longer exists");
+  assert.deepEqual(profile.agents_per_phase.development, { android: "developer" },
+    "the aspect fan-out uses the core role too");
   assert.equal(warnings.length, 1);
-  assert.match(warnings[0], /^WARN: foundation 'android' declares agents_per_phase — deprecated \(ADR-0021\)/);
+  assert.match(warnings[0], /^WARN: foundation 'android' declares agents_per_phase — ignored \(ADR-0021\)/);
+  assert.match(warnings[0], /role_expertise/, "the warning names the replacement, not just the removal");
+
   const clean = mergeProfiles({ primary: { stack: "x", aspects: ["android"] }, active: {}, additive: [], vanilla: coreVanilla });
   assert.deepEqual(clean.warnings, [], "no binding, no warning — the core manifest itself never warns");
 });

@@ -1,6 +1,6 @@
 ---
 adr: 21
-status: proposed
+status: accepted
 date: 2026-09-06
 supersedes: null
 ---

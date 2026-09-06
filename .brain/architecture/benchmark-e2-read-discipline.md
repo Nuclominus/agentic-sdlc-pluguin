@@ -101,7 +101,9 @@ Consequences for every future Track E experiment:
    `~/.claude/plugins/cache/**` instead of honouring `CLAUDE_CONFIG_DIR`, so stack detection reads
    the operator's real plugin tree. One run in 20 (`a-4`) discovered `android-foundation` there and
    ran a **7-phase Android pipeline** — `android-ba → android-developer → android-reviewer →
-   android-security → android-tester → android-qa → android-docs` — inside an arm where only
+   android-security → android-tester → android-qa → android-docs`, the roster as it was named at
+   the time (ADR-0021 later moved these to the core as `business-analyst → developer → reviewer →
+   security-analyst → tester → qa-engineer → document-writer`) — inside an arm where only
    `sdlc` was enabled. 27 occurrences across 10 files; the same hard-coded path also resolves
    `models.json` (tiers **and pricing**), workflow recipes, and skill-path fallbacks. Discovery also
    never consults `enabledPlugins`, which is why a disabled plugin can win foundation selection at

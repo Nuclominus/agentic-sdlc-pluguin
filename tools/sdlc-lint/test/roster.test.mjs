@@ -190,6 +190,47 @@ test("slot: every core agent carries the slot heading, whatever its tools", () =
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test("home: an agents/ directory outside the core is a violation", () => {
+  // The whole point of ADR-0021. A foundation that re-adds `agents/` gets its agents dispatched
+  // by name the moment a manifest binds them, and the split silently reverts.
+  const root = goodTree();
+  try {
+    assert.deepEqual(failures(checkRoster(root)).filter((e) => /^home:/.test(e)), []);
+    write(root, "plugins/foo-foundation/agents/foo-developer.md", agent("foo-developer"));
+    const errs = failures(checkRoster(root));
+    assert.ok(errs.some((e) => /home: .*foo-foundation\/agents.*only plugins\/sdlc\/agents may/.test(e)), errs.join("\n"));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("stragglers: a retired agent name, or a plugin-root path inside foundation rules, is a violation", () => {
+  // Two different ways the move leaves a trap behind. A retired name in a shipped file is an
+  // instruction to dispatch something that no longer exists; a plugin-root path inside `rules/`
+  // resolves against the plugin owning the *agent* — now always `sdlc` — so every such path misses.
+  const root = goodTree();
+  try {
+    assert.deepEqual(failures(checkRoster(root)).filter((e) => /^stragglers:/.test(e)), []);
+    write(root, "plugins/foo-foundation/skills/foo-conventions/SKILL.md",
+      "---\nname: foo-conventions\n---\n\nHand off to `android-developer` when done.\n");
+    write(root, "plugins/foo-foundation/rules/house.md",
+      "# house\n\nSee `${CLAUDE_PLUGIN_ROOT}/hooks/validate.sh`.\n");
+    const errs = failures(checkRoster(root));
+    assert.ok(errs.some((e) => /stragglers: .*foo-conventions\/SKILL\.md.*'android-developer'/.test(e)), errs.join("\n"));
+    assert.ok(errs.some((e) => /stragglers: .*rules\/house\.md.*CLAUDE_PLUGIN_ROOT/.test(e)), errs.join("\n"));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("stragglers: the migration data and the doctor command that applies it are exempt", () => {
+  // `config/agent-migrations.json` is a map FROM the retired names; a check that forbade them
+  // there would forbid the migration itself. Same for the command that shows the rename to a user.
+  const root = goodTree();
+  try {
+    write(root, "plugins/sdlc/config/agent-migrations.json",
+      JSON.stringify({ migrations: [{ renamed: { "android-ba": "business-analyst" } }] }));
+    write(root, "plugins/sdlc/commands/doctor.md", "---\nname: doctor\n---\n\nagents: android-ba → business-analyst\n");
+    assert.deepEqual(failures(checkRoster(root)).filter((e) => /^stragglers:/.test(e)), []);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test("the shipped marketplace honors every roster invariant", () => {
   const results = checkRoster(REPO);
   assert.deepEqual(failures(results), []);

@@ -93,8 +93,8 @@ log_path="${project_root}/docs/plans/_model-enforcement.log"
 
 # ── find agent .md ──────────────────────────────────────────────────────────
 # Agent names dispatched from plugins are namespaced as "<plugin>:<agent>"
-# (e.g. android-plugin:android-developer), but the file on disk is just
-# "<agent>.md". Strip the plugin prefix before building the search path.
+# (e.g. sdlc:developer), but the file on disk is just "<agent>.md".
+# Strip the plugin prefix before building the search path.
 bare_name="${agent_name##*:}"
 
 # Search order: installed plugin root → sibling plugins (marketplace layout) → dev checkout fallback

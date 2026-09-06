@@ -17,7 +17,7 @@ database, preferences store, and networking stack are detected from the project,
   models pure (no serialization or framework annotations leaking inward).
 - **Persistence — detect.** Follow the project's local DB and preferences store. Prefer a structured,
   typed store over raw `SharedPreferences`. Sensitive data (tokens, credentials, PII) goes to secure
-  storage — coordinate with the `android-security` agent on the trust boundary.
+  storage — coordinate with the `security-analyst` agent on the trust boundary.
 - **Networking / realtime.** Expose `suspend` functions for one-shot calls and `Flow` for streams.
   Handle errors and map them to domain-level results at the boundary; don't leak transport
   exceptions up the stack.
@@ -56,5 +56,5 @@ query/network results, and no exposing the repository implementation as public A
 ## References
 
 - `${CLAUDE_PLUGIN_ROOT}/rules/snippets/non-negotiable.md` — forbidden patterns.
-- `android-security` agent — secure-storage and trust-boundary review.
+- `security-analyst` agent — secure-storage and trust-boundary review.
 - Sibling skills: [[android-architecture]], [[android-navigation]].

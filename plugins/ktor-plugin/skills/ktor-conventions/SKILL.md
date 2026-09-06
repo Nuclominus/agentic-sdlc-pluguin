@@ -137,4 +137,4 @@ override suspend fun refresh(): Result<Unit> = withContext(io) {
 
 - [[android-data]] — data-layer principles (authoritative for layering; not restated here).
 - `ktor-plugin/rules/snippets/ktor-proguard.md` — R8/ProGuard keep rules.
-- `android-security` agent — TLS/pinning and secret-handling review (MASVS-NETWORK).
+- `security-analyst` agent — TLS/pinning and secret-handling review (MASVS-NETWORK).

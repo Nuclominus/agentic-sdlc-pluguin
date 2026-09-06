@@ -71,4 +71,4 @@ abstract class FeatureModule {
 
 - [[android-data]] — dispatcher qualifiers & layer principles (authoritative; not restated here).
 - `dagger-plugin/rules/snippets/hilt-proguard.md` — R8/ProGuard keep rules.
-- `android-security` agent — lifetime of security-sensitive singletons, `@EntryPoint` exposure.
+- `security-analyst` agent — lifetime of security-sensitive singletons, `@EntryPoint` exposure.

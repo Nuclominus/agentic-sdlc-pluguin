@@ -123,7 +123,7 @@ After writing, record each written file's sha256 into `.vault-manifest.json` so 
 ### Phase 4 — (Re)populate documentation (optional, user-gated)
 
 This is the ported `fill-vault`: scan the codebase, create/refresh **stub** notes only, regenerate the
-graph, flag drift. It NEVER fills section bodies or edge values (`android-docs` owns content) and NEVER
+graph, flag drift. It NEVER fills section bodies or edge values (`document-writer` owns content) and NEVER
 overwrites a non-stub note.
 
 ```
@@ -169,15 +169,15 @@ manage-vault report (YYYY-MM-DD)
   validation: validate-docs.mjs → clean | F finding(s) (list; escalate layer violations)
   drift:      D notes flagged <!-- DRIFT --> (never deleted)
 
-  Next: invoke `android-docs` to fill the new/refreshed stubs (sections + typed edges) before PR.
+  Next: invoke `document-writer` to fill the new/refreshed stubs (sections + typed edges) before PR.
 ```
 
 ## Common mistakes (inherited)
 
-- Filling section bodies or edge values → forbidden; `android-docs` owns content. Stubs only.
+- Filling section bodies or edge values → forbidden; `document-writer` owns content. Stubs only.
 - Overwriting an existing note → always existence-check; skip filled, refresh only `<!-- STUB -->`.
 - Hand-appending MOC bullets → MOCs are Dataview tables; correct frontmatter is the wiring.
 - Touching `_templates/`, `architecture/`, `stack/`, `general/` content → out of scope.
-- Deleting notes for removed code → never; audit appends `<!-- DRIFT -->`, a human/`android-docs` decides.
+- Deleting notes for removed code → never; audit appends `<!-- DRIFT -->`, a human/`document-writer` decides.
 - Treating test sources as production → skip `**/src/{test,androidTest,commonTest}/**`, `*Test.kt`, `*Spec.kt`.
 - Regenerating without archiving when content exists → phase 5 is mandatory before any stub refresh.

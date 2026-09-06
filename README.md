@@ -49,7 +49,7 @@ The README is the front door; each topic has a focused page under [`docs/`](docs
 
 This repo's own architecture, decisions, per-PR changes, and roadmap live in the **Second Brain** Obsidian vault at [`.brain/`](.brain/) — the engineering source of truth for how the marketplace works and evolves (see [`.brain/README.md`](.brain/README.md)).
 
-**In one paragraph:** the core `pipeline-orchestrator` skill never changes — it has zero knowledge of any platform, library, or security standard. The **foundation** registers itself via `manifest.yaml` (`kind: foundation`) and declares detection rules, priority, agents-per-phase, and a default workflow. **Framework plugins** attach additively (`kind: framework`): they enrich existing phases with a convention skill + prompt injections + ProGuard rules, ship **no agents**, and auto-detect from the Gradle build. Everything — manifests, workflows, dependencies — is *discovered by glob*, never hardcoded. See [`docs/WORKFLOW.md`](docs/WORKFLOW.md) for the diagrams and the full contract.
+**In one paragraph:** the core `pipeline-orchestrator` skill never changes — it has zero knowledge of any platform, library, or security standard. `sdlc` owns the **process**: the whole agent roster and the only phase→agent binding in the marketplace. A **foundation** (`kind: foundation`) owns the **expertise**: it registers detection rules, priority and a default workflow, and declares `role_expertise` per core role — invariants, rule paths and mandatory skills that the orchestrator pastes into the phase prompt. **Framework plugins** attach additively (`kind: framework`): they enrich existing phases with a convention skill + prompt injections + ProGuard rules and auto-detect from the Gradle build. No plugin but `sdlc` ships agents. Everything — manifests, workflows, dependencies — is *discovered by glob*, never hardcoded. See [`docs/WORKFLOW.md`](docs/WORKFLOW.md) for the diagrams and the full contract.
 
 ---
 
@@ -87,8 +87,8 @@ Top priorities right now:
 
 | Plugin               | Type               | Stack / Technology                                                    |
 | -------------------- | ------------------ | --------------------------------------------------------------------- |
-| `sdlc`               | Core               | Platform-agnostic orchestrator + 5 fallback agents                    |
-| `android-foundation` | Stack provider     | Android (Kotlin + Gradle) — 11-agent roster, MASVS, vault, house rules |
+| `sdlc`               | Core               | Platform-agnostic orchestrator + the entire 12-agent roster            |
+| `android-foundation` | Stack provider     | Android (Kotlin + Gradle) — expertise for 11 roles: 13 skills, MASVS, vault, house rules |
 | `retrofit-plugin`    | Framework provider | Retrofit/OkHttp — additive (skill + injections + ProGuard), no agents  |
 | `room-plugin`        | Framework provider | Room persistence — additive (skill + injections + ProGuard), no agents |
 | `dagger-plugin`      | Framework provider | Dagger/Hilt DI — additive (skill + injections + ProGuard), no agents   |
