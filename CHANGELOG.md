@@ -4,7 +4,15 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
-`sdlc` `1.16.0` → `1.18.0`, `android-foundation` `1.7.0` → `2.0.0`, marketplace `1.13.0` → `1.14.0`.
+`sdlc` `1.16.0` → `2.0.0`, `android-foundation` `1.7.0` → `2.0.0`, marketplace `1.13.0` → `1.14.0`.
+
+**Why both plugins go major.** ADR-0021 removes a documented extension point: a foundation manifest
+could bind `agents_per_phase` / `on_demand_agents` / `aar_analyst`, and now the schema rejects those
+keys and the resolver ignores them. That breaks any third-party stack provider written against the
+old contract, so the core carries the major too — not only the Android plugin whose roster moved.
+A project that merely *uses* the marketplace sees no breakage beyond the agent names in its own
+`.claude/sdlc.local.yaml` and `.claude/model.local.json`, which `/sdlc:doctor` migrates with your
+approval.
 
 ### Changed
 
@@ -44,7 +52,7 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ### Added
 
-- **Agents live in the core; foundations carry expertise — PR-1 of 3 (ADR-0021, `sdlc` 1.18.0).**
+- **Agents live in the core; foundations carry expertise — PR-1 of 3 (ADR-0021, `sdlc` 2.0.0).**
   The core now ships the whole roster: `reviewer`, `tester` (3-attempt cap), `debugger`
   (read-only), `devops` and `cicd` join the existing seven, and `plugins/sdlc/manifest.yaml` binds
   every phase (`review`, `test`, `debugging` included) plus the on-demand agents. Every role agent
