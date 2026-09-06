@@ -31,7 +31,7 @@ status: in-progress
 | H5 | prompt surface reduction / JIT procedure loading | measured, not decided | #110, #117 |
 | H5-D2 | the run start is one command (`resolve/cli.mjs plan`, ADR-0019) | landed, DoD unmeasured | #119, #121, #125 |
 | H6 | `Stop` hook sealing the run (deterministic tail) | done | #107 |
-| I1 | agents in the core, expertise in the foundations (`role_expertise`, ADR-0021) | in-progress (PR-2 of 3) | #139 |
+| I1 | agents in the core, expertise in the foundations (`role_expertise`, ADR-0021) | in-progress (PR-3 of 3) | #139 |
 
 _Remaining: B3. (`kotlinx.serialization` deferred — needs a `serialization` aspect decision before
 it can land as a provider.)_

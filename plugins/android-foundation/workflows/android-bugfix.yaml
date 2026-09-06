@@ -1,6 +1,6 @@
 name: android-bugfix
 description: >
-  Android bug-fix gate. Run android-debugger first (on-demand, for root cause), then:
+  Android bug-fix gate. Run debugger first (on-demand, for root cause), then:
   Developer -> Reviewer (loops back to Developer, max 3) -> [Security || Tester] -> QA.
 caps:
   # Measured basis (method: analysis.yaml): per-phase p90 development $5.41 + review $0.95 +

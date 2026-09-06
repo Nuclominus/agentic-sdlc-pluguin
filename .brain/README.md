@@ -17,7 +17,7 @@ A **merged PR is the trigger.** On merge to `develop`, the `brain-sync` GitHub A
 `tools/brain-sync` and opens a follow-up PR (`brain-sync/pr-<num>`) adding that PR's change note
 and refreshing `changes/_moc-changes.md`. The auto note is deterministic; **enrich** its prose,
 link the ADR it implements, and update the touched `components/` + `architecture/` notes by hand
-or via the `android-docs` agent.
+or via the `document-writer` agent.
 
 Run locally:
 ```bash

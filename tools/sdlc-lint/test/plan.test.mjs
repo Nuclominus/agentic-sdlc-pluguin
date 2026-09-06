@@ -332,11 +332,14 @@ test("role_expertise reaches the plan as absolute rule paths and pre-rendered pr
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
 
-test("a foundation still binding its own roster is warned about where the user can see it", () => {
+test("a foundation still binding its own roster is ignored, and said so where the user can see it", () => {
   const w = world();
   try {
-    const { prints } = resolvePlan({ cwd: w.proj, args: "", env: w.env });
-    assert.ok(prints.some((p) => /WARN: foundation 'demo' declares agents_per_phase — deprecated \(ADR-0021\)/.test(p)));
+    const { prints, plan } = resolvePlan({ cwd: w.proj, args: "", env: w.env });
+    assert.ok(prints.some((p) => /WARN: foundation 'demo' declares agents_per_phase — ignored \(ADR-0021\)/.test(p)),
+      prints.join("\n"));
+    assert.equal(plan.profile.agents_per_phase.business_analysis, "business-analyst",
+      "the core roster wins; the foundation's binding contributes nothing");
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
 
@@ -374,21 +377,22 @@ test("resolveExpertise serves an on-demand agent one block, refuses an unknown r
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
 
-test("a core role resolves even while a foundation still binds its own roster, and so does the bound name", () => {
-  // The defect this pins: `known_agents` built from the EFFECTIVE (foundation-bound) roster made
-  // every core role's on-demand bootstrap fail with 'unknown role' on any project whose foundation
-  // binds agents. The valid set is exactly what carries a prompt block: dispatched ∪ core.
-  const w = world();   // the demo foundation binds demo-ba / demo-dev / demo-qa / demo-docs
+test("every core role resolves, and a name only the ignored foundation roster mentioned does not", () => {
+  // The valid set is exactly what carries a prompt block: dispatched ∪ core. Now that a
+  // foundation's roster is ignored (ADR-0021 PR-3), nothing it names is dispatched, so
+  // `demo-dev` is not a role — and saying so is the point: the project has to be migrated, and a
+  // silent success here would hide that from the person running the command.
+  const w = world();   // the demo foundation still binds demo-ba / demo-dev / demo-qa / demo-docs
   try {
     const core = resolveExpertise({ cwd: w.proj, args: "", env: w.env, role: "developer" });
     assert.equal(core.ok, true, core.error);
-    const bound = resolveExpertise({ cwd: w.proj, args: "", env: w.env, role: "demo-dev" });
-    assert.equal(bound.ok, true, "a name this run actually dispatches is valid too");
+    const stale = resolveExpertise({ cwd: w.proj, args: "", env: w.env, role: "demo-dev" });
+    assert.equal(stale.ok, false, "a name no longer dispatched is not a role");
+    assert.match(stale.error, /unknown role 'demo-dev'/);
 
     const { plan } = resolvePlan({ cwd: w.proj, args: "", env: w.env });
-    assert.ok("demo-dev" in plan.profile.prompt_blocks, "the dispatched agent must have a block to paste");
-    assert.ok("developer" in plan.profile.prompt_blocks, "and so must every core role");
-    assert.equal(plan.profile.prompt_blocks["demo-dev"].expertise, null, "the foundation declares no role_expertise here");
+    assert.ok("developer" in plan.profile.prompt_blocks, "every core role carries a block");
+    assert.ok(!("demo-dev" in plan.profile.prompt_blocks), "and nothing else does");
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
 

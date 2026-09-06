@@ -39,11 +39,6 @@ export const READ_ONLY_AGENTS = [
   "debugger",
   "reviewer",
   "security-analyst",
-  // Legacy android-foundation roster — kept until PR-3 of ADR-0021 deletes the files.
-  "android-aar",
-  "android-debugger",
-  "android-reviewer",
-  "android-security",
 ];
 
 /** Parse `---`-delimited frontmatter. Returns null when the file has none. */

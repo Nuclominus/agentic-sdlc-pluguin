@@ -49,9 +49,9 @@ private fun FeatureContentPreview() = FeatureContent(FeatureUiState(loading = tr
 ## Test tags
 
 Every Compose component a test or QA flow can target carries a stable `testTag`. Tags are the
-contract between production UI, `android-qa` Compose UI Tests, and Maestro flows — `Modifier.testTag`
+contract between production UI, `qa-engineer` Compose UI Tests, and Maestro flows — `Modifier.testTag`
 values and Maestro `id:` are the same string. This is the single source of truth for the convention;
-`android-developer` applies the tags, `android-qa` consumes them, `android-reviewer` enforces them.
+`developer` applies the tags, `qa-engineer` consumes them, `reviewer` enforces them.
 
 ### Grammar (the string contract)
 
@@ -115,8 +115,8 @@ non-asserted decorative `Text`. When in doubt, tag it.
 ### Project index — `ui-patterns.md`
 
 The plugin defines the grammar; each consumer project keeps a per-screen index in
-`.obsidian-vault/architecture/ui-patterns.md` so `android-qa` can search tags fast. `android-developer`
-updates the affected row in the **same change** that adds or renames a tag; `android-docs` reconciles
+`.obsidian-vault/architecture/ui-patterns.md` so `qa-engineer` can search tags fast. `developer`
+updates the affected row in the **same change** that adds or renames a tag; `document-writer` reconciles
 and completes the index during the docs phase (it is the backstop). Schema:
 
 | Screen | Element | Constant | testTag | Component | Interactions | State / Notes |

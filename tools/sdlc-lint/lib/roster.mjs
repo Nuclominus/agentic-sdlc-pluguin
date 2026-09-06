@@ -147,6 +147,49 @@ export function checkRoster(root = process.cwd()) {
     push("expertise", rel, errors);
   }
 
+  // ---- home: `agents/` exists only under the core (ADR-0021 PR-3)
+  //
+  // The invariant the whole track exists to establish. A foundation that re-adds `agents/` gets
+  // those agents dispatched by name the moment any manifest binds them, and process leaks back out
+  // of the core one plugin at a time.
+  for (const dir of globSync("plugins/*/agents", { cwd: root, absolute: true, onlyDirectories: true }).sort()) {
+    const rel = relative(root, dir);
+    push("home", rel, rel === CORE_AGENTS_DIR ? [] : [
+      `${rel} ships agents, but only ${CORE_AGENTS_DIR} may (ADR-0021: the core owns the roster; a foundation carries expertise via role_expertise)`,
+    ]);
+  }
+
+  // ---- stragglers: retired names and cross-plugin path variables left behind by the move
+  //
+  // Two traps the move leaves if a file is missed. A retired `android-<role>` name in a shipped
+  // file is an instruction to dispatch something that no longer exists — it fails at dispatch, not
+  // at lint. A plugin-root variable inside a foundation's `rules/**` resolves against the plugin
+  // that owns the READING AGENT, which is now always `sdlc`, so every such path silently misses;
+  // the resolver emits `role_expertise.<role>.rules` absolute for exactly this reason.
+  //
+  // `config/agent-migrations.json` is the map FROM those names and the doctor command shows the
+  // rename to a user: forbidding them there would forbid the migration itself.
+  const RETIRED = /\bandroid-(ba|developer|reviewer|security|tester|qa|docs|debugger|devops|cicd|aar)\b(?!-)/;
+  const EXEMPT = new Set(["plugins/sdlc/config/agent-migrations.json", "plugins/sdlc/commands/doctor.md"]);
+  for (const file of globSync("plugins/**/*.{md,yaml,yml,json,mjs,sh}", { cwd: root, absolute: true })
+    .filter((f) => !f.includes("/test-fixtures/") && !f.includes("/node_modules/")).sort()) {
+    const rel = relative(root, file);
+    if (EXEMPT.has(rel)) continue;
+    const errors = [];
+    const text = readFileSync(file, "utf8");
+    const hit = text.match(RETIRED);
+    if (hit) {
+      errors.push(`${rel} still names the retired agent '${hit[0]}' — the roster was renamed and ships no aliases (ADR-0021); dispatching it fails at runtime, not here`);
+    }
+    // Only a FOUNDATION's rules/: the core's own files may name its plugin root, and that is
+    // where the variable resolves correctly.
+    if (/^plugins\/(?!sdlc\/)[^/]+\/rules\//.test(rel) && text.includes("CLAUDE_PLUGIN_ROOT")) {
+      errors.push(`${rel} names \`\${CLAUDE_PLUGIN_ROOT}\` — these files are read by an agent living in plugins/sdlc, where it resolves to the wrong plugin. Name the sibling file descriptively; the resolver supplies absolute paths via role_expertise.<role>.rules`);
+    }
+    if (errors.length) push("stragglers", rel, errors);
+  }
+  if (!results.some((r) => r.check === "stragglers")) push("stragglers", "plugins/", []);
+
   // ---- slot: the two-way expertise contract, held per agent by what its tools can actually do
   //
   // A bare substring test is not enough, and was not: business-analyst.md and security-analyst.md

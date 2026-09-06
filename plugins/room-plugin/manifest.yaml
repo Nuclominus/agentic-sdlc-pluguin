@@ -27,7 +27,7 @@ phase_injections:
     Room (MASVS-STORAGE): every query MUST be parameterized — use `@Query` bind parameters (`:arg`) or
     `SupportSQLiteQuery` bind args for `@RawQuery`; never concatenate untrusted input into SQL. Sensitive
     data at rest (tokens, credentials, PII) must not sit in a plaintext database — use an encrypted store
-    (e.g. SQLCipher) or field-level encryption and coordinate the trust boundary with android-security.
+    (e.g. SQLCipher) or field-level encryption and coordinate the trust boundary with security-analyst.
     Keep `exportSchema = true` for auditable migrations; never log query contents containing PII. Apply
     the R8/ProGuard keep rules in room-plugin/rules/snippets/room-proguard.md when the project ships R8.
 

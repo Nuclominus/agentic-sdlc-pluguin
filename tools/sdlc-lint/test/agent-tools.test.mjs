@@ -55,23 +55,23 @@ test("DISPATCH_TOOLS covers dispatch, resume, and fan-out — not just Agent", (
 });
 
 test("a reviewing agent declaring Edit is rejected", () => {
-  const r = scanAgent(agent(["name: android-reviewer", "description: d", "tools: [Read, Edit, Write]"]));
+  const r = scanAgent(agent(["name: reviewer", "description: d", "tools: [Read, Edit, Write]"]));
   assert.equal(r.ok, false);
   assert.match(r.errors.join("\n"), /reviewers report, the development agent applies/);
 });
 
 test("a reviewing agent may still hold Write for its own report", () => {
-  const r = scanAgent(agent(["name: android-security", "description: d", "tools: [Read, Glob, Grep, Write, Bash, Skill]"]));
+  const r = scanAgent(agent(["name: security-analyst", "description: d", "tools: [Read, Glob, Grep, Write, Bash, Skill]"]));
   assert.deepEqual(r.errors, []);
 });
 
 test("Edit is fine on an agent that is not a reviewer", () => {
-  const r = scanAgent(agent(["name: android-developer", "description: d", "tools: [Read, Edit, Write]"]));
+  const r = scanAgent(agent(["name: developer", "description: d", "tools: [Read, Edit, Write]"]));
   assert.deepEqual(r.errors, []);
 });
 
 test("a missing description is a violation — it makes the agent unselectable", () => {
-  const r = scanAgent(agent(["name: android-cicd", "tools: [Read, Bash]"]));
+  const r = scanAgent(agent(["name: cicd", "tools: [Read, Bash]"]));
   assert.equal(r.ok, false);
   assert.match(r.errors.join("\n"), /never be selected by trigger words/);
 });
@@ -84,15 +84,17 @@ test("a file with no frontmatter fails closed", () => {
 
 test("every shipped agent in this repo is clean", () => {
   const results = checkAgentTools(REPO);
-  assert.ok(results.length >= 18, `expected the full agent roster, found ${results.length}`);
+  assert.ok(results.length >= 12, `expected the full agent roster, found ${results.length}`);
   assert.deepEqual(results.filter(r => !r.ok), []);
 });
 
 test("no shipped agent holds a dispatch tool — the orchestrator's exclusive right", () => {
   const results = checkAgentTools(REPO);
-  // Guard against the check passing vacuously if the glob ever stops matching.
-  assert.ok(results.some(r => r.file.includes("android-")), "android agents must be in scope");
-  assert.ok(results.some(r => r.file.includes("plugins/sdlc/")), "core agents must be in scope");
+  // Guard against the check passing vacuously if the glob ever stops matching. Since ADR-0021
+  // there is exactly one place to match: the core owns the whole roster, and `sdlc-lint roster`
+  // fails any other plugin that ships an `agents/` directory.
+  assert.ok(results.length > 0 && results.every(r => r.file.startsWith("plugins/sdlc/agents/")),
+    `every agent must live in the core: ${results.map(r => r.file).join(", ")}`);
 });
 
 test("READ_ONLY_AGENTS names real shipped agents, not stale entries", () => {

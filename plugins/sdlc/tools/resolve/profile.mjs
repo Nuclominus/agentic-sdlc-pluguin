@@ -34,21 +34,27 @@ export function mergeProfiles({ primary, active = {}, additive = [], vanilla = n
   const orderedAdditive = [...additive].sort((a, b) => String(a.stack).localeCompare(String(b.stack)));
   const stackProfiles = uniq([primary, ...Object.values(active)].filter(Boolean));
 
-  // ADR-0021: agents live in the core. A foundation that still binds its own roster is honored
-  // for one release so consumers can migrate, but it is told so — silently keeping the override
-  // alive is how the roster split would never finish.
+  // ADR-0021: agents live in the core. A foundation that still binds its own roster is IGNORED —
+  // the schema now forbids the key outright, so reaching here means a stale or third-party manifest.
+  // Honoring it would dispatch a roster that no longer ships — a retired name resolves to no agent
+  // file, so the failure would land at dispatch rather than here. `rosterOf` is what enforces the
+  // rule; this loop is only the report.
+  const rosterIgnored = new Set();
   for (const p of stackProfiles) {
     if (p === vanilla || p?.stack === "vanilla") continue;
     if (isPlainObject(p?.agents_per_phase) && Object.keys(p.agents_per_phase).length) {
-      warnings.push(`WARN: foundation '${p.stack}' declares agents_per_phase — deprecated (ADR-0021): agents live in the core; foundations carry expertise via role_expertise. Honored this release; ignored in the next.`);
+      rosterIgnored.add(p);
+      warnings.push(`WARN: foundation '${p.stack}' declares agents_per_phase — ignored (ADR-0021): the roster and its phase bindings live only in the core manifest; declare role_expertise instead. Run /sdlc:doctor if this project's own config still names the retired agents.`);
     }
   }
+  /** The roster a profile may contribute: none, unless it is the core. */
+  const rosterOf = (p) => (p && !rosterIgnored.has(p) ? p.agents_per_phase ?? {} : {});
 
   // Agents: aspect-agnostic phases come from the primary, falling back to vanilla. Additive
   // profiles are never consulted for agent selection.
   const agents = {};
   for (const phase of ASPECT_AGNOSTIC) {
-    const fromPrimary = primary?.agents_per_phase?.[phase];
+    const fromPrimary = rosterOf(primary)[phase];
     const fromVanilla = vanilla?.agents_per_phase?.[phase];
     const chosen = fromPrimary ?? fromVanilla;
     if (chosen != null) agents[phase] = chosen;
@@ -57,12 +63,12 @@ export function mergeProfiles({ primary, active = {}, additive = [], vanilla = n
   //
   // The set is NOT "anything not aspect-agnostic". Step 1a names it exactly: `development`
   // always, plus any phase a profile declares AS a per-aspect mapping. An earlier draft made
-  // every remaining phase an aspect map, which turned `test: android-tester` into
-  // `{android: android-tester}` — harmless in the merge, and printed as `[object Object]` the
-  // moment a dry-run row read the agent. Real project data caught it; synthetic fixtures did not.
+  // every remaining phase an aspect map, which turned a flat `test: <agent>` into
+  // `{android: <agent>}` — harmless in the merge, and printed as `[object Object]` the moment a
+  // dry-run row read the agent. Real project data caught it; synthetic fixtures did not.
   const isAspectAware = (phase, mapping) => phase === "development" || isPlainObject(mapping);
   for (const [aspect, profile] of Object.entries(active)) {
-    for (const [phase, mapping] of Object.entries(profile?.agents_per_phase ?? {})) {
+    for (const [phase, mapping] of Object.entries(rosterOf(profile))) {
       if (ASPECT_AGNOSTIC.includes(phase)) continue;
       if (!isAspectAware(phase, mapping)) continue;
       const agent = isPlainObject(mapping) ? mapping[aspect] : mapping;
@@ -72,7 +78,7 @@ export function mergeProfiles({ primary, active = {}, additive = [], vanilla = n
     }
   }
   // Any remaining phase the primary declares flatly and no aspect claimed.
-  for (const [phase, mapping] of Object.entries(primary?.agents_per_phase ?? {})) {
+  for (const [phase, mapping] of Object.entries(rosterOf(primary))) {
     if (phase in agents) continue;
     agents[phase] = mapping;
   }

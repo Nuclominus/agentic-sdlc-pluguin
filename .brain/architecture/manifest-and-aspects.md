@@ -30,7 +30,7 @@ Agentic-SDLC-Plugin/
 │   │
 │   ├── android-foundation/       ← STACK PROVIDER — aspect android, priority 300 (the centerpiece)
 │   │   ├── manifest.yaml         ← kind: foundation
-│   │   ├── agents/               ← 11 specialized agents (android-ba, android-developer, …)
+│   │   ├── skills/               ← 13 skills: the platform expertise the CORE roles invoke
 │   │   ├── skills/               ← android-architecture, android-compose-ui, android-data, android-navigation, manage-vault
 │   │   ├── rules/                ← conventions + snippets (non-negotiable, proguard-keep, gradle-commands)
 │   │   ├── workflows/            ← android-feature, android-bugfix
@@ -172,5 +172,5 @@ single Maven coordinate.
 |---|---|---|
 | **Builds can't run in-pipeline** | `assembleDebug` needs the full SDK | Verification = detekt + JVM unit tests + Kotlin compile-check; real builds in CI. |
 | **Instrumented tests are CI-only** | `connectedAndroidTest` needs an emulator/device | Unit tests (JVM) in-pipeline; Compose UI Test / Maestro in CI. |
-| **Security model is mobile** | MASVS/MASTG, not OWASP web | `android-security` runs a full MASVS/MASTG audit; framework providers add MASVS-NETWORK (e.g. retrofit TLS/pinning). |
+| **Security model is mobile** | MASVS/MASTG, not OWASP web | The core `security-analyst` runs a full MASVS/MASTG audit under the foundation's `role_expertise` block + `android-security-masvs` skill; framework providers add MASVS-NETWORK (e.g. retrofit TLS/pinning). |
 | **Library guidance is detected, not imposed** | projects swap Retrofit/Room/Hilt | Detect-don't-impose libraries live in framework plugins; pinned house rules (Coil, Kermit, KSP, …) stay in the foundation. |

@@ -157,6 +157,27 @@ test("manifest.schema lets a framework declare role_expertise too — the merge 
   }), JSON.stringify(v.errors));
 });
 
+test("manifest.schema forbids the roster keys on a non-vanilla foundation, and still allows them on the core", () => {
+  // ADR-0021 PR-3. The core manifest is itself `kind: foundation` (`stack: vanilla`, priority 0),
+  // so the carve-out is on the stack, not on a third `kind` — adding one would ripple through
+  // `classify()` and every kind guard in the resolver for no gain.
+  const v = compile("schemas/manifest.schema.json");
+  const CORE = { kind: "foundation", stack: "vanilla", priority: 0, detect: { any: ["*"] } };
+
+  assert.ok(v({ ...CORE, agents_per_phase: { development: "developer" }, on_demand_agents: ["debugger"] }),
+    `the core still binds the roster: ${JSON.stringify(v.errors)}`);
+
+  assert.equal(v({ ...FOUNDATION, agents_per_phase: { development: "android-developer" } }), false,
+    "a stack provider may no longer bind a phase to an agent");
+  assert.equal(v({ ...FOUNDATION, on_demand_agents: ["android-debugger"] }), false,
+    "nor advertise its own on-demand roster");
+  assert.equal(v({ ...FOUNDATION, aar_analyst: "android-aar" }), false,
+    "nor override the AAR analyst — /sdlc:aar always dispatches the core one");
+
+  assert.ok(v({ ...FOUNDATION, role_expertise: { developer: { invariants: "Never block main." } } }),
+    `expertise is the replacement extension point: ${JSON.stringify(v.errors)}`);
+});
+
 test("checkpoint.schema accepts heal result fields", () => {
   const v = compile("schemas/checkpoint.schema.json");
   assert.ok(v({
