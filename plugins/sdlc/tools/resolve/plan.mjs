@@ -19,7 +19,6 @@ import {
   mergeProfiles, applyLocalOverrides, parseModelOverrides, renderOverridesPrint, renderModelPrint, renderStackPrint,
   mergeRoleExpertise, renderRoleExpertiseBlock, renderSkillsBlock,
 } from "./profile.mjs";
-import { canonicalAgentName } from "./aliases.mjs";
 import { discoverRecipes, resolveWorkflowName, locateRecipe, validateWorkflow, normalizePhases, validateAcyclic, buildResolvedPhases, renderWorkflowPrint } from "./workflow.mjs";
 import { resolveCostCap, renderCapOverridePrint, expandRows, estimate, renderDryRun, renderHeadlessDryRun } from "./caps.mjs";
 import { parseYaml } from "./yaml.mjs";
@@ -59,20 +58,19 @@ function agentsBound(agentsPerPhase = {}) {
 /**
  * ADR-0021 — the per-agent prompt blocks, pre-rendered.
  *
- * Keyed by the agent name the orchestrator dispatches; looked up by its CORE role, so a run that
- * still dispatches a legacy `android-developer` (PR-1 window) receives the `developer` expertise.
- * Every role the core knows gets an entry — `null` blocks included — so the orchestrator pastes
- * `prompt_blocks[agent].expertise` without a presence check, and an on-demand agent's block is
- * already rendered for `resolveExpertise`.
+ * Keyed by name, with no translation anywhere: a `role_expertise` entry is found by the exact name
+ * that will be dispatched. The key set is every agent this run can dispatch UNION the core's own
+ * roster, so the orchestrator can paste `prompt_blocks[agent]` without a presence check and an
+ * on-demand core role is served even when a foundation binds something else for its phases.
+ * A `null` block is a real answer (this stack says nothing about this role), not a missing one.
  */
 function renderPromptBlocks({ agents, roleExpertise, extensionRows, stack }) {
   const blocks = {};
   for (const agent of agents) {
-    const role = canonicalAgentName(agent, [], "");
-    const exp = roleExpertise[role];
+    const exp = roleExpertise[agent];
     blocks[agent] = {
-      expertise: renderRoleExpertiseBlock(role, exp, { stack }),
-      skills: renderSkillsBlock(role, { roleSkills: exp?.skills ?? [], extensionRows }),
+      expertise: renderRoleExpertiseBlock(agent, exp, { stack }),
+      skills: renderSkillsBlock(agent, { roleSkills: exp?.skills ?? [], extensionRows }),
     };
   }
   return blocks;
@@ -134,6 +132,15 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   for (const e of mergeErrors) warn(`WARN: ${e.message}`);
   warnAll(mergeWarnings);
 
+  // The roster a project's config may legitimately name: what this run dispatches, plus the core's
+  // own roles (an on-demand agent is never bound to a phase). A name in neither matches nothing —
+  // reported by the parsers below, never translated (ADR-0021 ships no aliases; /sdlc:doctor migrates).
+  const knownAgents = new Set([
+    ...agentsBound(base.agents_per_phase),
+    ...agentsBound(vanilla?.agents_per_phase),
+    ...(Array.isArray(vanilla?.on_demand_agents) ? vanilla.on_demand_agents : []),
+  ]);
+
   const localPath = join(cwd, ".claude", "sdlc.local.yaml");
   let local = null;
   if (existsSync(localPath)) {
@@ -146,6 +153,7 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   const overridden = applyLocalOverrides(base, local, {
     availableSkills: deps.available_skills,
     unavailablePlugins: deps.flags,
+    knownAgents,
   });
   warnAll(overridden.warnings);
   const effective = overridden.profile;
@@ -153,7 +161,7 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   if (overridesPrint) prints.push(overridesPrint);
 
   const modelJson = readJson(join(cwd, ".claude", "model.local.json"));
-  const models = parseModelOverrides(modelJson);
+  const models = parseModelOverrides(modelJson, { knownAgents });
   warnAll(models.warnings);
   const modelPrint = renderModelPrint(models.overrides);
   if (modelPrint) prints.push(modelPrint);
@@ -164,15 +172,17 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
     .map((r) => ({ stack: r.doc.stack, dir: r.file ? dirname(r.file) : "", role_expertise: r.doc.role_expertise }));
   const expertise = mergeRoleExpertise(expertiseSources);
   warnAll(expertise.warnings);
-  const knownAgents = new Set([...agentsBound(effective.agents_per_phase), ...(Array.isArray(vanilla?.on_demand_agents) ? vanilla.on_demand_agents : [])]);
+  // Late-bound phases (an `extra_phases[].agent`, a project's skip injections) can add a name after
+  // `knownAgents` was built for config validation; the block map must cover everything dispatched.
+  const blockAgents = new Set([...knownAgents, ...agentsBound(effective.agents_per_phase)]);
   const promptBlocks = renderPromptBlocks({
-    agents: knownAgents, roleExpertise: expertise.role_expertise, extensionRows: effective.extension_skills ?? [], stack: stack.foundation,
+    agents: blockAgents, roleExpertise: expertise.role_expertise, extensionRows: effective.extension_skills ?? [], stack: stack.foundation,
   });
 
   return {
     prints, warnings, halt: null, headless, roots, installs, enabled, manifests, deps, stack, local,
     primary, vanilla, additive, effective, models,
-    role_expertise: expertise.role_expertise, prompt_blocks: promptBlocks, known_agents: knownAgents,
+    role_expertise: expertise.role_expertise, prompt_blocks: promptBlocks, known_agents: blockAgents,
     profile_dir: primaryRecord?.file ? dirname(primaryRecord.file) : null,
   };
 }
@@ -188,15 +198,17 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
 export function resolveExpertise({ cwd = process.cwd(), args = "", env = process.env, mode = "installed", role } = {}) {
   const r = resolveProfile({ cwd, args, env, mode });
   if (r.halt) return { ok: false, role, error: r.halt, prints: r.prints, warnings: r.warnings };
+  // A blocking dependency stops `plan`; it must stop this too, or an on-demand agent would run
+  // against a project the pipeline itself refuses. The preflight's own stdout IS the contract.
+  if (r.deps?.abort) return { ok: false, role, error: r.deps.stdout.join("\n"), prints: r.prints, warnings: r.warnings };
   const known = [...r.known_agents].sort();
-  const canon = canonicalAgentName(role ?? "", r.warnings, "expertise --role");
-  if (!known.includes(canon)) {
+  if (!known.includes(role)) {
     return { ok: false, role, prints: r.prints, warnings: r.warnings, error: `unknown role '${role}' — known: ${known.join(", ")}` };
   }
-  const blocks = r.prompt_blocks[canon] ?? { expertise: null, skills: null };
+  const blocks = r.prompt_blocks[role] ?? { expertise: null, skills: null };
   return {
-    ok: true, role: canon, stack: r.stack.foundation, profile_dir: r.profile_dir,
-    expertise: r.role_expertise[canon] ?? null,
+    ok: true, role, stack: r.stack.foundation, profile_dir: r.profile_dir,
+    expertise: r.role_expertise[role] ?? null,
     block: blocks.expertise, skills_block: blocks.skills,
     prints: r.prints, warnings: r.warnings,
   };

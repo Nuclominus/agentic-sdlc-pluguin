@@ -23,7 +23,7 @@ defects follow:
 |---|---|
 | Roster | Full universal roster in the core: `reviewer`, `tester`, `debugger`, `devops`, `cicd` join the existing seven. Every `android-*` role has a 1:1 core successor. |
 | Delivery | Hybrid. Manifest-declared per-role `invariants` + `rules` paths are rendered by the resolver and pasted by the orchestrator into the stable prefix (present by construction). Large checklists become per-role foundation skills invoked as mandatory. |
-| Migration | Delete `android-foundation/agents/` in one release; the resolver and the model-enforcement hook map the 11 legacy names with a deprecation warning; aliases sunset two releases after `android-foundation 2.0.0`. |
+| Migration | Delete `android-foundation/agents/`. **No aliases anywhere** (amended 2026-09-06 after PR-1's review): a name that matches nothing is reported, never translated. `/sdlc:doctor` migrates a project's `sdlc.local.yaml` and `model.local.json` once, with approval, from the rename data in `config/agent-migrations.json`. |
 | On-demand agents | One resolver command — `node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs expertise --role <name>` — prints the same blocks; no "read N files" prose (H1: one-command shapes measure ~100% compliance). |
 
 ## Architecture
@@ -58,11 +58,11 @@ deprecation warning for one release (PR-1/2), forbidden by the schema after (PR-
 
 ### Resolver
 
-- `aliases.mjs` — `LEGACY_AGENT_ALIASES`, `canonicalAgentName(name, warnings, where)`, `legacyNamesFor`.
 - `profile.mjs` — `mergeRoleExpertise(sources)` (primary first, frameworks alphabetically; rules
-  absolute, missing ones dropped with a warning; skills deduped, strictest policy wins),
-  `renderRoleExpertiseBlock`, `renderSkillsBlock` (3b-1a as code), alias canonicalisation in
-  `parseExtensionSkills` / `parseModelOverrides`, `extra_phases[].agent` honored.
+  absolute, missing ones dropped with a warning; skills deduped, strictest policy wins, equal
+  policies broken by a stated `when` then alphabetically), `renderRoleExpertiseBlock`,
+  `renderSkillsBlock` (3b-1a as code), stale-agent-name reporting in `parseExtensionSkills` /
+  `parseModelOverrides`, `extra_phases[].agent` honored.
 - `plan.mjs` — `resolveProfile` (Steps 0 → 1b-models, shared), `plan.profile.role_expertise`,
   `plan.profile.prompt_blocks[agent] = {expertise, skills}`, `plan.stack.profile_dir`, a WARN for
   any recipe phase with no agent bound, `resolveExpertise({role})`.
@@ -98,9 +98,18 @@ command lives — correct by construction.
 
 ### Hook — `enforce-agent-model.sh`
 
-A `model.local.json` still keyed by a legacy name applies to the core successor (an explicit core
-key wins regardless of order); a dispatch of a deleted `android-*` agent resolves the successor's
-tier and warns about the rename. The alias case-table mirrors `aliases.mjs`.
+Unchanged in behaviour, and deliberately so: it resolves the name it is given and falls open when no
+agent file matches. A direct `${CLAUDE_PLUGIN_ROOT}/agents/<name>.md` probe answers first (every
+dispatched agent ships in the core), with `find -print -quit` as the fallback for other layouts.
+
+### Migration — `config/agent-migrations.json` + `tools/migrate/`
+
+`loadRenames` merges the versioned rename entries; `scanConfigs` reports every stale name in
+`sdlc.local.yaml` `extensions.skills[].agents` and `model.local.json` `agents{}` with its location;
+`applyRenames` rewrites only those tokens (YAML by targeted line replacement so comments and
+formatting survive, JSON by re-serialisation). `cli.mjs check` is read-only and exits 2 on findings;
+`cli.mjs apply` writes. `/sdlc:doctor` runs `check`, shows the findings, and runs `apply` only on an
+explicit yes.
 
 ### Lint — `sdlc-lint roster` (part of `all`)
 
@@ -109,7 +118,7 @@ tier and warns about the rename. The alias case-table mirrors `aliases.mjs`.
 | agents | every role the core binds (`agents_per_phase` ∪ `on_demand_agents` ∪ `extra_phases[].agent`) ships `plugins/sdlc/agents/<name>.md` with a matching `name:` |
 | phases | every phase in every `plugins/*/workflows/*.yaml` is a core-bound phase or an `extra_phases` name |
 | expertise | every `role_expertise` key is a core role; every rule path exists; every own-plugin skill exists; every `superpowers:*` skill is declared in that plugin's `runtime-dependencies.json` |
-| slot | every core role agent carries `expertise --role <its name>`; the orchestrator's 3b-1 layout carries `Stack expertise for` |
+| slot | every core role agent carries the "Stack expertise" section; one holding `Bash` carries `expertise --role <its name>`; one without `Bash` must NOT name that command; the orchestrator's 3b-1 layout carries `Stack expertise for` |
 
 PR-3 adds: only `plugins/sdlc` has an `agents/` dir; no legacy `android-<role>` name under
 `plugins/` outside `aliases.mjs`, the hook and CHANGELOG; no `${CLAUDE_PLUGIN_ROOT}` inside a
@@ -143,14 +152,15 @@ row per `##` section of each deleted agent lives in `.brain/planning/i1-agents-i
 | Stable-prefix growth | Invariants ≤ 1400 chars/role (schema), rules ≤ 5 lines, skills ≤ 5 rows. Net per-turn context is expected to shrink (an Android agent body was the subagent's system prompt on every turn). Measured in PR-4. |
 | Mandatory-skill compliance (H1) | ≤ 3 mandatory skills per role, one machine-rendered list, audited with `sdlc-lint compliance` after the first runs. |
 | `${CLAUDE_PLUGIN_ROOT}` cross-plugin | Rule paths emitted absolute; the variable purged from foundation `rules/**` and linted. |
-| Users' `sdlc.local.yaml` / `model.local.json` | Alias map with WARN in `prints[]`; hook honors legacy keys; `/sdlc:extension` and `/sdlc:model-config` offer a rewrite. |
+| Users' `sdlc.local.yaml` / `model.local.json` | A stale name is reported on every run (in `prints[]`, and on stderr for `expertise`) and migrated by one approved `/sdlc:doctor` pass. It degrades rather than misbehaves: an extension row injects nothing, a model key leaves the frontmatter tier in force. |
 | Old telemetry keyed by agent name | `/sdlc:report` groups by phase and model — unaffected. |
 
 ## Verification
 
 1. `node --test tools/sdlc-lint/test/*.test.mjs` — profile, plan, aliases, schema, roster suites.
 2. `node tools/sdlc-lint/cli.mjs all --json` — includes `roster`.
-3. `bash tests/test-enforce-agent-model.sh` — legacy key honored, legacy dispatch warns.
+3. `bash tests/test-enforce-agent-model.sh` — a stale key is not translated, an unknown dispatch falls open, the plugin-root probe resolves a core agent.
+3a. `node plugins/sdlc/tools/migrate/cli.mjs check` on a project with a stale name — exit 2, findings named.
 4. `node tools/brain-sync/cli.mjs check --vault .brain`.
 5. On a real Android project: `/sdlc:start "…" --dry-run` shows `development — android → developer`
    (PR-2 onward); `cli.mjs expertise --role debugger` prints the block.

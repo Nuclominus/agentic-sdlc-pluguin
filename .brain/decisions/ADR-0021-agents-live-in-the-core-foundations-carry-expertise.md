@@ -66,11 +66,22 @@ per-role declaration the core consumes).**
    phase is bound; every `role_expertise` key, rule path and skill resolves (a `superpowers:*`
    skill must be declared by the plugin that mandates it — the h5-d2 rule); every agent carries
    its own bootstrap line and the orchestrator pastes the block.
-5. **Legacy names survive one release as aliases.** `resolve/aliases.mjs` maps the eleven
-   `android-*` names to their successors in `sdlc.local.yaml` and `model.local.json` with a
-   per-site warning; the `enforce-agent-model.sh` hook mirrors the map and resolves a deleted
-   agent's dispatch to its successor's tier. Aliases are removed two releases after
-   `android-foundation 2.0.0`.
+5. **No aliases. An agent name is never translated, anywhere.** The first implementation kept the
+   eleven `android-*` names working by rewriting them in the resolver, in the tier lookup and in
+   the model-enforcement hook. Review found six defects in that machinery, every one the same
+   shape: one copy of the map keyed on the canonical name while another was keyed on the
+   dispatched one. The key in `model.local.json`, the name dispatched, the `role_expertise` key and
+   the file on disk are now one string by construction.
+
+   A name that matches nothing is **reported**, not repaired: the resolver warns per site and names
+   `/sdlc:doctor`, and the hook falls open exactly as it does for any non-SDLC agent. `/sdlc:doctor`
+   owns the migration. It reads `config/agent-migrations.json` (rename data, versioned and
+   appendable, never consulted at runtime), reports every stale entry in `sdlc.local.yaml` and
+   `model.local.json`, and rewrites those name tokens **only after the user approves**, via
+   `tools/migrate/cli.mjs apply`. This is the first time doctor writes anything; diagnosis stays
+   read-only and the write is bounded to two files, agent-name tokens only, interactive only. It
+   also generalises: the next rename is a data entry plus a doctor run, not another translation
+   layer.
 
 ## Consequences
 
@@ -85,11 +96,23 @@ per-role declaration the core consumes).**
   per-turn context is expected to *shrink* — an Android agent body (78–259 lines) was the
   subagent's system prompt on every turn; a core body plus a ~25-line block is smaller. The
   measurement is the follow-up (PR-4 of the plan), not a claim made here.
-- **Three PRs, each CI-green:** PR-1 (this ADR, roster, resolver, orchestrator, lint — Android runs
-  byte-identical, the foundation still binds), PR-2 (Android expertise extracted into nine skills
-  + `role_expertise`, the foundation stops binding), PR-3 (delete `android-foundation/agents/`,
-  forbid roster keys on non-core foundations, docs, 2.0.0). `expertise-coverage.mjs` asserts every
-  section of every deleted agent has a mapped destination.
+- **An un-migrated project degrades rather than misbehaves.** An extension row naming a removed
+  agent injects nothing; a stale `model.local.json` key leaves the frontmatter tier in force. Both
+  are reported on every run and fixed by one doctor pass. This is the deliberate trade for deleting
+  the translation layer: silent-and-correct was never on offer, only silent-and-wrong.
+- **The skills block is not byte-identical to the extension block it replaces.** It now carries the
+  stack's own `role_expertise.<role>.skills` alongside the project's `extensions.skills`, so it has
+  a new header and a stated tie-break for two rows of equal policy (a stated `when` beats none, then
+  alphabetically first). Prompt-cache stability holds run to run, which is what the cache needs; it
+  does not hold across this upgrade, and no claim is made that it does.
+- **Three PRs, each CI-green:** PR-1 (this ADR, roster, resolver, orchestrator, lint, doctor
+  migration — the foundation still binds its own roster, so an Android run behaves as before),
+  PR-2 (Android expertise extracted into nine skills + `role_expertise`, the foundation stops
+  binding), PR-3 (delete `android-foundation/agents/`, forbid roster keys on non-core foundations,
+  docs, 2.0.0). `expertise-coverage.mjs` asserts every section of every deleted agent has a mapped
+  destination. Because the whole track lands on one integration branch, the marketplace never
+  publishes a split roster: there is no shipped intermediate state to keep compatible, which is
+  what made the alias layer unnecessary as well as harmful.
 - **Amends ADR-0001.** "Its own agent roster" is no longer what a foundation plugs in; the
   extension point is `role_expertise` + workflow + skills + hooks. Detection, priority and the
   aspect model are unchanged. Old telemetry rows keep their `android-*` agent names; `/sdlc:report`

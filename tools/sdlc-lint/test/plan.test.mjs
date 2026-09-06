@@ -97,7 +97,9 @@ function world({ localYaml = null, modelJson = null, recipe = null, roleExpertis
     "detect:", '  any: ["*"]', "hosts_aspects: all",
     "agents_per_phase:",
     "  documentation: core-docs",
-    ...(roleExpertise ? ["  business_analysis: business-analyst", "  development: developer", "  qa: qa-engineer"] : []),
+    "  business_analysis: business-analyst",
+    "  development: developer",
+    "  qa: qa-engineer",
     "on_demand_agents: [debugger]",
     "",
   ].join("\n"));
@@ -369,6 +371,46 @@ test("resolveExpertise serves an on-demand agent one block, refuses an unknown r
     assert.equal(vanilla.ok, true);
     assert.equal(vanilla.block, null, "nothing to say — the caller prints the 'no stack expertise' line");
     assert.equal(vanilla.stack, "vanilla");
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("a core role resolves even while a foundation still binds its own roster, and so does the bound name", () => {
+  // The defect this pins: `known_agents` built from the EFFECTIVE (foundation-bound) roster made
+  // every core role's on-demand bootstrap fail with 'unknown role' on any project whose foundation
+  // binds agents. The valid set is exactly what carries a prompt block: dispatched ∪ core.
+  const w = world();   // the demo foundation binds demo-ba / demo-dev / demo-qa / demo-docs
+  try {
+    const core = resolveExpertise({ cwd: w.proj, args: "", env: w.env, role: "developer" });
+    assert.equal(core.ok, true, core.error);
+    const bound = resolveExpertise({ cwd: w.proj, args: "", env: w.env, role: "demo-dev" });
+    assert.equal(bound.ok, true, "a name this run actually dispatches is valid too");
+
+    const { plan } = resolvePlan({ cwd: w.proj, args: "", env: w.env });
+    assert.ok("demo-dev" in plan.profile.prompt_blocks, "the dispatched agent must have a block to paste");
+    assert.ok("developer" in plan.profile.prompt_blocks, "and so must every core role");
+    assert.equal(plan.profile.prompt_blocks["demo-dev"].expertise, null, "the foundation declares no role_expertise here");
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("a config naming an agent that does not exist is reported in prints, and the run continues", () => {
+  const w = world({
+    localYaml: [
+      "extensions:", "  skills:",
+      '    - skill: "acme:x"', "      agents: [android-developer]",
+      '    - skill: "acme:y"', "      agents: [developer]",
+      "",
+    ].join("\n"),
+    modelJson: { agents: { "android-ba": "opus" } },
+  });
+  try {
+    const { plan, prints, warnings } = resolvePlan({ cwd: w.proj, args: "", env: w.env });
+    assert.ok(plan, "an un-migrated config degrades, it never stops the run");
+    assert.deepEqual(plan.profile.extension_skills.map((r) => r.skill), ["acme:y"]);
+    assert.deepEqual(plan.models.agents, {}, "the unknown key is dropped, the rest of the file survives");
+    for (const w2 of warnings) assert.ok(prints.includes(w2), `warning not echoed: ${w2}`);
+    assert.ok(prints.some((p) => /extensions\.skills\[0\] targets unknown agent 'android-developer'/.test(p)), prints.join("\n"));
+    assert.ok(prints.some((p) => /model\.local\.json names unknown agent 'android-ba'/.test(p)), prints.join("\n"));
+    assert.ok(prints.some((p) => /run \/sdlc:doctor/.test(p)), "the report names the command that fixes it");
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
 

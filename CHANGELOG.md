@@ -61,12 +61,25 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
   `superpowers:*` skill must be declared by the plugin that mandates it), and every agent carries
   its bootstrap line. **Nothing changes for an Android run yet**: `android-foundation` still binds
   its own roster (now warned as deprecated); PR-2 extracts its expertise into skills +
-  `role_expertise`, PR-3 deletes `android-foundation/agents/`. The eleven legacy names
-  (`android-developer` → `developer`, …) already resolve as aliases in `sdlc.local.yaml`
-  `extensions.skills[].agents`, `model.local.json` `agents{}` and the `enforce-agent-model.sh`
-  hook, each with a deprecation warning; aliases sunset two releases after
-  `android-foundation 2.0.0`. Design: `docs/superpowers/specs/2026-09-05-agents-in-core-design.md`;
+  `role_expertise`, PR-3 deletes `android-foundation/agents/`.
+  Design: `docs/superpowers/specs/2026-09-05-agents-in-core-design.md`;
   track: `.brain/planning/i1-agents-in-core.md`.
+- **`/sdlc:doctor` migrates a project's config across an agent rename — and there are no runtime
+  aliases.** An agent name is used exactly as written: the key in `.claude/model.local.json`, the
+  name dispatched, the `role_expertise` key and the file on disk are one string. A first cut of this
+  release kept the retired `android-*` names alive by rewriting them in the resolver, the tier
+  lookup and the model-enforcement hook; review found six defects in that layer, every one a
+  disagreement between two copies of the same map about which spelling a given step was keyed on.
+  The layer is gone. Instead, every run now REPORTS a config entry that names an agent the
+  marketplace does not ship (`extensions.skills[].agents`, `model.local.json` `agents{}`), and
+  `/sdlc:doctor` fixes them: it reads the versioned rename data in
+  `plugins/sdlc/config/agent-migrations.json`, lists each `from → to`, and rewrites only those name
+  tokens **after you approve** (`tools/migrate/cli.mjs check|apply` — YAML by targeted replacement
+  so comments and formatting survive, JSON by re-serialisation). This is the first time doctor
+  writes anything; diagnosis stays read-only, the write is bounded to those two files and is never
+  performed non-interactively or under `--json`. An un-migrated project degrades rather than
+  misbehaves: the extension row injects nothing, the model key leaves the frontmatter tier in force,
+  and both are named on every run.
 - **A publish-time gate for the logging rule.** `hooks/git-guard.sh` (`PreToolUse(Bash)`) blocks
   `git commit`, `git push` and `gh pr create` when the code being published violates
   `rules/logging.md`, and `hooks/validate-logging.sh` is the per-file checker behind it. This closes

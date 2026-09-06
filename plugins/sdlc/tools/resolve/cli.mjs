@@ -63,12 +63,18 @@ if (cmd === "expertise") {
   } else if (!r.ok) {
     for (const p of r.prints) console.log(p);
     console.error(`❌ expertise: ${r.error}`);
-  } else if (r.block == null && r.skills_block == null) {
-    console.log(`no stack expertise for ${r.role} (stack: ${r.stack})`);
   } else {
-    if (r.block) console.log(r.block);
-    if (r.block && r.skills_block) console.log("");
-    if (r.skills_block) console.log(r.skills_block);
+    // stdout is the block the agent pastes into its own context, so it carries nothing else.
+    // Diagnostics still have to reach a human: a stale agent name in the project's config is
+    // reported here or nowhere, which is how the same class of warning went unseen before.
+    for (const w of r.warnings) console.error(w);
+    if (r.block == null && r.skills_block == null) {
+      console.log(`no stack expertise for ${r.role} (stack: ${r.stack})`);
+    } else {
+      if (r.block) console.log(r.block);
+      if (r.block && r.skills_block) console.log("");
+      if (r.skills_block) console.log(r.skills_block);
+    }
   }
   // Unknown role is a caller error (2); a halt in resolution is the same "cannot proceed" as plan (1).
   process.exit(r.ok ? 0 : /^unknown role/.test(String(r.error)) ? 2 : 1);

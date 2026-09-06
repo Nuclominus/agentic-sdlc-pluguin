@@ -18,7 +18,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { globSync } from "tinyglobby";
 import YAML from "yaml";
-import { frontmatter } from "./agent-tools.mjs";
+import { frontmatter, parseTools } from "./agent-tools.mjs";
 
 export const CORE_MANIFEST = "plugins/sdlc/manifest.yaml";
 export const CORE_AGENTS_DIR = "plugins/sdlc/agents";
@@ -140,15 +140,31 @@ export function checkRoster(root = process.cwd()) {
     push("expertise", rel, errors);
   }
 
-  // ---- slot: every core role agent carries its own bootstrap line; the orchestrator pastes the block
+  // ---- slot: the two-way expertise contract, held per agent by what its tools can actually do
+  //
+  // A bare substring test is not enough, and was not: business-analyst.md and security-analyst.md
+  // satisfied one with a sentence that ALSO misdescribed the contract ("the orchestrator obtains it
+  // via expertise --role", which it never does — 3b-1a pastes prompt_blocks from `plan --json`).
+  // An agent holding no `Bash` cannot run the bootstrap, so naming it there is a false instruction.
   for (const name of [...coreRoles].sort()) {
     const rel = `${CORE_AGENTS_DIR}/${name}.md`;
     const abs = join(root, rel);
     if (!existsSync(abs)) continue; // reported under `agents`
     const text = readFileSync(abs, "utf8");
-    push("slot", rel, text.includes(`expertise --role ${name}`) ? [] : [
-      `${rel} has no \`expertise --role ${name}\` bootstrap line — invoked on demand it would never receive its stack expertise (ADR-0021)`,
-    ]);
+    const fm = frontmatter(text);
+    const tools = fm ? parseTools(fm) : null;
+    const hasBash = Array.isArray(tools) && tools.includes("Bash");
+    const errors = [];
+    if (!/^##+ .*Stack expertise/m.test(text)) {
+      errors.push(`${rel} has no "Stack expertise" section — it would not know that a stack block can appear in its prompt (ADR-0021)`);
+    }
+    if (hasBash && !text.includes(`expertise --role ${name}`)) {
+      errors.push(`${rel} holds \`Bash\` but has no \`expertise --role ${name}\` bootstrap line — invoked on demand it would never receive its stack expertise (ADR-0021)`);
+    }
+    if (!hasBash && /expertise --role/.test(text)) {
+      errors.push(`${rel} holds no \`Bash\` yet names \`expertise --role\` — it cannot run that command, and the orchestrator does not run it either (3b-1a pastes prompt_blocks). Describe the orchestrated path and the generic fallback instead`);
+    }
+    push("slot", rel, errors);
   }
   const orch = join(root, ORCHESTRATOR);
   if (existsSync(orch)) {

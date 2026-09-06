@@ -21,7 +21,16 @@ function write(root, rel, content) {
   writeFileSync(file, content);
 }
 
-const agent = (name, extra = "") => `---\nname: ${name}\ndescription: d\nmodel: sonnet\ntools: [Read]\n---\n\n## Stack expertise\n\nRun \`node \${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs expertise --role ${name}\`.\n${extra}`;
+/** A well-formed core agent: `Bash` plus the bootstrap line it enables. */
+const agent = (name, { bash = true, body = null } = {}) => [
+  "---", `name: ${name}`, "description: d", "model: sonnet",
+  `tools: [Read${bash ? ", Bash" : ""}]`, "---", "",
+  "## Stack expertise (how platform knowledge reaches you)", "",
+  body ?? (bash
+    ? `Run \`node \${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs expertise --role ${name}\` when no block is present.`
+    : "No block, no bootstrap: this agent holds no Bash. Apply the generic guidance below."),
+  "",
+].join("\n");
 
 /** A minimal marketplace tree that satisfies every roster invariant. */
 function goodTree() {
@@ -31,7 +40,8 @@ function goodTree() {
     "agents_per_phase:", "  development: developer", "  qa: qa-engineer", "  review: reviewer",
     "on_demand_agents: [debugger]", "",
   ].join("\n"));
-  for (const n of ["developer", "qa-engineer", "reviewer", "debugger"]) write(root, `plugins/sdlc/agents/${n}.md`, agent(n));
+  for (const n of ["developer", "reviewer", "debugger"]) write(root, `plugins/sdlc/agents/${n}.md`, agent(n));
+  write(root, "plugins/sdlc/agents/qa-engineer.md", agent("qa-engineer", { bash: false }));
   write(root, ORCHESTRATOR, "=== STABLE PREFIX ===\n{role_expertise_block — Stack expertise for <role>}\n=== PER-CALL CONTEXT ===\n");
   write(root, "plugins/sdlc/workflows/default.yaml", "name: default\nphases:\n  - development\n  - parallel: [qa, review]\n");
   write(root, "plugins/foo-foundation/manifest.yaml", [
@@ -109,16 +119,43 @@ test("expertise: unknown role, missing rule file, missing own skill, undeclared 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("slot: a core agent without its own `expertise --role <name>` line, or an orchestrator without the block, is a violation", () => {
+test("slot: a Bash-holding agent needs its own bootstrap line; every agent needs the slot; the orchestrator needs the block", () => {
   const root = goodTree();
   try {
-    write(root, "plugins/sdlc/agents/developer.md", "---\nname: developer\ndescription: d\nmodel: sonnet\ntools: [Read]\n---\n\nno slot here\n");
-    write(root, "plugins/sdlc/agents/reviewer.md", agent("reviewer").replace("expertise --role reviewer", "expertise --role developer"));
+    write(root, "plugins/sdlc/agents/developer.md", "---\nname: developer\ndescription: d\nmodel: sonnet\ntools: [Read, Bash]\n---\n\nno slot here\n");
+    write(root, "plugins/sdlc/agents/reviewer.md", agent("reviewer", { body: "Run `cli.mjs expertise --role developer`." }));
     write(root, ORCHESTRATOR, "=== STABLE PREFIX ===\n=== PER-CALL CONTEXT ===\n");
     const errs = failures(checkRoster(root));
     assert.ok(errs.some((e) => /slot: .*developer\.md.*expertise --role developer/.test(e)), errs.join("\n"));
     assert.ok(errs.some((e) => /slot: .*reviewer\.md.*expertise --role reviewer/.test(e)), errs.join("\n"));
     assert.ok(errs.some((e) => /slot: .*SKILL\.md.*Stack expertise for/.test(e)), errs.join("\n"));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("slot: an agent holding no Bash must NOT be told to run the bootstrap command it cannot run", () => {
+  // The check was a bare substring test, so business-analyst.md and security-analyst.md passed it
+  // with a sentence that was also false: neither holds Bash, and the orchestrator never issues
+  // `expertise --role` (it pastes prompt_blocks from `plan --json`).
+  const root = goodTree();
+  try {
+    write(root, "plugins/sdlc/agents/qa-engineer.md", agent("qa-engineer", { bash: false }));
+    assert.deepEqual(failures(checkRoster(root)).filter((e) => /qa-engineer/.test(e)), [],
+      "a Bash-less agent is clean when it only describes the orchestrated path");
+
+    write(root, "plugins/sdlc/agents/qa-engineer.md", agent("qa-engineer", {
+      bash: false, body: "Run `cli.mjs expertise --role qa-engineer` first.",
+    }));
+    const errs = failures(checkRoster(root));
+    assert.ok(errs.some((e) => /slot: .*qa-engineer\.md.*holds no `Bash`/.test(e)), errs.join("\n"));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("slot: every core agent carries the slot heading, whatever its tools", () => {
+  const root = goodTree();
+  try {
+    write(root, "plugins/sdlc/agents/qa-engineer.md", "---\nname: qa-engineer\ndescription: d\nmodel: sonnet\ntools: [Read]\n---\n\nnothing\n");
+    const errs = failures(checkRoster(root));
+    assert.ok(errs.some((e) => /slot: .*qa-engineer\.md.*Stack expertise/.test(e)), errs.join("\n"));
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

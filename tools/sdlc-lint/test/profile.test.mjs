@@ -198,6 +198,20 @@ test("a foundation that binds no agents still fans development out over its aspe
   assert.equal(profile.agents_per_phase.test, "tester");
 });
 
+test("renderSkillsBlock resolves an equal-policy collision deterministically, by the alphabetically-first `when`", () => {
+  // File order must not change the prompt: the stable prefix is cache-keyed on its bytes, and two
+  // mandatory rows for one skill are exactly what an `agents: [x]` row plus an `agents: "all"` row
+  // produce. Documented in the prose this block replaced; now pinned in code.
+  const rows = [
+    { skill: "s:x", policy: "mandatory", when: "zulu" },
+    { skill: "s:x", policy: "mandatory", when: "alpha" },
+  ];
+  const forward = renderSkillsBlock("developer", { roleSkills: rows, extensionRows: [] });
+  const reversed = renderSkillsBlock("developer", { roleSkills: [...rows].reverse(), extensionRows: [] });
+  assert.equal(forward, reversed, "reordering sdlc.local.yaml must not invalidate the cached prefix");
+  assert.match(forward, /— alpha\./);
+});
+
 test("a foundation still binding agents_per_phase is honored but warned about (deprecated, ADR-0021)", () => {
   const { profile, warnings } = merged();
   assert.equal(profile.agents_per_phase.business_analysis, "android-ba", "PR-1 keeps the override alive");
@@ -304,17 +318,42 @@ test("renderSkillsBlock: role skills and matching extension rows, deduped, manda
   assert.equal(renderSkillsBlock("developer", { roleSkills: [], extensionRows: [{ skill: "s", agents: ["reviewer"], policy: "mandatory", when: "" }] }), null);
 });
 
-test("extension rows written against the legacy roster are re-targeted at the core agent, with a warning", () => {
+test("an extension row targeting an agent that does not exist is reported, not silently ignored", () => {
+  // ADR-0021 renamed the roster and ships NO aliases: a project still naming `android-developer`
+  // targets nothing. Translating it silently was the bug class this replaces — say so instead.
   const warnings = [];
-  const rows = parseExtensionSkills({ skills: [{ skill: "acme:x", agents: ["android-developer", "android-foundation:android-reviewer", "developer"], policy: "mandatory" }] }, {}, warnings);
-  assert.deepEqual(rows[0].agents, ["developer", "reviewer"], "mapped and de-duplicated");
-  assert.equal(warnings.length, 2);
-  assert.match(warnings[0], /extensions\.skills\[0\] names legacy agent 'android-developer' → 'developer'/);
+  const known = new Set(["developer", "reviewer"]);
+  const rows = parseExtensionSkills({
+    skills: [
+      { skill: "acme:x", agents: ["android-developer", "developer"], policy: "mandatory" },
+      { skill: "acme:y", agents: ["android-tester"], policy: "mandatory" },
+    ],
+  }, { knownAgents: known }, warnings);
+
+  assert.deepEqual(rows.map((r) => r.skill), ["acme:x"], "a row left with no real target is dropped");
+  assert.deepEqual(rows[0].agents, ["developer"], "the unknown name is filtered out, the real one survives");
+  assert.match(warnings[0], /^WARN: extensions\.skills\[0\] targets unknown agent 'android-developer'/);
+  assert.match(warnings[0], /run \/sdlc:doctor/);
+  assert.match(warnings[1], /extensions\.skills\[1\] targets unknown agent 'android-tester'/);
+  assert.match(warnings[2], /extensions\.skills\[1\] \(acme:y\) targets no known agent — dropped/);
 });
 
-test("model overrides keyed by a legacy name apply to the core agent; an explicit core key wins over its alias", () => {
-  const r = parseModelOverrides({ agents: { "android-ba": "opus", "android-developer": "haiku", developer: "sonnet" } });
-  assert.deepEqual(r.overrides.agents, { "business-analyst": "opus", developer: "sonnet" });
-  assert.ok(r.warnings.some((w) => /legacy agent 'android-ba' → 'business-analyst'/.test(w)));
-  assert.ok(r.warnings.some((w) => /'android-developer' → 'developer'/.test(w)));
+test("agent names are validated only when the roster is known, and `all` is never an agent name", () => {
+  const warnings = [];
+  const rows = parseExtensionSkills({ skills: [{ skill: "acme:x", agents: ["whatever"] }, { skill: "acme:y", agents: "all" }] }, {}, warnings);
+  assert.equal(rows.length, 2, "no roster passed, no validation — the parser must never guess");
+  assert.deepEqual(warnings, []);
+  const w2 = [];
+  parseExtensionSkills({ skills: [{ skill: "acme:y", agents: "all" }] }, { knownAgents: new Set(["developer"]) }, w2);
+  assert.deepEqual(w2, [], "`all` is a wildcard, not a name to validate");
+});
+
+test("a model override keyed by an agent that does not exist is dropped and reported, without discarding the file", () => {
+  const known = new Set(["developer", "business-analyst"]);
+  const r = parseModelOverrides({ default: "sonnet", agents: { "android-ba": "opus", developer: "haiku" } }, { knownAgents: known });
+  assert.deepEqual(r.overrides, { default: "sonnet", agents: { developer: "haiku" } },
+    "an unknown key is a no-op entry, not a corrupt file — unlike a bad tier it must not fail the whole map closed");
+  assert.equal(r.warnings.length, 1);
+  assert.match(r.warnings[0], /^WARN: \.claude\/model\.local\.json names unknown agent 'android-ba'/);
+  assert.match(r.warnings[0], /run \/sdlc:doctor/);
 });

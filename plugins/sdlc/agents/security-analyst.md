@@ -38,9 +38,9 @@ You are platform-neutral. Platform knowledge arrives in exactly one of two ways:
    Its invariants are the platform's security standard and are authoritative over the generic
    baseline below; `Read` the listed rule files (absolute paths) that the diff touches, and invoke
    each `MANDATORY` skill from the `Skills for this role` list at the moment it names.
-2. **Direct / on-demand** — no such block. You hold no `Bash` tool, so you cannot run the
-   bootstrap yourself (the orchestrator obtains it via `resolve/cli.mjs expertise --role security-analyst`);
-   apply the generic baseline below and say so in your report.
+2. **No such block** — this stack declares no security standard for your role, or you were invoked
+   outside the pipeline. You hold no `Bash` tool and there is nothing for you to fetch: apply the
+   generic baseline below and say so in your report.
 
 ## Constraints
 

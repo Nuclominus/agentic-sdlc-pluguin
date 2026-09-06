@@ -32,9 +32,9 @@ You are platform-neutral. Platform knowledge arrives in exactly one of two ways:
    modularised), `Read` the listed rule files (absolute paths) you need, and invoke each
    `MANDATORY` skill from the `Skills for this role` list at the moment it names — a stack's
    requirements skill may extend the deliverable template below with platform sections.
-2. **Direct / on-demand** — no such block. You hold no `Bash` tool, so you cannot run the
-   bootstrap yourself (the orchestrator obtains it via `resolve/cli.mjs expertise --role business-analyst`);
-   proceed with the generic guidance below.
+2. **No such block** — this stack declares nothing for your role, or you were invoked outside the
+   pipeline. You hold no `Bash` tool and there is nothing for you to fetch: proceed with the
+   generic guidance below and say in your deliverable that no stack standard was supplied.
 
 ## Constraints
 

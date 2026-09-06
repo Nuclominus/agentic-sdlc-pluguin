@@ -12,7 +12,6 @@
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { canonicalAgentName } from "./aliases.mjs";
 
 const ASPECT_AGNOSTIC = ["business_analysis", "security", "documentation"];
 const DEFAULT_TIERS = ["opus", "sonnet", "haiku", "fable"];
@@ -140,7 +139,6 @@ export function mergeProfiles({ primary, active = {}, additive = [], vanilla = n
 }
 
 const POLICY_RANK = { mandatory: 2, recommended: 1 };
-const strictest = (a, b) => ((POLICY_RANK[b] ?? 0) > (POLICY_RANK[a] ?? 0) ? b : a);
 
 /** One `role_expertise.<role>.skills[]` row, normalised. `policy` defaults to mandatory. */
 function normalizeSkillRow(row) {
@@ -153,14 +151,26 @@ function normalizeSkillRow(row) {
   };
 }
 
-/** Collapse rows to one per skill id — strictest policy wins and brings its own `when`. */
+/**
+ * Collapse rows to one per skill id — strictest policy wins and brings its own `when`.
+ *
+ * Two rows of EQUAL policy are the common case (an `agents: [developer]` row plus an
+ * `agents: "all"` row naming the same skill), and resolving them by arrival order would let the
+ * order of `sdlc.local.yaml` change the prompt — the stable prefix is cache-keyed on its bytes.
+ * The tie-break is therefore stated: a row that says WHEN beats one that does not, then the
+ * alphabetically-first `when` wins.
+ */
 function dedupeSkills(rows) {
   const out = new Map();
   for (const row of rows) {
     if (!row) continue;
     const prev = out.get(row.skill);
     if (!prev) { out.set(row.skill, { ...row }); continue; }
-    if (strictest(prev.policy, row.policy) !== prev.policy) out.set(row.skill, { ...row });
+    if (POLICY_RANK[row.policy] > POLICY_RANK[prev.policy]) { out.set(row.skill, { ...row }); continue; }
+    if (POLICY_RANK[row.policy] < POLICY_RANK[prev.policy]) continue;
+    const a = prev.when ?? "", b = row.when ?? "";
+    if (a === b) continue;
+    if (!a || (b && b < a)) out.set(row.skill, { ...row });
   }
   return [...out.values()];
 }
@@ -279,8 +289,14 @@ export function parseCostCaps(raw, warnings = []) {
  *
  * A missing skill DOWNGRADES the row to `recommended` rather than dropping or blocking it: a
  * project must never be stopped because an optional extension skill is absent.
+ *
+ * An agent name that matches nothing is REPORTED, never translated (ADR-0021). The roster was
+ * renamed and ships no aliases; a rewrite here would have to agree with the dispatch name, the
+ * tier lookup and the model-enforcement hook, and every place those disagreed was a defect.
+ * `/sdlc:doctor` migrates the file instead. Validation is skipped when no roster is supplied —
+ * the parser must never guess which names are real.
  */
-export function parseExtensionSkills(raw, { availableSkills = null, unavailablePlugins = {} } = {}, warnings = []) {
+export function parseExtensionSkills(raw, { availableSkills = null, unavailablePlugins = {}, knownAgents = null } = {}, warnings = []) {
   const rows = [];
   if (raw === undefined) return rows;
   if (!isPlainObject(raw) || !Array.isArray(raw.skills)) {
@@ -292,13 +308,22 @@ export function parseExtensionSkills(raw, { availableSkills = null, unavailableP
     if (!skill) { warnings.push(`WARN: extensions.skills[${i}] missing 'skill' — dropped`); return; }
 
     const agentsRaw = row.agents;
-    // Legacy android-* names are re-targeted at their core successor (ADR-0021) — mapped, not dropped.
-    const agents = agentsRaw === "all"
-      ? "all"
-      : uniq(arr(agentsRaw).filter((a) => typeof a === "string" && a.trim()).map((a) => canonicalAgentName(a, warnings, `extensions.skills[${i}]`)));
+    let agents = agentsRaw === "all" ? "all" : uniq(arr(agentsRaw).filter((a) => typeof a === "string" && a.trim()));
     if (agents !== "all" && agents.length === 0) {
       warnings.push(`WARN: extensions.skills[${i}] (${skill}) has no 'agents' — dropped`);
       return;
+    }
+    if (agents !== "all" && knownAgents && knownAgents.size) {
+      const kept = agents.filter((a) => {
+        if (knownAgents.has(a)) return true;
+        warnings.push(`WARN: extensions.skills[${i}] targets unknown agent '${a}' — no agent by that name is dispatched; run /sdlc:doctor to migrate this file`);
+        return false;
+      });
+      if (kept.length === 0) {
+        warnings.push(`WARN: extensions.skills[${i}] (${skill}) targets no known agent — dropped`);
+        return;
+      }
+      agents = kept;
     }
 
     let policy = "recommended";
@@ -382,6 +407,9 @@ export function applyLocalOverrides(profile, local, opts = {}) {
     if (extra.length) applied.convention_skills_extra = extra.join(", ");
   }
   if ("extensions" in local) {
+    // The roster to validate against is what this run can actually dispatch, plus the core's own
+    // on-demand roles — a name matching neither matches nothing, and that is the only case worth
+    // reporting. Supplied by the caller so this module stays free of manifest knowledge.
     next.extension_skills = parseExtensionSkills(local.extensions, opts, warnings);
     if (next.extension_skills.length) {
       const mandatory = next.extension_skills.filter((r) => r.policy === "mandatory").length;
@@ -436,7 +464,7 @@ export function renderOverridesPrint(applied) {
  * applied tier map is harder to reason about than none at all, and the agent frontmatter tiers
  * are always usable.
  */
-export function parseModelOverrides(raw, { validTiers = DEFAULT_TIERS } = {}) {
+export function parseModelOverrides(raw, { validTiers = DEFAULT_TIERS, knownAgents = null } = {}) {
   const warnings = [];
   const empty = { overrides: {}, warnings };
   if (raw == null) return empty;
@@ -458,19 +486,19 @@ export function parseModelOverrides(raw, { validTiers = DEFAULT_TIERS } = {}) {
       return empty;
     }
     const agents = {};
-    const explicit = new Set();
     for (const [agent, tier] of Object.entries(raw.agents)) {
       if (!validTiers.includes(tier)) {
         warnings.push(`⚠️ Failed to parse .claude/model.local.json: unknown tier '${tier}' for '${agent}'. Continuing with agent frontmatter tiers.`);
         return empty;
       }
-      // A legacy android-* key applies to its core successor (ADR-0021); an explicit core key
-      // beats its alias whatever the file order, so a half-migrated file never flips a tier.
-      const canon = canonicalAgentName(agent, warnings, ".claude/model.local.json agents");
-      const isAlias = canon !== agent;
-      if (isAlias && explicit.has(canon)) continue;
-      if (!isAlias) explicit.add(canon);
-      agents[canon] = tier;
+      // An unknown agent NAME is a no-op entry, not a corrupt file: it cannot mis-tier anything,
+      // so it is dropped and reported rather than failing the whole map closed the way a bad tier
+      // does. Never translated — see parseExtensionSkills and ADR-0021.
+      if (knownAgents && knownAgents.size && !knownAgents.has(agent)) {
+        warnings.push(`WARN: .claude/model.local.json names unknown agent '${agent}' — no agent by that name is dispatched; run /sdlc:doctor to migrate this file`);
+        continue;
+      }
+      agents[agent] = tier;
     }
     out.agents = agents;
   }
