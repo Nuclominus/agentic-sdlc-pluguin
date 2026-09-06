@@ -35,14 +35,21 @@ costs by hand.
 
 ## Step 4 — Resolve and dispatch the analyst
 
-1. Determine the active foundation profile (reuse `resolveStack` from
-   `${CLAUDE_PLUGIN_ROOT}/tools/resolve/detect.mjs` — the same detection
-   `/sdlc:start` runs). If its `manifest.yaml` declares `aar_analyst: <agent>`, dispatch
-   that agent; otherwise dispatch `aar-analyst` (the neutral default).
-2. Dispatch it with a single `Task` call, passing: `slug`, `transcript_path` (or
-   a note that it's unavailable), and the `metrics_json` from Step 3. Instruct it
-   to follow this skill's `gather.md` and return exactly the `report.md` shape.
-   The analyst is READ-ONLY.
+1. Get the analyst's stack expertise for the active profile with ONE command:
+
+   ```
+   node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs expertise --role aar-analyst --json
+   ```
+
+   Capture the top-level `block` (the `Stack expertise for aar-analyst` text) and `skills_block`.
+   Either may be `null` — a stack that declares no `role_expertise.aar-analyst` contributes nothing
+   here, and the command still exits 0.
+2. Dispatch **`aar-analyst`** — always. There is no per-stack analyst any more: ADR-0021 moved every
+   agent to the core, and a foundation contributes expertise instead of a substitute agent.
+3. One `Task` call, passing: `slug`, `transcript_path` (or a note that it's unavailable), the
+   `metrics_json` from Step 3, and `block` / `skills_block` from step 1 verbatim (omit either when
+   it is `null`). Instruct the analyst to follow this skill's `gather.md` and return exactly the
+   `report.md` shape. The analyst is READ-ONLY.
 
 ## Step 5 — Present, persist, approve, apply
 

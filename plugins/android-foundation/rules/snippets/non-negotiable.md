@@ -1,11 +1,11 @@
 ---
 loaded_by: [developer, reviewer, debugger]
-load_when: "android-developer: BEFORE writing code. android-reviewer: during review. android-debugger: when verifying fix."
+load_when: "developer: BEFORE writing code. reviewer: during review. debugger: when verifying a prescribed fix."
 ---
 
 # Non-Negotiable Rules
 
-These are enforced by `${CLAUDE_PLUGIN_ROOT}/hooks/validate-kotlin.sh` (regex, production sources only).
+These are enforced by the foundation's `hooks/validate-kotlin.sh` (regex, production sources only).
 AST-level rules are documented but require Detekt custom rules to enforce automatically.
 
 > The **logger** named in the Replacement columns (Kermit's `Logger`) is project-detected, not mandated. Substitute the logging library the project actually uses; a foundation may override it.

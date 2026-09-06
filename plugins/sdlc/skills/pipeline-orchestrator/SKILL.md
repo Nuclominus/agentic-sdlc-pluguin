@@ -664,6 +664,23 @@ Agent({
 })
 ```
 
+**3c-crash. Recovering a subagent that died on a mid-response server error.**
+
+This is platform-neutral and applies to every dispatched agent, in every recipe:
+
+1. **Resume FIRST.** `SendMessage` to the SAME `agentId` to continue where it stopped — its
+   in-agent context is intact, so it finishes with a handful of tool calls instead of re-reading
+   the whole task.
+2. **Fall back to a fresh `Agent` only if the resume fails.** A fresh agent must re-`Read`
+   everything the crashed one had loaded, roughly doubling the phase's tokens.
+3. **Record the mechanism** so telemetry stays honest — set the phase's `recovery` field to
+   `sendmessage-resume` or `fresh-restart` (Step 5 / `schemas/checkpoint.schema.json`). Do NOT
+   label a fresh-restart as a same-session resume.
+
+Honest caveat: a resume replays context, so the concrete saving is the redundant re-reads it
+avoids, not a dramatic token cut — but it also preserves correctness, since a fresh agent can
+diverge from the crashed one's partial work.
+
 **3d. Save the COMPACT summary** returned by the agent to `CONTEXT.{phase}_output`. Verify the agent also wrote the detailed file to `docs/plans/{task_slug}/0X-{phase}.md` (use `Glob` to check). If the file is missing, ask the agent again to write it before proceeding.
 
 **3d-0. Load the model registry** (once per run) — read the tag→model-ID map from the single source of truth:
@@ -1324,8 +1341,7 @@ The remaining keys ARE yours — they are decisions the run made, not measuremen
   `agentId`, context replayed), or `"fresh-restart"` when it was replaced by a **new** `Agent` +
   manual handoff. Omit the key when the phase ran without a crash. This keeps cost attribution and
   future AARs honest — a fresh-restart re-reads files and roughly doubles the phase's tokens, which a
-  bare "resumed" label would hide. Set it from the crash-handling rule in the workflow (see
-  `android-foundation/rules/workflow.md` Step 2 "Crash recovery").
+  bare "resumed" label would hide. Set it from the crash-handling rule in Step 3c-crash above.
 - `touched_files` (optional) = `git diff --name-status <merge-base>...HEAD` parsed into
   `[{ "status": "A|M|D|R...", "path": "<repo-relative>" }]`. The base ref is `plan.skip_rules.signals.base_ref`
   (resolved in Step 0 — never assume `origin/main`; neither downstream project uses that name).

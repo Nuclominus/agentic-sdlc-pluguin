@@ -1,6 +1,6 @@
 # android-foundation
 
-Android Foundation — the centerpiece Android (Kotlin + Gradle) stack provider for the Agentic SDLC marketplace. Its `manifest.yaml` (`kind: foundation`) registers the `android` profile (platform aspect `android`, priority 300) and contributes a full specialized agent roster adapted from the Nuclominus `android-workflow` system. It carries the pinned house rules and **hosts** detect-don't-impose libraries (Retrofit→`network`, Room→`persistence`, Dagger/Hilt→`di`) via `hosts_aspects: all` + `framework_detection`; those attach as **additive framework plugins**. For the Stack Provider Pattern, the Framework Provider Pattern, and shared mechanisms, see the [root README](../../README.md).
+Android Foundation — the centerpiece Android (Kotlin + Gradle) stack provider for the Agentic SDLC marketplace. Its `manifest.yaml` (`kind: foundation`) registers the `android` profile (platform aspect `android`, priority 300) and contributes the Android **expertise** the core roster consumes: a per-role `role_expertise` block, nine extracted skills, house rules and hooks (ADR-0021 — the agents themselves live in `sdlc`). It carries the pinned house rules and **hosts** detect-don't-impose libraries (Retrofit→`network`, Room→`persistence`, Dagger/Hilt→`di`) via `hosts_aspects: all` + `framework_detection`; those attach as **additive framework plugins**. For the Stack Provider Pattern, the Framework Provider Pattern, and shared mechanisms, see the [root README](../../README.md).
 
 ---
 
@@ -29,66 +29,78 @@ business_analysis → development → review ──approved──→ [ security 
 
 - **review** is a loop phase: changes-requested → re-run `development` (implement pass only, findings injected), up to 3 rounds, then escalate.
 - **[security ‖ test]** is a parallel group (one message, two Agent calls).
-- **remediation** is a gated phase — see "Who may write code" below. It dispatches `android-developer` with the security report, and only when `android-security` reported a Critical or High finding; otherwise it is skipped at zero cost.
+- **remediation** is a gated phase — see "Who may write code" below. It dispatches `developer` with the security report, and only when `security-analyst` reported a Critical or High finding; otherwise it is skipped at zero cost.
 - `android-bugfix` is the same minus BA: `development → review(⇄dev) → [security ‖ test] → remediation? → qa`.
 
 See the rendered diagram + a full end-to-end run in [`docs/WORKFLOW.md`](../../docs/WORKFLOW.md) and [`docs/WALKTHROUGH.md`](../../docs/WALKTHROUGH.md).
 
 ---
 
-## Agent roster
+## Expertise per role
 
-| Phase | Agent | model | effort | Edits code? | Notes |
-| ----- | ----- | ----- | ------ | ----------- | ----- |
-| business_analysis | `android-ba` | `opus` | `high` | no | BA + embedded DDD / module placement |
-| development | `android-developer` | `sonnet` | `medium` | **yes** | Architecture Detection — no imposed stack |
-| review | `android-reviewer` | `sonnet` | `medium` | no | Read-only; drives the ⇄developer loop |
-| security | `android-security` | `opus` | `high` | no | MASVS/MASTG; read-only, runs ‖ test |
-| remediation | `android-developer` | `sonnet` | `medium` | **yes** | Gated — applies security's Critical/High fixes |
-| test | `android-tester` | `sonnet` | `medium` | **yes** | Unit/integration: MockK, Turbine, Kover |
-| qa | `android-qa` | `sonnet` | `medium` | **yes** | E2E/UI: Compose UI Test, Maestro, a11y |
-| documentation | `android-docs` | `haiku` | `low` | **yes** | Docs + optional Obsidian vault stubs |
+This plugin ships **no agents**. The roster is the core's (`plugins/sdlc/agents/`); what the manifest
+contributes is `role_expertise`, keyed by core role name. For each role the resolver merges the
+`invariants` (always-on rules, capped at 1400 characters because they ride in every turn's stable
+prefix), the `rules` file paths (emitted absolute, since the reading agent lives in another plugin),
+and the `skills` rows (deduped with the project's own `sdlc.local.yaml` extensions, strictest policy
+winning). The orchestrator pastes the rendered blocks into the phase prompt; an on-demand role gets
+the same from `node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs expertise --role <name>`.
 
-### On-demand agents (not in the pipeline — invoke directly)
+| Core role | Phase | Android skill it must invoke | Invariants cover |
+| --------- | ----- | ---------------------------- | ---------------- |
+| `business-analyst` | business_analysis | `android-requirements` | Module placement / bounded contexts, the layering rule, Android non-functional requirements |
+| `developer` | development, remediation | (convention skills) + TDD, `frontend-design` | Compose + UDF, DI, coroutines, version catalog, testTags, logging, the compile check |
+| `reviewer` | review | `android-review` | The Kotlin/Compose/layering reject list; vault freshness as part of the diff |
+| `security-analyst` | security | `android-security-masvs` | MASVS/MASTG authority, release-variant audit, the Android security non-negotiables |
+| `tester` | test | `android-testing` | JVM-only scope, MockK/Turbine/coroutines-test discipline, what to cover |
+| `qa-engineer` | qa | `android-e2e` | Compose UI Test + Maestro, testTag selectors, accessibility, no `Thread.sleep` |
+| `document-writer` | documentation | `android-docs-vault` | Vault-as-SSOT, typed edges, generated artifacts, no version pinning in notes |
+| `debugger` | debugging + on-demand | `android-debugging` | Evidence order and the common Android causes; what a prescribed fix may not introduce |
+| `devops` | on-demand | `android-build-release` | Gradle/`build-logic`/version catalog, signing hygiene, KSP over KAPT |
+| `cicd` | on-demand | `android-ci` | CI stage order, caching, secrets from the CI store, pinned versions |
+| `aar-analyst` | `/sdlc:aar` | — | What to audit an Android run against; workflow scope only |
 
-| Agent | model | effort | Edits code? | Purpose |
-| ----- | ----- | ------ | ----------- | ------- |
-| `android-debugger` | `sonnet` | `high` | no | Root-cause analysis — diagnoses and prescribes; the fix goes to `android-developer` |
-| `android-devops` | `sonnet` | `medium` | **yes** | Gradle build config, signing, ProGuard/R8, distribution |
-| `android-cicd` | `sonnet` | `medium` | **yes** | CI/CD pipelines (GitHub Actions workflow YAML) |
-| `android-aar` | `sonnet` | `medium` | no | After Action Review analyst — read-only workflow retrospective |
+Convention skills (`android-compose-ui`, `android-architecture`, `android-data`, `android-navigation`)
+are declared separately under `convention_skills` and reach the development phase as before; framework
+plugins (Hilt, Retrofit, Room, …) add their own `phase_injections` on top.
 
 ### Who may write code
 
-Every agent declares an explicit `tools:` allowlist in its frontmatter. An agent with no `tools:`
-key inherits **every** tool, which is how a read-only reviewer ends up silently editing the code it
-is reviewing — so the allowlist is mandatory, not optional, for every agent shipped here.
+Every core agent declares an explicit `tools:` allowlist in its frontmatter. An agent with no
+`tools:` key inherits **every** tool, which is how a read-only reviewer ends up silently editing the
+code it is reviewing — so the allowlist is mandatory, not optional (ADR-0018).
 
-The reviewing agents (`android-reviewer`, `android-security`, `android-debugger`, `android-aar`)
-have **no `Edit` tool by design**. `Write` is still granted to the first three for exactly one
-purpose: their own report under `docs/plans/{task_slug}/`. This is what keeps the review loop
-meaningful — a reviewer that repairs the code it reviews leaves no independent verifier behind, and
-its edits land outside the loop that guards every other change. Their findings reach the codebase
-through `android-developer`, either via the review loop or via the gated `remediation` phase.
+The reviewing roles (`reviewer`, `security-analyst`, `debugger`, `aar-analyst`) have **no `Edit` tool
+by design**. `Write` is still granted to the first three for exactly one purpose: their own report
+under `docs/plans/{task_slug}/`. This is what keeps the review loop meaningful — a reviewer that
+repairs the code it reviews leaves no independent verifier behind, and its edits land outside the
+loop that guards every other change. Their findings reach the codebase through `developer`, either
+via the review loop or via the gated `remediation` phase.
 
 ---
 
 ## Conventions (`rules/`)
 
-Plugin-resident, referenced by agents via `${CLAUDE_PLUGIN_ROOT}/rules/`:
-`non-negotiable` (forbidden patterns), `gradle-commands`, `testing`, `logging`, `documentation` (vault SDLC), `git-operations`, `enforcement`, `skills` (mandatory-skill matrix), `workflow`, `INDEX`. The `handoff` rule is intentionally omitted — the orchestrator passes phase context.
+Plugin-resident, reached by **absolute path**: the manifest lists each role's rules under
+`role_expertise.<role>.rules` and the resolver emits them absolute, because the agent that reads them
+lives in `sdlc` — where the plugin-root variable would resolve to the wrong plugin. The files:
+`non-negotiable` (forbidden patterns), `gradle-commands`, `logging`, `documentation` (vault SDLC plus
+the per-role reading map), `git-operations`, `enforcement`, `skills` (the optional `android` CLI
+capability bindings), `workflow` (what Android adds to each pipeline step), `INDEX`. `testing` was
+folded into the `android-testing` skill; the `handoff` rule is intentionally omitted — the
+orchestrator passes phase context.
 
 ---
 
 ## Security — MASVS / MASTG
 
-`android-security` audits against **MASVS** control groups (STORAGE / CRYPTO / AUTH / NETWORK / PLATFORM / CODE / RESILIENCE / PRIVACY) using **MASTG** test procedures. Each audit section is tagged with its MASVS group(s); every finding cites the MASVS control + MASTG test ID. OWASP Mobile Top 10 is kept only as a secondary risk cross-map. The `android` security injection in `manifest.yaml` (`phase_injections.security`) makes MASVS/MASTG authoritative over the core's platform-neutral baseline.
+The `security-analyst` audits against **MASVS** control groups (STORAGE / CRYPTO / AUTH / NETWORK / PLATFORM / CODE / RESILIENCE / PRIVACY) using **MASTG** test procedures. Each audit section is tagged with its MASVS group(s); every finding cites the MASVS control + MASTG test ID. OWASP Mobile Top 10 is kept only as a secondary risk cross-map. `role_expertise.security-analyst.invariants` makes MASVS/MASTG authoritative over the core's platform-neutral baseline, and the full audit lives in the mandatory `android-security-masvs` skill.
 
 ---
 
 ## Optional Obsidian Vault — `manage-vault`
 
-Agents treat `.obsidian-vault/` as the single source of project knowledge **when present**, falling back to the codebase + `docs/plans/` when absent. The `manage-vault` skill owns the whole vault lifecycle in one idempotent, content-safe flow:
+Roles treat `.obsidian-vault/` as the single source of project knowledge **when present**, falling back to the codebase + `docs/plans/` when absent. The `manage-vault` skill owns the whole vault lifecycle in one idempotent, content-safe flow:
 
 1. **Detect** state — vault absent / skeleton incomplete / empty / has content.
 2. **Scaffold** the skeleton + Node scripts (from `vault/`) if absent.

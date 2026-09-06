@@ -64,5 +64,5 @@ channel never sees work-in-progress.
 
 - Claude Code (latest).
 - API Tier 2+ or Claude Max — a medium feature uses a large token volume; lower tiers may be throttled.
-- A Git repository for `android-docs` / `document-writer` (PR creation).
+- A Git repository for `document-writer` (PR creation).
 - **Android:** JDK + Gradle wrapper. Builds (`assembleDebug`) and instrumented tests are CI-deferred; in-pipeline verification is detekt + JVM unit tests + Kotlin compile-check.

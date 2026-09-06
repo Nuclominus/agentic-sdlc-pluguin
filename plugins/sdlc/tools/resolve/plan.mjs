@@ -64,13 +64,17 @@ function agentsBound(agentsPerPhase = {}) {
  * on-demand core role is served even when a foundation binds something else for its phases.
  * A `null` block is a real answer (this stack says nothing about this role), not a missing one.
  */
-function renderPromptBlocks({ agents, roleExpertise, extensionRows, stack }) {
+function renderPromptBlocks({ agents, roleExpertise, extensionRows, stack, unavailablePlugins, warnings = [] }) {
   const blocks = {};
   for (const agent of agents) {
     const exp = roleExpertise[agent];
     blocks[agent] = {
       expertise: renderRoleExpertiseBlock(agent, exp, { stack }),
-      skills: renderSkillsBlock(agent, { roleSkills: exp?.skills ?? [], extensionRows }),
+      // A stack that mandates a skill from a plugin the preflight flagged unavailable gets that
+      // row downgraded, not printed as a hard requirement the agent then has to disobey.
+      skills: renderSkillsBlock(agent, {
+        roleSkills: exp?.skills ?? [], extensionRows, unavailablePlugins, warnings,
+      }),
     };
   }
   return blocks;
@@ -175,9 +179,14 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   // Late-bound phases (an `extra_phases[].agent`, a project's skip injections) can add a name after
   // `knownAgents` was built for config validation; the block map must cover everything dispatched.
   const blockAgents = new Set([...knownAgents, ...agentsBound(effective.agents_per_phase)]);
+  // One WARN per downgraded row, not one per role that mandates it — the block is rendered per
+  // agent, so the same missing skill would otherwise be reported once for every role naming it.
+  const blockWarnings = [];
   const promptBlocks = renderPromptBlocks({
     agents: blockAgents, roleExpertise: expertise.role_expertise, extensionRows: effective.extension_skills ?? [], stack: stack.foundation,
+    unavailablePlugins: deps.flags, warnings: blockWarnings,
   });
+  warnAll([...new Set(blockWarnings)]);
 
   return {
     prints, warnings, halt: null, headless, roots, installs, enabled, manifests, deps, stack, local,

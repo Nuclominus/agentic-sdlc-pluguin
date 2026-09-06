@@ -1,5 +1,11 @@
 # Android Foundation — SDLC manifest (kind: foundation).
 # This is the machine-read source of truth the orchestrator consumes. Human docs live in README.md.
+#
+# ADR-0021: this foundation ships NO agents. The roster lives in plugins/sdlc/manifest.yaml; what
+# this file contributes is EXPERTISE — `role_expertise` below, keyed by CORE agent name. The
+# resolver merges it, renders the `Stack expertise for <role>` block plus the skills list, and the
+# orchestrator pastes both into the phase prompt's stable prefix; an on-demand agent obtains the
+# same block from `resolve/cli.mjs expertise --role <name>`.
 
 kind: foundation
 stack: android
@@ -26,25 +32,226 @@ framework_detection:
   - "**/build.gradle.kts"
   - "**/build.gradle"
 
-agents_per_phase:
-  business_analysis: android-ba      # Opus/high — BA + embedded DDD (module placement)
-  debugging: android-debugger        # Sonnet/medium — root-cause phase (also stays on-demand); used by android-debug
-  development: android-developer     # Sonnet/medium — implementer (Architecture Detection)
-  review: android-reviewer           # Sonnet/medium — read-only review; ⇄developer loop (max 3)
-  security: android-security         # Opus/high — MASVS/MASTG; READ-ONLY, runs ‖ test
-  remediation: android-developer     # gated — dispatched ONLY when security reports Critical/High
-  test: android-tester               # Sonnet/medium — unit/integration (MockK/Turbine/Kover)
-  qa: android-qa                     # Sonnet/medium — E2E/UI (Compose UI Test, Maestro, a11y)
-  documentation: android-docs        # Haiku/low — docs + (optional) Obsidian vault
+# Android expertise, per CORE role (ADR-0021). Keys are agent names from plugins/sdlc/manifest.yaml,
+# NOT phase names: `developer` serves both development and remediation, and debugger/devops/cicd/
+# aar-analyst have no phase at all. `invariants` rides in every turn's stable prefix, so it is capped
+# at 1400 characters and holds only non-negotiables — the long checklists are the skills below.
+# `rules` paths are relative to THIS file and are emitted absolute, because the agent reading them
+# lives in plugins/sdlc, where ${CLAUDE_PLUGIN_ROOT} would resolve to the wrong plugin.
+role_expertise:
+  business-analyst:
+    invariants: |
+      Native Android (Kotlin), modular `:feature:<name>`. Decide MODULE PLACEMENT, not just
+      requirements: which feature module owns each domain concept, which consumes it, and why.
+      Dependency rule is UI -> feature (domain) -> data/infra; a lower layer never imports an upper
+      one. Shared primitives belong in the model module, never in a feature another feature would
+      have to depend on. A repository interface is owned by its feature module; the implementation
+      is `internal`. Navigation routes follow the project's convention (e.g. type-safe
+      `@Serializable` types). Match the project's existing layering — never introduce a wrapper
+      layer it does not use. Cover the non-functional requirements Android charges for: cold start
+      and frame budget, offline behaviour, process death and state restoration, permissions, minSdk
+      reach, background-execution limits. Estimate complexity relatively, never in hours.
+    rules:
+      - { path: rules/documentation.md, note: "vault reading map — read before answering project questions" }
+      - { path: rules/skills.md, note: "only if the optional `android` CLI is on PATH — capability bindings" }
+    skills:
+      - { skill: android-foundation:android-requirements, when: "before any requirements analysis" }
+      - { skill: superpowers:brainstorming, when: "before formulating requirements" }
+      - { skill: superpowers:verification-before-completion, when: "before the analysis handoff" }
 
-# Invoked directly, NOT by the pipeline (informational).
-on_demand_agents:
-  - android-debugger   # root-cause analysis (Logcat, coroutines/Flow, recomposition, leaks)
-  - android-devops     # Gradle/signing/variants/R8/Play Store
-  - android-cicd       # GitHub Actions, Gradle CI, lint/test pipelines
-  - android-aar        # read-only After Action Review of a workflow run
+  developer:
+    invariants: |
+      Native Android (Kotlin). Compose-first UI with Material 3; unidirectional data flow; state
+      hoisting; UI state as StateFlow from a ViewModel, collected with
+      collectAsStateWithLifecycle(). DI via constructor injection using the project's existing
+      framework, scoped deliberately; framework plugins add specifics. Coroutines + Flow; never
+      block the main thread; launch from viewModelScope; IO/CPU work on the project's dispatcher
+      qualifier. Detect the project's state-management pattern before implementing state and follow
+      it — never impose one. New dependencies go through the Gradle version catalog
+      (libs.versions.toml), pinned. Respect the existing module structure. Secrets via
+      BuildConfig/local.properties, never in source. Every non-decorative composable gets a testTag
+      from the central TestTag object — no inline literals — and any added or changed tag is
+      mirrored into the vault's ui-patterns index. Use the project's logging library, never
+      android.util.Log or println. Compile check: ./gradlew compileDebugKotlin, one attempt; the
+      test phase iterates.
+    rules:
+      - { path: rules/snippets/non-negotiable.md, note: "forbidden patterns — read before the first edit" }
+      - { path: rules/snippets/gradle-commands.md, note: "build / lint commands" }
+      - { path: rules/logging.md, note: "logging library, tagging, diagnostics placement" }
+      - { path: rules/documentation.md, note: "vault reading map" }
+      - { path: rules/skills.md, note: "only if the optional `android` CLI is on PATH — capability bindings" }
+    skills:
+      - { skill: superpowers:test-driven-development, when: "before the first Write/Edit of production Kotlin" }
+      - { skill: frontend-design:frontend-design, when: "before implementing a Compose screen" }
+      - { skill: superpowers:verification-before-completion, when: "before the development->review handoff" }
 
-aar_analyst: android-aar   # overrides the neutral core's aar-analyst for /sdlc:aar
+  reviewer:
+    invariants: |
+      Review Kotlin against the project's DETECTED stack (UI toolkit, DI, navigation), not an
+      assumed one. Security is not a review dimension here — it belongs to the security phase; note
+      an obvious issue as "possible security concern" and move on. Hard rejects: `!!` in production,
+      `var` in state or data classes, `runBlocking`/`GlobalScope`, raw `collectAsState` where
+      `collectAsStateWithLifecycle` belongs, a suspend call in a composable body, business logic in
+      a composable, an upward layer import, a non-decorative composable with no testTag from the
+      central TestTag object, `android.util.Log`/`println`, sensitive data in raw SharedPreferences,
+      IO/CPU work left on the main dispatcher. Vault freshness is part of the diff: a new module,
+      screen, route, or changed public API without its note — or any remaining `<!-- STUB -->`
+      marker — is an important finding, not a nit.
+    rules:
+      - { path: rules/snippets/non-negotiable.md, note: "forbidden patterns — the reject list" }
+      - { path: rules/documentation.md, note: "vault invariants and stub-marker enforcement" }
+      - { path: rules/logging.md, note: "logging conventions under review" }
+      - { path: rules/skills.md, note: "only if the optional `android` CLI is on PATH — capability bindings" }
+    skills:
+      - { skill: android-foundation:android-review, when: "before the first finding" }
+      - { skill: superpowers:requesting-code-review, when: "when generating the review report" }
+      - { skill: superpowers:receiving-code-review, policy: recommended, when: "when evaluating the developer's response" }
+      - { skill: superpowers:verification-before-completion, policy: recommended, when: "before approving" }
+
+  tester:
+    invariants: |
+      JVM unit and integration tests only — Compose UI, instrumented and Maestro tests belong to the
+      QA phase. Stack: JUnit (match the project's baseline), MockK, kotlinx-coroutines-test, Turbine
+      for Flow assertions, Robolectric only when an Android runtime class is unavoidable, Kover for
+      coverage. `runTest`, never `runBlocking`; never `Thread.sleep` — use `advanceTimeBy` /
+      `advanceUntilIdle`. No `!!` and no `GlobalScope` in test code. Inject a TestDispatcher in place
+      of the project's IO qualifier rather than mocking the dispatcher. Cover every Intent -> state /
+      action path, repository success AND failure AND mapping, and the mappers; skip DI wiring,
+      generated `data class` members, and trivial delegations. Run the project's debug-flavor unit
+      test task; if a Gradle task is missing on the first attempt, skip it and say so — do not retry
+      under alternate names.
+    rules:
+      - { path: rules/snippets/gradle-commands.md, note: "test / lint task names" }
+      - { path: rules/logging.md, note: "test-source exemptions for log calls" }
+    skills:
+      - { skill: android-foundation:android-testing, when: "before writing the first test" }
+      - { skill: superpowers:test-driven-development, policy: recommended, when: "when writing new tests from scratch" }
+
+  qa-engineer:
+    invariants: |
+      End-to-end verification on Android: Compose UI Test (`createAndroidComposeRule`), Maestro YAML
+      flows, UIAutomator for system UI, and accessibility. When a `test` phase precedes you, do not
+      re-derive its unit tests — verify journeys, UI, and acceptance. Selectors are testTag constants
+      from the central TestTag object, resolved through the vault's ui-patterns index; never inline
+      literals and never localized text. A missing tag is a gap to flag to the development phase, not
+      something to work around with a text matcher. No `Thread.sleep` — use Compose `waitUntil { }` or
+      Maestro `waitForAnimationToEnd`. Accessibility is part of the pass: contentDescription on
+      informative images, 48dp tap targets, semantics on custom interactive composables, never colour
+      alone. Instrumented tests need a device or emulator; when none is available, say so rather than
+      reporting an untested pass.
+    rules:
+      - { path: rules/snippets/gradle-commands.md, note: "instrumented / assemble task names" }
+      - { path: rules/skills.md, note: "only if the optional `android` CLI is on PATH — emulator, screen capture, layout" }
+    skills:
+      - { skill: android-foundation:android-e2e, when: "before writing or running E2E / UI tests" }
+      - { skill: superpowers:verification-before-completion, policy: recommended, when: "before the QA signoff" }
+
+  security-analyst:
+    invariants: |
+      OWASP MASVS is the authoritative standard and MASTG supplies the test procedures — cite the
+      MASVS control group and the MASTG test ID in every finding. Audit the RELEASE variant; debug
+      variants have relaxed settings by design. Android non-negotiables: secrets in the Keystore or
+      `config/*.properties` -> BuildConfig, never in source and never in plain SharedPreferences; no
+      cleartext traffic; certificate pinning for the backend; per-encryption random IV stored with
+      the ciphertext; incoming Intents and deep links validated against an allow-list; exported
+      components permission-guarded; BiometricPrompt with CryptoObject as step-up, not as the primary
+      factor; purchase tokens verified server-side before entitlements unlock; R8 enabled for release
+      with no blanket `-keep class **`; no secrets in logs. Detect the project's actual HTTP client,
+      auth, realtime, billing and storage from the codebase — assume no vendor. Never print a real
+      secret in a report; use placeholders.
+    rules:
+      - { path: rules/snippets/proguard-keep.md, note: "reusable R8 keep rules to audit against" }
+      - { path: rules/logging.md, note: "what may and may not be logged" }
+    skills:
+      - { skill: android-foundation:android-security-masvs, when: "before the audit" }
+
+  document-writer:
+    invariants: |
+      The project's Obsidian vault at `.obsidian-vault/` is the single source of project knowledge —
+      never scatter the same content into READMEs. It is OPTIONAL: if it is absent, skip the vault
+      work and document in `docs/plans/{task_slug}/` instead. Notes carry typed edges
+      (depends_on / screens / flows / adrs) as path-qualified wikilinks, never a flat `links:` array
+      and never a bare slug. `depends_on:` is authoritative; the Dependencies prose is its mirror and
+      holds the why — keep them in sync by hand. Never hand-edit generated content: the Mermaid block
+      in architecture/dependency-graph.md is rebuilt by gen-mermaid.mjs and the `_moc-*` tables are
+      Dataview queries. Never pin Kotlin/Gradle/AGP/Compose versions in a note — link to
+      libs.versions.toml and AppConfig.kt. Templates in `_templates/` are copied, never edited. No
+      `<!-- STUB -->` marker may survive into the PR.
+    rules:
+      - { path: rules/documentation.md, note: "vault canon, triggers, and the Definition of Done" }
+      - { path: rules/git-operations.md, note: "commit / PR conventions" }
+    skills:
+      - { skill: android-foundation:android-docs-vault, when: "before filling vault notes and before `gh pr create`" }
+
+  debugger:
+    invariants: |
+      Android root-cause analysis: follow evidence, not assumptions, and detect the project's stack
+      before naming a cause. Evidence order: full stack trace (file, line, thread) -> Logcat context
+      from before the failure, filtered by the project's log tag -> `git log --oneline -15` -> the
+      originating layer (screen, ViewModel/store, feature repository, data source). The usual causes,
+      in order of frequency: collecting state outside the lifecycle instead of
+      collectAsStateWithLifecycle(); GlobalScope or a bare CoroutineScope; a blocking call on Main
+      (runBlocking, Thread.sleep) behind an ANR; a missing dispatcher qualifier; an unstable
+      composable parameter behind excess recomposition; a missing rememberSaveable behind state lost
+      on rotation; a Context or Activity held by a singleton behind a leak. A prescribed fix must
+      introduce no `!!`, `GlobalScope`, `runBlocking`, or suspend call in a composable body.
+    rules:
+      - { path: rules/logging.md, note: "log tags and Logcat filters" }
+      - { path: rules/snippets/non-negotiable.md, note: "what a prescribed fix must not introduce" }
+      - { path: rules/enforcement.md, note: "when a foundation hook is the thing misbehaving" }
+    skills:
+      - { skill: android-foundation:android-debugging, when: "before the first hypothesis" }
+      - { skill: superpowers:systematic-debugging, when: "before any diagnosis — the method is not optional" }
+      - { skill: superpowers:verification-before-completion, when: "before declaring a root cause" }
+
+  devops:
+    invariants: |
+      Gradle build configuration, convention plugins in `build-logic/`, the version catalog, flavors
+      and build types, signing, R8, and store distribution. GitHub Actions workflow YAML is the CI
+      role's, not yours. Versions live in gradle/libs.versions.toml and SDK/JVM targets in
+      build-logic conf/AppConfig.kt — never inline a version in a script or a doc. KSP over KAPT.
+      Confirm the flavor x type matrix from app/build.gradle.kts and build-logic before scripting
+      anything; the release artifact has R8 and signing on, and any non-minified release type is
+      deliberate. `config/keystore.properties`, `config/*.properties` holding secrets, and analytics
+      config files stay out of VCS — verify .gitignore before touching signing. Never print or commit
+      a keystore, password, or key alias. With the Gradle configuration cache on, validate a
+      build-script change locally before committing it.
+    rules:
+      - { path: rules/snippets/gradle-commands.md, note: "canonical build / assemble / bundle tasks" }
+      - { path: rules/snippets/proguard-keep.md, note: "reusable R8 keep rules" }
+      - { path: rules/enforcement.md, note: "the foundation's hook scripts" }
+      - { path: rules/skills.md, note: "only if the optional `android` CLI is on PATH — sdk / init / skills capabilities" }
+    skills:
+      - { skill: android-foundation:android-build-release, when: "before changing build config, signing, R8, or distribution" }
+
+  cicd:
+    invariants: |
+      CI authoring for an Android Gradle project: job order is lint (detekt + ktlintCheck in
+      parallel) -> unit tests -> assemble debug -> bundle release on the release branch ->
+      distribute, wired with `needs:` so a failure stops the chain early. Signing keys, keystore
+      infrastructure, and store console setup belong to the build/release role — you consume secrets,
+      you do not manage them. Cache ~/.gradle/caches and ~/.gradle/wrapper keyed on the build files
+      and the wrapper properties. Check out with `submodules: recursive` when the project has
+      submodules. Pin action versions and the JVM version (from AppConfig.kt); never hardcode a
+      library version in a workflow. Every secret comes from the CI secret store — never inline, and
+      never echo one into a log. Upload failure artifacts (test reports, mapping files).
+    rules:
+      - { path: rules/snippets/gradle-commands.md, note: "the task names CI stages call" }
+    skills:
+      - { skill: android-foundation:android-ci, when: "before writing or changing workflow YAML" }
+
+  aar-analyst:
+    invariants: |
+      When auditing an Android run, the workflow you are auditing against is the foundation's
+      rules/workflow.md (Android specifics per step) plus the core orchestrator's own contract.
+      Mandatory-skill adherence is checked against this manifest's `role_expertise.<role>.skills`
+      rows, which are what the orchestrator actually pasted into each phase prompt — not against any
+      agent's prose. Workflow scope only: agents, rules, settings, process docs. Never product code
+      and never code-derived vault content.
+    rules:
+      - { path: rules/workflow.md, note: "the Android DAG and per-step specifics you audit against" }
+    skills:
+      - { skill: superpowers:verification-before-completion, policy: recommended, when: "before returning findings — every claim cites transcript evidence" }
 
 convention_skills:
   - android-foundation:android-compose-ui
@@ -55,29 +262,9 @@ convention_skills:
 extra_phases: []
 pre_phase_commands: []
 
-phase_injections:
-  development: |
-    Native Android (Kotlin) project. Compose-first UI with Material 3.
-    Unidirectional data flow; state hoisting; UI state as StateFlow from a ViewModel.
-    DI: use the project's existing DI framework via constructor injection; scope bindings deliberately.
-    Framework-specific guidance (Hilt/Dagger, Koin) is added by the matching framework plugin when detected.
-    Concurrency: coroutines + Flow; never block the main thread; use viewModelScope.
-    New dependencies via the Gradle version catalog (libs.versions.toml), pinned ^x.y.z.
-    Respect the existing module structure. Secrets via BuildConfig/local.properties, never source.
-    Apply skills: android-foundation:android-compose-ui, android-foundation:android-architecture,
-    android-foundation:android-data, android-foundation:android-navigation.
-  qa: |
-    Android testing: JUnit5 (or JUnit4 if that's the project baseline), MockK, Turbine for Flow,
-    kotlinx-coroutines-test for dispatchers. Unit tests run on the JVM (testDebugUnitTest).
-    Instrumentation/UI tests (Espresso/Compose UI test) are CI-only — do NOT run in pipeline.
-  security: |
-    Android-specific (MASVS/MASTG): secrets in Keystore not SharedPreferences; no cleartext traffic;
-    certificate pinning where required; validate incoming Intents/deep links; biometric (BiometricPrompt)
-    as step-up not primary; R8/ProGuard enabled for release; no secrets in source/VCS.
-
 # G1 self-healing: compile ONLY. Deliberately a subset of post_pipeline_checks —
 # testDebugUnitTest is excluded because a failing unit test is a logic problem that belongs
-# to the qa agent's own 3-attempt cap, not to the mechanical heal loop.
+# to the test phase's own 3-attempt cap, not to the mechanical heal loop.
 #
 # Perf note (measured on android-feature.yaml: development guarded + return_to of a 3-round
 # review loop, qa guarded): heal_checks runs after EVERY guarded-phase dispatch, unconditionally,

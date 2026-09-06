@@ -318,6 +318,49 @@ test("renderSkillsBlock: role skills and matching extension rows, deduped, manda
   assert.equal(renderSkillsBlock("developer", { roleSkills: [], extensionRows: [{ skill: "s", agents: ["reviewer"], policy: "mandatory", when: "" }] }), null);
 });
 
+test("renderSkillsBlock downgrades a role skill whose plugin is not installed, exactly as an extension row is", () => {
+  // The asymmetry this closes: `parseExtensionSkills` already downgrades a project's own row when
+  // the plugin is absent, because a MANDATORY line for a skill that cannot be invoked is worse than
+  // no line — the agent either stalls or learns that MANDATORY is negotiable. A `role_expertise`
+  // row is the same instruction from a different author, and it reached the prompt undowngraded:
+  // on a machine without `frontend-design`, the Android developer phase was told, as a hard
+  // requirement, to invoke a skill that does not exist.
+  const roleSkills = [
+    { skill: "frontend-design:frontend-design", policy: "mandatory", when: "before a Compose screen" },
+    { skill: "superpowers:test-driven-development", policy: "mandatory", when: "before the first edit" },
+  ];
+  const warnings = [];
+  const block = renderSkillsBlock("developer", {
+    roleSkills,
+    extensionRows: [],
+    unavailablePlugins: { "frontend-design_unavailable": true },
+    warnings,
+  });
+  assert.equal(block, [
+    "Skills for this role (from the active stack profile and this project's .claude/sdlc.local.yaml):",
+    "- MANDATORY — invoke `superpowers:test-driven-development` — before the first edit. Do not skip; this project requires it.",
+    "- RECOMMENDED — consider invoking `frontend-design:frontend-design` — before a Compose screen (skill not installed — best-effort).",
+  ].join("\n"));
+  assert.ok(warnings.some((w) => /frontend-design:frontend-design not installed — downgraded/.test(w)), warnings.join("\n"));
+
+  // No flags at all (the caller could not measure) leaves every row as authored — absent
+  // evidence must never be read as evidence of absence.
+  assert.match(renderSkillsBlock("developer", { roleSkills }), /MANDATORY — invoke `frontend-design:frontend-design`/);
+
+  // The enumerated skill list must NOT be consulted for a role row. It describes the INSTALLED
+  // cache, while the row is authored by the manifest being resolved: on a marketplace checkout
+  // whose cache lags the tree, judging by enumeration downgrades every one of the foundation's
+  // own skills — which is the inverse of the intent.
+  assert.match(
+    renderSkillsBlock("tester", {
+      roleSkills: [{ skill: "android-foundation:android-testing", policy: "mandatory", when: "first" }],
+      unavailablePlugins: { superpowers_unavailable: true },
+    }),
+    /MANDATORY — invoke `android-foundation:android-testing`/,
+    "a plugin's own skill ships with it and is never in question",
+  );
+});
+
 test("an extension row targeting an agent that does not exist is reported, not silently ignored", () => {
   // ADR-0021 renamed the roster and ships NO aliases: a project still naming `android-developer`
   // targets nothing. Translating it silently was the bug class this replaces — say so instead.

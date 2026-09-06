@@ -241,14 +241,59 @@ export function renderRoleExpertiseBlock(role, exp, { stack = "unknown" } = {}) 
 }
 
 /**
+ * The single definition of "this skill cannot be invoked here, so stop calling it MANDATORY".
+ *
+ * Both authors of a skill row go through this: the project's `extensions.skills` (1b-ext) and the
+ * stack profile's `role_expertise.<role>.skills` (3b-1a). Keeping one copy is deliberate — the
+ * defect PR-1's review found was two copies of one rule disagreeing about which spelling a step
+ * was keyed on, and a downgrade rule that lived twice would rot the same way.
+ *
+ * Returns the row unchanged when there is no availability data to judge it by.
+ */
+function downgradeIfMissing(row, { availableSkills = null, unavailablePlugins = null, warnings = [], where = "role_expertise" } = {}) {
+  if (!availableSkills && !unavailablePlugins) return row;
+  const pluginOf = row.skill.includes(":") ? row.skill.split(":")[0] : null;
+  const pluginDown = pluginOf && unavailablePlugins ? unavailablePlugins[`${pluginOf}_unavailable`] === true : false;
+  const notListed = availableSkills ? !availableSkills.has(row.skill) : false;
+  if (!pluginDown && !notListed) return row;
+  warnings.push(`WARN: ${where} ${row.skill} not installed — downgraded to recommended`);
+  return {
+    ...row,
+    policy: "recommended",
+    when: `${row.when}${row.when ? " " : ""}(skill not installed — best-effort)`,
+  };
+}
+
+/**
  * Step 3b-1a as code — the one deduped skill list an agent receives: the stack profile's
  * `role_expertise.<role>.skills` plus the project's `extensions.skills` rows that target it
  * (`agents` contains the name, or is `"all"`). Strictest policy wins per skill id, mandatory
  * rows render first, alphabetical within each group; `null` when nothing targets the agent.
+ *
+ * A role row whose plugin the deps preflight flagged unavailable is DOWNGRADED to `recommended`,
+ * the same way `parseExtensionSkills` downgrades a project's own row: a MANDATORY line for a skill
+ * that cannot be invoked either stalls the agent or teaches it that MANDATORY is negotiable — the
+ * compliance damage H1 measured.
+ *
+ * `unavailablePlugins` (the preflight's `<name>_unavailable` flags) is the ONLY signal used here,
+ * deliberately — NOT the enumerated `availableSkills` that judges an extension row. The enumeration
+ * describes the INSTALLED plugin cache, while a `role_expertise` row is authored by a manifest in
+ * the tree being resolved: on any checkout whose cache lags the tree (a marketplace working copy,
+ * a fresh clone, `--mode tree` in CI) every one of the foundation's own skills enumerates as
+ * missing and would be downgraded, while a genuinely-absent external dependency that happens to be
+ * installed stays MANDATORY — precisely inverted. The preflight flag is plugin-scoped and derived
+ * from `runtime-dependencies.json`, so it answers the question actually being asked: "is the
+ * plugin this row depends on usable in this session?" A plugin's own skills ship with it and are
+ * never in question. With no flags at all the rows render exactly as authored — absent evidence is
+ * not evidence of absence.
  */
-export function renderSkillsBlock(agent, { roleSkills = [], extensionRows = [] } = {}) {
+export function renderSkillsBlock(agent, {
+  roleSkills = [], extensionRows = [], unavailablePlugins = null, warnings = [],
+} = {}) {
   const targeted = extensionRows.filter((r) => r && (r.agents === "all" || arr(r.agents).includes(agent)));
-  const rows = dedupeSkills([...roleSkills.map(normalizeSkillRow), ...targeted.map(normalizeSkillRow)]);
+  // Extension rows arrive already downgraded (1b-ext); only the profile's own rows need it here.
+  const own = roleSkills.map(normalizeSkillRow).map((r) => downgradeIfMissing(r, { unavailablePlugins, warnings }));
+  const rows = dedupeSkills([...own, ...targeted.map(normalizeSkillRow)]);
   if (rows.length === 0) return null;
   rows.sort((a, b) => (POLICY_RANK[b.policy] - POLICY_RANK[a.policy]) || a.skill.localeCompare(b.skill));
   const lines = ["Skills for this role (from the active stack profile and this project's .claude/sdlc.local.yaml):"];
@@ -332,17 +377,11 @@ export function parseExtensionSkills(raw, { availableSkills = null, unavailableP
       else warnings.push(`WARN: extensions.skills[${i}] (${skill}) unknown policy '${row.policy}' — using recommended`);
     }
 
-    let when = typeof row.when === "string" ? row.when : "";
-    const pluginOf = skill.includes(":") ? skill.split(":")[0] : null;
-    const pluginDown = pluginOf ? unavailablePlugins[`${pluginOf}_unavailable`] === true : false;
-    const notListed = availableSkills ? !availableSkills.has(skill) : false;
-    if (pluginDown || notListed) {
-      policy = "recommended";
-      when = `${when}${when ? " " : ""}(skill not installed — best-effort)`;
-      warnings.push(`WARN: extensions.skills ${skill} not installed — downgraded to recommended`);
-    }
+    const when = typeof row.when === "string" ? row.when : "";
+    const judged = downgradeIfMissing({ skill, when, policy },
+      { availableSkills, unavailablePlugins, warnings, where: "extensions.skills" });
 
-    rows.push({ skill, agents, when, policy });
+    rows.push({ skill, agents, when: judged.when, policy: judged.policy });
   });
   return rows;
 }

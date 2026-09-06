@@ -117,49 +117,53 @@ The boundary: **pinned house rules** (Coil3, Kermit, KSP, `@Serializable` routes
 
 ### Stack Composition Examples
 
-| Project                           | Profile(s)                              | Development dispatch                       |
-| --------------------------------- | --------------------------------------- | ------------------------------------------ |
-| Android app repo                  | android (300)                           | android-developer                          |
-| Android app + Retrofit            | android (300) + retrofit (add.)         | android-developer, enriched by retrofit    |
-| Android app + Retrofit/Room/Hilt  | android (300) + retrofit + room + dagger| android-developer, enriched by all three   |
-| Unknown stack                     | vanilla (0)                             | developer (fallback)                       |
+The dispatched agent is always the core `developer` (ADR-0021) — what the profiles change is the
+expertise it arrives with: the foundation's `role_expertise.developer` block plus each active
+framework's `phase_injections`.
+
+| Project                           | Profile(s)                              | `developer` arrives with                    |
+| --------------------------------- | --------------------------------------- | ------------------------------------------- |
+| Android app repo                  | android (300)                           | the Android block (Compose, DI, testTags, …) |
+| Android app + Retrofit            | android (300) + retrofit (add.)         | the Android block + Retrofit conventions     |
+| Android app + Retrofit/Room/Hilt  | android (300) + retrofit + room + dagger| the Android block + all three frameworks     |
+| Unknown stack                     | vanilla (0)                             | nothing — the agent's own generic guidance   |
 
 ## 3. The Android pipeline (workflow `android-feature`)
 
 ```mermaid
 flowchart LR
-    BA["business_analysis<br/>android-ba (Opus)"] --> DEV["development<br/>android-developer (Sonnet)<br/>plan → approve → implement"]
-    DEV --> REV{"review<br/>android-reviewer (Sonnet)"}
+    BA["business_analysis<br/>business-analyst (Opus)"] --> DEV["development<br/>developer (Sonnet)<br/>plan → approve → implement"]
+    DEV --> REV{"review<br/>reviewer (Sonnet)"}
     REV -->|changes requested, max 3| DEV
     REV -->|approved| SEC
     REV -->|approved| TEST
     subgraph PAR["parallel group — one message, two Agent calls"]
-      SEC["security<br/>android-security (Opus)<br/>MASVS / MASTG"]
-      TEST["test<br/>android-tester (Sonnet)<br/>MockK / Turbine / Kover"]
+      SEC["security<br/>security-analyst (Opus)<br/>MASVS / MASTG"]
+      TEST["test<br/>tester (Sonnet)<br/>MockK / Turbine / Kover"]
     end
-    SEC --> REM{"remediation — GATED<br/>android-developer (Sonnet)<br/>runs only on Critical/High"}
+    SEC --> REM{"remediation — GATED<br/>developer (Sonnet)<br/>runs only on Critical/High"}
     TEST --> REM
-    REM --> QA["qa<br/>android-qa (Sonnet)<br/>Compose UI Test / Maestro / a11y"]
-    QA --> DOCS["documentation<br/>android-docs (Haiku)<br/>PR + optional vault"]
+    REM --> QA["qa<br/>qa-engineer (Sonnet)<br/>Compose UI Test / Maestro / a11y"]
+    QA --> DOCS["documentation<br/>document-writer (Haiku)<br/>PR + optional vault"]
 ```
 
-- **review** is a *loop phase*: if `android-reviewer` requests changes, the orchestrator re-runs
+- **review** is a *loop phase*: if `reviewer` requests changes, the orchestrator re-runs
   `development` (implement pass only — the plan was already approved) with the review findings injected,
   up to 3 rounds, then escalates to the user.
 - **[security ‖ test]** is a *parallel group*: both agents are dispatched in a single message and must
   return before the gate is evaluated.
-- **remediation** is a *gated phase*. `android-security` is READ-ONLY — it has no `Edit` tool and
+- **remediation** is a *gated phase*. `security-analyst` is READ-ONLY — it has no `Edit` tool and
   never touches code; it classifies findings and writes a remediation for each. Once the whole
   parallel group has returned, the orchestrator parses security's `ISSUES_FOUND:` line: on a
-  Critical or High finding it dispatches `android-developer` with the security report to apply the
+  Critical or High finding it dispatches `developer` with the security report to apply the
   fixes; otherwise the phase is skipped at zero cost. It is a one-way hand-off — security does not
   re-run afterwards.
-- `android-debugger` is read-only for the same reason: it diagnoses and prescribes, and the
-  `android-debug` / `android-bugfix` recipes route the fix to `android-developer` in the next
+- `debugger` is read-only for the same reason: it diagnoses and prescribes, and the
+  `android-debug` / `android-bugfix` recipes route the fix to `developer` in the next
   phase, where it passes through the normal review loop.
-- On-demand agents (not in the pipeline; invoke directly): `android-devops`, `android-cicd`,
-  `android-aar`. `android-debugger` is on-demand **and** wired as the `debugging` phase of the
-  `android-debug` recipe (manifest `agents_per_phase.debugging → android-debugger`).
+- On-demand agents (not in the pipeline; invoke directly): `devops`, `cicd`,
+  `aar-analyst`. `debugger` is on-demand **and** wired as the `debugging` phase of the
+  `android-debug` recipe (manifest `agents_per_phase.debugging → debugger`).
 
 The agent assigned to each phase (and the on-demand agents) is documented in
 [`plugins/android-foundation/README.md`](../plugins/android-foundation/README.md#agent-roster).
@@ -189,7 +193,7 @@ the security agent classifies and prescribes, the development agent applies.
 
 ### Framework enrichment (additive)
 
-When a framework plugin's library is detected, its guidance joins the run without changing the pipeline shape. Example: on a project using Retrofit, `retrofit-plugin` adds its `retrofit-conventions` skill to the development phase and injects networking + TLS guidance into the `android-developer` and `android-security` prompts. No extra agent, no extra phase — the existing agents simply receive richer, library-specific instructions. Multiple frameworks compose: their injections concatenate deterministically.
+When a framework plugin's library is detected, its guidance joins the run without changing the pipeline shape. Example: on a project using Retrofit, `retrofit-plugin` adds its `retrofit-conventions` skill to the development phase and injects networking + TLS guidance into the `developer` and `security-analyst` prompts. No extra agent, no extra phase — the existing agents simply receive richer, library-specific instructions. Multiple frameworks compose: their injections concatenate deterministically.
 
 ## 3b. Project-local recipes & built-in intents
 
@@ -203,7 +207,7 @@ Additional built-in intents ship with a `match:` block for auto-selection:
 - `analysis` (core) — BA → Security, **reports only** (no code, no PR); matches "analyze/audit/assess".
 - `testing` (core) — QA only; backfill/verify tests; matches "test/coverage".
 - `debug` (core) — Dev → QA fix-and-verify (developer does root-cause; vanilla has no debugger agent).
-- `android-debug` (android) — Debugger → Dev → Review(⇄Dev ×2) → Test; wires `android-debugger` via the
+- `android-debug` (android) — Debugger → Dev → Review(⇄Dev ×2) → Test; wires `debugger` via the
   `debugging` phase. On Android both `debug` and `android-debug` match; `android-debug` wins the tie
   via `match.priority: 10` (the first tie-break rule), not by name order.
 
@@ -211,9 +215,9 @@ Additional built-in intents ship with a `match:` block for auto-selection:
 
 | Tier | Model | Agents |
 |------|-------|--------|
-| high | Opus | `android-ba`, `android-security` |
-| medium | Sonnet | `android-developer`, `android-reviewer`, `android-tester`, `android-qa`, on-demand agents |
-| low | Haiku | `android-docs` |
+| high | Opus | `business-analyst`, `security-analyst` |
+| medium | Sonnet | `developer`, `reviewer`, `tester`, `qa-engineer`, on-demand agents |
+| low | Haiku | `document-writer` |
 
 Tiers are declared in each agent's frontmatter `model:`/`effort:` and enforced by the core
 `enforce-agent-model.sh` hook.
