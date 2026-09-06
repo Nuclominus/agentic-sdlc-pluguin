@@ -30,6 +30,12 @@ is_valid_tier() {
     esac
 }
 
+# ADR-0021 renamed the agent roster and ships NO aliases: this hook resolves the name it is given,
+# and a name that matches no agent file falls open (below) exactly as any non-SDLC agent does.
+# Migrating a project's model.local.json is `/sdlc:doctor`'s job, not a lookup fallback here —
+# a translation that has to agree with the dispatch name, the resolver and the orchestrator is
+# four copies of one map, and every place they disagreed was a defect.
+
 # Read the two OPTIONAL project-local tier candidates from
 # <project_root>/.claude/model.local.json: the per-agent value (agents[<name>])
 # on line 1, the default value on line 2 (each empty if absent). Fails open —
@@ -102,12 +108,19 @@ if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
 fi
 search_roots+=( "${project_root}/plugins" )
 
+# The core ships every dispatched agent (ADR-0021), so the direct probe answers first and costs a
+# stat; `find` stays as the fallback for a plugin laid out differently, and `-print -quit` stops it
+# at the first hit instead of walking every cached plugin version to completion.
 md_path=""
-for root in "${search_roots[@]}"; do
-    [ -d "$root" ] || continue
-    md_path=$(find "$root" -path "*/agents/${bare_name}.md" 2>/dev/null | head -1)
-    [ -n "$md_path" ] && break
-done
+if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "${CLAUDE_PLUGIN_ROOT}/agents/${bare_name}.md" ]; then
+    md_path="${CLAUDE_PLUGIN_ROOT}/agents/${bare_name}.md"
+else
+    for root in "${search_roots[@]}"; do
+        [ -d "$root" ] || continue
+        md_path=$(find "$root" -path "*/agents/${bare_name}.md" -print -quit 2>/dev/null)
+        [ -n "$md_path" ] && break
+    done
+fi
 
 if [ -z "$md_path" ]; then
     allow_warn "[model-enforcement] agent '${agent_name}' .md not found — skipping model check (non-SDLC agent?)"
@@ -169,11 +182,12 @@ printf '[%s] CORRECTED agent=%s requested=%s enforced=%s\n' \
     "$ts" "$agent_name" "${requested_model:-absent}" "$declared_model" >> "$log_path"
 
 # Build corrected output — jq path preferred, python3 fallback
+corrected_msg="[model-enforcement] CORRECTED ${agent_name}: ${requested_model:-absent} → ${declared_model}"
 if command -v jq >/dev/null 2>&1; then
     updated_input=$(printf '%s' "$payload" | jq --arg m "$declared_model" '.tool_input | .model = $m')
     jq -n \
         --argjson ui "$updated_input" \
-        --arg msg "[model-enforcement] CORRECTED ${agent_name}: ${requested_model:-absent} → ${declared_model}" \
+        --arg msg "$corrected_msg" \
         '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","updatedInput":$ui},"systemMessage":$msg}'
 else
     updated_input=$(printf '%s' "$payload" \
@@ -184,6 +198,6 @@ ti = d.get('tool_input', {})
 ti['model'] = '${declared_model}'
 print(json.dumps(ti))
 ")
-    printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","updatedInput":%s},"systemMessage":"[model-enforcement] CORRECTED %s: %s → %s"}\n' \
-        "$updated_input" "$agent_name" "${requested_model:-absent}" "$declared_model"
+    printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","updatedInput":%s},"systemMessage":"%s"}\n' \
+        "$updated_input" "$corrected_msg"
 fi

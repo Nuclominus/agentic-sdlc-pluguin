@@ -1,18 +1,25 @@
 #!/usr/bin/env node
 // Dependency-free entry for resolving a run, shipped inside the sdlc plugin.
 //
-// One command, invoked by pipeline-orchestrator Steps 0 → 1d:
+// Two commands:
 //   node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs plan [--json] [--dry-run] [--workflow=NAME] …
+//     invoked by pipeline-orchestrator Steps 0 → 1d. It replaces ~926 lines of prose that the
+//     model executed as ~24 turns and 14 tool calls, for a measured median of $1.31 per run
+//     (ADR-0019).
+//   node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs expertise --role <name> [--json] [--stack=NAME]
+//     invoked by an ON-DEMAND agent (debugger, devops, cicd, aar-analyst) that runs outside the
+//     orchestrator. It prints the same `Stack expertise for <role>` and `Skills for this role`
+//     blocks a pipeline dispatch would have carried in its stable prefix (ADR-0021) — one
+//     command, once per invocation, in place of "self-read rules/skills.md and sdlc.local.yaml".
 //
-// It replaces ~926 lines of prose that the model executed as ~24 turns and 14 tool calls, for a
-// measured median of $1.31 per run (ADR-0019). Paths resolve against the CONSUMER's project cwd;
-// only the script itself is loaded from the plugin root.
+// Paths resolve against the CONSUMER's project cwd; only the script itself is loaded from the
+// plugin root.
 //
 // This is the ONLY unit here that prints. Everything it prints is composed upstream — the
 // orchestrator echoes `prints[]` verbatim rather than filling a template, which is
 // ADR-0015's machine-value invariant applied to prose instead of arithmetic.
 
-import { resolvePlan } from "./plan.mjs";
+import { resolvePlan, resolveExpertise } from "./plan.mjs";
 
 const argv = process.argv.slice(2);
 const cmd = argv[0];
@@ -23,23 +30,61 @@ function usage() {
   console.error("usage: cli.mjs plan [--json] [--dry-run] [--workflow=NAME] [--no-auto-workflow]");
   console.error("                    [--force-preflight] [--skills <csv>] [--no-skip-rules] [--force-ba]");
   console.error("                    [--base-ref <ref>] [--mode tree|installed]");
+  console.error("       cli.mjs expertise --role <name> [--json] [--stack=NAME] [--mode tree|installed]");
   return 2;
 }
 
-if (cmd !== "plan") process.exit(usage());
+/** `--name value` (a separate token), or null. */
+function tokenOpt(name) {
+  const i = argv.indexOf(name);
+  return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : null;
+}
 
-const modeIdx = argv.indexOf("--mode");
-const mode = modeIdx >= 0 && argv[modeIdx + 1] && !argv[modeIdx + 1].startsWith("--") ? argv[modeIdx + 1] : "installed";
+if (cmd !== "plan" && cmd !== "expertise") process.exit(usage());
+
+const mode = tokenOpt("--mode") ?? "installed";
+
+/** A crash stops the run, and the prose it replaced would have degraded instead. The trade is
+ *  deliberate (ADR-0019), so the message has to be actionable rather than a stack. */
+function crash(e) {
+  if (jsonOut) console.log(JSON.stringify({ ok: false, error: String(e && e.message ? e.message : e) }));
+  else console.error(`❌ resolve failed: ${e && e.message ? e.message : e}`);
+  process.exit(1);
+}
+
+if (cmd === "expertise") {
+  const role = tokenOpt("--role");
+  if (!role) process.exit(usage());
+  let r;
+  try { r = resolveExpertise({ cwd: process.cwd(), args: rest, env: process.env, mode, role }); } catch (e) { crash(e); }
+
+  if (jsonOut) {
+    console.log(JSON.stringify(r));
+  } else if (!r.ok) {
+    for (const p of r.prints) console.log(p);
+    console.error(`❌ expertise: ${r.error}`);
+  } else {
+    // stdout is the block the agent pastes into its own context, so it carries nothing else.
+    // Diagnostics still have to reach a human: a stale agent name in the project's config is
+    // reported here or nowhere, which is how the same class of warning went unseen before.
+    for (const w of r.warnings) console.error(w);
+    if (r.block == null && r.skills_block == null) {
+      console.log(`no stack expertise for ${r.role} (stack: ${r.stack})`);
+    } else {
+      if (r.block) console.log(r.block);
+      if (r.block && r.skills_block) console.log("");
+      if (r.skills_block) console.log(r.skills_block);
+    }
+  }
+  // Unknown role is a caller error (2); a halt in resolution is the same "cannot proceed" as plan (1).
+  process.exit(r.ok ? 0 : /^unknown role/.test(String(r.error)) ? 2 : 1);
+}
 
 let result;
 try {
   result = resolvePlan({ cwd: process.cwd(), args: rest, env: process.env, mode });
 } catch (e) {
-  // A crash here stops the run, and the prose it replaced would have degraded instead. The
-  // trade is deliberate (ADR-0019), so the message has to be actionable rather than a stack.
-  if (jsonOut) console.log(JSON.stringify({ ok: false, error: String(e && e.message ? e.message : e) }));
-  else console.error(`❌ resolve failed: ${e && e.message ? e.message : e}`);
-  process.exit(1);
+  crash(e);
 }
 
 const { plan, prints, warnings, halt, deps_abort: depsAbort } = result;
