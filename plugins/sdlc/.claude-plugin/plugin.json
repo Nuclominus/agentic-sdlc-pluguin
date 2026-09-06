@@ -1,7 +1,7 @@
 {
   "name": "sdlc",
   "version": "1.18.0",
-  "description": "Universal SDLC orchestrator with stack provider auto-discovery. Owns the pipeline AND the whole agent roster (ADR-0021): 12 platform-neutral, cost-tiered agents — business-analyst (Opus), developer, reviewer, tester, qa-engineer (Sonnet, iteration caps), security-analyst (Opus, read-only), document-writer (Haiku), debugger (read-only), devops, cicd, aar-analyst, session-recorder. Plugins register themselves via manifest.yaml profiles (kind: foundation | framework) and supply per-role expertise (role_expertise) that the resolver renders into each agent's stable prefix; on-demand agents fetch it with `resolve/cli.mjs expertise --role <name>`. Slash command: /sdlc:start \"<feature>\".",
+  "description": "Universal SDLC orchestrator with stack provider auto-discovery. Owns the pipeline AND the whole 12-agent roster (ADR-0021): business-analyst (Opus), developer, reviewer, tester, qa-engineer (Sonnet, iteration caps), security-analyst (Opus, read-only), document-writer (Haiku), debugger (read-only), devops, cicd, aar-analyst, session-recorder. Plugins register via manifest.yaml (kind: foundation | framework) and supply per-role expertise (role_expertise) rendered into each agent's prefix; on-demand agents fetch it via `resolve/cli.mjs expertise --role`. Slash command: /sdlc:start \"<feature>\".",
   "author": {
     "name": "Nuclominus",
     "url": "https://github.com/Nuclominus"
