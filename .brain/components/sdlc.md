@@ -10,12 +10,19 @@ dependency: null
 ## Responsibility
 
 Universal SDLC orchestrator with stack provider auto-discovery. Owns the pipeline; plugins
-register themselves via `manifest.yaml` profiles (`kind: foundation | framework`). Includes 5
-cost-tiered default agents (BA Opus, Dev Sonnet, QA Sonnet with iteration cap, Sec Opus, Docs
-Haiku). Slash command: `/sdlc:start "<feature>"`. Ships its own vanilla `manifest.yaml`
+register themselves via `manifest.yaml` profiles (`kind: foundation | framework`). Since
+[[decisions/ADR-0021-agents-live-in-the-core-foundations-carry-expertise]] it owns the **whole**
+cost-tiered agent roster — `business-analyst` (Opus), `developer`, `reviewer`, `tester`,
+`qa-engineer` (all Sonnet, the test/QA roles with a 3-attempt iteration cap), `security-analyst`
+(Opus), `document-writer` (Haiku), plus the on-demand `debugger`, `devops`, `cicd` and
+`aar-analyst` — and `plugins/sdlc/manifest.yaml` is the only manifest that binds a phase to an
+agent. A foundation contributes `role_expertise` instead; the resolver merges it and pre-renders
+`profile.prompt_blocks[agent]`, which the orchestrator pastes verbatim into the phase prompt's
+stable prefix, and `resolve/cli.mjs expertise --role <name>` prints the same blocks for an agent
+invoked outside the pipeline. Slash command: `/sdlc:start "<feature>"`. Ships its own vanilla `manifest.yaml`
 (`kind: foundation`, `priority: 0`) as the always-matching fallback profile when no specialized
 foundation claims the project, but the core pipeline logic itself never forks per stack — it
-reads whichever foundation manifest wins. Beyond the five phase agents it ships `session-recorder`,
+reads whichever foundation manifest wins. Beyond the phase agents it ships `session-recorder`,
 a built-in run closer dispatched at orchestrator Step 6 that appends a short entry to the cumulative
 run journal `docs/plans/_journal.md` (elapsed time measured via a real Step 2 clock, not estimated).
 Its orchestrator prompt template carries a **read-discipline contract** in the cache-stable prefix
@@ -37,7 +44,10 @@ control neither, a constraint stated in Step 0a-1 and enforced doc-wide by sdlc-
 ## Key files
 - `plugins/sdlc/manifest.yaml`
 - `plugins/sdlc/.claude-plugin/plugin.json`
+- `plugins/sdlc/agents/` (the entire roster — the only `agents/` directory in the marketplace)
 - `plugins/sdlc/agents/session-recorder.md`
+- `plugins/sdlc/config/agent-migrations.json` + `plugins/sdlc/tools/migrate/` (the rename data
+  `/sdlc:doctor` applies to a project's own config; never read at runtime)
 - `plugins/sdlc/PLUGIN-PATHS.md` (path-resolution contract; orchestrator Step 0 resolves it)
 - `plugins/sdlc/skills/pipeline-orchestrator/SKILL.md` (Step 0 roots, Step 2 clock, Step 5 timing, Step 6 close)
 - `plugins/sdlc/config/models.json` (model registry — the single source of truth for `tag → model_id`

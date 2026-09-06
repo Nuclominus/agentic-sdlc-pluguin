@@ -85,8 +85,10 @@ framework_detection:             # WHERE to look for a framework's coordinate �
   - "**/build.gradle.kts"
   - "**/build.gradle"
 ```
-Wins the `android` aspect (platform/winner axis), declares the agents-per-phase roster, the convention
-skills, the `development` / `qa` / `security` phase injections (Compose-first, JVM-only tests, MASVS/MASTG),
+Wins the `android` aspect (platform/winner axis) and declares the per-role expertise
+(`role_expertise` — invariants, rule paths and mandatory skills per CORE role; ADR-0021 moved both the
+roster and its `agents_per_phase` binding to `plugins/sdlc/manifest.yaml`, and the Android
+`phase_injections` became `role_expertise.<role>.invariants` in the same move), the convention skills,
 and — via `hosts_aspects` + `framework_detection` — owns discovery of its frameworks (Retrofit→`network`,
 Room→`persistence`, Dagger→`di`). The stack id stays `android` (config stability); only the plugin name is
 `android-foundation`.

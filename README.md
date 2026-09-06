@@ -111,7 +111,7 @@ Top priorities right now:
 
 ## Security: MASVS / MASTG
 
-The core security phase is **platform-neutral** and applies the standard injected by the active profile as authoritative. On Android, `android-security` runs a full **MASVS/MASTG** audit; active framework plugins concatenate their own checks (e.g. `retrofit-plugin` adds MASVS-NETWORK TLS/pinning). Details → [`plugins/android-foundation/README.md`](plugins/android-foundation/README.md#security--masvs--mastg).
+The core security phase is **platform-neutral** and applies the standard injected by the active profile as authoritative. On Android, `security-analyst` runs a full **MASVS/MASTG** audit; active framework plugins concatenate their own checks (e.g. `retrofit-plugin` adds MASVS-NETWORK TLS/pinning). Details → [`plugins/android-foundation/README.md`](plugins/android-foundation/README.md#security--masvs--mastg).
 
 ## Optional Obsidian Vault
 

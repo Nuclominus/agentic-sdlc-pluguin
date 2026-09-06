@@ -59,11 +59,33 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
   (3b-1a). `sdlc-lint roster` (part of `all`) holds the four seams: every bound role ships a core
   `.md`, every recipe phase is bound, every `role_expertise` key/rule/skill resolves (a
   `superpowers:*` skill must be declared by the plugin that mandates it), and every agent carries
-  its bootstrap line. **Nothing changes for an Android run yet**: `android-foundation` still binds
-  its own roster (now warned as deprecated); PR-2 extracts its expertise into skills +
-  `role_expertise`, PR-3 deletes `android-foundation/agents/`.
+  its bootstrap line.
   Design: `docs/superpowers/specs/2026-09-05-agents-in-core-design.md`;
   track: `.brain/planning/i1-agents-in-core.md`.
+- **Android runs now dispatch the core roster — PR-2 of 3 (ADR-0021, `android-foundation`).** An
+  Android pipeline prints `development → developer`, not `development → android-developer`: the
+  foundation no longer declares `agents_per_phase`, `on_demand_agents`, `aar_analyst` or
+  `phase_injections`, and `plugins/sdlc/manifest.yaml` is the only manifest that binds a phase to an
+  agent. What the foundation contributes instead is `role_expertise` for all eleven core roles —
+  invariants that ride in the stable prefix, rule paths the resolver emits absolute, and the
+  mandatory/recommended skill rows that used to live in a `rules/skills.md` matrix.
+  **Nine skills** carry what the agent bodies carried: `android-requirements`, `android-review`,
+  `android-security-masvs`, `android-testing`, `android-e2e`, `android-docs-vault`,
+  `android-debugging`, `android-build-release`, `android-ci`. The Architecture Detection grep moved
+  into `android-architecture`; `rules/testing.md` folded into `android-testing`; `rules/skills.md`
+  keeps only the optional `android` CLI capability bindings; `rules/workflow.md` shrank to what
+  Android actually adds per step; `rules/documentation.md` gained a per-role vault reading map; and
+  no rules file names the plugin-root variable any more, because the agent that reads them now lives
+  in `sdlc`, where it would resolve to the wrong plugin. `/sdlc:aar` always dispatches the core
+  `aar-analyst`, passing the stack's block from `expertise --role aar-analyst --json`, and the
+  orchestrator carries its own crash-recovery rule (Step 3c-crash) rather than pointing at a
+  foundation rules file for it. `frontend-design` is now declared in the foundation's
+  `runtime-dependencies.json` — it was mandated but undeclared, so the preflight could not downgrade
+  it when absent. New CI gate `tools/sdlc-lint/scripts/expertise-coverage.mjs` asserts that every
+  `##` section of every Android agent has a row in the track note's coverage table and that each
+  row's anchor phrase is literally present in the destination — and, while the agent files are still
+  on disk, that the mapping is a bijection. The agent files stay one more PR for side-by-side
+  review; PR-3 deletes them.
 - **`/sdlc:doctor` migrates a project's config across an agent rename — and there are no runtime
   aliases.** An agent name is used exactly as written: the key in `.claude/model.local.json`, the
   name dispatched, the `role_expertise` key and the file on disk are one string. A first cut of this

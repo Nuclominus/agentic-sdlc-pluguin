@@ -1,226 +1,98 @@
 ---
-loaded_by: [orchestrator]
-load_when: "Once at session start; on phase transitions."
+loaded_by: [aar-analyst]
+load_when: "When auditing a run against what Android adds to each pipeline step."
 ---
 
-# Agent Workflow Orchestration
+# Android specifics per pipeline step
 
-## Pipeline DAG
+The pipeline itself — phase order, the review loop and its cap, the gated `remediation` phase, the
+parallel group, crash recovery, checkpointing — belongs to the core orchestrator
+(`sdlc/skills/pipeline-orchestrator/SKILL.md`) and to the recipe under `workflows/`. This file does
+not restate it. What follows is only what **Android** adds, step by step, and the roles are the CORE
+roster (ADR-0021): this foundation ships no agents.
 
-```
-Standard feature:
-  android-ba → android-developer → (android-reviewer ⇄ android-developer, max 3 rounds)
-                → [android-security ‖ android-tester] → remediation? → android-qa → android-docs
+The recipe this foundation selects is `workflows/android-feature.yaml`; the bug-fix variants are
+`android-debug.yaml` and `android-bugfix.yaml`.
 
-Bug-fix (full gate):
-  android-debugger → android-developer → (android-reviewer ⇄ android-developer, max 3 rounds)
-           → [android-security ‖ android-tester] → remediation? → android-qa
-```
+## Applies to every step
 
-`[android-security ‖ android-tester]` = android-security and android-tester run **in parallel** — invoke both simultaneously.
+- **Vault first.** `.obsidian-vault/` is the single source of project knowledge. Before answering a
+  project-specific question, `Read` the relevant note starting from `_moc-root.md`, then follow the
+  typed edges (`depends_on` / `screens` / `flows` / `adrs`) and the generated
+  `architecture/dependency-graph.md`. The vault is OPTIONAL — when it is absent, go straight to the
+  codebase and `docs/plans/{task_slug}/`. See `documentation.md`.
+- **Act, don't stall.** The first emitted action in a phase is a tool call. A `Glob`/`Read` that
+  misses IS the check for whether the vault exists.
+- **Plan mode** for any task that touches ≥ 3 files, introduces a public API or exported component,
+  adds a dependency, or crosses a module boundary.
+- **Diagnostics** belong in a development source set or behind a lazy severity gate — never a runtime
+  flag inside production logic (`logging.md`, ADR-0020).
+- **Gradle task probe.** If `./gradlew detekt` or `./gradlew ktlintCheck` reports "task not found" on
+  the first attempt, skip that check. Do not retry under alternate names or inspect build files.
 
-`remediation?` = a **gated** phase (`gate: {after: [security], min_severity: high}`). android-security is
-read-only; once the whole parallel group has returned, the orchestrator parses its
-`ISSUES_FOUND:` counts and dispatches **android-developer** with the security report only when a
-Critical or High finding exists. Otherwise the phase is skipped at zero cost. It is a one-way
-hand-off — android-security does not re-run afterwards. Likewise android-debugger diagnoses only:
-`android-debug` / `android-bugfix` route its prescribed fix to android-developer in the next phase,
-where it passes through the normal review loop.
+## business_analysis
 
-After the pipeline ends, an **optional** retrospective step is available:
-`sdlc:aar` (After Action Review) analyzes the run's metrics dashboard and
-session transcript for token cost and agent cooperation and proposes approvable
-workflow improvements. It is user-triggered, never automatic.
+Identify affected `:feature:<name>` modules and decide module placement (bounded contexts, the
+UI → domain → data direction, where shared primitives live). If the analysis introduces a new
+architectural decision or cross-module boundary, draft an ADR stub at
+`.obsidian-vault/architecture/adr-<NNNN>-<slug>.md` from `_templates/adr.md`; the documentation phase
+finalises it. Skill: `android-requirements`.
 
-## Knowledge sourcing — applies to every step
+## development
 
-`.obsidian-vault/` is the single source of project knowledge. Every agent, before
-answering project-specific questions, MUST `Read` the relevant note(s) starting from
-`.obsidian-vault/_moc-root.md`, then follow the note's **typed edges**
-(`depends_on`/`screens`/`flows`/`adrs`) and the generated
-`.obsidian-vault/architecture/dependency-graph.md`. See `${CLAUDE_PLUGIN_ROOT}/rules/documentation.md`.
+Detect the project's state-management pattern and DI framework before implementing state — never
+impose one. Compile check is `./gradlew compileDebugKotlin`, one attempt; the test phase iterates.
+The `check-docs-sync.sh` PostToolUse hook auto-creates vault stubs for new modules and screens — do
+not delete them; flag them in the handoff. `validate-kotlin.sh` blocks the forbidden patterns in
+`snippets/non-negotiable.md` at write time. Convention skills for Compose UI, architecture, data and
+navigation are declared in `manifest.yaml` `convention_skills`; framework plugins (Hilt, Retrofit,
+Room, …) add their own `phase_injections` on top.
 
-## What counts as "non-trivial"
+## review
 
-Enter plan mode for any task that meets ONE of:
-- Touches ≥ 3 files.
-- Introduces a new public API or exported component.
-- Adds a new dependency.
-- Involves an architectural decision or cross-module boundary.
+Android review dimensions and the vault-freshness checks are the `android-review` skill. Security is
+**not** reviewed here — it is the security phase's, and a review that duplicates it wastes the
+parallel group.
 
-## Core Principles
+## security ‖ test (parallel)
 
-- **Simplicity First** — minimal impact. Only touch what's necessary.
-- **No Laziness** — find root causes. No temporary fixes.
-- **Never mark Done without proof** — diff, tests, or demonstration.
-- After ANY user correction: capture as an ADR in `.obsidian-vault/architecture/` if architectural, otherwise as a memory.
+**security** — MASVS/MASTG against the **release** variant; the `android-security-masvs` skill
+carries the audit sections and the control map. Read-only: the gated `remediation` phase dispatches
+the developer with the report when a Critical or High finding exists.
 
-## General Rules
+**test** — JVM unit and integration tests only (`android-testing` skill). Instrumented and Compose
+UI tests are the QA phase's; a full assemble and `connectedAndroidTest` are CI-only and never run
+in-pipeline.
 
-- Enter plan mode for ANY non-trivial task (see definition above).
-- If something goes sideways, STOP and re-plan — don't keep pushing.
-- Use subagents to keep main context clean.
-- Diagnostics belong in a development source set or behind a lazy severity gate — never a runtime
-  flag inside production logic. See `${CLAUDE_PLUGIN_ROOT}/rules/logging.md`.
-- ALWAYS check vault impact when creating a PR.
+## qa
 
-## Handoff Contract
+E2E on the project's debug variant: Compose UI Test, Maestro flows, accessibility
+(`android-e2e` skill). Selectors are testTag constants resolved through the vault's
+`architecture/ui-patterns.md` index. An instrumented run needs a device or emulator — when none is
+available, say so rather than reporting an untested pass.
 
-All agent-to-agent handoffs use the JSON envelope defined in `${CLAUDE_PLUGIN_ROOT}/rules/handoff.md`.
-No free-form text handoffs.
+## documentation
 
----
+The Obsidian vault Definition of Done gates the PR: no `<!-- STUB -->` marker survives, typed edges
+resolve, `gen-mermaid.mjs` re-run, `validate-docs.mjs` clean or every finding escalated, the
+`ui-patterns.md` testTag index reconciled. Full checklist: `documentation.md` and the
+`android-docs-vault` skill. PR title format is `[task_id] title` (e.g. `[CRF-6] Search Filters`); no
+AI mentions, no change statistics, no test checklists in the description.
 
-## Step 1: android-ba
+**Model note.** The documentation role defaults to a low tier, which is fine for vault edits but
+unreliable for an outward-facing `gh pr create` combined with a cross-repo / submodule commit. When
+the phase does both, escalate that run's tier deliberately and record why.
 
-- `Read` `.obsidian-vault/_moc-root.md` and follow links to relevant modules / flows / ADRs.
-- Analyze requirements; break down into user stories with acceptance criteria.
-- Identify affected modules and dependencies (vault notes are the source).
-- Output: Feature Analysis document + handoff envelope (`phase: ba`).
-- Do NOT wait for user confirmation before invoking the next agent.
+## debugging (and on-demand)
 
-### android-ba → Architecture Decision?
+Read-only root-cause analysis; the prescribed fix goes to the development phase in the next step,
+where it passes through the normal review loop. The Android symptom→cause tables, Logcat filters and
+heap-dump commands are the `android-debugging` skill.
 
-If the task requires a new domain model, major structural change, or cross-module
-boundaries: android-ba drafts an ADR stub in `.obsidian-vault/architecture/adr-<NNNN>-<slug>.md`
-(from `_templates/adr.md`) and hands it off to android-developer for refinement.
+## Out of pipeline
 
----
-
-## Step 2: android-developer
-
-- Receive handoff from android-ba.
-- `Read` `.obsidian-vault/modules/<module>.md` and `.obsidian-vault/architecture/` for invariants before writing code.
-- Determine execution order and parallel groups.
-- For each task: implement → verify build → hand off to android-reviewer.
-- Output: code changes + handoff envelope per task (`phase: dev`).
-
-### android-reviewer ⇄ android-developer Loop (max 3 rounds)
-
-- android-reviewer returns findings → android-developer addresses all → re-verify build → re-hand off.
-- After 3 rounds without LGTM: set `blockers: ["Review loop exceeded 3 rounds. Escalate to human."]` and stop.
-
-### Crash recovery (any dispatched agent)
-
-If a subagent (developer, reviewer, or any phase agent) dies on a **mid-response server error**:
-
-1. **Resume FIRST.** Attempt `SendMessage` to the SAME `agentId` to continue where it stopped —
-   its in-agent context is intact, so it finishes with a handful of tool calls instead of re-reading
-   the whole task.
-2. **Fall back to a fresh `Agent` only if resume fails.** A fresh agent must re-`Read` everything the
-   crashed one had loaded, roughly doubling the phase's tokens.
-3. **Record the mechanism** so telemetry stays honest — set the phase's `recovery` field to
-   `sendmessage-resume` or `fresh-restart` (see `${CLAUDE_PLUGIN_ROOT}`-side orchestrator Step 5 /
-   `schemas/checkpoint.schema.json`). Do NOT label a fresh-restart as a same-session resume.
-
-Honest caveat: resume replays context, so the concrete saving is the redundant re-reads it avoids,
-not a dramatic token cut — but it also preserves correctness (a fresh agent can diverge from the
-crashed one's partial work).
-
----
-
-## Step 2.5: android-reviewer
-
-- Receive handoff from android-developer.
-- `Read` `.obsidian-vault/architecture/` and `.obsidian-vault/modules/<module>.md` to verify diff respects invariants.
-- Execute Review Dimensions (see `android-reviewer.md`). Security dimension is delegated to android-security — do NOT review security here.
-- LGTM → proceed to next task / next phase.
-- Changes requested → return to android-developer with findings.
-- When ALL tasks LGTM'd: hand off to Step 3+4 in parallel.
-
----
-
-## Steps 3 + 4: android-security ‖ android-tester (parallel)
-
-Invoke both agents simultaneously in a single message.
-
-### android-security
-
-**READ-ONLY** — no `Edit` tool. It audits and reports; `android-developer` applies the fixes.
-
-- Obfuscation: verify ProGuard/R8 rules cover new classes.
-- Network: TLS enforced; no plain HTTP in production.
-- Storage: sensitive data through DataStore + AndroidX Security Crypto; no plain SharedPreferences.
-- Realtime: Parse / Pusher / Retrofit / WebRTC payload models validated at boundaries.
-- Output: findings with severity ratings, a concrete remediation per Critical/High finding, and a
-  handoff envelope (`phase: security`). The compact summary MUST end with the machine-contract line
-  `ISSUES_FOUND: critical=N high=N medium=N low=N` — the remediation gate parses it.
-
-### android-tester
-
-- Write unit tests for ViewModels / state stores and non-trivial business logic.
-- Use MockK, Turbine, Robolectric where Android runtime required.
-- See `${CLAUDE_PLUGIN_ROOT}/rules/testing.md` for patterns.
-- Output: test files + handoff envelope (`phase: test`).
-
----
-
-## Step 5: android-qa
-
-- Verify user flows work on `devDebug` and `productionRelease` variants.
-- Check UI consistency across supported screen sizes.
-- Prerequisite: build APK (`./gradlew assembleDevDebug`) before handing off to android-qa.
-- Test integration points (Parse LiveQuery, Pusher, Stream WebRTC, Play Billing paywall, Firebase events).
-- Output: manual verification results + handoff envelope (`phase: qa`).
-
----
-
-## Step 6: android-docs
-
-- Write summary report of all changes.
-- Update `.obsidian-vault/` per the SDLC triggers in `${CLAUDE_PLUGIN_ROOT}/rules/documentation.md`.
-
-### Obsidian Vault SDLC Check (MANDATORY before PR)
-
-Read `${CLAUDE_PLUGIN_ROOT}/rules/documentation.md` and verify the android-docs Definition of Done checklist:
-
-- New :feature:<name> module → `.obsidian-vault/modules/<module>.md` exists and is filled (no `<!-- STUB -->` marker), linked from `_moc-modules.md`.
-- New `@Composable` screen or `@Serializable` route → `.obsidian-vault/screens/<Name>.md` exists and is filled, `.obsidian-vault/navigation/routes.md` updated, linked from `_moc-screens.md`.
-- New business flow → `.obsidian-vault/business-logic/<flow>.md` exists and is filled, linked from `_moc-flows.md`.
-- Changed public Repository interface → corresponding `modules/<module>.md` Public API section updated.
-- New dependency → relevant `stack/<area>.md` updated.
-- Typed edges (`depends_on`/`screens`/`flows`/`adrs`) are path-qualified and resolve; `depends_on:` matches its prose mirror.
-- Re-run `node .claude/scripts/gen-mermaid.mjs` so `architecture/dependency-graph.md` reflects new edges.
-- Run `node .claude/scripts/validate-docs.mjs` — it must be clean, OR every finding is escalated. **Never rewrite a layer edge to make it pass.**
-
-**STOP** if any vault item is missing, any stub marker remains, or `validate-docs.mjs` has unaddressed findings. Update vault FIRST, then `gh pr create`.
-
-- Create PR: `[task_id] title`. Example: `[CRF-6] Search Filters`.
-- Use `gh pr create` via GitHub CLI.
-- No AI mentions, no change statistics, no test checklists in PR description.
-
-**Model override for outward-facing docs work.** `android-docs` defaults to `model: haiku`, which is
-fine for vault edits but unreliable for an outward `gh pr create` (PR prose) combined with a
-cross-repo / submodule commit. When the docs phase does BOTH — creates a PR and commits a submodule
-(e.g. a vault submodule) — escalate the docs agent to `sonnet` for that run. Note this in the run so
-the one-off tier bump is intentional, not accidental.
-
----
-
-## Step 7: AAR — After Action Review (optional, retrospective)
-
-- Runs **only** when the user invokes `sdlc:aar` (via `/sdlc:aar`) after a cycle ends.
-- A read-only `aar` analyst subagent reads the deterministic metrics dashboard
-  (`tools/aar/metrics.mjs` over `docs/plans/{slug}/_telemetry.json`) for cost
-  accounting and parses the session transcript JSONL
-  (`${CLAUDE_CONFIG_DIR:-~/.claude}/projects/<encoded-cwd>/<session>.jsonl`) for cooperation signals —
-  the only durable record of the run, since handoff envelopes are not persisted.
-- Produces findings bucketed into **agents / rules / settings / vault docs**, each
-  with transcript evidence and a concrete proposed edit.
-- The user multi-selects findings, reviews a diff per item, and approves; AAR
-  edits only approved files. Never auto-applies. Settings edits require explicit
-  confirmation (global CLAUDE.md).
-- Never edits product code or code-derived vault content — workflow scope only.
-
----
-
-## CI/CD Tasks
-
-- Use **android-devops** for Gradle, signing, Play Store, ProGuard, Firebase Distribution.
-- Use **android-cicd** for GitHub Actions workflow YAML changes.
-
----
-
-## Gradle Task Probe Rule
-
-If `./gradlew detekt` or `./gradlew ktlintCheck` returns "task not found" on the first attempt — skip that check. Do NOT retry under alternate names or inspect build files. One attempt only.
+- **devops** — Gradle, `build-logic/`, the version catalog, signing, R8, store distribution.
+- **cicd** — GitHub Actions workflow YAML and CI stage design.
+- **aar-analyst** — `/sdlc:aar`, user-triggered and retrospective. Mandatory-skill adherence is
+  audited against `manifest.yaml` `role_expertise.<role>.skills` (what the orchestrator actually
+  pasted), not against any agent's prose.

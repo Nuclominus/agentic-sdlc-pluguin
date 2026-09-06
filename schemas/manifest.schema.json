@@ -140,7 +140,7 @@
     },
     "aar_analyst": {
       "type": "string",
-      "description": "DEPRECATED (ADR-0021): agent name that overrode the core `aar-analyst` for /sdlc:aar. Honored for one release; the core `aar-analyst` now receives the stack's `role_expertise.aar-analyst` instead. Will be removed from the schema.",
+      "description": "DEPRECATED and INERT (ADR-0021): agent name that once overrode the core `aar-analyst` for /sdlc:aar. Nothing reads it any more — the `sdlc:aar` skill always dispatches `aar-analyst` and passes it the stack's `role_expertise.aar-analyst` blocks. Still accepted so an older third-party manifest validates; removed from the schema in the release that forbids roster keys on non-core foundations.",
       "minLength": 1
     },
     "convention_skills": {

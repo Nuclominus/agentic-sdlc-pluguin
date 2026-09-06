@@ -1,5 +1,5 @@
 ---
-loaded_by: [docs-writer, any-agent-on-commit-request]
+loaded_by: [document-writer, any-role-on-commit-request]
 load_when: "Only when about to commit, create a branch, or open a PR."
 ---
 

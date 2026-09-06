@@ -1,6 +1,6 @@
 ---
-loaded_by: [developer, reviewer, debugger, tester, security-scanner]
-load_when: "developer: before writing a log line. reviewer/security-scanner: during review. debugger: when adding tracing. tester: for the test-source exemption."
+loaded_by: [developer, reviewer, debugger, tester, security-analyst]
+load_when: "developer: before writing a log line. reviewer/security-analyst: during review. debugger: when adding tracing. tester: for the test-source exemption."
 ---
 
 # Logging — separating development and release code

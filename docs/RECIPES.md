@@ -32,7 +32,7 @@ exception: it ships no code, so there is nothing to remediate.
 a `match:` block so `/sdlc:start` can auto-select them from the task text — e.g. "analyze/audit/assess …"
 → `analysis`, "add tests / coverage" → `testing`, "debug/crash/regression/root-cause" → `debug` (or
 `android-debug` on an Android project, which wins the tie via `match.priority: 10`). `android-debug` wires the
-otherwise on-demand `android-debugger` into a real pipeline phase (`debugging` → `android-debugger`).
+otherwise on-demand `debugger` into a real pipeline phase (`debugging` → `debugger`).
 
 ## Control-flow shapes (generic)
 

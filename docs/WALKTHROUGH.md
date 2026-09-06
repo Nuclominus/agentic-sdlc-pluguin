@@ -29,13 +29,13 @@ from the prompt (here: English).
 
 ---
 
-## 1. business_analysis — `android-ba` (Opus)
+## 1. business_analysis — `business-analyst` (Opus)
 
 ```
-▶ Phase 1/6: business_analysis → android-ba (opus)
+▶ Phase 1/6: business_analysis → business-analyst (opus)
 ```
 
-`android-ba` reads the brief and the codebase, applies embedded DDD to place the feature, and writes
+`business-analyst` reads the brief and the codebase, applies embedded DDD to place the feature, and writes
 `01-business-analysis.md` (scope, acceptance criteria, module placement, edge cases). It returns:
 
 ```
@@ -52,12 +52,12 @@ STATUS: ready-for-development
 
 ---
 
-## 2. development — `android-developer` (Sonnet), two passes
+## 2. development — `developer` (Sonnet), two passes
 
 ### Pass 1 — planning
 
 ```
-▶ Phase 2/6: development → android-developer (sonnet)  [plan pass]
+▶ Phase 2/6: development → developer (sonnet)  [plan pass]
 ```
 
 The agent runs Architecture Detection (it does **not** impose a stack — it reads the project's actual
@@ -82,7 +82,7 @@ at the approval gate:
 ### Pass 2 — implementation
 
 ```
-▶ Phase 2/6: development → android-developer (sonnet)  [implement pass]
+▶ Phase 2/6: development → developer (sonnet)  [implement pass]
 ```
 
 The agent implements against the approved plan and writes `02-development.md`:
@@ -104,10 +104,10 @@ no `!!`, no `runBlocking`, no `println`/`android.util.Log` in production.)
 
 ---
 
-## 3. review — `android-reviewer` (Sonnet), loop phase
+## 3. review — `reviewer` (Sonnet), loop phase
 
 ```
-▶ Phase 3/6: review → android-reviewer (sonnet)
+▶ Phase 3/6: review → reviewer (sonnet)
 ```
 
 Read-only review against the diff. First round finds a real issue and returns **changes requested**:
@@ -125,8 +125,8 @@ findings injected, then re-runs review:
 
 ```
 ↻ review round 2/3
-▶ Phase 2/6: development → android-developer (sonnet)  [implement pass, loop_findings applied]
-▶ Phase 3/6: review → android-reviewer (sonnet)
+▶ Phase 2/6: development → developer (sonnet)  [implement pass, loop_findings applied]
+▶ Phase 3/6: review → reviewer (sonnet)
 ```
 
 ```
@@ -142,13 +142,13 @@ NOTES: both findings resolved; viewModelScope used with proper error handling; L
 
 ```
 ▶ Phase 4/6: [security ‖ test] — parallel
-▶ Phase 4/6: security → android-security (opus)
-▶ Phase 4/6: test    → android-tester (sonnet)
+▶ Phase 4/6: security → security-analyst (opus)
+▶ Phase 4/6: test    → tester (sonnet)
 ```
 
 Both agents are dispatched **in one message** (true concurrency) and both must return before `qa`.
 
-`android-security` audits against MASVS/MASTG and writes `04-security.md`:
+`security-analyst` audits against MASVS/MASTG and writes `04-security.md`:
 
 ```
 ISSUES_FOUND: critical=0 high=0 medium=1 low=0
@@ -158,7 +158,7 @@ MASVS:
 STATUS: clean (1 documented recommendation)
 ```
 
-`android-tester` writes unit/integration tests and `04-test.md`:
+`tester` writes unit/integration tests and `04-test.md`:
 
 ```
 TESTS ADDED:
@@ -170,10 +170,10 @@ STATUS: green
 
 ---
 
-## 5. qa — `android-qa` (Sonnet)
+## 5. qa — `qa-engineer` (Sonnet)
 
 ```
-▶ Phase 5/6: qa → android-qa (sonnet)
+▶ Phase 5/6: qa → qa-engineer (sonnet)
 ```
 
 End-to-end / UI verification, writes `05-qa.md`:
@@ -188,14 +188,14 @@ STATUS: pass
 
 ---
 
-## 6. documentation — `android-docs` (Haiku)
+## 6. documentation — `document-writer` (Haiku)
 
 ```
-▶ Phase 6/6: documentation → android-docs (haiku)
+▶ Phase 6/6: documentation → document-writer (haiku)
 ```
 
 Assembles the PR description from all phase outputs and writes `06-documentation.md`. Because this project
-uses an Obsidian vault, `android-docs` also creates `<!-- STUB -->` notes for the new module/screen/flow
+uses an Obsidian vault, `document-writer` also creates `<!-- STUB -->` notes for the new module/screen/flow
 (via the `manage-vault` conventions) for later filling — it never invents content.
 
 ```
@@ -217,7 +217,7 @@ STATUS: PR ready
    artifacts: docs/plans/add-settings-dark-mode-toggle/
    telemetry: _telemetry.json (per-phase tokens / cost / skips)
 
-   Next: review the PR; run `android-docs` (or open Obsidian) to fill the new vault stubs before merge.
+   Next: review the PR; run `document-writer` (or open Obsidian) to fill the new vault stubs before merge.
 ```
 
 ### What this demonstrates

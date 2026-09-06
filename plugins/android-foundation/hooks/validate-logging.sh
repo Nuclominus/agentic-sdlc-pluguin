@@ -12,7 +12,7 @@ file="${1:-}"
 [ -f "$file" ] || exit 0
 case "$file" in *.kt) ;; *) exit 0 ;; esac
 
-# Test sources are exempt — see rules/testing.md.
+# Test sources are exempt — see rules/logging.md "Test sources are exempt".
 case "$file" in
   *Test.kt|*Spec.kt|*/src/test/*|*/src/androidTest/*|*/src/commonTest/*) exit 0 ;;
 esac

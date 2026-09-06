@@ -1,5 +1,5 @@
 {
-  "_comment": "Runtime plugin dependencies for android-foundation, aggregated by pipeline-orchestrator Step 0a. Every skill listed here is MANDATED by this plugin's own agents — the mapping is rules/skills.md, and each entry is traceable to an agent file. Android CLI is a SYSTEM tool, not a plugin: it is checked entirely inside android-foundation (hooks/android-cli-check.sh), never by the core, so it does not belong here.",
+  "_comment": "Runtime plugin dependencies for android-foundation, aggregated by pipeline-orchestrator Step 0a. Every skill listed here is MANDATED by this plugin's own manifest.yaml `role_expertise.<role>.skills` rows — that block is the mapping, and each entry is traceable to a role (ADR-0021: this plugin ships no agents, so there is no agent file to trace to any more). `sdlc-lint roster` enforces the tie for superpowers:* rows. Android CLI is a SYSTEM tool, not a plugin: it is checked entirely inside android-foundation (hooks/android-cli-check.sh), never by the core, so it does not belong here.",
   "dependencies": [
     {
       "name": "superpowers",
@@ -14,10 +14,21 @@
         "receiving-code-review",
         "systematic-debugging"
       ],
-      "fallback_note": "The pipeline still runs, with reduced rigor: android-ba formulates requirements without a structured brainstorm, android-developer/android-tester write code without the TDD discipline, android-reviewer and android-debugger lose their review and root-cause methodologies, and no agent runs the pre-handoff verification pass.",
+      "fallback_note": "The pipeline still runs, with reduced rigor: the business-analyst formulates requirements without a structured brainstorm, developer and tester write code without the TDD discipline, reviewer and debugger lose their review and root-cause methodologies, and no role runs the pre-handoff verification pass.",
       "install_command": [
         "/plugin marketplace add obra/superpowers",
         "/plugin install superpowers@superpowers"
+      ]
+    },
+    {
+      "name": "frontend-design",
+      "policy": "warn",
+      "skills_used": [
+        "frontend-design"
+      ],
+      "fallback_note": "The developer role implements Compose screens without the visual-design pass; layout, spacing and hierarchy get no dedicated review before the code review sees them.",
+      "install_command": [
+        "/plugin install frontend-design"
       ]
     }
   ]

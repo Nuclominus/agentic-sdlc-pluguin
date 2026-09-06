@@ -12,7 +12,7 @@ Retrospective for a completed pipeline run. Invoke the **`sdlc:aar`** skill.
 
 The skill: resolves the run + session transcript, computes the deterministic
 metrics dashboard (`tools/aar/metrics.mjs`), dispatches a READ-ONLY analyst
-(`aar-analyst`, or the active profile's `aar_analyst` override), presents the
+(`aar-analyst`, carrying the active stack's `role_expertise` block), presents the
 findings, writes a durable `docs/plans/{slug}/_aar.md`, and applies only what you
 approve — appending curated lessons to `.claude/sdlc-lessons.md`. Never automatic;
 no auto-apply.

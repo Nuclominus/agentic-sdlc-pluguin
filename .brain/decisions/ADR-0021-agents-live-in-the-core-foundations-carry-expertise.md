@@ -113,6 +113,14 @@ per-role declaration the core consumes).**
   destination. Because the whole track lands on one integration branch, the marketplace never
   publishes a split roster: there is no shipped intermediate state to keep compatible, which is
   what made the alias layer unnecessary as well as harmful.
+- **Two foundation rules files change shape.** `rules/testing.md` is folded into the
+  `android-testing` skill (a role invokes it; nothing reads a rules file for test patterns any
+  more), so the cross-reference ADR-0020 made to it now points at `rules/logging.md`, which carries
+  the test-source exemption itself. `rules/skills.md` keeps only the optional `android` CLI
+  capability bindings: its mandatory-skill matrix became `role_expertise.<role>.skills`, its
+  "Project Extensions" self-read became `expertise --role`, its Architecture Detection grep moved
+  into the `android-architecture` skill, and its "Parallel Phase Execution" note was recipe control
+  flow the orchestrator already owns.
 - **Amends ADR-0001.** "Its own agent roster" is no longer what a foundation plugs in; the
   extension point is `role_expertise` + workflow + skills + hooks. Detection, priority and the
   aspect model are unchanged. Old telemetry rows keep their `android-*` agent names; `/sdlc:report`

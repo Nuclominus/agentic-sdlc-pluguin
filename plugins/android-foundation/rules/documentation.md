@@ -1,6 +1,6 @@
 ---
-loaded_by: [docs-writer, reviewer, ba, developer, debugger, tester, qa, security-scanner, devops, ci-cd-engineer]
-load_when: "Every agent: before answering project-specific questions. android-docs: before PR. android-reviewer: during review."
+loaded_by: [business-analyst, developer, reviewer, tester, qa-engineer, security-analyst, document-writer, debugger]
+load_when: "Every role: before answering project-specific questions. document-writer: before the PR. reviewer: during review."
 ---
 
 # Documentation Rules (SDLC)
@@ -10,7 +10,7 @@ load_when: "Every agent: before answering project-specific questions. android-do
 `.obsidian-vault/` is the **authoritative project knowledge base** for the project.
 
 Before answering any question about architecture, modules, screens, navigation, or
-business logic — every agent MUST `Read` the relevant note(s) from `.obsidian-vault/`.
+business logic — every role MUST `Read` the relevant note(s) from `.obsidian-vault/`.
 Start from `.obsidian-vault/_moc-root.md`, then **navigate the typed edges**: follow a
 note's `depends_on` / `screens` / `flows` / `adrs` wikilinks to the next note, and read
 `.obsidian-vault/architecture/dependency-graph.md` for the whole-project module graph.
@@ -34,6 +34,23 @@ no scattered READMEs. The vault is it.
 | A module's dependencies | the module note's `depends_on:` frontmatter (authoritative) + `## Dependencies` prose (the why) |
 | Which screens/flows touch a module | follow `screens:` / `flows:` edges, or the Dataview tables in the MOCs |
 | The live index of modules/screens/flows | `_moc-modules.md` / `_moc-screens.md` / `_moc-flows.md` (Dataview tables) |
+
+### Reading map by role
+
+What each core role reads before its phase work, on top of `_moc-root.md` (always) and the typed
+edges of whatever note it lands on. These lists moved here from the per-agent "Knowledge sourcing"
+sections when the agents moved to the core (ADR-0021).
+
+| Role | Reads |
+|------|-------|
+| business-analyst | `architecture/dependency-graph.md` + `architecture/`; `modules/<module>.md` per affected module; `business-logic/<flow>.md` per affected flow; `navigation/routes.md` when UI is in scope |
+| developer | `modules/<module>.md` for every module it will touch; `architecture/dependency-graph.md` + `architecture/` for layering, DDD and UI-pattern invariants and the relevant ADRs; `screens/<Name>.md` when modifying UI; `business-logic/<flow>.md` when implementing a domain flow |
+| reviewer | `architecture/dependency-graph.md` + `architecture/`; `modules/<module>.md` per affected module; `navigation/routes.md` for route changes |
+| tester | `architecture/layering.md`; `architecture/ui-patterns.md` (the project's test patterns); `architecture/dependency-graph.md`; `modules/` |
+| qa-engineer | `architecture/ui-patterns.md` (the testTag index — the selector source); `screens/` (each note's `route:`); `business-logic/` (the journeys to verify) |
+| security-analyst | the notes for security-sensitive areas — secure persistence, networking, auth/session, realtime/backend, billing — plus `architecture/dependency-graph.md` to see what each pulls in |
+| document-writer | `modules/<module>.md` for the modules in scope; `architecture/dependency-graph.md` + `architecture/`; `screens/<Name>.md` and `navigation/routes.md` when UI is in scope; `architecture/ui-patterns.md` |
+| debugger | `architecture/layering.md`; `architecture/dependency-graph.md` (what a failing module pulls in); `architecture/ui-patterns.md`; `modules/` |
 
 ## Vault structure (canon)
 
@@ -136,15 +153,15 @@ graph), lint what's authored (the prose). Never auto-rewrite the prose.
 The `check-docs-sync.sh` PostToolUse hook **auto-creates stub notes** in
 `.obsidian-vault/modules/` and `.obsidian-vault/screens/` when production Kotlin
 is edited and the matching note is absent. Stubs contain a
-`<!-- STUB: ... android-docs must fill ... -->` marker.
+`<!-- STUB: ... must fill ... -->` marker.
 
-android-docs MUST fill every stub before PR. android-reviewer rejects diffs where the marker
-still exists in any changed note.
+The **document-writer** fills every stub before the PR. The **reviewer** rejects diffs where the
+marker still exists in any changed note.
 
 ## Validation (`validate-docs.mjs`)
 
 `.claude/scripts/validate-docs.mjs` lints the vault and **reports only — it never edits a
-note**. Run it at android-docs Definition-of-Done, from `fill-vault`, and (optionally) in CI.
+note**. Run it at the document-writer's Definition of Done, from `fill-vault`, and (optionally) in CI.
 It checks four things:
 
 1. **Resolution** — every typed-edge wikilink is path-qualified and resolves to a note.
@@ -174,9 +191,9 @@ user confirmation** per the global CLAUDE.md self-modification rule — do not w
 - Bug fix that does not change method signatures.
 - Test-only changes (`src/test/`, `src/androidTest/`, `*Test.kt`, `*Spec.kt`).
 
-## android-docs Definition of Done
+## document-writer Definition of Done
 
-Before creating any PR, android-docs MUST verify:
+Before creating any PR, the document-writer MUST verify:
 
 - [ ] No `_vault-pending.md` breadcrumb sits at the repo root — its presence means the docs gate ran with **no vault** (usually an untracked vault a git worktree never inherited). Restore/track the vault and re-validate, or explicitly record why docs are deferred; do NOT create the PR treating an absent vault as a silent pass.
 - [ ] Every hook-created stub in `.obsidian-vault/modules/` and `.obsidian-vault/screens/` has been filled (no `<!-- STUB -->` markers in changed notes).
@@ -194,9 +211,9 @@ Before creating any PR, android-docs MUST verify:
 
 If any item fails — STOP and update the vault before `gh pr create`.
 
-## android-reviewer Enforcement
+## reviewer enforcement
 
-android-reviewer rejects (returns the diff to android-developer) when:
+The reviewer rejects (returns the diff to the development phase) when:
 
 - A new :feature:<name> module ships without a `.obsidian-vault/modules/<name>.md` note.
 - A new public screen / `@Serializable` route ships without a `.obsidian-vault/screens/<Name>.md` note and a `routes.md` entry.

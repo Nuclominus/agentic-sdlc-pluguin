@@ -1,5 +1,5 @@
 ---
-loaded_by: [security-scanner, devops]
+loaded_by: [security-analyst, devops]
 load_when: "ProGuard/R8 rules review or edit."
 ---
 
