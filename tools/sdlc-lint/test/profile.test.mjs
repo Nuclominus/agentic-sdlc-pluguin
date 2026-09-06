@@ -4,9 +4,13 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   mergeProfiles, applyLocalOverrides, parseCostCaps, parseExtensionSkills,
   parseModelOverrides, renderOverridesPrint, renderModelPrint, renderStackPrint,
+  mergeRoleExpertise, renderRoleExpertiseBlock, renderSkillsBlock,
 } from "../../../plugins/sdlc/tools/resolve/profile.mjs";
 
 const vanilla = {
@@ -132,11 +136,11 @@ test("an unavailable plugin downgrades its extension rows too", () => {
 });
 
 test("model overrides: one bad tier discards the whole file", () => {
-  const ok = parseModelOverrides({ default: "sonnet", agents: { "android-ba": "opus" } });
-  assert.deepEqual(ok.overrides, { default: "sonnet", agents: { "android-ba": "opus" } });
+  const ok = parseModelOverrides({ default: "sonnet", agents: { "business-analyst": "opus" } });
+  assert.deepEqual(ok.overrides, { default: "sonnet", agents: { "business-analyst": "opus" } });
   assert.deepEqual(ok.warnings, []);
 
-  const bad = parseModelOverrides({ default: "sonnet", agents: { "android-ba": "gpt" } });
+  const bad = parseModelOverrides({ default: "sonnet", agents: { "business-analyst": "gpt" } });
   assert.deepEqual(bad.overrides, {}, "a partly-applied tier map is harder to reason about than none");
   assert.match(bad.warnings[0], /unknown tier 'gpt'/);
 });
@@ -172,4 +176,145 @@ test("the stack banner degrades to em-dashes rather than fabricating aspects", (
   assert.match(out, /forced via --stack: yes/);
   assert.equal(renderStackPrint({ foundation: null }), null, "no winning foundation, no banner");
   assert.equal(renderStackPrint(null), null);
+});
+
+// ---- ADR-0021: agents live in the core; foundations carry expertise -------------------------
+
+const coreVanilla = {
+  stack: "vanilla",
+  agents_per_phase: {
+    business_analysis: "business-analyst", development: "developer", review: "reviewer", security: "security-analyst",
+    remediation: "developer", test: "tester", qa: "qa-engineer", debugging: "debugger", documentation: "document-writer",
+  },
+};
+
+test("a foundation that binds no agents still fans development out over its aspect, bound to the core agent", () => {
+  // Post-ADR-0021 an Android run must keep its dry-run/telemetry row shape
+  // (`development — android → developer`), so the vanilla FLAT binding expands per active aspect.
+  const expertiseOnly = { stack: "android", aspects: ["android"], workflow: "android-feature" };
+  const { profile } = mergeProfiles({ primary: expertiseOnly, active: { android: expertiseOnly }, additive: [], vanilla: coreVanilla });
+  assert.deepEqual(profile.agents_per_phase.development, { android: "developer" });
+  assert.equal(profile.agents_per_phase.review, "reviewer", "a flat core phase stays flat");
+  assert.equal(profile.agents_per_phase.test, "tester");
+});
+
+test("a foundation still binding agents_per_phase is honored but warned about (deprecated, ADR-0021)", () => {
+  const { profile, warnings } = merged();
+  assert.equal(profile.agents_per_phase.business_analysis, "android-ba", "PR-1 keeps the override alive");
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /^WARN: foundation 'android' declares agents_per_phase — deprecated \(ADR-0021\)/);
+  const clean = mergeProfiles({ primary: { stack: "x", aspects: ["android"] }, active: {}, additive: [], vanilla: coreVanilla });
+  assert.deepEqual(clean.warnings, [], "no binding, no warning — the core manifest itself never warns");
+});
+
+test("extra_phases[].agent binds a core role for a phase the core map does not know", () => {
+  const audit = { stack: "x", aspects: ["android"], extra_phases: [{ name: "audit", after: "qa", agent: "reviewer" }] };
+  const { profile } = mergeProfiles({ primary: audit, active: { android: audit }, additive: [], vanilla: coreVanilla });
+  assert.equal(profile.agents_per_phase.audit, "reviewer");
+});
+
+function expertiseWorld() {
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-expertise-"));
+  const found = join(dir, "android-foundation");
+  const fw = join(dir, "room-plugin");
+  mkdirSync(join(found, "rules", "snippets"), { recursive: true });
+  mkdirSync(join(fw, "rules"), { recursive: true });
+  writeFileSync(join(found, "rules", "snippets", "non-negotiable.md"), "# forbidden\n");
+  writeFileSync(join(found, "rules", "logging.md"), "# logging\n");
+  writeFileSync(join(fw, "rules", "room.md"), "# room\n");
+  return { dir, found, fw };
+}
+
+test("mergeRoleExpertise: primary first, then additive alphabetically; rules absolute; missing rule dropped with a warning", () => {
+  const w = expertiseWorld();
+  try {
+    const sources = [
+      { stack: "android", dir: w.found, role_expertise: {
+        developer: {
+          invariants: "ANDROID DEV",
+          rules: [{ path: "rules/snippets/non-negotiable.md", note: "forbidden patterns" }, "rules/logging.md", "rules/does-not-exist.md"],
+          skills: [{ skill: "superpowers:test-driven-development", when: "before the first edit" }],
+        },
+      } },
+      { stack: "room", dir: w.fw, role_expertise: { developer: { invariants: "ROOM DEV", rules: ["rules/room.md"] } } },
+      { stack: "dagger", dir: w.fw, role_expertise: { developer: { invariants: "DAGGER DEV" } } },
+    ];
+    const { role_expertise: rx, warnings } = mergeRoleExpertise(sources);
+    assert.equal(rx.developer.invariants, "ANDROID DEV\n\nDAGGER DEV\n\nROOM DEV", "foundation first, then frameworks by stack name");
+    assert.deepEqual(rx.developer.rules, [
+      { path: join(w.found, "rules/snippets/non-negotiable.md"), note: "forbidden patterns" },
+      { path: join(w.found, "rules/logging.md"), note: "" },
+      { path: join(w.fw, "rules/room.md"), note: "" },
+    ]);
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /role_expertise\.developer\.rules: rules\/does-not-exist\.md not found under android — dropped/);
+    assert.deepEqual(rx.developer.skills, [{ skill: "superpowers:test-driven-development", policy: "mandatory", when: "before the first edit" }],
+      "policy defaults to mandatory");
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("mergeRoleExpertise: the same skill from two sources collapses to one row, strictest policy wins", () => {
+  const sources = [
+    { stack: "a", dir: "/nowhere", role_expertise: { tester: { skills: [{ skill: "s:x", policy: "recommended", when: "sometimes" }] } } },
+    { stack: "b", dir: "/nowhere", role_expertise: { tester: { skills: [{ skill: "s:x", policy: "mandatory", when: "always" }, { skill: "s:y", policy: "recommended" }] } } },
+  ];
+  const { role_expertise: rx } = mergeRoleExpertise(sources);
+  assert.deepEqual(rx.tester.skills, [
+    { skill: "s:x", policy: "mandatory", when: "always" },
+    { skill: "s:y", policy: "recommended", when: "" },
+  ]);
+});
+
+test("renderRoleExpertiseBlock: header, invariants, rule list — or null when the role has nothing", () => {
+  const block = renderRoleExpertiseBlock("developer", {
+    invariants: "Never block main.",
+    rules: [{ path: "/abs/rules/non-negotiable.md", note: "forbidden patterns" }, { path: "/abs/rules/logging.md", note: "" }],
+    skills: [],
+  }, { stack: "android" });
+  assert.equal(block, [
+    "Stack expertise for developer (android):",
+    "Never block main.",
+    "Rule files (Read the ones your task touches):",
+    "- /abs/rules/non-negotiable.md — forbidden patterns",
+    "- /abs/rules/logging.md",
+  ].join("\n"));
+  assert.equal(renderRoleExpertiseBlock("developer", { skills: [{ skill: "s:x", policy: "mandatory" }] }, { stack: "android" }), null,
+    "skills render in their own block — this one is empty without invariants or rules");
+  assert.equal(renderRoleExpertiseBlock("developer", undefined, { stack: "vanilla" }), null);
+});
+
+test("renderSkillsBlock: role skills and matching extension rows, deduped, mandatory first then alphabetical — or null", () => {
+  const block = renderSkillsBlock("developer", {
+    roleSkills: [
+      { skill: "superpowers:test-driven-development", policy: "mandatory", when: "before the first edit" },
+      { skill: "acme:zed", policy: "recommended", when: "" },
+    ],
+    extensionRows: [
+      { skill: "superpowers:test-driven-development", agents: "all", policy: "recommended", when: "project says so" },
+      { skill: "acme:alpha", agents: ["developer"], policy: "mandatory", when: "" },
+      { skill: "acme:other", agents: ["reviewer"], policy: "mandatory", when: "" },
+    ],
+  });
+  assert.equal(block, [
+    "Skills for this role (from the active stack profile and this project's .claude/sdlc.local.yaml):",
+    "- MANDATORY — invoke `acme:alpha`. Do not skip; this project requires it.",
+    "- MANDATORY — invoke `superpowers:test-driven-development` — before the first edit. Do not skip; this project requires it.",
+    "- RECOMMENDED — consider invoking `acme:zed`.",
+  ].join("\n"));
+  assert.equal(renderSkillsBlock("developer", { roleSkills: [], extensionRows: [{ skill: "s", agents: ["reviewer"], policy: "mandatory", when: "" }] }), null);
+});
+
+test("extension rows written against the legacy roster are re-targeted at the core agent, with a warning", () => {
+  const warnings = [];
+  const rows = parseExtensionSkills({ skills: [{ skill: "acme:x", agents: ["android-developer", "android-foundation:android-reviewer", "developer"], policy: "mandatory" }] }, {}, warnings);
+  assert.deepEqual(rows[0].agents, ["developer", "reviewer"], "mapped and de-duplicated");
+  assert.equal(warnings.length, 2);
+  assert.match(warnings[0], /extensions\.skills\[0\] names legacy agent 'android-developer' → 'developer'/);
+});
+
+test("model overrides keyed by a legacy name apply to the core agent; an explicit core key wins over its alias", () => {
+  const r = parseModelOverrides({ agents: { "android-ba": "opus", "android-developer": "haiku", developer: "sonnet" } });
+  assert.deepEqual(r.overrides.agents, { "business-analyst": "opus", developer: "sonnet" });
+  assert.ok(r.warnings.some((w) => /legacy agent 'android-ba' → 'business-analyst'/.test(w)));
+  assert.ok(r.warnings.some((w) => /'android-developer' → 'developer'/.test(w)));
 });

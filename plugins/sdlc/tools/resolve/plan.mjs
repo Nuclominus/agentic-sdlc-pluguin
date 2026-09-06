@@ -9,13 +9,17 @@
 // Every step's own module does its own reading. This function owns the order and the assembly.
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { resolveRoots } from "./roots.mjs";
 import { readInstalledPlugins, readEnabledPlugins, loadInstalledManifests, loadManifestsFromTree } from "./manifests.mjs";
 import { resolveStack } from "./detect.mjs";
 import { preflight } from "./deps.mjs";
 import { computeDiffSignals, applySkipRules, renderSkipPrint } from "./skiprules.mjs";
-import { mergeProfiles, applyLocalOverrides, parseModelOverrides, renderOverridesPrint, renderModelPrint, renderStackPrint } from "./profile.mjs";
+import {
+  mergeProfiles, applyLocalOverrides, parseModelOverrides, renderOverridesPrint, renderModelPrint, renderStackPrint,
+  mergeRoleExpertise, renderRoleExpertiseBlock, renderSkillsBlock,
+} from "./profile.mjs";
+import { canonicalAgentName } from "./aliases.mjs";
 import { discoverRecipes, resolveWorkflowName, locateRecipe, validateWorkflow, normalizePhases, validateAcyclic, buildResolvedPhases, renderWorkflowPrint } from "./workflow.mjs";
 import { resolveCostCap, renderCapOverridePrint, expandRows, estimate, renderDryRun, renderHeadlessDryRun } from "./caps.mjs";
 import { parseYaml } from "./yaml.mjs";
@@ -42,24 +46,49 @@ function frontmatterTiers(installs, enabled) {
 const flag = (args, name) => new RegExp(`(^|\\s)${name}(\\s|=|$)`).test(String(args));
 const opt = (args, name) => (new RegExp(`${name}=([^\\s]+)`).exec(String(args)) ?? [])[1] ?? null;
 
+/** Every agent name an `agents_per_phase` map binds, flat or per-aspect, de-duplicated. */
+function agentsBound(agentsPerPhase = {}) {
+  const out = new Set();
+  for (const mapping of Object.values(agentsPerPhase)) {
+    if (typeof mapping === "string") out.add(mapping);
+    else if (mapping && typeof mapping === "object") for (const a of Object.values(mapping)) if (typeof a === "string") out.add(a);
+  }
+  return out;
+}
+
 /**
- * Resolve everything Steps 0 → 1d resolve, in one pass.
+ * ADR-0021 — the per-agent prompt blocks, pre-rendered.
  *
- * Returns `{ plan, prints, halt, warnings }`. `halt` is a string when the run cannot proceed —
- * an ambiguous or missing recipe, a schema failure, a blocking dependency. The caller decides
- * what to do with it; this function never exits and never prints.
- *
- * **`warnings[]` is a subset of `prints[]`, not a sibling channel.** Every warning is pushed
- * into both, in generation order. The orchestrator has exactly one obligation — echo `prints[]`
- * — so a warning that lived only in `warnings[]` would reach nobody: the caller sends that
- * array to stderr only in non-JSON mode, and the orchestrator always invokes with `--json`.
- * That is how "⚠️ Failed to parse .claude/sdlc.local.yaml" became silent. The duplicate key
- * survives for machine consumers that want the diagnostics without pattern-matching prose.
+ * Keyed by the agent name the orchestrator dispatches; looked up by its CORE role, so a run that
+ * still dispatches a legacy `android-developer` (PR-1 window) receives the `developer` expertise.
+ * Every role the core knows gets an entry — `null` blocks included — so the orchestrator pastes
+ * `prompt_blocks[agent].expertise` without a presence check, and an on-demand agent's block is
+ * already rendered for `resolveExpertise`.
  */
-export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env, mode = "installed" } = {}) {
+function renderPromptBlocks({ agents, roleExpertise, extensionRows, stack }) {
+  const blocks = {};
+  for (const agent of agents) {
+    const role = canonicalAgentName(agent, [], "");
+    const exp = roleExpertise[role];
+    blocks[agent] = {
+      expertise: renderRoleExpertiseBlock(role, exp, { stack }),
+      skills: renderSkillsBlock(role, { roleSkills: exp?.skills ?? [], extensionRows }),
+    };
+  }
+  return blocks;
+}
+
+/**
+ * Steps 0 → 1b-models: everything up to and including the effective profile. Shared by
+ * `resolvePlan` (which continues into the workflow) and `resolveExpertise` (which stops here —
+ * an on-demand agent has no recipe to resolve).
+ *
+ * Returns `halt` when detection cannot proceed; otherwise every intermediate the caller needs.
+ */
+export function resolveProfile({ cwd = process.cwd(), args = "", env = process.env, mode = "installed" } = {}) {
   const prints = [];
   const warnings = [];
-  /** Record a diagnostic in both channels — see the note above. */
+  /** Record a diagnostic in both channels — see the note on resolvePlan. */
   const warn = (msg) => { warnings.push(msg); prints.push(msg); };
   const warnAll = (msgs) => { for (const m of msgs) warn(m); };
   const headless = env.SDLC_NONINTERACTIVE === "true" || env.SDLC_NONINTERACTIVE === "1";
@@ -87,24 +116,23 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
   if (stack.forced_unresolved) {
     const known = stack.known_stacks.length ? stack.known_stacks.join(", ") : "none installed";
     return {
-      plan: null, prints, warnings,
+      prints, warnings, headless, roots, deps,
       halt: `❌ --stack=${stack.forced_unresolved}: no installed foundation declares that stack.\n   Installed foundations: ${known}`,
     };
   }
-  const primary = manifests.foundations.find((f) => f.doc?.stack === stack.foundation)?.doc ?? null;
+  const primaryRecord = manifests.foundations.find((f) => f.doc?.stack === stack.foundation) ?? null;
+  const primary = primaryRecord?.doc ?? null;
   const vanilla = manifests.foundations.find((f) => f.doc?.stack === "vanilla")?.doc ?? null;
-  const additive = manifests.frameworks.filter((f) => stack.additive.includes(f.doc?.stack)).map((f) => f.doc);
+  const additiveRecords = manifests.frameworks.filter((f) => stack.additive.includes(f.doc?.stack));
+  const additive = additiveRecords.map((f) => f.doc);
   const stackPrint = renderStackPrint(stack);
   if (stackPrint) prints.push(stackPrint);
 
-  // ---- Step 0c: diff signals
-  const signals = computeDiffSignals(cwd, { baseRef: opt(args, "--base-ref") });
-  if (signals.degraded) warn(`WARN: skip-rule signals unavailable (${signals.reason ?? "git"}) — no rule will fire`);
-
   // ---- Step 1: profile merge + project overrides
   const activeByAspect = primary ? { [primary.aspects?.[0] ?? stack.foundation]: primary } : {};
-  const { profile: base, errors: mergeErrors } = mergeProfiles({ primary, active: activeByAspect, additive, vanilla });
+  const { profile: base, errors: mergeErrors, warnings: mergeWarnings } = mergeProfiles({ primary, active: activeByAspect, additive, vanilla });
   for (const e of mergeErrors) warn(`WARN: ${e.message}`);
+  warnAll(mergeWarnings);
 
   const localPath = join(cwd, ".claude", "sdlc.local.yaml");
   let local = null;
@@ -129,6 +157,76 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
   warnAll(models.warnings);
   const modelPrint = renderModelPrint(models.overrides);
   if (modelPrint) prints.push(modelPrint);
+
+  // ---- Step 1a-expertise (ADR-0021): per-role expertise, merged in injection order, paths absolute
+  const expertiseSources = [primaryRecord, ...additiveRecords]
+    .filter((r) => r?.doc)
+    .map((r) => ({ stack: r.doc.stack, dir: r.file ? dirname(r.file) : "", role_expertise: r.doc.role_expertise }));
+  const expertise = mergeRoleExpertise(expertiseSources);
+  warnAll(expertise.warnings);
+  const knownAgents = new Set([...agentsBound(effective.agents_per_phase), ...(Array.isArray(vanilla?.on_demand_agents) ? vanilla.on_demand_agents : [])]);
+  const promptBlocks = renderPromptBlocks({
+    agents: knownAgents, roleExpertise: expertise.role_expertise, extensionRows: effective.extension_skills ?? [], stack: stack.foundation,
+  });
+
+  return {
+    prints, warnings, halt: null, headless, roots, installs, enabled, manifests, deps, stack, local,
+    primary, vanilla, additive, effective, models,
+    role_expertise: expertise.role_expertise, prompt_blocks: promptBlocks, known_agents: knownAgents,
+    profile_dir: primaryRecord?.file ? dirname(primaryRecord.file) : null,
+  };
+}
+
+/**
+ * ADR-0021 — the one command an ON-DEMAND agent runs to receive its stack expertise.
+ *
+ * `node …/resolve/cli.mjs expertise --role <name>` prints exactly the blocks the orchestrator
+ * would have pasted into a pipeline prompt for that role. One command, once per invocation: the
+ * shape H1 measured at ~100% compliance, replacing the "self-read rules/skills.md and
+ * sdlc.local.yaml" prose that on-demand agents were asked to follow.
+ */
+export function resolveExpertise({ cwd = process.cwd(), args = "", env = process.env, mode = "installed", role } = {}) {
+  const r = resolveProfile({ cwd, args, env, mode });
+  if (r.halt) return { ok: false, role, error: r.halt, prints: r.prints, warnings: r.warnings };
+  const known = [...r.known_agents].sort();
+  const canon = canonicalAgentName(role ?? "", r.warnings, "expertise --role");
+  if (!known.includes(canon)) {
+    return { ok: false, role, prints: r.prints, warnings: r.warnings, error: `unknown role '${role}' — known: ${known.join(", ")}` };
+  }
+  const blocks = r.prompt_blocks[canon] ?? { expertise: null, skills: null };
+  return {
+    ok: true, role: canon, stack: r.stack.foundation, profile_dir: r.profile_dir,
+    expertise: r.role_expertise[canon] ?? null,
+    block: blocks.expertise, skills_block: blocks.skills,
+    prints: r.prints, warnings: r.warnings,
+  };
+}
+
+/**
+ * Resolve everything Steps 0 → 1d resolve, in one pass.
+ *
+ * Returns `{ plan, prints, halt, warnings }`. `halt` is a string when the run cannot proceed —
+ * an ambiguous or missing recipe, a schema failure, a blocking dependency. The caller decides
+ * what to do with it; this function never exits and never prints.
+ *
+ * **`warnings[]` is a subset of `prints[]`, not a sibling channel.** Every warning is pushed
+ * into both, in generation order. The orchestrator has exactly one obligation — echo `prints[]`
+ * — so a warning that lived only in `warnings[]` would reach nobody: the caller sends that
+ * array to stderr only in non-JSON mode, and the orchestrator always invokes with `--json`.
+ * That is how "⚠️ Failed to parse .claude/sdlc.local.yaml" became silent. The duplicate key
+ * survives for machine consumers that want the diagnostics without pattern-matching prose.
+ */
+export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env, mode = "installed" } = {}) {
+  const resolved = resolveProfile({ cwd, args, env, mode });
+  const { prints, warnings, headless, roots, installs, enabled, deps, stack, local, effective, models } = resolved;
+  if (resolved.halt) return { plan: null, prints, warnings, halt: resolved.halt };
+  /** Record a diagnostic in both channels — see the note above. */
+  const warn = (msg) => { warnings.push(msg); prints.push(msg); };
+  const warnAll = (msgs) => { for (const m of msgs) warn(m); };
+
+  // ---- Step 0c: diff signals
+  const signals = computeDiffSignals(cwd, { baseRef: opt(args, "--base-ref") });
+  if (signals.degraded) warn(`WARN: skip-rule signals unavailable (${signals.reason ?? "git"}) — no rule will fire`);
 
   // ---- Step 1c: workflow
   const recipes = discoverRecipes({ projectRoot: cwd, installs, enabled });
@@ -172,6 +270,17 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
   if (built.halt) return { plan: null, prints, warnings, halt: built.halt };
   prints.push(renderWorkflowPrint(resolvedName.name, built.phases));
 
+  // A recipe names PHASES; the core manifest binds the agent. A phase nothing binds is not a
+  // crash — the orchestrator's 3a skips it — but it must be said before the run, not discovered
+  // as a silent gap in telemetry.
+  const bound = (name) => {
+    const m = effective.agents_per_phase?.[name];
+    return typeof m === "string" ? Boolean(m) : Boolean(m && typeof m === "object" && Object.values(m).some(Boolean));
+  };
+  for (const name of built.phases.flatMap((p) => (Array.isArray(p.parallel) ? p.parallel : [p.name]))) {
+    if (!bound(name)) warn(`WARN: phase '${name}' in workflow '${resolvedName.name}' has no agent bound in the core manifest — it will be skipped`);
+  }
+
   // ---- Step 1d: cap
   const cap = resolveCostCap({ recipe: located.recipe.doc, workflowName: resolvedName.name, costCaps: effective.cost_caps });
   const capPrint = renderCapOverridePrint(cap, located.recipe.doc);
@@ -193,6 +302,8 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
       // entirely — while telemetry has always documented this field as a manifest path
       // ("android-foundation/manifest.yaml"). Read from the winning foundation now.
       profile_source: stack.source ?? null,
+      // The directory `role_expertise` rule paths were resolved against (ADR-0021).
+      profile_dir: resolved.profile_dir,
       forced: Boolean(stack.forced),
     },
     skip_rules: { applied: skip.applied, suppressed: skip.suppressed, signals },
@@ -213,6 +324,10 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
       heal_checks: effective.heal_checks,
       phase_command_overrides: effective.phase_command_overrides,
       extension_skills: effective.extension_skills,
+      // ADR-0021: merged per-role expertise (absolute rule paths) and the pre-rendered blocks the
+      // orchestrator pastes verbatim into each agent's stable prefix (3b-1).
+      role_expertise: resolved.role_expertise,
+      prompt_blocks: resolved.prompt_blocks,
     },
     models: models.overrides,
     cost_cap: cap.cost_cap,
