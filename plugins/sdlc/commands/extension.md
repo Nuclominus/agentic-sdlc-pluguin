@@ -50,7 +50,7 @@ runs the pipeline.
      with the same `skill` AND the same `agents` set already exists, **update it in place** (refresh
      `when`/`policy`) instead of adding a duplicate. Never reorder or drop unrelated content.
    - **Overlap guard:** if the new row names a `skill` that an existing row ALSO targets for one or
-     more of the same agents (e.g. existing `agents: "all"` vs. new `agents: [android-developer]`),
+     more of the same agents (e.g. existing `agents: "all"` vs. new `agents: [developer]`),
      warn the user — at runtime the orchestrator dedupes such overlaps to one line per skill (strictest
      policy wins, 3b-1a), so the extra row only adds noise. Offer to merge into the existing row instead.
    - If the file did not exist, create it with a one-line header comment and just the `extensions:` block.
@@ -63,7 +63,7 @@ runs the pipeline.
 extensions:
   skills:
     - skill: "superpowers:test-driven-development"
-      agents: [android-developer]      # list of agent names, or the string "all"
+      agents: [developer]            # list of agent names, or the string "all"
       when: "before writing production code"
       policy: mandatory                # mandatory | recommended
 ```
@@ -73,11 +73,11 @@ extensions:
 ```
 🧩 SDLC extension manifest
 
-Discovered: 11 agents, 6 skills (3 plugins)
+Discovered: 12 agents, 6 skills (3 plugins)
 
 Added mapping:
   skill:   superpowers:test-driven-development
-  agents:  [android-developer]
+  agents:  [developer]
   when:    before writing production code
   policy:  mandatory
 
@@ -85,7 +85,7 @@ Wrote: .claude/sdlc.local.yaml  (extensions.skills: 1 row total)
 
 Current extensions.skills:
   skill                                     │ agents              │ policy      │ when
-  superpowers:test-driven-development        │ android-developer   │ mandatory   │ before writing production code
+  superpowers:test-driven-development        │ developer           │ mandatory   │ before writing production code
 
 Next:
   /sdlc:start "<feature>"      # the orchestrator will inject these per agent

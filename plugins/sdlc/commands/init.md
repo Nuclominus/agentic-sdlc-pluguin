@@ -42,7 +42,7 @@ One-time project setup. Detects the platform(s), writes a starter local-override
    # extensions:                           # per-agent Skill mapping — no plugin edits needed
    #   skills:
    #     - skill: "superpowers:test-driven-development"
-   #       agents: [android-developer]     # list of agent names, or "all"
+   #       agents: [developer]             # list of agent names, or "all"
    #       when: "before writing production code"
    #       policy: mandatory               # mandatory | recommended (default)
    ```
