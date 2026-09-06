@@ -27,7 +27,7 @@
     {
       "name": "sdlc",
       "source": "./plugins/sdlc",
-      "description": "Platform-agnostic SDLC orchestrator with stack-provider auto-discovery. Provides the pipeline-orchestrator skill (generic phases, review-loops, parallel groups, workflow discovery across plugins, file_glob/nested detection) plus 5 cost-tiered fallback agents (BA Opus/high, Dev Sonnet/medium, QA Sonnet/medium with iteration cap, Sec Opus/high platform-neutral baseline, Docs Haiku/low). Commands: /sdlc:start, /sdlc:doctor, /sdlc:list-stacks, /sdlc:batch, /sdlc:security-init."
+      "description": "Platform-agnostic SDLC orchestrator with stack-provider auto-discovery. Provides the pipeline-orchestrator skill (generic phases, review-loops, parallel groups, workflow discovery across plugins, file_glob/nested detection) plus the whole 12-agent roster (ADR-0021): BA Opus/high, developer/reviewer/tester/qa-engineer Sonnet/medium with iteration caps, security-analyst Opus/high read-only, document-writer Haiku/low, debugger read-only, devops, cicd, aar-analyst, session-recorder. Foundations supply per-role expertise (role_expertise) that is rendered into each agent's stable prefix. Commands: /sdlc:start, /sdlc:doctor, /sdlc:list-stacks, /sdlc:batch, /sdlc:security-init."
     },
     {
       "name": "android-foundation",

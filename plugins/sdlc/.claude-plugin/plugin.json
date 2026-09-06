@@ -1,7 +1,7 @@
 {
   "name": "sdlc",
-  "version": "1.17.0",
-  "description": "Universal SDLC orchestrator with stack provider auto-discovery. Owns the pipeline; plugins register themselves via manifest.yaml profiles (kind: foundation | framework). Includes 5 cost-tiered default agents (BA Opus, Dev Sonnet, QA Sonnet with iteration cap, Sec Opus, Docs Haiku). Slash command: /sdlc:start \"<feature>\".",
+  "version": "1.18.0",
+  "description": "Universal SDLC orchestrator with stack provider auto-discovery. Owns the pipeline AND the whole agent roster (ADR-0021): 12 platform-neutral, cost-tiered agents — business-analyst (Opus), developer, reviewer, tester, qa-engineer (Sonnet, iteration caps), security-analyst (Opus, read-only), document-writer (Haiku), debugger (read-only), devops, cicd, aar-analyst, session-recorder. Plugins register themselves via manifest.yaml profiles (kind: foundation | framework) and supply per-role expertise (role_expertise) that the resolver renders into each agent's stable prefix; on-demand agents fetch it with `resolve/cli.mjs expertise --role <name>`. Slash command: /sdlc:start \"<feature>\".",
   "author": {
     "name": "Nuclominus",
     "url": "https://github.com/Nuclominus"

@@ -4,7 +4,7 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
-`sdlc` `1.16.0` → `1.17.0`, `android-foundation` `1.7.0` → `1.8.0`.
+`sdlc` `1.16.0` → `1.18.0`, `android-foundation` `1.7.0` → `1.8.0`.
 
 ### Changed
 
@@ -44,6 +44,29 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ### Added
 
+- **Agents live in the core; foundations carry expertise — PR-1 of 3 (ADR-0021, `sdlc` 1.18.0).**
+  The core now ships the whole roster: `reviewer`, `tester` (3-attempt cap), `debugger`
+  (read-only), `devops` and `cicd` join the existing seven, and `plugins/sdlc/manifest.yaml` binds
+  every phase (`review`, `test`, `debugging` included) plus the on-demand agents. Every role agent
+  carries the same **Stack expertise slot**: orchestrated, it receives a `Stack expertise for
+  <role>` block and a `Skills for this role` list in its stable prefix; on demand, it runs exactly
+  one command — `node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs expertise --role <name>` — and
+  receives the same two blocks. A foundation declares that expertise in a new manifest block,
+  `role_expertise` (per core role: `invariants` ≤ 1400 chars, `rules` paths emitted absolute,
+  `skills` rows with a mandatory/recommended policy); the resolve command merges it (foundation
+  first, frameworks alphabetically), renders `plan.profile.prompt_blocks[agent]`, and the
+  orchestrator pastes the blocks verbatim (3b-1) instead of hand-rendering the extension list
+  (3b-1a). `sdlc-lint roster` (part of `all`) holds the four seams: every bound role ships a core
+  `.md`, every recipe phase is bound, every `role_expertise` key/rule/skill resolves (a
+  `superpowers:*` skill must be declared by the plugin that mandates it), and every agent carries
+  its bootstrap line. **Nothing changes for an Android run yet**: `android-foundation` still binds
+  its own roster (now warned as deprecated); PR-2 extracts its expertise into skills +
+  `role_expertise`, PR-3 deletes `android-foundation/agents/`. The eleven legacy names
+  (`android-developer` → `developer`, …) already resolve as aliases in `sdlc.local.yaml`
+  `extensions.skills[].agents`, `model.local.json` `agents{}` and the `enforce-agent-model.sh`
+  hook, each with a deprecation warning; aliases sunset two releases after
+  `android-foundation 2.0.0`. Design: `docs/superpowers/specs/2026-09-05-agents-in-core-design.md`;
+  track: `.brain/planning/i1-agents-in-core.md`.
 - **A publish-time gate for the logging rule.** `hooks/git-guard.sh` (`PreToolUse(Bash)`) blocks
   `git commit`, `git push` and `gh pr create` when the code being published violates
   `rules/logging.md`, and `hooks/validate-logging.sh` is the per-file checker behind it. This closes

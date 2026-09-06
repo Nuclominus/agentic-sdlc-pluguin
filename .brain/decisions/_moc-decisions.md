@@ -2,6 +2,7 @@
 
 > One note per architecture decision. Newest first.
 
+- [[decisions/ADR-0021-agents-live-in-the-core-foundations-carry-expertise]]
 - [[decisions/ADR-0020-logging-lives-in-a-development-artifact]]
 - [[decisions/ADR-0019-the-run-start-is-one-command]]
 - [[decisions/ADR-0018-reviewers-do-not-write-code]]
