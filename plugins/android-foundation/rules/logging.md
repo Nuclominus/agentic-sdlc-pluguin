@@ -142,7 +142,8 @@ Acceptable because it is one line, in configuration, not in logic.
   library bypass every gate above.
 - **Test sources are exempt.** `println` and platform log calls in `src/test/`,
   `src/androidTest/`, `*Test.kt`, `*Spec.kt` and Maestro flows are allowed and are not
-  subject to the rules above — see `testing.md`.
+  subject to the rules above — see the `android-foundation:android-testing` skill
+  § Test source exemptions.
 
 ## 6. Review checklist
 

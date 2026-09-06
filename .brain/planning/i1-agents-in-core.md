@@ -54,104 +54,119 @@ Destinations in short: `manifest.yaml` = `role_expertise.<role>` (invariants and
 | Agent | Section | Destination | Anchor |
 |---|---|---|---|
 | android-aar | Mandatory Skills | plugins/android-foundation/manifest.yaml | `before returning findings — every claim cites transcript evidence` |
-| android-aar | Input | plugins/sdlc/agents/aar-analyst.md | `## Input (passed by the sdlc:aar skill)` |
-| android-aar | Extraction contract | plugins/sdlc/agents/aar-analyst.md | `## Extraction contract` |
+| android-aar | Input | plugins/sdlc/agents/aar-analyst.md | `Use these numbers verbatim.` |
+| android-aar | Extraction contract | plugins/sdlc/agents/aar-analyst.md | `Follow the `sdlc:aar` skill's `gather.md` contract.` |
 | android-aar | Knowledge sourcing (before grounding recommendations) | plugins/android-foundation/manifest.yaml | `the Android DAG and per-step specifics you audit against` |
 | android-aar | Authoritative References | plugins/sdlc/agents/aar-analyst.md | `Return ONLY the report defined in the skill's `report.md`` |
 | android-aar | Deliverable | — | core `aar-analyst` § Deliverable owns the report contract |
 | android-aar | Non-negotiable rules | plugins/android-foundation/manifest.yaml | `Workflow scope only: agents, rules, settings, process docs` |
 | android-ba | Mandatory Skills | plugins/android-foundation/manifest.yaml | `android-foundation:android-requirements` |
-| android-ba | Knowledge sourcing (mandatory — before any analysis) | plugins/android-foundation/skills/android-requirements/SKILL.md | `## Knowledge sourcing — before any analysis` |
+| android-ba | Knowledge sourcing (mandatory — before any analysis) | plugins/android-foundation/skills/android-requirements/SKILL.md | `it is the single source of project knowledge` |
 | android-ba | Authoritative References | plugins/android-foundation/rules/documentation.md | `per affected module; ` |
-| android-ba | 1. Requirements Discovery | plugins/android-foundation/skills/android-requirements/SKILL.md | `## 1. Requirements discovery (Android lens)` |
-| android-ba | 2. Technical Analysis | plugins/android-foundation/skills/android-requirements/SKILL.md | `## 2. Technical analysis` |
-| android-ba | 3. Domain Design (embedded DDD) | plugins/android-foundation/skills/android-requirements/SKILL.md | `## 3. Module placement — embedded DDD` |
-| android-ba | 4. Risk & Dependency Assessment | plugins/android-foundation/skills/android-requirements/SKILL.md | `## 4. Risk & dependency assessment` |
-| android-ba | 5. Implementation Roadmap | plugins/android-foundation/skills/android-requirements/SKILL.md | `## 5. Implementation roadmap` |
-| android-ba | 6. Deliverable Format | plugins/android-foundation/skills/android-requirements/SKILL.md | `## 6. Deliverable format` |
-| android-ba | 7. Vault Capture (architectural deltas) | plugins/android-foundation/skills/android-requirements/SKILL.md | `## 7. Vault capture — architectural deltas` |
+| android-ba | 1. Requirements Discovery | plugins/android-foundation/skills/android-requirements/SKILL.md | `minSdk reach, background-execution limits, and battery/data cost.` |
+| android-ba | 2. Technical Analysis | plugins/android-foundation/skills/android-requirements/SKILL.md | `addable (version catalog, minSdk floor, licence).` |
+| android-ba | 3. Domain Design (embedded DDD) | plugins/android-foundation/skills/android-requirements/SKILL.md | `shared primitives go in the model module` |
+| android-ba | 4. Risk & Dependency Assessment | plugins/android-foundation/skills/android-requirements/SKILL.md | `main-thread work, large lists, image decoding, oversized recompositions` |
+| android-ba | 5. Implementation Roadmap | plugins/android-foundation/skills/android-requirements/SKILL.md | `Estimate complexity in relative terms, never in hours.` |
+| android-ba | 6. Deliverable Format | plugins/android-foundation/skills/android-requirements/SKILL.md | `# Feature Analysis: [Feature Name]` |
+| android-ba | 7. Vault Capture (architectural deltas) | plugins/android-foundation/skills/android-requirements/SKILL.md | `The documentation phase finalises it.` |
 | android-cicd | Project Extensions | — | replaced by one `expertise --role cicd` command (ADR-0014/0019) |
-| android-cicd | Authoritative References | plugins/android-foundation/skills/android-ci/SKILL.md | `## Authoritative references` |
-| android-cicd | Build Variants | plugins/android-foundation/skills/android-ci/SKILL.md | `## Build variants` |
-| android-cicd | Project File Locations | plugins/android-foundation/skills/android-ci/SKILL.md | `## Project file locations` |
-| android-cicd | CI Pipeline Structure | plugins/android-foundation/skills/android-ci/SKILL.md | `## CI pipeline structure` |
-| android-cicd | Gradle Commands | plugins/android-foundation/skills/android-ci/SKILL.md | `## Gradle commands` |
-| android-cicd | GitHub Actions Workflow Example | plugins/android-foundation/skills/android-ci/SKILL.md | `## GitHub Actions workflow example` |
-| android-cicd | Caching | plugins/android-foundation/skills/android-ci/SKILL.md | `## Caching` |
-| android-cicd | Signing for Release | plugins/android-foundation/skills/android-ci/SKILL.md | `## Signing for release` |
-| android-cicd | Best Practices | plugins/android-foundation/skills/android-ci/SKILL.md | `## Best practices` |
-| android-cicd | Scope Boundary | plugins/android-foundation/skills/android-ci/SKILL.md | `## Scope boundary` |
-| android-cicd | Quality Checklist | plugins/android-foundation/skills/android-ci/SKILL.md | `## Android CI quality checklist` |
+| android-cicd | Authoritative References | plugins/android-foundation/skills/android-ci/SKILL.md | `Never hardcode Kotlin / Gradle / AGP / DI versions in CI docs` |
+| android-cicd | Build Variants | plugins/android-foundation/skills/android-ci/SKILL.md | `Note any tooling the project disables per build type` |
+| android-cicd | Project File Locations | plugins/android-foundation/skills/android-ci/SKILL.md | `.github/workflows/              — CI/CD workflows` |
+| android-cicd | CI Pipeline Structure | plugins/android-foundation/skills/android-ci/SKILL.md | `lint (parallel: detekt, ktlintCheck)` |
+| android-cicd | Gradle Commands | plugins/android-foundation/skills/android-ci/SKILL.md | `./gradlew bundle<Flavor>Release` |
+| android-cicd | GitHub Actions Workflow Example | plugins/android-foundation/skills/android-ci/SKILL.md | `path: app/build/outputs/apk/<flavor>/debug/*.apk` |
+| android-cicd | Caching | plugins/android-foundation/skills/android-ci/SKILL.md | `restore-keys: gradle-` |
+| android-cicd | Signing for Release | plugins/android-foundation/skills/android-ci/SKILL.md | `KEYSTORE_BASE64` (base64-encoded keystore)` |
+| android-cicd | Best Practices | plugins/android-foundation/skills/android-ci/SKILL.md | `Pin action versions to commit SHAs for supply-chain safety.` |
+| android-cicd | Scope Boundary | plugins/android-foundation/skills/android-ci/SKILL.md | `Signing infrastructure, keystore management` |
+| android-cicd | Quality Checklist | plugins/android-foundation/skills/android-ci/SKILL.md | `Failure artifacts uploaded (test reports, mapping files)` |
 | android-cicd | Non-Negotiable Rules | plugins/android-foundation/manifest.yaml | `Pin action versions and the JVM version` |
 | android-debugger | Mandatory Skills | plugins/android-foundation/manifest.yaml | `superpowers:systematic-debugging` |
 | android-debugger | Authoritative References | plugins/android-foundation/rules/documentation.md | `(what a failing module pulls in)` |
-| android-debugger | Debugging Methodology | plugins/android-foundation/skills/android-debugging/SKILL.md | `## Android specifics per investigation phase` |
-| android-debugger | Common Bug Categories | plugins/android-foundation/skills/android-debugging/SKILL.md | `## Common bug categories` |
-| android-debugger | Logging — the project's logging library | plugins/android-foundation/skills/android-debugging/SKILL.md | `## Logging and Logcat` |
-| android-debugger | Quality Checklist | plugins/android-foundation/skills/android-debugging/SKILL.md | `## Android prescription checklist` |
+| android-debugger | Debugging Methodology | plugins/android-foundation/skills/android-debugging/SKILL.md | `identify the originating layer (UI screen, ViewModel/store` |
+| android-debugger | Common Bug Categories | plugins/android-foundation/skills/android-debugging/SKILL.md | `State resets on rotation` |
+| android-debugger | Logging — the project's logging library | plugins/android-foundation/skills/android-debugging/SKILL.md | `adb logcat --pid=$(adb shell pidof -s <applicationId>)` |
+| android-debugger | Quality Checklist | plugins/android-foundation/skills/android-debugging/SKILL.md | `The checklist covers the report handed to the development phase` |
 | android-debugger | Non-Negotiable Rules | plugins/android-foundation/manifest.yaml | `follow evidence, not assumptions` |
-| android-developer | Mandatory Skills & Architecture Detection | plugins/android-foundation/skills/android-architecture/SKILL.md | `## Architecture Detection` |
+| android-developer | Mandatory Skills & Architecture Detection | plugins/android-foundation/skills/android-architecture/SKILL.md | `then follow it — never impose a pattern the project does not use.` |
 | android-developer | Knowledge sourcing (mandatory — before any code) | plugins/android-foundation/rules/documentation.md | `for every module it will touch` |
 | android-developer | Authoritative References | plugins/android-foundation/manifest.yaml | `forbidden patterns — read before the first edit` |
 | android-developer | Implementation | plugins/android-foundation/manifest.yaml | `./gradlew compileDebugKotlin, one attempt` |
-| android-developer | Reviewer ⇄ Developer Loop | plugins/sdlc/agents/developer.md | `## Review-loop response` |
+| android-developer | Reviewer ⇄ Developer Loop | plugins/sdlc/agents/developer.md | `every `MUST_FIX` item, not just the first` |
 | android-developer | Quality Checklist | plugins/android-foundation/manifest.yaml | `Every non-decorative composable gets a testTag` |
 | android-devops | Project Extensions | — | replaced by one `expertise --role devops` command (ADR-0014/0019) |
-| android-devops | Authoritative References | plugins/android-foundation/skills/android-build-release/SKILL.md | `## Authoritative references` |
-| android-devops | Infrastructure Overview | plugins/android-foundation/skills/android-build-release/SKILL.md | `## Infrastructure overview` |
-| android-devops | Build Variants | plugins/android-foundation/skills/android-build-release/SKILL.md | `## Build variants` |
-| android-devops | Project File Locations | plugins/android-foundation/skills/android-build-release/SKILL.md | `## Project file locations` |
-| android-devops | Signing Configuration | plugins/android-foundation/skills/android-build-release/SKILL.md | `## Signing configuration` |
-| android-devops | ProGuard / R8 Rules | plugins/android-foundation/skills/android-build-release/SKILL.md | `## ProGuard / R8 rules` |
-| android-devops | Gradle Commands | plugins/android-foundation/skills/android-build-release/SKILL.md | `## Gradle commands` |
-| android-devops | Gradle Performance | plugins/android-foundation/skills/android-build-release/SKILL.md | `## Gradle performance` |
-| android-devops | App Distribution (example: Firebase — adapt to the project's channel) | plugins/android-foundation/skills/android-build-release/SKILL.md | `## App distribution` |
-| android-devops | Quality Checklist | plugins/android-foundation/skills/android-build-release/SKILL.md | `## Android build quality checklist` |
+| android-devops | Authoritative References | plugins/android-foundation/skills/android-build-release/SKILL.md | `SDK / JVM target source of truth` |
+| android-devops | Infrastructure Overview | plugins/android-foundation/skills/android-build-release/SKILL.md | `Annotation processing` |
+| android-devops | Build Variants | plugins/android-foundation/skills/android-build-release/SKILL.md | `type is R8 off by design (profiling / diagnostics)` |
+| android-devops | Project File Locations | plugins/android-foundation/skills/android-build-release/SKILL.md | `app/proguard-rules.pro          — ProGuard / R8 rules` |
+| android-devops | Signing Configuration | plugins/android-foundation/skills/android-build-release/SKILL.md | `rootProject.file("config/keystore.properties")` |
+| android-devops | ProGuard / R8 Rules | plugins/android-foundation/skills/android-build-release/SKILL.md | `for the project's own third-party SDKs — detect them from` |
+| android-devops | Gradle Commands | plugins/android-foundation/skills/android-build-release/SKILL.md | `The current command set is the foundation's `rules/snippets/gradle-commands.md`.` |
+| android-devops | Gradle Performance | plugins/android-foundation/skills/android-build-release/SKILL.md | `org.gradle.configuration-cache=true` |
+| android-devops | App Distribution (example: Firebase — adapt to the project's channel) | plugins/android-foundation/skills/android-build-release/SKILL.md | `firebase appdistribution:distribute` |
+| android-devops | Quality Checklist | plugins/android-foundation/skills/android-build-release/SKILL.md | `Release assemble succeeds (signing exercised)` |
 | android-devops | Non-Negotiable Rules | plugins/android-foundation/manifest.yaml | `KSP over KAPT` |
-| android-docs | Knowledge sourcing (mandatory) | plugins/android-foundation/skills/android-docs-vault/SKILL.md | `## Knowledge sourcing` |
-| android-docs | Vault Structure (canon) | plugins/android-foundation/skills/android-docs-vault/SKILL.md | `## Vault structure (canon)` |
-| android-docs | Hook-created stubs | plugins/android-foundation/skills/android-docs-vault/SKILL.md | `## Hook-created stubs` |
-| android-docs | testTag index — when UI changes | plugins/android-foundation/skills/android-docs-vault/SKILL.md | `## testTag index — when UI changes` |
-| android-docs | Definition of Done (before PR) | plugins/android-foundation/skills/android-docs-vault/SKILL.md | `## Definition of Done (before the PR)` |
-| android-docs | Closing nudge (after PR) | plugins/android-foundation/skills/android-docs-vault/SKILL.md | `## Closing nudge (after the PR)` |
-| android-docs | Authoritative References (always link, never duplicate) | plugins/android-foundation/skills/android-docs-vault/SKILL.md | `## Authoritative references — always link, never duplicate` |
-| android-docs | Project Stack (mirrors `.obsidian-vault/stack/`) | plugins/android-foundation/skills/android-docs-vault/SKILL.md | `## Project stack table` |
-| android-docs | Documentation Standards | plugins/android-foundation/skills/android-docs-vault/SKILL.md | `## Documentation standards` |
+| android-docs | Knowledge sourcing (mandatory) | plugins/android-foundation/skills/android-docs-vault/SKILL.md | `the testTag index, when UI is in scope` |
+| android-docs | Vault Structure (canon) | plugins/android-foundation/skills/android-docs-vault/SKILL.md | `Templates live in `.obsidian-vault/_templates/` — copy them, never edit them.` |
+| android-docs | Hook-created stubs | plugins/android-foundation/skills/android-docs-vault/SKILL.md | `grep -rl "<!-- STUB" .obsidian-vault/` |
+| android-docs | testTag index — when UI changes | plugins/android-foundation/skills/android-docs-vault/SKILL.md | `removed component loses its row` |
+| android-docs | Definition of Done (before PR) | plugins/android-foundation/skills/android-docs-vault/SKILL.md | `An absent vault is not a silent pass.` |
+| android-docs | Closing nudge (after PR) | plugins/android-foundation/skills/android-docs-vault/SKILL.md | `Workflow complete. Run `/sdlc:aar` to review this cycle` |
+| android-docs | Authoritative References (always link, never duplicate) | plugins/android-foundation/skills/android-docs-vault/SKILL.md | `Never pin Kotlin / Gradle / AGP / DI / Compose versions inside vault notes` |
+| android-docs | Project Stack (mirrors `.obsidian-vault/stack/`) | plugins/android-foundation/skills/android-docs-vault/SKILL.md | `This table is a **template**, not a fixed stack.` |
+| android-docs | Documentation Standards | plugins/android-foundation/skills/android-docs-vault/SKILL.md | `tag is load-bearing` |
 | android-docs | Build Commands Reference | plugins/android-foundation/skills/android-docs-vault/SKILL.md | `use the project's Gradle commands` |
 | android-docs | Quality Checklist | plugins/android-foundation/skills/android-docs-vault/SKILL.md | `STOP and fix the vault if any item fails` |
 | android-docs | Non-Negotiable Rules | plugins/android-foundation/manifest.yaml | `Templates in `_templates/` are copied, never edited` |
 | android-docs | Recommended Skills | plugins/android-foundation/manifest.yaml | `android-foundation:android-docs-vault` |
-| android-qa | Authoritative References | plugins/android-foundation/skills/android-e2e/SKILL.md | `## Authoritative references` |
-| android-qa | Testing Stack | plugins/android-foundation/skills/android-e2e/SKILL.md | `## Testing stack` |
-| android-qa | Compose UI Test | plugins/android-foundation/skills/android-e2e/SKILL.md | `## Compose UI Test` |
-| android-qa | Maestro E2E Flows | plugins/android-foundation/skills/android-e2e/SKILL.md | `## Maestro E2E flows` |
-| android-qa | Accessibility — Compose semantics | plugins/android-foundation/skills/android-e2e/SKILL.md | `## Accessibility — Compose semantics` |
+| android-qa | Authoritative References | plugins/android-foundation/skills/android-e2e/SKILL.md | `Confirm the app id and host activity from` |
+| android-qa | Testing Stack | plugins/android-foundation/skills/android-e2e/SKILL.md | `Cross-process / system UI interaction (permission dialogs, billing sheets)` |
+| android-qa | Compose UI Test | plugins/android-foundation/skills/android-e2e/SKILL.md | `performScrollToIndex(10)` |
+| android-qa | Maestro E2E Flows | plugins/android-foundation/skills/android-e2e/SKILL.md | `maestro --device <device_id> test .maestro/flows/` |
+| android-qa | Accessibility — Compose semantics | plugins/android-foundation/skills/android-e2e/SKILL.md | `AccessibilityChecks.enable().setRunChecksFromRootView(true)` |
 | android-qa | Commands | plugins/android-foundation/skills/android-e2e/SKILL.md | `connected<Flavor>DebugAndroidTest` |
-| android-qa | Scope Boundary | plugins/sdlc/agents/qa-engineer.md | `## Scope on a recipe with a `test` phase` |
-| android-qa | Quality Checklist | plugins/android-foundation/skills/android-e2e/SKILL.md | `## Android E2E quality checklist` |
+| android-qa | Scope Boundary | plugins/sdlc/agents/qa-engineer.md | `do **not** duplicate them` |
+| android-qa | Quality Checklist | plugins/android-foundation/skills/android-e2e/SKILL.md | `Accessibility audit passes (content descriptions, 48dp targets, TalkBack)` |
 | android-qa | Non-Negotiable Rules | plugins/android-foundation/manifest.yaml | `use Compose `waitUntil { }`` |
 | android-reviewer | Mandatory Skills | plugins/android-foundation/manifest.yaml | `superpowers:requesting-code-review` |
-| android-reviewer | Knowledge sourcing (mandatory — before any finding) | plugins/android-foundation/skills/android-review/SKILL.md | `## Knowledge sourcing — before any finding` |
+| android-reviewer | Knowledge sourcing (mandatory — before any finding) | plugins/android-foundation/skills/android-review/SKILL.md | `verify the diff respects documented invariants` |
 | android-reviewer | Authoritative References | plugins/android-foundation/manifest.yaml | `forbidden patterns — the reject list` |
-| android-reviewer | Review Dimensions | plugins/android-foundation/skills/android-review/SKILL.md | `## Review dimensions` |
-| android-reviewer | Review Output Format | plugins/android-foundation/skills/android-review/SKILL.md | `## Android review checklist` |
+| android-reviewer | Review Dimensions | plugins/android-foundation/skills/android-review/SKILL.md | `defeat recomposition skipping` |
+| android-reviewer | Review Output Format | plugins/android-foundation/skills/android-review/SKILL.md | `Non-decorative Compose components carry a `testTag` from `TestTag` (no inline literals)` |
 | android-reviewer | Severity Levels | — | core `reviewer` § Severity owns the ladder |
-| android-security | Authoritative References | plugins/android-foundation/skills/android-security-masvs/SKILL.md | `## Knowledge sourcing` |
-| android-security | Security Audit Coverage | plugins/android-foundation/skills/android-security-masvs/SKILL.md | `## Security audit coverage` |
+| android-security | Authoritative References | plugins/android-foundation/skills/android-security-masvs/SKILL.md | `Read the vault notes for the project's security-sensitive areas before auditing` |
+| android-security | Security Audit Coverage | plugins/android-foundation/skills/android-security-masvs/SKILL.md | `The IV is randomly generated per encryption and stored alongside the ciphertext` |
 | android-security | Reporting Format | — | core `security-analyst` § Deliverable owns the report shape |
 | android-security | Return value (COMPACT summary) | — | core `security-analyst` owns the `ISSUES_FOUND` machine contract |
-| android-security | Commands | plugins/android-foundation/skills/android-security-masvs/SKILL.md | `## Commands` |
-| android-security | MASVS / MASTG Reference | plugins/android-foundation/skills/android-security-masvs/SKILL.md | `## MASVS / MASTG reference` |
+| android-security | Commands | plugins/android-foundation/skills/android-security-masvs/SKILL.md | `process<Flavor>ReleaseManifest` |
+| android-security | MASVS / MASTG Reference | plugins/android-foundation/skills/android-security-masvs/SKILL.md | `Insufficient Binary Protections` |
 | android-security | Non-Negotiable Rules | plugins/android-foundation/skills/android-security-masvs/SKILL.md | `use placeholders` |
-| android-tester | Authoritative References | plugins/android-foundation/skills/android-testing/SKILL.md | `## Authoritative references` |
-| android-tester | Testing Stack | plugins/android-foundation/skills/android-testing/SKILL.md | `## Testing stack` |
+| android-tester | Authoritative References | plugins/android-foundation/skills/android-testing/SKILL.md | `Gradle commands, including single-class invocation via` |
+| android-tester | Testing Stack | plugins/android-foundation/skills/android-testing/SKILL.md | `no Interactor/UseCase layer` |
 | android-tester | TDD Workflow | plugins/android-foundation/manifest.yaml | `when writing new tests from scratch` |
-| android-tester | Patterns | plugins/android-foundation/skills/android-testing/SKILL.md | `## Patterns` |
-| android-tester | What TO Test | plugins/android-foundation/skills/android-testing/SKILL.md | `## What to test` |
-| android-tester | What NOT to Test | plugins/android-foundation/skills/android-testing/SKILL.md | `## What not to test` |
-| android-tester | Commands | plugins/android-foundation/skills/android-testing/SKILL.md | `## Commands` |
-| android-tester | Quality Checklist | plugins/android-foundation/skills/android-testing/SKILL.md | `## Android test quality checklist` |
+| android-tester | Patterns | plugins/android-foundation/skills/android-testing/SKILL.md | `cancelAndIgnoreRemainingEvents()` |
+| android-tester | What TO Test | plugins/android-foundation/skills/android-testing/SKILL.md | `DTO ↔ domain ↔ entity` |
+| android-tester | What NOT to Test | plugins/android-foundation/skills/android-testing/SKILL.md | `Trivial delegations with no logic.` |
+| android-tester | Commands | plugins/android-foundation/skills/android-testing/SKILL.md | `koverHtmlReport` |
+| android-tester | Quality Checklist | plugins/android-foundation/skills/android-testing/SKILL.md | `AAA structure per test` |
 | android-tester | Non-Negotiable Rules | plugins/android-foundation/manifest.yaml | ``runTest`, never `runBlocking`` |
+
+## Review of PR-2 (2026-09-06) — what it changed
+
+Eight findings, all confirmed by re-execution before acting. Disposition:
+
+| Finding | Disposition |
+|---|---|
+| `/sdlc:aar` Step 4 told the analyst to read `blocks.expertise` / `blocks.skills`; `resolveExpertise` returns `block` / `skills_block` at top level | fixed — the whole aar substitution was inert as written, since the command exits 0 and the analyst was simply dispatched with no stack expertise |
+| `role_expertise` skill rows were never downgraded when their plugin is missing, though the CHANGELOG said they were | fixed — one shared `downgradeIfMissing` now serves both authors of a skill row. The first cut used the enumerated skill list and was **inverted** on a marketplace checkout: it downgraded all nine of the foundation's own new skills and left `frontend-design` mandatory. The preflight's per-plugin flag is the signal that answers the question actually being asked |
+| `sdlc-lint roster`'s declaration check was keyed on the literal `superpowers` | fixed — any foreign owner now needs a declaration; the `frontend-design` omission that motivated the rule had passed it green |
+| `rules/skills.md` was reachable from no role, while INDEX.md and the README claimed five | fixed — added to those five roles' `rules`, noted as CLI-only |
+| `rules/logging.md` still pointed at `testing.md`, deleted by this PR | fixed — points at the `android-testing` skill |
+| `android-docs-vault` cited an absolute path the document-writer is never handed | fixed — describes the file instead of promising a path |
+| ~a third of the coverage anchors were the destination's own `##` heading | fixed — 67 rewritten to distinctive sentences. A heading proves a heading exists; the gate is worth only what its anchors bind. (Rewriting them put a newline in one anchor and truncated the table — the bijection check caught it immediately, which is the check earning its place) |
+| stale `android-docs` / `android-qa` names in `enforcement.md`, `git-operations.md` | fixed |
 
 ## Review of PR-1 (2026-09-06) — what it changed
 

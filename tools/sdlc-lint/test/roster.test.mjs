@@ -119,6 +119,37 @@ test("expertise: unknown role, missing rule file, missing own skill, undeclared 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test("expertise: an UNDECLARED external skill is a violation whoever owns it, not just superpowers", () => {
+  // The check was keyed on the literal `superpowers`, so the one omission this rule exists to
+  // catch — `frontend-design:frontend-design`, mandated by the Android developer role and absent
+  // from runtime-dependencies.json — passed it green. The declaring plugin's own skills ship with
+  // it and need no declaration; anything else is a dependency whether or not it is superpowers.
+  const root = goodTree();
+  try {
+    write(root, "plugins/foo-foundation/manifest.yaml", [
+      "kind: foundation", "stack: foo", "priority: 300", "detect:", "  any: [{ file_exists: foo }]",
+      "role_expertise:",
+      "  developer:",
+      "    skills:",
+      "      - { skill: foo-foundation:foo-conventions }",
+      "      - { skill: superpowers:test-driven-development }",
+      "      - { skill: frontend-design:frontend-design }",
+      "",
+    ].join("\n"));
+    const errs = failures(checkRoster(root));
+    assert.ok(errs.some((e) => /expertise: .*frontend-design:frontend-design.*runtime-dependencies\.json/.test(e)), errs.join("\n"));
+    assert.ok(!errs.some((e) => /foo-foundation:foo-conventions/.test(e)), "a plugin's own skill needs no declaration");
+    assert.ok(!errs.some((e) => /superpowers:test-driven-development/.test(e)), "a declared dependency is fine");
+
+    // Declaring it clears the finding.
+    write(root, "plugins/foo-foundation/runtime-dependencies.json", JSON.stringify({ dependencies: [
+      { name: "superpowers", skills_used: ["test-driven-development"] },
+      { name: "frontend-design", skills_used: ["frontend-design"] },
+    ] }));
+    assert.deepEqual(failures(checkRoster(root)).filter((e) => /frontend-design/.test(e)), []);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test("slot: a Bash-holding agent needs its own bootstrap line; every agent needs the slot; the orchestrator needs the block", () => {
   const root = goodTree();
   try {

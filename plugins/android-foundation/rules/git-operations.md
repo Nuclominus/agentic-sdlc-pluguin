@@ -20,5 +20,5 @@ load_when: "Only when about to commit, create a branch, or open a PR."
 
 - **NEVER mention AI tools** (Claude, Copilot, Gemini, Firebander, etc.) in PR title or body
 - **NEVER include change statistics** (file count, lines added/removed)
-- **NEVER add test plan checklists** — there is no android-qa team to execute them
+- **NEVER add test plan checklists** — there is no QA team to execute them
 - Keep PR descriptions empty

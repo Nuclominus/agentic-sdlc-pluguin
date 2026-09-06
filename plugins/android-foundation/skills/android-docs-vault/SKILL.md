@@ -209,6 +209,7 @@ class FeatureViewModel @Inject constructor(
 
 Code examples must use idiomatic Kotlin (no `!!`, `val` over `var`), match the project's **detected**
 stack, and use the project's Gradle commands. They must not violate the foundation's forbidden
-patterns (`rules/snippets/non-negotiable.md`, whose absolute path the orchestrated prompt lists) or
+patterns (the foundation's `rules/snippets/non-negotiable.md` — the development phase's prompt
+carries its absolute path; ask for it rather than guessing one) or
 introduce libraries the project's conventions forbid. Use the project's actual paths, package, and
 class names, and prefer KSP over KAPT.

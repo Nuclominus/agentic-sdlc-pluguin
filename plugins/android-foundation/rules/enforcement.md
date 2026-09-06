@@ -12,7 +12,7 @@ Automated guardrails that run outside the agents themselves.
 | Hook | Script | Purpose | Behaviour |
 |------|--------|---------|-----------|
 | validate-kotlin | the foundation's `hooks/validate-kotlin.sh` (via `kotlin-guard.sh`) | Blocks `!!`, `runBlocking`, `println`, `android.util.Log.*`, `.printStackTrace()`, and inline `testTag("…")` literals in production Kotlin | **Blocking** — `kotlin-guard.sh` propagates exit 2, surfacing the violation to the agent |
-| check-docs-sync | `.claude/scripts/check-docs-sync.sh` | When production Kotlin is edited and matching `.obsidian-vault/` note is absent, **auto-creates a stub** from `.obsidian-vault/_templates/`. android-docs fills the stub before PR. | **Non-blocking** — emits `INFO` and creates the stub file |
+| check-docs-sync | `.claude/scripts/check-docs-sync.sh` | When production Kotlin is edited and matching `.obsidian-vault/` note is absent, **auto-creates a stub** from `.obsidian-vault/_templates/`. The document-writer fills the stub before the PR. | **Non-blocking** — emits `INFO` and creates the stub file |
 
 Both fire on `Write|Edit`. Test sources (`src/test/**`, `src/androidTest/**`, `*Test.kt`, `*Spec.kt`) are exempt from validate-kotlin (see `snippets/non-negotiable.md`).
 
@@ -46,7 +46,7 @@ are a violation, and none block the command.
 
 ## Documentation tooling (Node, non-blocking — NOT hooks)
 
-Unlike the blocking `validate-kotlin.sh` hook, the vault tooling runs **on demand** (android-docs
+Unlike the blocking `validate-kotlin.sh` hook, the vault tooling runs **on demand** (document-writer
 Definition-of-Done, `fill-vault`, optional CI) and never blocks a write:
 
 | Script | Purpose | Behaviour |

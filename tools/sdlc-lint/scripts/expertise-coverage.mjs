@@ -53,7 +53,7 @@ function parseTable(text) {
     const cells = line.split("|").slice(1, -1);
     if (cells.length !== 4) { errors.push(`${TRACK_NOTE}:${i + 1} has ${cells.length} columns, expected 4 (Agent | Section | Destination | Anchor)`); continue; }
     const [agent, section, destination, anchor] = cells.map(cell);
-    if (/^-{2,}$/.test(agent.replace(/[\s:]/g, "")) || /^Agent$/i.test(agent)) continue;   // header / separator
+    if (/^:?-+:?$/.test(agent.replace(/\s/g, "")) || /^Agent$/i.test(agent)) continue;   // header / separator
     if (/^_?\(PR-\d\)_?$/.test(agent) || (agent && !section && !destination)) {
       errors.push(`${TRACK_NOTE}:${i + 1} is still a placeholder row (${agent || "empty"}) — the coverage table was never filled in`);
       continue;

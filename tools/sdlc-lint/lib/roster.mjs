@@ -130,10 +130,17 @@ export function checkRoster(root = process.cwd()) {
         if (owner === plugin) {
           const skillFile = `plugins/${plugin}/skills/${skill}/SKILL.md`;
           if (!existsSync(join(root, skillFile))) errors.push(`role_expertise.${role}.skills: ${id} — ${skillFile} does not exist`);
-        } else if (owner === "superpowers") {
-          if (!declaredSkills || !declaredSkills.has(id)) {
-            errors.push(`role_expertise.${role}.skills: ${id} is mandated here but not declared in plugins/${plugin}/runtime-dependencies.json skills_used — each plugin declares what its own runtime invokes`);
-          }
+        } else if (existsSync(join(root, "plugins", owner, "manifest.yaml"))) {
+          // A sibling in this marketplace: install-time resolution is plugin.json's job, not the
+          // runtime preflight's.
+          const skillFile = `plugins/${owner}/skills/${skill}/SKILL.md`;
+          if (!existsSync(join(root, skillFile))) errors.push(`role_expertise.${role}.skills: ${id} — ${skillFile} does not exist`);
+        } else if (!declaredSkills || !declaredSkills.has(id)) {
+          // Anything else is an EXTERNAL dependency. Keyed on the owner being foreign, not on the
+          // literal `superpowers`: the one omission this rule exists to catch was
+          // `frontend-design:frontend-design`, mandated by the Android developer role and undeclared,
+          // and a superpowers-only test reported that tree clean.
+          errors.push(`role_expertise.${role}.skills: ${id} is mandated here but not declared in plugins/${plugin}/runtime-dependencies.json skills_used — each plugin declares what its own runtime invokes, and an undeclared one can never be downgraded when it is missing`);
         }
       }
     }

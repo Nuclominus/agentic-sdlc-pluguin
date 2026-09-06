@@ -41,13 +41,14 @@ costs by hand.
    node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs expertise --role aar-analyst --json
    ```
 
-   Capture `blocks.expertise` and `blocks.skills` (either may be `null` — a stack that declares no
-   `role_expertise.aar-analyst` simply contributes nothing here).
+   Capture the top-level `block` (the `Stack expertise for aar-analyst` text) and `skills_block`.
+   Either may be `null` — a stack that declares no `role_expertise.aar-analyst` contributes nothing
+   here, and the command still exits 0.
 2. Dispatch **`aar-analyst`** — always. There is no per-stack analyst any more: ADR-0021 moved every
    agent to the core, and a foundation contributes expertise instead of a substitute agent.
 3. One `Task` call, passing: `slug`, `transcript_path` (or a note that it's unavailable), the
-   `metrics_json` from Step 3, and the two blocks from step 1 verbatim (omit a block that is
-   `null`). Instruct the analyst to follow this skill's `gather.md` and return exactly the
+   `metrics_json` from Step 3, and `block` / `skills_block` from step 1 verbatim (omit either when
+   it is `null`). Instruct the analyst to follow this skill's `gather.md` and return exactly the
    `report.md` shape. The analyst is READ-ONLY.
 
 ## Step 5 — Present, persist, approve, apply

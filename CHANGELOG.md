@@ -80,8 +80,14 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
   `aar-analyst`, passing the stack's block from `expertise --role aar-analyst --json`, and the
   orchestrator carries its own crash-recovery rule (Step 3c-crash) rather than pointing at a
   foundation rules file for it. `frontend-design` is now declared in the foundation's
-  `runtime-dependencies.json` — it was mandated but undeclared, so the preflight could not downgrade
-  it when absent. New CI gate `tools/sdlc-lint/scripts/expertise-coverage.mjs` asserts that every
+  `runtime-dependencies.json` — it was mandated but undeclared — and `role_expertise` skill rows are
+  now downgraded to `recommended` when the deps preflight flags their plugin unavailable, exactly as
+  a project's own `extensions.skills` row already was. The signal is the preflight's per-plugin flag
+  and deliberately NOT the enumerated skill list that judges an extension row: the enumeration
+  describes the installed cache, so on any checkout whose cache lags the tree it would downgrade
+  every one of the foundation's own skills while leaving a genuinely-absent dependency mandatory.
+  `sdlc-lint roster` now requires a declaration for any external skill, not just `superpowers:*` —
+  the check was keyed on that literal, which is why the `frontend-design` omission passed it green. New CI gate `tools/sdlc-lint/scripts/expertise-coverage.mjs` asserts that every
   `##` section of every Android agent has a row in the track note's coverage table and that each
   row's anchor phrase is literally present in the destination — and, while the agent files are still
   on disk, that the mapping is a bijection. The agent files stay one more PR for side-by-side
