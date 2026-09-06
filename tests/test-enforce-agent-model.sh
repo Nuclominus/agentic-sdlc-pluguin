@@ -61,4 +61,29 @@ check "invalid per-agent falls through to default" "haiku" "$(enforced_tier "$(r
 p=$(mk_project '{"default":"turbo"}')
 check "invalid default falls back to frontmatter" "sonnet" "$(enforced_tier "$(run_hook "$p" sonnet)" sonnet)"
 
+# ── ADR-0021: legacy android-* names survive one release as aliases ─────────────────────────────
+
+run_hook_as() {  # $1 = project dir, $2 = subagent_type, $3 = requested model → prints hook stdout
+    printf '{"tool_name":"Agent","tool_input":{"subagent_type":"%s","model":"%s"}}' "$2" "$3" \
+        | CLAUDE_PROJECT_DIR="$1" CLAUDE_PLUGIN_ROOT="" bash "$HOOK" 2>/dev/null
+}
+
+# 8. a model.local.json still keyed by the legacy name applies to the core agent → opus
+p=$(mk_project '{"agents":{"android-developer":"opus"}}')
+check "legacy model.local.json key honored" "opus" "$(enforced_tier "$(run_hook "$p" sonnet)" sonnet)"
+
+# 9. an explicit core key beats its alias, whatever the file order → haiku
+p=$(mk_project '{"agents":{"android-developer":"opus","developer":"haiku"}}')
+check "explicit core key beats legacy alias" "haiku" "$(enforced_tier "$(run_hook "$p" sonnet)" sonnet)"
+
+# 10. dispatching a deleted legacy agent: allowed, warned, and the successor's tier enforced
+p=$(mk_project NONE)
+out=$(run_hook_as "$p" "android-foundation:android-developer" opus)
+check "legacy dispatch name resolves to the core agent's tier" "sonnet" "$(enforced_tier "$out" opus)"
+msg=$(printf '%s' "$out" | jq -r '.systemMessage // empty')
+case "$msg" in
+    *"renamed to 'developer'"*) echo "PASS: legacy dispatch name warns about the rename" ;;
+    *) echo "FAIL: legacy dispatch name warns about the rename — got '$msg'"; fails=$((fails+1)) ;;
+esac
+
 [ "$fails" -eq 0 ] && { echo "ALL PASS"; exit 0; } || { echo "$fails FAILED"; exit 1; }

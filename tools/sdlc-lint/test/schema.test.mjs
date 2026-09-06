@@ -117,6 +117,46 @@ test("manifest.schema accepts heal_checks", () => {
   }));
 });
 
+// ---- ADR-0021: role_expertise — the foundation's per-role expertise declaration ---------------
+
+const FOUNDATION = { kind: "foundation", stack: "android", priority: 300, aspects: ["android"], detect: { any: ["*"] } };
+
+test("manifest.schema accepts a role_expertise block keyed by core role, with rules as strings or {path, note}", () => {
+  const v = compile("schemas/manifest.schema.json");
+  assert.ok(v({
+    ...FOUNDATION,
+    role_expertise: {
+      developer: {
+        invariants: "Never block main.",
+        rules: ["rules/logging.md", { path: "rules/snippets/non-negotiable.md", note: "forbidden patterns" }],
+        skills: [{ skill: "superpowers:test-driven-development", when: "before the first edit" }, { skill: "acme:x", policy: "recommended" }],
+      },
+      "aar-analyst": { rules: ["rules/workflow.md"] },
+    },
+  }), JSON.stringify(v.errors));
+});
+
+test("manifest.schema rejects a role_expertise key that is not a core role", () => {
+  const v = compile("schemas/manifest.schema.json");
+  assert.equal(v({ ...FOUNDATION, role_expertise: { "android-developer": { invariants: "x" } } }), false,
+    "the legacy roster name is not a role the core dispatches");
+});
+
+test("manifest.schema caps invariants at the stable-prefix budget and refuses an empty role entry", () => {
+  const v = compile("schemas/manifest.schema.json");
+  assert.equal(v({ ...FOUNDATION, role_expertise: { developer: { invariants: "x".repeat(1401) } } }), false, "1400 chars ≈ 300 tokens per role");
+  assert.equal(v({ ...FOUNDATION, role_expertise: { developer: {} } }), false, "an entry must declare something");
+  assert.equal(v({ ...FOUNDATION, role_expertise: { developer: { skills: [{ policy: "mandatory" }] } } }), false, "a skill row needs a skill id");
+});
+
+test("manifest.schema lets a framework declare role_expertise too — the merge is additive", () => {
+  const v = compile("schemas/manifest.schema.json");
+  assert.ok(v({
+    kind: "framework", stack: "room", priority: 150, enriches_aspect: "persistence", dependency: "androidx.room",
+    role_expertise: { developer: { invariants: "Room DAOs are suspend or Flow." } },
+  }), JSON.stringify(v.errors));
+});
+
 test("checkpoint.schema accepts heal result fields", () => {
   const v = compile("schemas/checkpoint.schema.json");
   assert.ok(v({

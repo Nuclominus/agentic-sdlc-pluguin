@@ -53,7 +53,7 @@
   "properties": {
     "kind": {
       "enum": ["foundation", "framework"],
-      "description": "`foundation` = stack provider: owns platform aspect(s), declares agents_per_phase, hosts frameworks. `framework` = additive: enriches existing phases, ships no agents, points at one functional aspect via enriches_aspect."
+      "description": "`foundation` = stack provider: owns platform aspect(s), hosts frameworks, carries per-role expertise (`role_expertise`) and a default workflow. `framework` = additive: enriches existing phases, points at one functional aspect via enriches_aspect. Neither ships agents — the core plugin owns the whole roster and binds it in its own manifest's agents_per_phase (ADR-0021)."
     },
     "stack": {
       "type": "string",
@@ -123,7 +123,7 @@
     },
     "agents_per_phase": {
       "type": "object",
-      "description": "Foundation only: phase → agent name (aspect-agnostic) or phase → {aspect: agent name} (aspect-aware fan-out). Frameworks must not declare this — they enrich existing agents.",
+      "description": "CORE manifest only (plugins/sdlc/manifest.yaml): phase → agent name (aspect-agnostic) or phase → {aspect: agent name} (aspect-aware fan-out). Deprecated for foundations since ADR-0021 — honored with a WARN for one release, then ignored; foundations carry `role_expertise` instead. Frameworks must not declare it.",
       "minProperties": 1,
       "additionalProperties": {
         "oneOf": [
@@ -134,13 +134,13 @@
     },
     "on_demand_agents": {
       "type": "array",
-      "description": "Foundation only (informational): agents invoked directly, NOT by the pipeline (e.g. debugger, devops, cicd, aar).",
+      "description": "CORE manifest only: agents invoked directly, NOT by a workflow phase (debugger, devops, cicd, aar-analyst). They receive their stack expertise via `resolve/cli.mjs expertise --role`. Deprecated for foundations since ADR-0021.",
       "items": { "type": "string", "minLength": 1 },
       "uniqueItems": true
     },
     "aar_analyst": {
       "type": "string",
-      "description": "Foundation only (optional): agent name that overrides the generic `aar-analyst` for the /sdlc:aar retrospective. Absent → the neutral core's `aar-analyst` is used.",
+      "description": "DEPRECATED (ADR-0021): agent name that overrode the core `aar-analyst` for /sdlc:aar. Honored for one release; the core `aar-analyst` now receives the stack's `role_expertise.aar-analyst` instead. Will be removed from the schema.",
       "minLength": 1
     },
     "convention_skills": {
@@ -158,7 +158,7 @@
         "properties": {
           "name": { "type": "string" },
           "after": { "type": "string" },
-          "agent": { "type": "string" },
+          "agent": { "$ref": "#/$defs/coreRole", "description": "The CORE role that runs the phase — the only way a foundation adds a phase now that it binds no agents (ADR-0021)." },
           "description": { "type": "string" }
         },
         "additionalProperties": false
@@ -183,9 +183,68 @@
       "type": "array",
       "description": "Shell commands the G1 self-healing loop runs after a guarded phase (compile/lint gates ONLY — never unit tests). Merged across profiles as a de-duplicated union, PRIMARY first. Usually a subset of post_pipeline_checks. Empty for most frameworks.",
       "items": { "type": "string", "minLength": 1 }
+    },
+    "role_expertise": {
+      "type": "object",
+      "description": "ADR-0021: per-ROLE platform expertise the CORE agents consume. Keys are core agent names ($defs.coreRole). The resolver merges every active manifest's block (foundation first, frameworks alphabetically by stack), renders `invariants` + `rules` into the `Stack expertise for <role>` block the orchestrator pastes into the phase prompt's stable prefix, and `skills` into the deduped `Skills for this role` list; `resolve/cli.mjs expertise --role` prints the same for an on-demand agent. `rules` paths are relative to THIS manifest's directory and are emitted absolute (the reading agent lives in another plugin, where ${CLAUDE_PLUGIN_ROOT} would resolve wrong). Budget: `invariants` ≤ 1400 chars (~300 tokens) per role — it rides in every turn's prefix.",
+      "additionalProperties": false,
+      "propertyNames": { "$ref": "#/$defs/coreRole" },
+      "patternProperties": {
+        "^[a-z][a-z-]*$": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "invariants": {
+              "type": "string",
+              "description": "Short, always-on rules for this role on this stack. Present by construction in every dispatch — keep it to the non-negotiables; long checklists belong in a skill.",
+              "minLength": 1,
+              "maxLength": 1400
+            },
+            "rules": {
+              "type": "array",
+              "description": "Rule files the agent may `Read` (paths relative to this manifest's directory). A `note` says when to read it.",
+              "uniqueItems": true,
+              "items": {
+                "oneOf": [
+                  { "type": "string", "minLength": 1 },
+                  {
+                    "type": "object",
+                    "required": ["path"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "path": { "type": "string", "minLength": 1 },
+                      "note": { "type": "string" }
+                    }
+                  }
+                ]
+              }
+            },
+            "skills": {
+              "type": "array",
+              "description": "Skills this role must (mandatory, the default) or may (recommended) invoke — the same row shape as sdlc.local.yaml `extensions.skills`, deduped with them, strictest policy wins.",
+              "uniqueItems": true,
+              "items": {
+                "type": "object",
+                "required": ["skill"],
+                "additionalProperties": false,
+                "properties": {
+                  "skill": { "type": "string", "minLength": 3, "description": "Fully-qualified `plugin:skill` id." },
+                  "policy": { "enum": ["mandatory", "recommended"], "default": "mandatory" },
+                  "when": { "type": "string", "description": "The moment to invoke it, e.g. 'before the first Write/Edit of production Kotlin'." }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "$defs": {
+    "coreRole": {
+      "description": "The agent roster the CORE plugin ships (plugins/sdlc/agents/*.md) — the only roles a `role_expertise` block may address (ADR-0021). MIRRORS the values of plugins/sdlc/manifest.yaml `agents_per_phase` ∪ `on_demand_agents` — keep them in sync.",
+      "enum": ["business-analyst", "developer", "reviewer", "tester", "qa-engineer", "security-analyst", "document-writer", "debugger", "devops", "cicd", "aar-analyst"]
+    },
     "platformAspect": {
       "description": "PLATFORM / WINNER aspect — what a foundation owns and competes to win. MIRRORS plugins/sdlc/config/aspects.yaml `platform`.",
       "enum": ["android", "backend", "frontend", "database", "infra", "testing", "messaging"]
