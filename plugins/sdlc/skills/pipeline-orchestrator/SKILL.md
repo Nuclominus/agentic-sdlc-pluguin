@@ -133,6 +133,8 @@ that status is available to a wrapper script, but it is not the hosting session'
 | `profile.convention_skills` | `EFFECTIVE_PROFILE.convention_skills` | Step 3b-1a |
 | `profile.phase_prompts_injection` | `EFFECTIVE_PROFILE.phase_prompts_injection` | Step 3b-1 |
 | `profile.extension_skills` | `EFFECTIVE_PROFILE.extension_skills` *(**Step 1b-ext**)* | Step 3b-1a |
+| `profile.role_expertise` | `EFFECTIVE_PROFILE.role_expertise` *(**ADR-0021**)* | Step 5 telemetry (which stack expertise was in force) |
+| `profile.prompt_blocks` | `EFFECTIVE_PROFILE.prompt_blocks[agent]` *(**ADR-0021**)* | Step 3b-1 — `.expertise` and `.skills` pasted verbatim |
 | `profile.post_pipeline_checks` | `EFFECTIVE_PROFILE.post_pipeline_checks` *(**Step 1b**)* | Step 4 |
 | `profile.heal_checks` | `EFFECTIVE_PROFILE.heal_checks` | Step 3e-heal |
 | `profile.phase_command_overrides` | `EFFECTIVE_PROFILE.phase_command_overrides` | Step 3b-1 |
@@ -414,11 +416,13 @@ The prompt MUST be assembled in this exact order so the stable prefix (everythin
 
 {phase_prompts_injection[phase] from active profiles, concatenated}
 
+{role_expertise_block — the "Stack expertise for <role> (<stack>):" block, EFFECTIVE_PROFILE.prompt_blocks[agent].expertise pasted VERBATIM; OMITTED ENTIRELY when null — see 3b-1a}
+
 {sdlc_lessons_block — see 3b-1b; OMITTED ENTIRELY when .claude/sdlc-lessons.md is absent or empty}
 
 Convention skills to consider invoking: {convention_skills (sorted, deterministic)}
 
-{project_extension_skills_block — see 3b-1a; OMITTED ENTIRELY when no rule targets this agent}
+{skills_block — the "Skills for this role (…):" list, EFFECTIVE_PROFILE.prompt_blocks[agent].skills pasted VERBATIM; OMITTED ENTIRELY when null — see 3b-1a}
 
 Output language contract:
 - code, identifiers, branch names, commit messages, PR titles: always English
@@ -468,39 +472,46 @@ aspect_constraint: |
      breaks prompt-cache stability and fails the lint. Reword freely; do not relocate
      or delete. Track E2. -->
 
+<!-- DRIFT GUARD: the `role_expertise_block` placeholder above must keep the literal words
+     "Stack expertise for" INSIDE the stable prefix — tools/sdlc-lint/lib/roster.mjs (verb: roster,
+     part of `all`) asserts it. That is the header plugins/sdlc/tools/resolve/profile.mjs
+     renderRoleExpertiseBlock emits; an orchestrator that stops pasting it silently strips every
+     core agent of its platform expertise (ADR-0021). -->
+
 The two `===` delimiters are part of the prompt — agents are instructed (via their `.md` body) to read CONTEXT keys from this trailer.
 
-**3b-1a. Build the `project_extension_skills_block`** (Project Extension Manifest injection).
+**3b-1a. Paste the two pre-rendered blocks** (`role_expertise_block` and `skills_block`, ADR-0021).
 
-Select rows from `EFFECTIVE_PROFILE.extension_skills` (built in 1b-ext) that target the agent being
-spawned: a row matches when its `agents` list contains the agent's name OR equals the string `"all"`.
-
-**Dedupe by skill.** Multiple matching rows can name the same `skill` (e.g. an explicit
-`agents: [android-developer]` row plus an `agents: "all"` row). Collapse them to ONE entry per `skill`
-id — keep the **strictest policy** (`mandatory` > `recommended`) and the `when` hint from the row that
-supplied that strictest policy (if several mandatory rows collide, the alphabetically-first `when`
-wins, to stay deterministic). This guarantees one line per skill with no policy contradiction.
-
-- If **no row matches** → the block is the empty string and is OMITTED entirely (no blank header), so
-  the stable prefix stays byte-identical for phases/agents that have no extensions.
-- After dedupe, render the entries deterministically — **mandatory first, then recommended; within each
-  group sorted alphabetically by `skill`** (so the block is stable across runs and cache-friendly):
+Both blocks are **rendered by the resolve command**, not by you. `EFFECTIVE_PROFILE.prompt_blocks`
+carries one entry per agent the core manifest binds (phase agents and on-demand agents alike):
 
 ```
-Project extension skills (from this project's .claude/sdlc.local.yaml `extensions.skills`):
-- MANDATORY — invoke `{skill}`{IF when: " — " + when}. Do not skip; this project requires it.
-- RECOMMENDED — consider invoking `{skill}`{IF when: " — " + when}.
+prompt_blocks[agent] = { expertise: <string | null>, skills: <string | null> }
 ```
 
-This block lives in the **stable prefix** (not the per-call trailer): for a given (phase, aspect) the
-agent is deterministic, so its matched rows are identical across runs. It is invalidated only by
-legitimate, infrequent changes — editing `sdlc.local.yaml`, or installing/uninstalling a referenced
-extension skill's plugin (which flips the 1b-ext availability downgrade). Do NOT splice any per-call
-value (task_slug, timestamps) into this block.
+- `expertise` — the `Stack expertise for <role> (<stack>):` block: the active foundation's (and
+  frameworks') `role_expertise.<role>.invariants`, then the rule files as ABSOLUTE paths the agent
+  may `Read`. Rendered by `profile.mjs renderRoleExpertiseBlock`.
+- `skills` — the `Skills for this role (…)` list: `role_expertise.<role>.skills` merged with the
+  project's `sdlc.local.yaml` `extensions.skills` rows that target this agent (`agents` contains its
+  name, or is `"all"`), **deduped by skill id with the strictest policy winning, mandatory first,
+  alphabetical within each group**. Rendered by `profile.mjs renderSkillsBlock`.
 
-Note: this injection covers the **pipeline phase agents** the orchestrator dispatches. ON-DEMAND
-agents that bypass the orchestrator (e.g. debugger / devops / cicd / aar) self-read their matching
-`extensions.skills` rows at use-time — see the platform plugin's `rules/skills.md`.
+Paste each string **verbatim** at its placeholder in 3b-1. When a value is `null`, omit the
+placeholder entirely — no blank header — so the stable prefix stays byte-identical for agents the
+stack says nothing about. Never edit, reorder or re-derive either block: the dedupe and ordering
+rules live in `profile.mjs` and its tests, and a hand-rendered copy is the drift this step removes.
+
+Both blocks live in the **stable prefix** (not the per-call trailer): for a given (phase, aspect)
+the agent is deterministic, so its blocks are identical across runs. They are invalidated only by
+legitimate, infrequent changes — editing a manifest's `role_expertise`, editing `sdlc.local.yaml`,
+or installing/uninstalling a referenced skill's plugin. Do NOT splice any per-call value
+(task_slug, timestamps) into either block.
+
+Note: this covers the **pipeline phase agents** the orchestrator dispatches. ON-DEMAND agents that
+run outside the orchestrator (debugger / devops / cicd / aar-analyst) obtain the SAME two blocks by
+running one command themselves — `node {SDLC_PLUGIN_ROOT}/tools/resolve/cli.mjs expertise --role <name>` —
+as their `.md` body instructs. There is no self-read of `rules/skills.md` or `sdlc.local.yaml` any more.
 
 **3b-1b. Build the `sdlc_lessons_block`** (AAR lessons injection).
 
@@ -532,12 +543,12 @@ phase.
 
 Examples:
 - Aspect-agnostic: `▶ Phase 1/6: business_analysis → business-analyst (opus)`
-- Aspect-aware: `▶ Phase 2/6: development — android → android-developer (sonnet)`
-- Single-stack (Android Foundation): `▶ Phase 2/6: development → android-developer (sonnet)`
+- Aspect-aware: `▶ Phase 2/6: development — android → developer (sonnet)`
+- Flat core phase on any stack: `▶ Phase 3/7: review → reviewer (sonnet)`
 
 This is a contract with the user. Do not skip.
 
-**3b-3. Resolve model (project override → frontmatter)** — before spawning, resolve `{model_tier}` by precedence (first hit wins): `CONTEXT.model_overrides.agents[<bare>]` where `<bare>` is the agent name after the last `:` (e.g. `android-foundation:android-developer` → `android-developer`) → `CONTEXT.model_overrides.default` → the `model:` YAML field from the agent's `.md` file (`plugins/**/agents/{agent_name}.md`) → `sonnet`. An override value that is not a valid tier (`opus|sonnet|haiku|fable`) is skipped with an inline warning and resolution falls through to the next source. The `enforce-agent-model.sh` hook applies this SAME override, so the resolved tier is not reverted at dispatch. This resolved tier (the SHORT name: `opus` / `sonnet` / `haiku` / `fable`) is what you print in 3b-2 AND pass verbatim to `Agent()` in 3c. The `Agent` tool's `model` parameter accepts the short tier ONLY — passing a full model ID raises `InputValidationError`. The tier→model-ID mapping is resolved from the model registry (`plugins/sdlc/config/models.json`) and is used ONLY for telemetry/cost accounting in 3d-1, never for dispatch. If the file is missing or the field is absent, warn inline and fall back to `sonnet`.
+**3b-3. Resolve model (project override → frontmatter)** — before spawning, resolve `{model_tier}` by precedence (first hit wins): `CONTEXT.model_overrides.agents[<bare>]` where `<bare>` is the agent name after the last `:` (e.g. `sdlc:developer` → `developer`; the resolve command has already mapped any legacy `android-*` key in `model.local.json` to its core successor, ADR-0021) → `CONTEXT.model_overrides.default` → the `model:` YAML field from the agent's `.md` file (`{SDLC_PLUGIN_ROOT}/agents/{agent_name}.md` — every dispatched agent ships in the core) → `sonnet`. An override value that is not a valid tier (`opus|sonnet|haiku|fable`) is skipped with an inline warning and resolution falls through to the next source. The `enforce-agent-model.sh` hook applies this SAME override, so the resolved tier is not reverted at dispatch. This resolved tier (the SHORT name: `opus` / `sonnet` / `haiku` / `fable`) is what you print in 3b-2 AND pass verbatim to `Agent()` in 3c. The `Agent` tool's `model` parameter accepts the short tier ONLY — passing a full model ID raises `InputValidationError`. The tier→model-ID mapping is resolved from the model registry (`plugins/sdlc/config/models.json`) and is used ONLY for telemetry/cost accounting in 3d-1, never for dispatch. If the file is missing or the field is absent, warn inline and fall back to `sonnet`.
 
 **3b-special. Development phase two-pass execution**
 
@@ -1452,7 +1463,8 @@ Rules:
 
 ## Base prompts per phase
 
-These are the canonical prompts. Stack profiles inject additional text via `phase_prompts_injection`.
+These are the canonical prompts. Stack profiles add to them in two ways (3b-1): a foundation's
+per-role `Stack expertise for <role>` block (ADR-0021), and any profile's `phase_prompts_injection`.
 
 ### business_analysis
 
@@ -1593,9 +1605,10 @@ Read the actual changed files via the file system.
 
 Security-guidance plugin active this session: {CONTEXT.security_guidance_available ?? false}
 
-Apply the platform security standard injected by the active stack profile
-(phase_prompts_injection) as AUTHORITATIVE — e.g. MASVS/MASTG for mobile. If none was
-injected, use this platform-neutral baseline:
+Apply the platform security standard the active stack profile supplies — the
+`Stack expertise for security-analyst` block above and/or a phase_prompts_injection — as
+AUTHORITATIVE — e.g. MASVS/MASTG for mobile, whose full audit is the mandatory skill that
+block names. If none was supplied, use this platform-neutral baseline:
 - Secrets & credentials (hardcoded keys/tokens/passwords; secrets committed or logged)
 - Authentication & session integrity (weak auth, missing MFA on sensitive ops, session leakage)
 - Injection & input validation (untrusted input into any interpreter/query; unsafe deserialization)
@@ -1711,7 +1724,7 @@ Hard rules:
 
 - The stable prefix MUST contain ZERO references to `task_slug`, ISO timestamps, run UUIDs, or any per-call value. All such values live in the trailer.
 - The stable prefix's `convention_skills` list MUST be sorted deterministically — never insertion-ordered.
-- The `project_extension_skills_block` (3b-1a) MUST be deduped by skill (strictest policy wins), ordered deterministically (mandatory-first, then alphabetical by skill), and OMITTED entirely when no row targets the agent — never emit an empty header. It is invalidated only by edits to `sdlc.local.yaml` or install/uninstall of a referenced skill's plugin, which is acceptable.
+- The `role_expertise_block` and `skills_block` (3b-1a) are pasted VERBATIM from `EFFECTIVE_PROFILE.prompt_blocks[agent]` — never hand-rendered — and OMITTED entirely when `null`; never emit an empty header. They are invalidated only by edits to a manifest's `role_expertise`, to `sdlc.local.yaml`, or by install/uninstall of a referenced skill's plugin, which is acceptable.
 - The `sdlc_lessons_block` (3b-1b) is the VERBATIM contents of
   `.claude/sdlc-lessons.md`, read ONCE at session start, byte-identical across
   all phases, and OMITTED entirely (no header) when the file is absent or

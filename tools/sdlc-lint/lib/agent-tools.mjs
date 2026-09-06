@@ -36,11 +36,14 @@ export const DISPATCH_TOOLS = ["Agent", "Task", "SendMessage", "Workflow"];
  */
 export const READ_ONLY_AGENTS = [
   "aar-analyst",
+  "debugger",
+  "reviewer",
+  "security-analyst",
+  // Legacy android-foundation roster — kept until PR-3 of ADR-0021 deletes the files.
   "android-aar",
   "android-debugger",
   "android-reviewer",
   "android-security",
-  "security-analyst",
 ];
 
 /** Parse `---`-delimited frontmatter. Returns null when the file has none. */

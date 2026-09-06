@@ -1,5 +1,11 @@
-# Vanilla — SDLC manifest (kind: foundation). The always-matching fallback profile.
-# Loses to any foundation with higher priority. Claims all aspects when no other foundation matches.
+# Core — SDLC manifest (kind: foundation). The always-matching fallback profile AND the
+# canonical phase → agent map (ADR-0021: agents live in the core; foundations carry expertise).
+#
+# Loses detection to any foundation with a higher priority, but the roster below is what EVERY
+# stack dispatches: a winning foundation supplies `role_expertise`, `workflow`, `convention_skills`,
+# `heal_checks` and `post_pipeline_checks` — never agents. `mergeProfiles` falls back to this map
+# per phase, and `development` fans out over the winning foundation's aspects
+# (`development — android → developer`).
 
 kind: foundation
 stack: vanilla
@@ -8,18 +14,31 @@ priority: 0
 detect:
   any: ["*"]                       # always matches
 
+# The roster. Keys are the phase palette every recipe draws from (plus any foundation's
+# `extra_phases[].name`); values are files under plugins/sdlc/agents/. `sdlc-lint roster` holds
+# both ends of that contract.
 agents_per_phase:
-  business_analysis: business-analyst
-  development: developer
-  qa: qa-engineer
-  security: security-analyst
-  remediation: developer          # gated: only dispatched when security reports Critical/High
-  documentation: document-writer
+  business_analysis: business-analyst   # opus/high — stories, AC, data-model sketch, edge cases
+  development: developer                # sonnet/medium — implementer; two-pass (plan → implement)
+  review: reviewer                      # sonnet/medium — READ-ONLY; the ⇄ development loop is recipe control flow
+  security: security-analyst            # opus/high — READ-ONLY; the stack's standard is authoritative
+  remediation: developer                # gated — dispatched ONLY when security reports Critical/High
+  test: tester                          # sonnet/medium — unit / integration, 3-attempt cap
+  qa: qa-engineer                       # sonnet/medium — verification; E2E/UI when a `test` phase precedes it
+  debugging: debugger                   # sonnet/high — READ-ONLY root cause; also on-demand
+  documentation: document-writer        # haiku/low — the PR
 
-# aar_analyst: (unset) → the neutral core's `aar-analyst` runs /sdlc:aar retrospectives.
+# Invoked directly, NOT by a workflow phase. They obtain the active stack's expertise with one
+# command: `node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs expertise --role <name>`.
+on_demand_agents:
+  - debugger      # root-cause analysis (also the `debugging` phase)
+  - devops        # build configuration, signing, release, distribution
+  - cicd          # CI pipelines
+  - aar-analyst   # read-only After Action Review of a run (/sdlc:aar)
+
 # session-recorder: dispatched by the orchestrator as the built-in run closer (Step 6) — it appends
 #   a short entry to docs/plans/_journal.md. Not a workflow phase and not on-demand, so it takes no
-#   agents_per_phase binding; the core `session-recorder` agent runs on every stack.
+#   binding here; it runs on every stack.
 
 convention_skills: []
 extra_phases: []
