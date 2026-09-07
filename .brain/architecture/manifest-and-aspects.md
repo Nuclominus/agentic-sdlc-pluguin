@@ -30,7 +30,7 @@ Agentic-SDLC-Plugin/
 │   │
 │   ├── android-foundation/       ← STACK PROVIDER — aspect android, priority 300 (the centerpiece)
 │   │   ├── manifest.yaml         ← kind: foundation
-│   │   ├── agents/               ← 11 specialized agents (android-ba, android-developer, …)
+│   │   ├── skills/               ← 13 skills: the platform expertise the CORE roles invoke
 │   │   ├── skills/               ← android-architecture, android-compose-ui, android-data, android-navigation, manage-vault
 │   │   ├── rules/                ← conventions + snippets (non-negotiable, proguard-keep, gradle-commands)
 │   │   ├── workflows/            ← android-feature, android-bugfix
@@ -85,8 +85,10 @@ framework_detection:             # WHERE to look for a framework's coordinate �
   - "**/build.gradle.kts"
   - "**/build.gradle"
 ```
-Wins the `android` aspect (platform/winner axis), declares the agents-per-phase roster, the convention
-skills, the `development` / `qa` / `security` phase injections (Compose-first, JVM-only tests, MASVS/MASTG),
+Wins the `android` aspect (platform/winner axis) and declares the per-role expertise
+(`role_expertise` — invariants, rule paths and mandatory skills per CORE role; ADR-0021 moved both the
+roster and its `agents_per_phase` binding to `plugins/sdlc/manifest.yaml`, and the Android
+`phase_injections` became `role_expertise.<role>.invariants` in the same move), the convention skills,
 and — via `hosts_aspects` + `framework_detection` — owns discovery of its frameworks (Retrofit→`network`,
 Room→`persistence`, Dagger→`di`). The stack id stays `android` (config stability); only the plugin name is
 `android-foundation`.
@@ -170,5 +172,5 @@ single Maven coordinate.
 |---|---|---|
 | **Builds can't run in-pipeline** | `assembleDebug` needs the full SDK | Verification = detekt + JVM unit tests + Kotlin compile-check; real builds in CI. |
 | **Instrumented tests are CI-only** | `connectedAndroidTest` needs an emulator/device | Unit tests (JVM) in-pipeline; Compose UI Test / Maestro in CI. |
-| **Security model is mobile** | MASVS/MASTG, not OWASP web | `android-security` runs a full MASVS/MASTG audit; framework providers add MASVS-NETWORK (e.g. retrofit TLS/pinning). |
+| **Security model is mobile** | MASVS/MASTG, not OWASP web | The core `security-analyst` runs a full MASVS/MASTG audit under the foundation's `role_expertise` block + `android-security-masvs` skill; framework providers add MASVS-NETWORK (e.g. retrofit TLS/pinning). |
 | **Library guidance is detected, not imposed** | projects swap Retrofit/Room/Hilt | Detect-don't-impose libraries live in framework plugins; pinned house rules (Coil, Kermit, KSP, …) stay in the foundation. |

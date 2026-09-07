@@ -36,10 +36,8 @@ export const DISPATCH_TOOLS = ["Agent", "Task", "SendMessage", "Workflow"];
  */
 export const READ_ONLY_AGENTS = [
   "aar-analyst",
-  "android-aar",
-  "android-debugger",
-  "android-reviewer",
-  "android-security",
+  "debugger",
+  "reviewer",
   "security-analyst",
 ];
 

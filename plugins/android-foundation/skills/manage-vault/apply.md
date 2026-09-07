@@ -19,7 +19,7 @@ content  = template
          .replace("{{date}}",  <DATE>)
          .replace(
             "<!-- STUB: created by check-docs-sync.sh on <DATE>. ... -->",
-            "<!-- STUB: created by manage-vault on <DATE>. android-docs must fill all sections before PR. -->"
+            "<!-- STUB: created by manage-vault on <DATE>. document-writer must fill all sections before PR. -->"
          )
 Write content → target path
 ```
@@ -31,7 +31,7 @@ Targets: `modules/<slug>.md` (`module`), `screens/<Name>.md` (`screen`),
 rule below. Never overwrite via the create path.
 
 The stub inherits the template's typed-edge frontmatter (`depends_on`/`screens`/`flows`/`adrs`/`related`,
-all empty). Leave them empty — `android-docs` owns edge values.
+all empty). Leave them empty — `document-writer` owns edge values.
 
 ## 2. Refresh existing stubs (`to_refresh_stubs`) — STUB-aware
 
@@ -70,7 +70,7 @@ updated: <DATE>
 # Navigation Routes
 
 Registry of every `@Serializable` route used by `NavHost` / `composable<…>`. Maintained jointly by
-`manage-vault` (auto-discovery) and `android-docs` (PR-time updates).
+`manage-vault` (auto-discovery) and `document-writer` (PR-time updates).
 
 ## Index
 
@@ -85,7 +85,7 @@ row = | <RouteClass> | <fqcn> | [[screens/<Name>]] | <file:line> |
 ```
 
 `<Name>` = the correlated `@Composable` screen (same module + name root); blank if unknown
-(`android-docs` fills it). Append rows; preserve existing; dedupe by the `RouteClass` cell. Update
+(`document-writer` fills it). Append rows; preserve existing; dedupe by the `RouteClass` cell. Update
 `updated:` only when rows changed. A row with a filled (non-stub) screen note is never rewritten.
 
 ## 5. Migrate edges + regenerate graph (Node — phase 4.5)

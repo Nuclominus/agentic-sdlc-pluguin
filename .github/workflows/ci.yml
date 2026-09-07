@@ -18,6 +18,11 @@ jobs:
         run: node tools/sdlc-lint/cli.mjs all --json
       - name: sdlc-lint unit tests
         run: npm test --prefix tools/sdlc-lint
+      # ADR-0021 moved the Android expertise out of eleven agent bodies. A paragraph that fails
+      # to land in its destination raises no error — it just stops existing — so the track note
+      # carries a row per agent section and this asserts each row's anchor is really there.
+      - name: expertise coverage (ADR-0021)
+        run: node tools/sdlc-lint/scripts/expertise-coverage.mjs
       # The vault is the repo's SSOT (.claude/rules/second-brain.md), so its structure,
       # links and index completeness are a build concern. Without this the check only ran
       # when someone remembered to — which is how two ADRs shipped unlisted.

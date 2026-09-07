@@ -4,7 +4,15 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
-`sdlc` `1.16.0` → `1.17.0`, `android-foundation` `1.7.0` → `1.8.0`.
+`sdlc` `1.16.0` → `2.0.0`, `android-foundation` `1.7.0` → `2.0.0`, marketplace `1.13.0` → `1.14.0`.
+
+**Why both plugins go major.** ADR-0021 removes a documented extension point: a foundation manifest
+could bind `agents_per_phase` / `on_demand_agents` / `aar_analyst`, and now the schema rejects those
+keys and the resolver ignores them. That breaks any third-party stack provider written against the
+old contract, so the core carries the major too — not only the Android plugin whose roster moved.
+A project that merely *uses* the marketplace sees no breakage beyond the agent names in its own
+`.claude/sdlc.local.yaml` and `.claude/model.local.json`, which `/sdlc:doctor` migrates with your
+approval.
 
 ### Changed
 
@@ -44,6 +52,87 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ### Added
 
+- **Agents live in the core; foundations carry expertise — PR-1 of 3 (ADR-0021, `sdlc` 2.0.0).**
+  The core now ships the whole roster: `reviewer`, `tester` (3-attempt cap), `debugger`
+  (read-only), `devops` and `cicd` join the existing seven, and `plugins/sdlc/manifest.yaml` binds
+  every phase (`review`, `test`, `debugging` included) plus the on-demand agents. Every role agent
+  carries the same **Stack expertise slot**: orchestrated, it receives a `Stack expertise for
+  <role>` block and a `Skills for this role` list in its stable prefix; on demand, it runs exactly
+  one command — `node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs expertise --role <name>` — and
+  receives the same two blocks. A foundation declares that expertise in a new manifest block,
+  `role_expertise` (per core role: `invariants` ≤ 1400 chars, `rules` paths emitted absolute,
+  `skills` rows with a mandatory/recommended policy); the resolve command merges it (foundation
+  first, frameworks alphabetically), renders `plan.profile.prompt_blocks[agent]`, and the
+  orchestrator pastes the blocks verbatim (3b-1) instead of hand-rendering the extension list
+  (3b-1a). `sdlc-lint roster` (part of `all`) holds the four seams: every bound role ships a core
+  `.md`, every recipe phase is bound, every `role_expertise` key/rule/skill resolves (a
+  `superpowers:*` skill must be declared by the plugin that mandates it), and every agent carries
+  its bootstrap line.
+  Design: `docs/superpowers/specs/2026-09-05-agents-in-core-design.md`;
+  track: `.brain/planning/i1-agents-in-core.md`.
+- **Android runs now dispatch the core roster — PR-2 of 3 (ADR-0021, `android-foundation`).** An
+  Android pipeline prints `development → developer`, not `development → android-developer`: the
+  foundation no longer declares `agents_per_phase`, `on_demand_agents`, `aar_analyst` or
+  `phase_injections`, and `plugins/sdlc/manifest.yaml` is the only manifest that binds a phase to an
+  agent. What the foundation contributes instead is `role_expertise` for all eleven core roles —
+  invariants that ride in the stable prefix, rule paths the resolver emits absolute, and the
+  mandatory/recommended skill rows that used to live in a `rules/skills.md` matrix.
+  **Nine skills** carry what the agent bodies carried: `android-requirements`, `android-review`,
+  `android-security-masvs`, `android-testing`, `android-e2e`, `android-docs-vault`,
+  `android-debugging`, `android-build-release`, `android-ci`. The Architecture Detection grep moved
+  into `android-architecture`; `rules/testing.md` folded into `android-testing`; `rules/skills.md`
+  keeps only the optional `android` CLI capability bindings; `rules/workflow.md` shrank to what
+  Android actually adds per step; `rules/documentation.md` gained a per-role vault reading map; and
+  no rules file names the plugin-root variable any more, because the agent that reads them now lives
+  in `sdlc`, where it would resolve to the wrong plugin. `/sdlc:aar` always dispatches the core
+  `aar-analyst`, passing the stack's block from `expertise --role aar-analyst --json`, and the
+  orchestrator carries its own crash-recovery rule (Step 3c-crash) rather than pointing at a
+  foundation rules file for it. `frontend-design` is now declared in the foundation's
+  `runtime-dependencies.json` — it was mandated but undeclared — and `role_expertise` skill rows are
+  now downgraded to `recommended` when the deps preflight flags their plugin unavailable, exactly as
+  a project's own `extensions.skills` row already was. The signal is the preflight's per-plugin flag
+  and deliberately NOT the enumerated skill list that judges an extension row: the enumeration
+  describes the installed cache, so on any checkout whose cache lags the tree it would downgrade
+  every one of the foundation's own skills while leaving a genuinely-absent dependency mandatory.
+  `sdlc-lint roster` now requires a declaration for any external skill, not just `superpowers:*` —
+  the check was keyed on that literal, which is why the `frontend-design` omission passed it green. New CI gate `tools/sdlc-lint/scripts/expertise-coverage.mjs` asserts that every
+  `##` section of every Android agent has a row in the track note's coverage table and that each
+  row's anchor phrase is literally present in the destination — and, while the agent files are still
+  on disk, that the mapping is a bijection. The agent files stay one more PR for side-by-side
+  review; PR-3 deletes them.
+- **`plugins/android-foundation/agents/` is gone — PR-3 of 3 (ADR-0021, `android-foundation` 2.0.0).**
+  **Breaking for plugin authors:** `agents_per_phase`, `on_demand_agents` and `aar_analyst` are now
+  rejected by `schemas/manifest.schema.json` on any foundation but the core's own `stack: vanilla`
+  profile, and `mergeProfiles` **ignores** a roster that reaches it anyway (PR-1 honored it with a
+  deprecation warning) — the phase falls back to the core binding and the run prints one WARN naming
+  `role_expertise` as the replacement. Honoring it would dispatch a roster that no longer ships, and
+  the failure would land at dispatch rather than at resolve. Nothing changes for a project that just
+  *uses* the marketplace beyond the agent names in its own config, which `/sdlc:doctor` migrates.
+  `sdlc-lint roster` gains the two checks that make the split irreversible: **home** — no `agents/`
+  outside `plugins/sdlc`; and **stragglers** — no retired `android-<role>` name and no plugin-root
+  variable inside a foundation's `rules/**` anywhere under `plugins/`, exempting only
+  `config/agent-migrations.json` and the doctor command that applies it. The sweep those checks
+  forced touched 24 files (framework ProGuard snippets, convention skills, `manage-vault`, the vault
+  template, both bug-fix recipes). `create-pluguin` now asks a new foundation for `role_expertise`
+  instead of a roster and scaffolds no `agents/`; CONTRIBUTING, the root README, `workflow-config`
+  (the phase palette is the CORE manifest's keys plus the profile's `extra_phases`), `extension` and
+  `model-config` follow. ADR-0021 is `accepted`.
+- **`/sdlc:doctor` migrates a project's config across an agent rename — and there are no runtime
+  aliases.** An agent name is used exactly as written: the key in `.claude/model.local.json`, the
+  name dispatched, the `role_expertise` key and the file on disk are one string. A first cut of this
+  release kept the retired `android-*` names alive by rewriting them in the resolver, the tier
+  lookup and the model-enforcement hook; review found six defects in that layer, every one a
+  disagreement between two copies of the same map about which spelling a given step was keyed on.
+  The layer is gone. Instead, every run now REPORTS a config entry that names an agent the
+  marketplace does not ship (`extensions.skills[].agents`, `model.local.json` `agents{}`), and
+  `/sdlc:doctor` fixes them: it reads the versioned rename data in
+  `plugins/sdlc/config/agent-migrations.json`, lists each `from → to`, and rewrites only those name
+  tokens **after you approve** (`tools/migrate/cli.mjs check|apply` — YAML by targeted replacement
+  so comments and formatting survive, JSON by re-serialisation). This is the first time doctor
+  writes anything; diagnosis stays read-only, the write is bounded to those two files and is never
+  performed non-interactively or under `--json`. An un-migrated project degrades rather than
+  misbehaves: the extension row injects nothing, the model key leaves the frontmatter tier in force,
+  and both are named on every run.
 - **A publish-time gate for the logging rule.** `hooks/git-guard.sh` (`PreToolUse(Bash)`) blocks
   `git commit`, `git push` and `gh pr create` when the code being published violates
   `rules/logging.md`, and `hooks/validate-logging.sh` is the per-file checker behind it. This closes

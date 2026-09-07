@@ -43,8 +43,8 @@ and per-agent model tiers, the orchestrator prints a plan block and exits cleanl
 🔎 DRY RUN — no agents dispatched, no code written.
 Stack: android | Workflow: android-feature
 Phases (7):
-   1. business_analysis  → android-ba (opus)          ~$0.94
-   2. development         → android-developer (sonnet) ~$1.84
+   1. business_analysis  → business-analyst (opus)          ~$0.94
+   2. development         → developer (sonnet) ~$1.84
    ...
 Estimated cost: ~$4.29  (worst-case $7.71)
 Cap: 16.50  → WITHIN

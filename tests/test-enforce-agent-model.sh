@@ -61,4 +61,32 @@ check "invalid per-agent falls through to default" "haiku" "$(enforced_tier "$(r
 p=$(mk_project '{"default":"turbo"}')
 check "invalid default falls back to frontmatter" "sonnet" "$(enforced_tier "$(run_hook "$p" sonnet)" sonnet)"
 
+# ── ADR-0021: the roster was renamed and ships NO aliases ───────────────────────────────────────
+
+run_hook_as() {  # $1 = project dir, $2 = subagent_type, $3 = requested model → prints hook stdout
+    printf '{"tool_name":"Agent","tool_input":{"subagent_type":"%s","model":"%s"}}' "$2" "$3" \
+        | CLAUDE_PROJECT_DIR="$1" CLAUDE_PLUGIN_ROOT="" bash "$HOOK" 2>/dev/null
+}
+
+# 8. a model.local.json still keyed by a removed name is NOT translated — frontmatter stands.
+#    (The resolver reports the stale key and /sdlc:doctor migrates it; the hook never guesses.)
+p=$(mk_project '{"agents":{"android-developer":"opus"}}')
+check "a stale agent key is not translated" "sonnet" "$(enforced_tier "$(run_hook "$p" sonnet)" sonnet)"
+
+# 9. dispatching an agent that ships no .md falls open, with the non-SDLC notice
+p=$(mk_project NONE)
+out=$(run_hook_as "$p" "android-foundation:android-developer" opus)
+check "an unknown dispatch name falls open" "opus" "$(enforced_tier "$out" opus)"
+msg=$(printf '%s' "$out" | jq -r '.systemMessage // empty')
+case "$msg" in
+    *".md not found"*) echo "PASS: an unknown dispatch name says why it was skipped" ;;
+    *) echo "FAIL: an unknown dispatch name says why it was skipped — got '$msg'"; fails=$((fails+1)) ;;
+esac
+
+# 10. the direct CLAUDE_PLUGIN_ROOT probe resolves a core agent without walking the plugin cache
+p=$(mk_project NONE)
+out=$(printf '{"tool_name":"Agent","tool_input":{"subagent_type":"sdlc:developer","model":"opus"}}' \
+    | CLAUDE_PROJECT_DIR="$p" CLAUDE_PLUGIN_ROOT="$p/plugins/sdlc" bash "$HOOK" 2>/dev/null)
+check "the plugin-root probe finds a core agent" "sonnet" "$(enforced_tier "$out" opus)"
+
 [ "$fails" -eq 0 ] && { echo "ALL PASS"; exit 0; } || { echo "$fails FAILED"; exit 1; }

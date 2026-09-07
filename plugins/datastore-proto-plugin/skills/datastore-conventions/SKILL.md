@@ -114,7 +114,7 @@ val Context.settingsStore: DataStore<Settings> by dataStore(
   `Dispatchers.IO` or `withContext`.
 - The backing file is **plaintext on disk** (MASVS-STORAGE): never persist secrets, tokens, or PII
   unencrypted. Encrypt sensitive fields Keystore-backed, or keep them in secure storage entirely and
-  persist only non-sensitive state here — defer the encryption strategy to the `android-security` agent.
+  persist only non-sensitive state here — defer the encryption strategy to the `security-analyst` agent.
 
 ## Anti-patterns
 
@@ -128,4 +128,4 @@ val Context.settingsStore: DataStore<Settings> by dataStore(
 
 - [[android-data]] — data-layer principles (authoritative for layering; not restated here).
 - `datastore-proto-plugin/rules/snippets/datastore-proguard.md` — R8/ProGuard keep rules.
-- `android-security` agent — at-rest encryption and plaintext-storage review (MASVS-STORAGE).
+- `security-analyst` agent — at-rest encryption and plaintext-storage review (MASVS-STORAGE).

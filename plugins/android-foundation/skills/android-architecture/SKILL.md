@@ -7,8 +7,23 @@ description: App architecture & module conventions — layering, :feature modula
 
 House-style conventions for app architecture and module structure. These are **principles, not a
 library mandate** — concrete libraries (DI framework, state pattern) are chosen by the project, not
-by this skill. Run the **Architecture Detection** grep in
-`${CLAUDE_PLUGIN_ROOT}/rules/skills.md` first and follow what the codebase already does.
+by this skill. Run the **Architecture Detection** grep below first and follow what the codebase
+already does.
+
+## Architecture Detection
+
+Detect the project's existing state-management pattern before any state-management implementation,
+then follow it — never impose a pattern the project does not use.
+
+```bash
+grep -rhoE "MVVM|MVI|MVP|Redux|Clean|StateFlow|MutableStateFlow|sealed (interface|class) \w+(State|Intent|Action|Event)" \
+  $(find . -name "*.kt" -path "*/src/*" 2>/dev/null) 2>/dev/null | sort | uniq -c | sort -rn | head -20
+```
+
+| Result | Decision |
+|--------|----------|
+| Existing pattern found | Identify it (MVVM/MVI/MVP/Redux/Clean) from the code and follow it consistently |
+| No clear pattern | Default to the project's idiomatic `ViewModel` + `StateFlow`. Do NOT impose an unused pattern. |
 
 ## Principles
 
@@ -54,6 +69,5 @@ classes, and no imposing a state-management pattern or DI framework the project 
 
 ## References
 
-- `${CLAUDE_PLUGIN_ROOT}/rules/skills.md` — Architecture Detection grep (run before any state work).
 - `${CLAUDE_PLUGIN_ROOT}/rules/snippets/non-negotiable.md` — forbidden patterns.
 - Sibling skills: [[android-compose-ui]], [[android-data]], [[android-navigation]].

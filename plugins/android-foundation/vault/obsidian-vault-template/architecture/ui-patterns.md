@@ -7,9 +7,9 @@ updated: 2026-01-01
 
 # UI Patterns — testTag Index
 
-The per-screen index of every `testTag` in the app. `android-qa` searches this note to pick
-selectors for Compose UI Tests and Maestro flows; `android-developer` adds a row whenever it adds or
-renames a tag; `android-docs` verifies and completes the index during the docs phase.
+The per-screen index of every `testTag` in the app. `qa-engineer` searches this note to pick
+selectors for Compose UI Tests and Maestro flows; `developer` adds a row whenever it adds or
+renames a tag; `document-writer` verifies and completes the index during the docs phase.
 
 **The convention (grammar, the centralized `TestTag` object, required-vs-exempt rules) lives in the
 `android-compose-ui` skill § Test tags — this note is the project's concrete index, not the rules.**

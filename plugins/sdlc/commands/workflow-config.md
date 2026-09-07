@@ -26,12 +26,12 @@ it never runs the pipeline.
    - **Existing project recipes:** `Glob <repo_root>/.claude/sdlc-workflows/*.yaml` (for editing/shadow warnings).
    - **Plugin recipe names** (reserved / shadow detection): `Glob {PLUGIN_CACHE_ROOT}/**/workflows/*.yaml`
      → collect each file's `name`.
-   - **Available phase names:** read the ACTIVE stack's `manifest.yaml` (reuse `resolveStack` detection from
-     `pipeline-orchestrator/SKILL.md`, or `Glob {PLUGIN_CACHE_ROOT}/**/manifest.yaml`) and offer the
-     **keys of `agents_per_phase`** as the valid phase palette (e.g. Android: `business_analysis`,
-     `debugging`, `development`, `review`, `security`, `test`, `qa`, `documentation`; vanilla:
-     `business_analysis`, `development`, `qa`, `security`, `documentation`). A phase name that no active
-     profile maps to an agent will be skipped at run time — warn if the user picks one.
+   - **Available phase names:** the palette is the **keys of `agents_per_phase` in the CORE manifest**
+     (`{SDLC_PLUGIN_ROOT}/manifest.yaml`) — since ADR-0021 that is the only manifest that binds a phase
+     to an agent — **plus** any `extra_phases[].name` the active stack profile adds. Today the core
+     binds `business_analysis`, `development`, `review`, `security`, `remediation`, `test`, `qa`,
+     `debugging`, `documentation`. A phase name outside that palette is skipped at run time — warn if
+     the user picks one.
 
 4. **Name the recipe** (use `AskUserQuestion` or a prompt). Rules:
    - kebab-case, matching `^[a-z][a-z0-9-]*$`, length 2–40 (the schema `name` pattern).
@@ -117,8 +117,8 @@ Next:
 - **Idempotent & non-destructive.** Same `<name>` ⇒ update in place; never clobber other recipes.
 - **Shadowing is explicit.** Warn (and require confirmation) when the chosen name collides with a plugin
   recipe — the project recipe wins by design, but the user must intend it.
-- **Phases from the active palette.** Offer `agents_per_phase` keys from the active manifest; warn on a
-  phase no active profile maps to an agent.
+- **Phases from the core palette.** Offer the core manifest's `agents_per_phase` keys plus the active
+  profile's `extra_phases[].name`; warn on anything else — nothing binds it, so it would be skipped.
 - **No pipeline run.** This command only authors config.
 - **Reuse, don't reimplement.** Phase-palette / recipe discovery lives in `tools/resolve/detect.mjs` and
   `tools/resolve/workflow.mjs`, which implement `RESOLVER.md`; validation reuses `schemas/workflow.schema.json`.

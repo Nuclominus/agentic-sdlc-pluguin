@@ -101,4 +101,4 @@ WorkManager.getInstance(context)
 - [[android-architecture]] — coroutine/concurrency + module placement (authoritative; not restated here).
 - [[android-data]] — repository ownership and domain `Result` mapping the worker calls into.
 - `workmanager-plugin/rules/snippets/workmanager-proguard.md` — R8/ProGuard keep rules (default factory).
-- `android-security` agent — inputData/PII and foreground-service review (MASVS-STORAGE/PLATFORM).
+- `security-analyst` agent — inputData/PII and foreground-service review (MASVS-STORAGE/PLATFORM).

@@ -10,3 +10,4 @@
 - [[planning/h5-prompt-surface]] — H5 measurement: prose costs ~3%, cardinality predicts compliance; decision deferred
 - [[planning/h5-d2-start-resolution-command]] — H5 D2 implementation spec: Steps 0→1d become one shipped command
 - [[planning/h6-hook-deterministic-tail]] — H6 implementation spec: a Stop hook seals a finished run
+- [[planning/i1-agents-in-core]] — I1 track note: agents move to the core, foundations carry `role_expertise`; PR ledger + expertise-coverage table

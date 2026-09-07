@@ -64,7 +64,7 @@ Output: list of `(className, fqcn, file:line)` triples.
 ## 4. Business flows
 
 State-management entry points. Primary signal is ViewModels; some projects use an MVI store/container
-pattern (see Architecture Detection in `${CLAUDE_PLUGIN_ROOT}/rules/skills.md`).
+pattern (see Architecture Detection in the `android-architecture` skill).
 
 ```
 Grep -nE "class\s+(\w+)ViewModel\s*(:|\(|\{)"             → ViewModel-based flows

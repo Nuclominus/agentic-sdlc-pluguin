@@ -66,4 +66,4 @@ interface ItemDao {
 
 - [[android-data]] — data-layer principles (authoritative for layering; not restated here).
 - `room-plugin/rules/snippets/room-proguard.md` — R8/ProGuard keep rules.
-- `android-security` agent — at-rest encryption and query-injection review (MASVS-STORAGE).
+- `security-analyst` agent — at-rest encryption and query-injection review (MASVS-STORAGE).

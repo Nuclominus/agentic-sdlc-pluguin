@@ -14,12 +14,12 @@ const REPO = new URL("../../../", import.meta.url).pathname;
 const registry = JSON.parse(readFileSync(join(REPO, "plugins", "sdlc", "config", "models.json"), "utf8"));
 
 const AGENTS = {
-  business_analysis: "android-ba",
-  development: { android: "android-developer" },
-  review: "android-reviewer",
-  security: "android-security",
-  test: "android-tester",
-  documentation: "android-docs",
+  business_analysis: "business-analyst",
+  development: { android: "developer" },
+  review: "reviewer",
+  security: "security-analyst",
+  test: "tester",
+  documentation: "document-writer",
 };
 
 test("the cap comes from the recipe when the project says nothing", () => {
@@ -76,12 +76,12 @@ test("cache_read dominates the baseline — the shape the old model got wrong", 
 });
 
 test("tier precedence: per-agent override, then project default, then frontmatter, then sonnet", () => {
-  const fm = { "android-ba": "opus" };
-  assert.equal(resolveTier("android-ba", { modelOverrides: { agents: { "android-ba": "haiku" }, default: "fable" }, frontmatterTiers: fm }), "haiku");
-  assert.equal(resolveTier("android-ba", { modelOverrides: { default: "fable" }, frontmatterTiers: fm }), "fable");
-  assert.equal(resolveTier("android-ba", { frontmatterTiers: fm }), "opus");
+  const fm = { "business-analyst": "opus" };
+  assert.equal(resolveTier("business-analyst", { modelOverrides: { agents: { "business-analyst": "haiku" }, default: "fable" }, frontmatterTiers: fm }), "haiku");
+  assert.equal(resolveTier("business-analyst", { modelOverrides: { default: "fable" }, frontmatterTiers: fm }), "fable");
+  assert.equal(resolveTier("business-analyst", { frontmatterTiers: fm }), "opus");
   assert.equal(resolveTier("unknown-agent", {}), "sonnet");
-  assert.equal(resolveTier("android-foundation:android-ba", { frontmatterTiers: fm }), "opus", "the plugin prefix is an install detail");
+  assert.equal(resolveTier("sdlc:business-analyst", { frontmatterTiers: fm }), "opus", "the plugin prefix is an install detail");
 });
 
 test("rows: parallel groups and aspect fan-out each become their own dispatch", () => {

@@ -8,8 +8,9 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { resolvePlan } from "../../../plugins/sdlc/tools/resolve/plan.mjs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { resolvePlan, resolveExpertise } from "../../../plugins/sdlc/tools/resolve/plan.mjs";
 
 function write(file, content) {
   mkdirSync(join(file, ".."), { recursive: true });
@@ -17,7 +18,7 @@ function write(file, content) {
 }
 
 /** A consumer machine: config dir + one installed plugin + a git project. */
-function world({ localYaml = null, modelJson = null, recipe = null } = {}) {
+function world({ localYaml = null, modelJson = null, recipe = null, roleExpertise = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "sdlc-plan-"));
   const cfg = join(dir, "cfg");
   const plug = join(dir, "cache", "demo", "1.0.0");
@@ -33,15 +34,32 @@ function world({ localYaml = null, modelJson = null, recipe = null } = {}) {
     "detect:",
     "  file_exists: marker.txt",
     "hosts_aspects: all",
-    "agents_per_phase:",
-    "  business_analysis: demo-ba",
-    "  development: demo-dev",
-    "  qa: demo-qa",
-    "  documentation: demo-docs",
+    ...(roleExpertise ? [
+      // ADR-0021 shape: the foundation binds NO agents; it declares expertise per core role.
+      "role_expertise:",
+      "  developer:",
+      "    invariants: |",
+      "      Demo house rule: never block main.",
+      "    rules:",
+      "      - { path: rules/house.md, note: \"house rules\" }",
+      "    skills:",
+      "      - { skill: superpowers:test-driven-development, when: \"before the first edit\" }",
+      "      - { skill: demo:zed, policy: recommended }",
+      "  debugger:",
+      "    invariants: |",
+      "      Demo debugging rule.",
+    ] : [
+      "agents_per_phase:",
+      "  business_analysis: demo-ba",
+      "  development: demo-dev",
+      "  qa: demo-qa",
+      "  documentation: demo-docs",
+    ]),
     "post_pipeline_checks:",
     '  - "echo plugin-check"',
     "",
   ].join("\n"));
+  if (roleExpertise) write(join(plug, "rules", "house.md"), "# house rules\n");
   write(join(plug, "agents", "demo-ba.md"), "---\nname: demo-ba\nmodel: opus\n---\n");
   write(join(plug, "agents", "demo-dev.md"), "---\nname: demo-dev\nmodel: sonnet\n---\n");
   write(join(plug, "workflows", "demo-flow.yaml"), recipe ?? [
@@ -77,8 +95,15 @@ function world({ localYaml = null, modelJson = null, recipe = null } = {}) {
   write(join(core, "manifest.yaml"), [
     "kind: foundation", "stack: vanilla", "priority: 0", "aspects: [vanilla]",
     "detect:", '  any: ["*"]', "hosts_aspects: all",
-    "agents_per_phase:", "  documentation: core-docs", "",
+    "agents_per_phase:",
+    "  documentation: core-docs",
+    "  business_analysis: business-analyst",
+    "  development: developer",
+    "  qa: qa-engineer",
+    "on_demand_agents: [debugger]",
+    "",
   ].join("\n"));
+  write(join(core, "agents", "developer.md"), "---\nname: developer\nmodel: sonnet\n---\n");
   write(join(core, "runtime-dependencies.json"), { dependencies: [] });
 
   write(join(cfg, "settings.json"), { enabledPlugins: { "demo@m": true, "sdlc@m": true } });
@@ -277,5 +302,148 @@ test("--stack forces the profile, and an unknown one halts instead of falling ba
     assert.equal(bogus.plan, null);
     assert.match(bogus.halt, /--stack=cobol: no installed foundation declares that stack/);
     assert.match(bogus.halt, /demo, vanilla/);
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+// ---- ADR-0021: agents live in the core; foundations carry expertise -------------------------
+
+test("role_expertise reaches the plan as absolute rule paths and pre-rendered prompt blocks", () => {
+  const w = world({ roleExpertise: true });
+  try {
+    const { plan, halt, warnings } = resolvePlan({ cwd: w.proj, args: "--dry-run", env: w.env });
+    assert.equal(halt, null);
+    assert.deepEqual(warnings.filter((x) => /agents_per_phase/.test(x)), [], "an expertise-only foundation earns no deprecation warning");
+    assert.equal(plan.stack.profile_dir, w.plug, "the directory the rule paths were resolved against");
+    assert.deepEqual(plan.profile.agents_per_phase.development, { demo: "developer" }, "the core agent, fanned out over the foundation's aspect");
+
+    const rx = plan.profile.role_expertise.developer;
+    assert.equal(rx.rules[0].path, join(w.plug, "rules", "house.md"), "relative in the manifest, absolute in the plan");
+
+    const dev = plan.profile.prompt_blocks.developer;
+    assert.match(dev.expertise, /^Stack expertise for developer \(demo\):\nDemo house rule: never block main\./);
+    assert.ok(dev.expertise.includes(`- ${join(w.plug, "rules", "house.md")} — house rules`));
+    assert.match(dev.skills, /^Skills for this role/);
+    assert.match(dev.skills, /\n- MANDATORY — invoke `superpowers:test-driven-development` — before the first edit\./);
+    assert.ok(dev.skills.indexOf("MANDATORY") < dev.skills.indexOf("RECOMMENDED"), "mandatory rows first");
+
+    assert.ok("debugger" in plan.profile.prompt_blocks, "on-demand agents get a block too — the expertise command serves them");
+    assert.equal(plan.profile.prompt_blocks["qa-engineer"].expertise, null, "a role the stack says nothing about gets no header");
+    assert.ok(plan.dry_run.rows.every((r) => !/^demo-/.test(r.agent)), "every dispatch row names a core agent");
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("a foundation still binding its own roster is ignored, and said so where the user can see it", () => {
+  const w = world();
+  try {
+    const { prints, plan } = resolvePlan({ cwd: w.proj, args: "", env: w.env });
+    assert.ok(prints.some((p) => /WARN: foundation 'demo' declares agents_per_phase — ignored \(ADR-0021\)/.test(p)),
+      prints.join("\n"));
+    assert.equal(plan.profile.agents_per_phase.business_analysis, "business-analyst",
+      "the core roster wins; the foundation's binding contributes nothing");
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("a recipe phase that resolves to no agent is warned about, not crashed on", () => {
+  const w = world({ recipe: "name: demo-flow\nphases:\n  - business_analysis\n  - review\n  - development\n" });
+  try {
+    const { plan, warnings } = resolvePlan({ cwd: w.proj, args: "", env: w.env });
+    assert.ok(plan, "the run still plans — the orchestrator's 3a skips the phase");
+    assert.ok(warnings.some((x) => /WARN: phase 'review' in workflow 'demo-flow' has no agent bound/.test(x)), warnings.join("\n"));
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("resolveExpertise serves an on-demand agent one block, refuses an unknown role, and is empty on vanilla", () => {
+  const w = world({ roleExpertise: true });
+  try {
+    const dbg = resolveExpertise({ cwd: w.proj, args: "", env: w.env, role: "debugger" });
+    assert.equal(dbg.ok, true);
+    assert.equal(dbg.stack, "demo");
+    assert.match(dbg.block, /^Stack expertise for debugger \(demo\):\nDemo debugging rule\./);
+    assert.equal(dbg.skills_block, null);
+
+    const dev = resolveExpertise({ cwd: w.proj, args: "", env: w.env, role: "developer" });
+    assert.ok(dev.block.includes(join(w.plug, "rules", "house.md")));
+    assert.match(dev.skills_block, /MANDATORY — invoke `superpowers:test-driven-development`/);
+
+    const bogus = resolveExpertise({ cwd: w.proj, args: "", env: w.env, role: "bogus" });
+    assert.equal(bogus.ok, false);
+    assert.match(bogus.error, /unknown role 'bogus'/);
+    assert.match(bogus.error, /known: .*debugger.*developer/);
+
+    const vanilla = resolveExpertise({ cwd: w.proj, args: "--stack=vanilla", env: w.env, role: "developer" });
+    assert.equal(vanilla.ok, true);
+    assert.equal(vanilla.block, null, "nothing to say — the caller prints the 'no stack expertise' line");
+    assert.equal(vanilla.stack, "vanilla");
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("every core role resolves, and a name only the ignored foundation roster mentioned does not", () => {
+  // The valid set is exactly what carries a prompt block: dispatched ∪ core. Now that a
+  // foundation's roster is ignored (ADR-0021 PR-3), nothing it names is dispatched, so
+  // `demo-dev` is not a role — and saying so is the point: the project has to be migrated, and a
+  // silent success here would hide that from the person running the command.
+  const w = world();   // the demo foundation still binds demo-ba / demo-dev / demo-qa / demo-docs
+  try {
+    const core = resolveExpertise({ cwd: w.proj, args: "", env: w.env, role: "developer" });
+    assert.equal(core.ok, true, core.error);
+    const stale = resolveExpertise({ cwd: w.proj, args: "", env: w.env, role: "demo-dev" });
+    assert.equal(stale.ok, false, "a name no longer dispatched is not a role");
+    assert.match(stale.error, /unknown role 'demo-dev'/);
+
+    const { plan } = resolvePlan({ cwd: w.proj, args: "", env: w.env });
+    assert.ok("developer" in plan.profile.prompt_blocks, "every core role carries a block");
+    assert.ok(!("demo-dev" in plan.profile.prompt_blocks), "and nothing else does");
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("a config naming an agent that does not exist is reported in prints, and the run continues", () => {
+  const w = world({
+    localYaml: [
+      "extensions:", "  skills:",
+      '    - skill: "acme:x"', "      agents: [android-developer]",
+      '    - skill: "acme:y"', "      agents: [developer]",
+      "",
+    ].join("\n"),
+    modelJson: { agents: { "android-ba": "opus" } },
+  });
+  try {
+    const { plan, prints, warnings } = resolvePlan({ cwd: w.proj, args: "", env: w.env });
+    assert.ok(plan, "an un-migrated config degrades, it never stops the run");
+    assert.deepEqual(plan.profile.extension_skills.map((r) => r.skill), ["acme:y"]);
+    assert.deepEqual(plan.models.agents, {}, "the unknown key is dropped, the rest of the file survives");
+    for (const w2 of warnings) assert.ok(prints.includes(w2), `warning not echoed: ${w2}`);
+    assert.ok(prints.some((p) => /extensions\.skills\[0\] targets unknown agent 'android-developer'/.test(p)), prints.join("\n"));
+    assert.ok(prints.some((p) => /model\.local\.json names unknown agent 'android-ba'/.test(p)), prints.join("\n"));
+    assert.ok(prints.some((p) => /run \/sdlc:doctor/.test(p)), "the report names the command that fixes it");
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("cli.mjs expertise --role prints the block, exits 2 on an unknown role, and says so on vanilla", () => {
+  const w = world({ roleExpertise: true });
+  const cli = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "plugins", "sdlc", "tools", "resolve", "cli.mjs");
+  const run = (argv) => {
+    try {
+      return { code: 0, out: execFileSync("node", [cli, ...argv], { cwd: w.proj, env: { ...process.env, ...w.env }, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }) };
+    } catch (e) { return { code: e.status, out: String(e.stdout ?? ""), err: String(e.stderr ?? "") }; }
+  };
+  try {
+    const dev = run(["expertise", "--role", "developer"]);
+    assert.equal(dev.code, 0);
+    assert.match(dev.out, /^Stack expertise for developer \(demo\):/m);
+    assert.match(dev.out, /Skills for this role/);
+
+    const json = run(["expertise", "--role", "debugger", "--json"]);
+    assert.equal(json.code, 0);
+    const parsed = JSON.parse(json.out);
+    assert.equal(parsed.ok, true);
+    assert.match(parsed.block, /^Stack expertise for debugger/);
+
+    const bogus = run(["expertise", "--role", "bogus"]);
+    assert.equal(bogus.code, 2);
+    assert.match(bogus.err, /unknown role 'bogus'/);
+
+    const vanilla = run(["expertise", "--role", "developer", "--stack=vanilla"]);
+    assert.equal(vanilla.code, 0);
+    assert.match(vanilla.out, /^no stack expertise for developer \(stack: vanilla\)$/m);
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });

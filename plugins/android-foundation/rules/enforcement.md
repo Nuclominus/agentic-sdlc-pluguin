@@ -1,5 +1,5 @@
 ---
-loaded_by: [debugger, devops, main-thread-on-hook-failure]
+loaded_by: [debugger, devops]
 load_when: "Only when a PostToolUse hook fails, misbehaves, or needs to be extended."
 ---
 
@@ -11,8 +11,8 @@ Automated guardrails that run outside the agents themselves.
 
 | Hook | Script | Purpose | Behaviour |
 |------|--------|---------|-----------|
-| validate-kotlin | `${CLAUDE_PLUGIN_ROOT}/hooks/validate-kotlin.sh` (via `kotlin-guard.sh`) | Blocks `!!`, `runBlocking`, `println`, `android.util.Log.*`, `.printStackTrace()`, and inline `testTag("…")` literals in production Kotlin | **Blocking** — `kotlin-guard.sh` propagates exit 2, surfacing the violation to the agent |
-| check-docs-sync | `.claude/scripts/check-docs-sync.sh` | When production Kotlin is edited and matching `.obsidian-vault/` note is absent, **auto-creates a stub** from `.obsidian-vault/_templates/`. android-docs fills the stub before PR. | **Non-blocking** — emits `INFO` and creates the stub file |
+| validate-kotlin | the foundation's `hooks/validate-kotlin.sh` (via `kotlin-guard.sh`) | Blocks `!!`, `runBlocking`, `println`, `android.util.Log.*`, `.printStackTrace()`, and inline `testTag("…")` literals in production Kotlin | **Blocking** — `kotlin-guard.sh` propagates exit 2, surfacing the violation to the agent |
+| check-docs-sync | `.claude/scripts/check-docs-sync.sh` | When production Kotlin is edited and matching `.obsidian-vault/` note is absent, **auto-creates a stub** from `.obsidian-vault/_templates/`. The document-writer fills the stub before the PR. | **Non-blocking** — emits `INFO` and creates the stub file |
 
 Both fire on `Write|Edit`. Test sources (`src/test/**`, `src/androidTest/**`, `*Test.kt`, `*Spec.kt`) are exempt from validate-kotlin (see `snippets/non-negotiable.md`).
 
@@ -20,7 +20,7 @@ Both fire on `Write|Edit`. Test sources (`src/test/**`, `src/androidTest/**`, `*
 
 | Hook | Script | Purpose | Behaviour |
 |------|--------|---------|-----------|
-| git-guard | `${CLAUDE_PLUGIN_ROOT}/hooks/git-guard.sh` (via `validate-logging.sh`) | Gates `git commit`, `git push` and `gh pr create` on `logging.md` (ADR-0020) | **Blocking** — exit 2 with a `file:line` report; **never edits code** |
+| git-guard | the foundation's `hooks/git-guard.sh` (via `validate-logging.sh`) | Gates `git commit`, `git push` and `gh pr create` on `logging.md` (ADR-0020) | **Blocking** — exit 2 with a `file:line` report; **never edits code** |
 
 `kotlin-guard.sh` is `PostToolUse(Edit|Write)`, so it only ever sees files edited **through those
 tools**. A hand edit, a `sed` in a Bash call, a merge, a rebase or a cherry-pick reaches the commit
@@ -46,7 +46,7 @@ are a violation, and none block the command.
 
 ## Documentation tooling (Node, non-blocking — NOT hooks)
 
-Unlike the blocking `validate-kotlin.sh` hook, the vault tooling runs **on demand** (android-docs
+Unlike the blocking `validate-kotlin.sh` hook, the vault tooling runs **on demand** (document-writer
 Definition-of-Done, `fill-vault`, optional CI) and never blocks a write:
 
 | Script | Purpose | Behaviour |

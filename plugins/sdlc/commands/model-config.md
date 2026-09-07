@@ -27,7 +27,8 @@ frontmatter → sonnet`. This command only edits config — it never runs the pi
      a `**` glob would also match other cached versions of this plugin).
      Offer each tag in `pipeline_tiers`, annotated with its `model_id` and `pricing`
      (e.g. `haiku → claude-haiku-4-5-20251001  ($1/$5 per MTok)`).
-   - **Agents:** `Glob {PLUGIN_CACHE_ROOT}/**/agents/*.md`; the agent name is each file's
+   - **Agents:** `Glob {SDLC_PLUGIN_ROOT}/agents/*.md` — since ADR-0021 the core is the only plugin
+     that ships agents, so a marketplace-wide glob would only ever find this one directory; the agent name is each file's
      frontmatter `name:` (fall back to filename without `.md`); record its frontmatter `model:` as
      the current default tier. De-duplicate and sort.
 

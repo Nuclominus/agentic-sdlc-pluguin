@@ -35,8 +35,8 @@ renders `started_at`/`completed_at` from it. This measured timing (not an estima
 
 **Who may write code (Step 3 + agent frontmatter).** Every shipped agent declares an explicit
 `tools:` allowlist; an omitted key grants the FULL toolset, which is how a read-only reviewer ends
-up editing what it reviews. Reviewing agents (`android-reviewer`, `android-security`,
-`security-analyst`, `android-debugger`, `*-aar`) carry no `Edit` — their `Write` exists only for
+up editing what it reviews. Reviewing agents (`reviewer`, `security-analyst`, `debugger`,
+`aar-analyst`) carry no `Edit` — their `Write` exists only for
 their own report under `docs/plans/{task_slug}/`. Their findings reach the codebase through the
 development agent: via the review loop, or via the **gated `remediation` phase**
 (`gate: {after: [security], min_severity: high}`, orchestrator step 3-gate), which parses the
@@ -77,7 +77,7 @@ The five core fallbacks live in `plugins/sdlc/agents/`; the Android roster lives
 | security-analyst | sdlc | opus | high | Threat model; **read-only — no `Edit`**. Reports findings; the gated `remediation` phase dispatches `developer` to apply them ([[decisions/ADR-0018-reviewers-do-not-write-code]]). |
 | document-writer | sdlc | haiku | low | Structured output from known facts. |
 | session-recorder | sdlc | haiku | low | Built-in run closer (Step 6): ~30-word journal entry from telemetry. Not a phase. |
-| **android-ba / android-developer / android-reviewer / android-security / android-tester / android-qa / android-docs** | android-foundation | opus→haiku | per role | The specialized roster that wins the `android` aspect (see the plugin README). |
+| **business-analyst / developer / reviewer / security-analyst / tester / qa-engineer / document-writer** | sdlc | opus→haiku | per role | The whole roster, core-owned since ADR-0021. A foundation supplies each role's platform expertise via `role_expertise`; the agent itself is the same on every stack. |
 
 Framework providers ship **no agents** — they enrich the prompts the agents above receive.
 
@@ -112,7 +112,8 @@ that reads `model:` from the agent frontmatter and rewrites the Agent call).
 
 # Run
 /sdlc:start "Add a settings screen with dark-mode toggle"
-# → Detected: android → android-developer (Sonnet) for development; retrofit additive (if present)
+# → Detected: android → developer (Sonnet) for development, carrying the Android expertise block;
+#   retrofit additive (if present)
 # → BA (Opus) → Dev → Review(⇄Dev) → [Security ‖ Test] → Remediation? → QA → Docs
 # → Post-pipeline: detekt + testDebugUnitTest + compileDebugKotlin
 ```

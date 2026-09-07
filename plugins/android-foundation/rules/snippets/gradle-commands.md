@@ -1,5 +1,5 @@
 ---
-loaded_by: [developer, qa, tester, devops, ci-cd-engineer]
+loaded_by: [developer, qa-engineer, tester, devops, cicd]
 load_when: "When running Gradle. Gradle Task Probe rule lives here (do not retry on 'task not found')."
 ---
 
