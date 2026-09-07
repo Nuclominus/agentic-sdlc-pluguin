@@ -3,7 +3,7 @@
   "started_at": "2026-09-07T10:00:00Z",
   "plugin_version": "2.0.0",
   "stack": "android",
-  "expertise_blocks": ["developer", "reviewer", "document-writer"],
+  "expertise_block_agents": ["developer", "reviewer", "document-writer"],
   "phases": [
     { "phase": "development", "agent_id": "iii999" }
   ]

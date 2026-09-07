@@ -151,7 +151,7 @@ test("accepts a dispatch-scoped agent_prompt contract", () => {
   assert.ok(ok, `expected the well-formed contract to parse; errors: ${errors.join("; ")}`);
   assert.equal(ok.requires, "agent_prompt");
   assert.equal(ok.cardinality, "every-dispatch");
-  assert.equal(ok.dispatch_scope, "expertise_blocks");
+  assert.equal(ok.dispatch_scope, "expertise_block_agents");
 });
 
 test("every-dispatch without a dispatch_scope is an error, not a silent default", () => {

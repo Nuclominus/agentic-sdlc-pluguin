@@ -18,7 +18,7 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
   The denominator needed a new cardinality rather than a new pattern. A review loop dispatches
   `development` several times, so counting matches against the phase count reads 9 ≥ 7 and passes
   the very run that missed one. `every-dispatch` scopes to `dispatch_scope:
-  telemetry.expertise_blocks` — the agents the resolver *states* it rendered a block for, carried
+  telemetry.expertise_block_agents` — the agents the resolver *states* it rendered a block for, carried
   into telemetry from `plan.profile.expertise_block_agents` so the orchestrator copies rather than
   recounts (ADR-0015). A vanilla stack renders no blocks, declares none, and is scored `n/a`
   instead of passed. Runs that predate the telemetry field also score `n/a` — silence, not a guess.

@@ -349,7 +349,7 @@ test("a dispatch to an agent outside the scope is not counted for or against", (
 test("a run whose telemetry names no scope field is n/a, never a silent pass", () => {
   const { contracts: cs } = parseContracts(DISPATCH_FIX);
   const c = cs.filter((x) => x.id === "3b-1a-expertise-block");
-  // Same era as the contract, but the run declares no expertise_blocks — a vanilla stack
+  // Same era as the contract, but the run declares no expertise_block_agents — a vanilla stack
   // legitimately renders no block, and that must read as "nothing to check", not as compliance.
   const res = auditRun(run("no-expertise-scope"), c, { projectsRoot: PROJECTS });
   const v = verdict(res, "3b-1a-expertise-block");

@@ -135,7 +135,7 @@ that status is available to a wrapper script, but it is not the hosting session'
 | `profile.extension_skills` | `EFFECTIVE_PROFILE.extension_skills` *(**Step 1b-ext**)* | Step 3b-1a |
 | `profile.role_expertise` | `EFFECTIVE_PROFILE.role_expertise` *(**ADR-0021**)* | Step 5 telemetry (which stack expertise was in force) |
 | `profile.prompt_blocks` | `EFFECTIVE_PROFILE.prompt_blocks[agent]` *(**ADR-0021**)* | Step 3b-1 — `.expertise` and `.skills` pasted verbatim |
-| `profile.expertise_block_agents` | `EFFECTIVE_PROFILE.expertise_block_agents` *(**ADR-0021**)* | Step 5 telemetry `expertise_blocks` — copy the array verbatim; do NOT recount it from `prompt_blocks` |
+| `profile.expertise_block_agents` | `EFFECTIVE_PROFILE.expertise_block_agents` *(**ADR-0021**)* | Step 5 telemetry, under the SAME key — copy the array; never recount it from `prompt_blocks` |
 | `profile.post_pipeline_checks` | `EFFECTIVE_PROFILE.post_pipeline_checks` *(**Step 1b**)* | Step 4 |
 | `profile.heal_checks` | `EFFECTIVE_PROFILE.heal_checks` | Step 3e-heal |
 | `profile.phase_command_overrides` | `EFFECTIVE_PROFILE.phase_command_overrides` | Step 3b-1 |
@@ -519,7 +519,7 @@ id: 3b-1a-expertise-block
 requires: agent_prompt
 pattern: Stack expertise for
 cardinality: every-dispatch
-dispatch_scope: telemetry.expertise_blocks
+dispatch_scope: telemetry.expertise_block_agents
 since: 2026-09-07
 ```
 
@@ -534,7 +534,7 @@ since: 2026-09-07
 > The denominator is the whole difficulty, and it is why this contract needed a new cardinality
 > rather than reusing `once-per-phase`. A review loop dispatches `development` three times, so
 > counting matches against the phase count reads 9 ≥ 7 and passes. `every-dispatch` scopes instead
-> to `telemetry.expertise_blocks` — the agents the resolver states it rendered a block for — so
+> to `telemetry.expertise_block_agents` — the agents the resolver states it rendered a block for — so
 > nine of ten is nine of ten. A vanilla stack renders no blocks, declares none, and is scored `n/a`
 > rather than passed.
 
@@ -1214,7 +1214,7 @@ their checkpoints, not lost). Then write `docs/plans/{task_slug}/_telemetry.json
   "priority": 300,
   "aspects": ["android"],
   "additive_profiles": ["retrofit"],
-  "expertise_blocks": "<copy CONTEXT.expertise_block_agents verbatim — the agents the resolver rendered a Stack expertise block for; `sdlc-lint compliance` uses it as the denominator for 3b-1a-expertise-block>",
+  "expertise_block_agents": "<copy CONTEXT.expertise_block_agents — same key, same array, no transformation. The agents the resolver rendered a Stack expertise block for; `sdlc-lint compliance` uses it as the denominator for 3b-1a-expertise-block>",
   "profile_source": "android-foundation/manifest.yaml",
   "narrative_language": "uk",
   "headless_mode": false,

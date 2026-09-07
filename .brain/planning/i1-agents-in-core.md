@@ -226,7 +226,7 @@ block. This run measured that dependency for the first time:
    The denominator was the whole difficulty and it needed a new cardinality, not a new pattern.
    `once-per-phase` cannot express this: a review loop dispatches `development` three times, so
    `matched >= phaseCount` reads 9 ≥ 7 and **passes the very run that missed a block**. So the
-   contract carries `dispatch_scope: telemetry.expertise_blocks` — the agents the resolver states
+   contract carries `dispatch_scope: telemetry.expertise_block_agents` — the agents the resolver states
    it rendered a block for — and expected is the number of dispatches to those agents. Nine of ten
    is nine of ten. A vanilla stack declares no scope and scores `n/a`, never a silent pass.
    The list comes from `plan.profile.expertise_block_agents`, so the orchestrator copies it rather

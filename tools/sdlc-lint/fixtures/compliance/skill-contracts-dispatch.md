@@ -5,7 +5,7 @@ id: 3b-1a-expertise-block
 requires: agent_prompt
 pattern: Stack expertise for
 cardinality: every-dispatch
-dispatch_scope: telemetry.expertise_blocks
+dispatch_scope: telemetry.expertise_block_agents
 since: 2026-09-07
 ```
 
@@ -26,7 +26,7 @@ id: scope-malformed
 requires: agent_prompt
 pattern: Stack expertise for
 cardinality: every-dispatch
-dispatch_scope: expertise_blocks
+dispatch_scope: expertise_block_agents
 since: 2026-09-07
 ```
 
@@ -37,6 +37,6 @@ id: pattern-broken
 requires: agent_prompt
 pattern: "Stack expertise for ([a-z"
 cardinality: every-dispatch
-dispatch_scope: telemetry.expertise_blocks
+dispatch_scope: telemetry.expertise_block_agents
 since: 2026-09-07
 ```
