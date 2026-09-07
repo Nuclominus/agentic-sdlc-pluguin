@@ -21,9 +21,58 @@ block; this asks whether the subagent then **invoked** what that block mandated 
 
 - [[components/sdlc]]
 
+Closes the half [[planning/i1-agents-in-core|PR-4]] left open. `3b-1a-expertise-block` asks whether
+a dispatch **received** its expertise block; `3b-1a-mandatory-skill` asks whether the subagent then
+**invoked** what that block mandated of it.
+
+## Why it could not be asked before
+
+`resolveRunSessions` resolves a subagent transcript only to walk **up** to its parent session, so
+the auditor read the main transcript and nothing else. A subagent's own `Skill` calls — the entire
+evidence — were never read. Three runs were audited by hand instead, one dispatch at a time:
+
+| Dispatch | Mandated | Invoked | Production edits |
+|---|---|---|---|
+| `development (implement)` | 3 | 3 | 24 |
+| `development (review fixes)` | 3 | **0** | 7 |
+| `documentation` (run 3) | 1 | **0** | — |
+
+## Two decisions worth keeping
+
+**The join is by tool_use id, never by position.** `deriveDispatchMap` now returns the dispatch `id`
+beside the `agentId` its tool_result carries, and the transcript is named after that. A positional
+join would have worked on the day it was written and failed silently the first day two independent
+filters stopped agreeing on what counts as a dispatch — the same class of coupling as the
+`expertise_blocks` / `expertise_block_agents` split removed two PRs earlier.
+
+**`every-mandate` counts mandates, not dispatches.** "9 of 12 mandates met" says how much is being
+lost; "3 of 4 dispatches complied" hides whether a dispatch missed one skill or all three. Both
+measured failures were *all* of them, which is precisely the distinction that decides whether to
+act — and the reason a coarser denominator would have been the wrong instrument.
+
+Two guards come from earlier scars: an `agent_skill` pattern must capture the skill id in a group
+(without it every mandate scores unmet — a flat 0% indistinguishable from total non-compliance, the
+shape `0-resolve` once shipped with), and a dispatch whose transcript cannot be resolved is counted
+neither way.
+
+## What this does not show
+
+No real numbers. The three runs' branches and PRs were deleted, taking `_telemetry.json` with them,
+so they can no longer be re-audited end to end. Reconstructing that input to produce a favourable
+figure would not be evidence, so none is claimed here. The fixture reproduces both measured shapes;
+the first real rate arrives with the next pipeline run — and it answers two open questions at once,
+since the same run also shows whether #148's per-dispatch triggers hold on a review-loop round.
+
 ## Decisions & rationale
 
-- _Enrich: record or link the decision behind this change, e.g. `decisions/ADR-XXXX`._
+- No new ADR. It completes the instrument
+  [[decisions/ADR-0021-agents-live-in-the-core-foundations-carry-expertise]] made necessary: once
+  expertise stopped being structurally present in an agent body, both its *delivery* and its *use*
+  became things that can silently not happen, and only the first was gated.
+- Squarely inside Track H's premise ([[planning/h-instruction-fidelity]]): prose read by a model is
+  a probabilistic instruction, so measure a load-bearing step rather than word it more firmly. This
+  is the measurement for the step [[decisions/ADR-0015-the-machine-value-invariant]] could not turn
+  into a machine value, because "invoke this skill" is an action, not a value.
 
 ## Planning
 
