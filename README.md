@@ -57,13 +57,13 @@ This repo's own architecture, decisions, per-PR changes, and roadmap live in the
 
 What's next, in order:
 
-| # | Next | Why now |
-| - | ---- | ------- |
-| 1 | Gate the expertise hand-off (Track I, PR-4) | ADR-0021 moved platform expertise out of agent bodies and into a block the orchestrator pastes. A real run delivered it on 10 of 11 dispatches — and nothing catches the eleventh. |
-| 2 | Re-measure the collapsed run start (Track H) | ADR-0019's DoD is a before/after on the start window. The first post-2.0.0 run can't settle it: a dry run shared its session, so both resolves landed inside the measured window. |
-| 3 | Replace Track E's prefix DoD | `peak_prefix_tokens < 60k` failed to discriminate in an A/B where both arms passed, and a real run now puts `test` at 200k. The threshold measures task size as much as read discipline. |
-| 4 | Prune context inside review loops (E7) | That same 200k peak is the target: a review loop re-reads every earlier attempt. |
-| 5 | Amortize per-run init cost (E8's open half) | `/sdlc:batch` already runs pipelines in parallel, but each pays its own start — $8.75 of a $16.06 run was orchestration, more than all eight agents combined. |
+| # | Next | What it means |
+| - | ---- | ------------- |
+| 1 | Check that every agent gets its platform knowledge | Agents are handed Android know-how at the start of each step. In one real run, one step never received it. |
+| 2 | Prove the faster startup really is faster | Pipeline start-up was rewritten to be shorter. The first attempt to time it was spoiled, so it still has to be measured properly. |
+| 3 | Find a better measure of context bloat | The current limit flags big tasks rather than wasteful ones, so it can't tell a real problem from an ordinary large feature. |
+| 4 | Stop re-sending old attempts during review | When code goes back for another review round, every earlier attempt is sent again. Summarise them instead. |
+| 5 | Pay start-up once for a batch of small fixes | Several small fixes can run together, but each still pays full set-up. On one run that overhead cost more than all the work itself. |
 
 The full board — every track, status and landing PR — is generated from the vault roadmap into
 [`roadmap/index.html`](roadmap/index.html); the table it reads is
