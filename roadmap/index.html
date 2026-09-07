@@ -209,15 +209,14 @@ const SEED = [
   { id: "A", track: "Track A", title: "Foundation retune", desc: "Baseline stack-provider foundation pass.", pr: 23, col: "done" },
   { id: "B1", track: "Track B", title: "--resume checkpoints", desc: "Resume a pipeline run from its last checkpoint.", pr: 25, col: "done" },
   { id: "B2", track: "Track B", title: "Cross-run rollup /sdlc:report", desc: "Aggregate cost/telemetry across all runs.", pr: 28, col: "done" },
-  { id: "B3", track: "Track B", title: "B3 (unscheduled)", desc: "Next Track B item — approval gates; scope TBD.", pr: null, col: "todo" },
   { id: "B4", track: "Track B", title: "Session-recorder run journal + measured run clock", desc: "Cumulative journal + measured wall-clock run time.", pr: 35, col: "done" },
   { id: "C1", track: "Track C", title: "AAR learning cycle /sdlc:aar", desc: "After Action Review captures lessons per run.", pr: 27, col: "done" },
   { id: "C2", track: "Track C", title: "Framework providers (WorkManager, Koin, Ktor, DataStore-Proto)", desc: "Framework providers: WorkManager #29 + Koin/Ktor/DataStore-Proto #64. kotlinx.serialization deferred.", pr: 29, col: "done" },
   { id: "D", track: "Track D", title: "HTML run-report artifact", desc: "Rendered per-run report from telemetry.", pr: 26, col: "done" },
   { id: "E", track: "Track E", title: "Pipeline cache/cost efficiency", desc: "Cut prompt-cache reads (6.65M/run baseline). E5 shipped.", pr: 50, col: "progress" },
-  { id: "E6", track: "Track E", title: "Deterministic prefix ordering (prompt-cache)", desc: "Byte-identical stable prefix for max prompt-cache hits (plan §1.1).", pr: null, col: "todo" },
-  { id: "E7", track: "Track E", title: "Dynamic context pruning (review loops)", desc: "Haiku summarizes failed review-loop attempts before next Dev pass (§1.2).", pr: null, col: "todo" },
-  { id: "E8", track: "Track E", title: "Micro-task batching (3–5 bugfixes)", desc: "Auto-group 3–5 bugfixes into one session; amortize init cost (§1.3).", pr: null, col: "todo" },
+  { id: "E6", track: "Track E", title: "Deterministic prefix ordering (prompt-cache)", desc: "Byte-identical stable prefix for max prompt-cache hits (§1.1). Closed by measurement: cache_hit_ratio 1.0 on the #142 validation run.", pr: 142, col: "done" },
+  { id: "E7", track: "Track E", title: "Dynamic context pruning (review loops)", desc: "Haiku summarizes failed review-loop attempts before next Dev pass (§1.2). Target: the 200k `test` peak.", pr: null, col: "todo" },
+  { id: "E8", track: "Track E", title: "Micro-task batching — throughput half shipped as /sdlc:batch; init-cost amortization still open", desc: "Parallel dispatch shipped as /sdlc:batch; amortizing init cost across 3–5 bugfixes is still open (§1.3).", pr: null, col: "progress" },
   { id: "F1", track: "Track F", title: "Speculative TDD (QA ∥ Dev)", desc: "Run QA test-writing concurrently with Dev after BA approval (§2.1).", pr: null, col: "todo" },
   { id: "F2", track: "Track F", title: "Fast-track bugfix DAG (LOC-gated)", desc: "LOC-gated Dev→QA→Docs when change is trivial (§2.2).", pr: null, col: "todo" },
   { id: "G1", track: "Track G", title: "Self-healing compiler/lint micro-loops", desc: "Feed compiler/lint stderr back to Dev, capped at 2 attempts (§3.1).", pr: 77, col: "done" },
@@ -229,6 +228,7 @@ const SEED = [
   { id: "H5", track: "Track H", title: "Prompt surface reduction / JIT procedure loading", desc: "Prose costs ~3%; cardinality predicts compliance. Decision deferred (#110, #117).", pr: 110, col: "todo", pri: true },
   { id: "H5-D2", track: "Track H", title: "The run start is one command (resolve/cli.mjs plan, ADR-0019)", desc: "Steps 0→1d as one shipped command (ADR-0019), −808 lines. DoD: start window 9 → 2–3 calls, unmeasured.", pr: 119, col: "review", pri: true },
   { id: "H6", track: "Track H", title: "Stop hook sealing the run (deterministic tail)", desc: "Stop hook seals a finished run; state, not enforcement.", pr: 107, col: "done" },
+  { id: "I1", track: "Track I", title: "Agents in the core, expertise in the foundations (role_expertise, ADR-0021)", desc: "Core owns every agent; foundations declare role_expertise. Validated on a real Android run (#142).", pr: 139, col: "done" },
 ];
 // <<SEED-END>>
 

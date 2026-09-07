@@ -45,15 +45,14 @@ const DESCRIPTIONS = {
   A:  "Baseline stack-provider foundation pass.",
   B1: "Resume a pipeline run from its last checkpoint.",
   B2: "Aggregate cost/telemetry across all runs.",
-  B3: "Next Track B item — approval gates; scope TBD.",
   B4: "Cumulative journal + measured wall-clock run time.",
   C1: "After Action Review captures lessons per run.",
   C2: "Framework providers: WorkManager #29 + Koin/Ktor/DataStore-Proto #64. kotlinx.serialization deferred.",
   D:  "Rendered per-run report from telemetry.",
   E:  "Cut prompt-cache reads (6.65M/run baseline). E5 shipped.",
-  E6: "Byte-identical stable prefix for max prompt-cache hits (plan §1.1).",
-  E7: "Haiku summarizes failed review-loop attempts before next Dev pass (§1.2).",
-  E8: "Auto-group 3–5 bugfixes into one session; amortize init cost (§1.3).",
+  E6: "Byte-identical stable prefix for max prompt-cache hits (§1.1). Closed by measurement: cache_hit_ratio 1.0 on the #142 validation run.",
+  E7: "Haiku summarizes failed review-loop attempts before next Dev pass (§1.2). Target: the 200k `test` peak.",
+  E8: "Parallel dispatch shipped as /sdlc:batch; amortizing init cost across 3–5 bugfixes is still open (§1.3).",
   F1: "Run QA test-writing concurrently with Dev after BA approval (§2.1).",
   F2: "LOC-gated Dev→QA→Docs when change is trivial (§2.2).",
   G1: "Feed compiler/lint stderr back to Dev, capped at 2 attempts (§3.1).",
@@ -65,12 +64,13 @@ const DESCRIPTIONS = {
   H5: "Prose costs ~3%; cardinality predicts compliance. Decision deferred (#110, #117).",
   "H5-D2": "Steps 0→1d as one shipped command (ADR-0019), −808 lines. DoD: start window 9 → 2–3 calls, unmeasured.",
   H6: "Stop hook seals a finished run; state, not enforcement.",
+  I1: "Core owns every agent; foundations declare role_expertise. Validated on a real Android run (#142).",
 };
 
 // Presentation overrides where the table title is terse. Keyed by item id.
-const TITLE_OVERRIDES = {
-  B3: "B3 (unscheduled)",
-};
+// (B3's override lived here until 2026-09-07, when the row itself was dropped as a
+// placeholder that never acquired a scope — see the roadmap note.)
+const TITLE_OVERRIDES = {};
 
 const md = readFileSync(ROADMAP_MD, "utf8");
 

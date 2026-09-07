@@ -55,15 +55,19 @@ This repo's own architecture, decisions, per-PR changes, and roadmap live in the
 
 ## Roadmap
 
-Top priorities right now:
+What's next, in order:
 
-| Priority | Task | Status |
-| -------- | ---- | ------ |
-| 1 | Instruction fidelity (Track H) — re-measure the collapsed run start/tail before deciding H4 | In progress |
-| 2 | Pipeline cache & cost efficiency | In progress |
-| 3 | Micro-task batching (3–5 bugfixes per run) | Planned |
+| # | Next | What it means |
+| - | ---- | ------------- |
+| 1 | Check that every agent gets its platform knowledge | Agents are handed Android know-how at the start of each step. In one real run, one step never received it. |
+| 2 | Prove the faster startup really is faster | Pipeline start-up was rewritten to be shorter. The first attempt to time it was spoiled, so it still has to be measured properly. |
+| 3 | Find a better measure of context bloat | The current limit flags big tasks rather than wasteful ones, so it can't tell a real problem from an ordinary large feature. |
+| 4 | Stop re-sending old attempts during review | When code goes back for another review round, every earlier attempt is sent again. Summarise them instead. |
+| 5 | Pay start-up once for a batch of small fixes | Several small fixes can run together, but each still pays full set-up. On one run that overhead cost more than all the work itself. |
 
-<a href="docs/assets/roadmap-board.jpg" target="_blank"><img src="docs/assets/roadmap-board.jpg" alt="SDLC Roadmap board" width="100%"></a>
+The full board — every track, status and landing PR — is generated from the vault roadmap into
+[`roadmap/index.html`](roadmap/index.html); the table it reads is
+[`.brain/planning/roadmap.md`](.brain/planning/roadmap.md).
 
 ---
 
