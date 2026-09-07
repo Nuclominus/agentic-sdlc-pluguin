@@ -329,6 +329,14 @@ test("role_expertise reaches the plan as absolute rule paths and pre-rendered pr
     assert.ok("debugger" in plan.profile.prompt_blocks, "on-demand agents get a block too — the expertise command serves them");
     assert.equal(plan.profile.prompt_blocks["qa-engineer"].expertise, null, "a role the stack says nothing about gets no header");
     assert.ok(plan.dry_run.rows.every((r) => !/^demo-/.test(r.agent)), "every dispatch row names a core agent");
+
+    // PR-4: the compliance denominator. The orchestrator must not re-derive which agents got a
+    // block (ADR-0015) — the resolver states it, and only for roles that actually got one.
+    const scoped = plan.profile.expertise_block_agents;
+    assert.ok(Array.isArray(scoped), "the plan states the scope rather than leaving it to be counted");
+    assert.ok(scoped.includes("developer"), "developer has an expertise block");
+    assert.ok(!scoped.includes("qa-engineer"), "a role with a null block is out of scope, not a silent failure");
+    assert.deepEqual(scoped, [...scoped].sort(), "stable order — it lands in telemetry and in diffs");
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
 

@@ -68,7 +68,9 @@ no cache misses. Their effect on prefix *size*, which is the half of
 bills, is still unmeasured and is PR-4's job.
 
 Two behavioural findings, neither a code defect: the `documentation` dispatch carried no expertise
-block (10 of 11 did — the resolver returns one, so the orchestrator dropped it), and a re-dispatched
+block (nine of the ten dispatches in scope did — the resolver returns one, so the orchestrator
+dropped it; the eleventh dispatch, `session-recorder`, is out of scope because no role_expertise
+names it), and a re-dispatched
 `developer` edited production Kotlin with three MANDATORY rows in its prompt and zero `Skill` calls.
 Neither has a gate: `sdlc-lint compliance` can match a dispatch only by `subagent_type` or a Bash
 command, and `transcript-facts.mjs` does not capture dispatch prompts at all. Closing that is PR-4.

@@ -9,7 +9,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import Ajv from "ajv/dist/2020.js";
 import {
   discoverRecipes, validateWorkflow, normalizePhases, phaseNames, validateAcyclic,
@@ -207,4 +208,21 @@ test("discovery finds project recipes first and skips disabled plugins", () => {
     const recipes = discoverRecipes({ projectRoot: join(dir, "proj"), installs, enabled: { "off@m": false } });
     assert.deepEqual(recipes.map((r) => `${r.origin}:${r.name}`), ["project:bugfix", "plugin:default"]);
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// PR-4 — the core `debug` recipe must use the core debugger.
+//
+// PR-1 added `debugger` to the core roster and bound `debugging: debugger` in the core manifest,
+// but debug.yaml kept the shape it had when vanilla shipped no such agent: root-cause analysis
+// went to `development`, which holds Edit. The recipe's own description asserted that absence,
+// which stopped being true the moment the roster landed.
+test("the core debug recipe opens with the debugging phase, not with development", () => {
+  const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+  const raw = readFileSync(join(REPO_ROOT, "plugins/sdlc/workflows/debug.yaml"), "utf8");
+  const doc = parseYaml(raw);
+  assert.equal(phaseNames(normalizePhases(doc.phases))[0], "debugging",
+    "root cause is diagnosed by the read-only debugger before anything edits code");
+  assert.match(doc.description, /debugger/,
+    "the description must not still claim vanilla ships no debugger agent");
+  assert.ok(!/ships no dedicated debugger/.test(doc.description));
 });

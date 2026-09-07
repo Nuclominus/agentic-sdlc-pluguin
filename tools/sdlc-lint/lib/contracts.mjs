@@ -1,9 +1,16 @@
 import { existsSync, readFileSync } from "node:fs";
 import YAML from "yaml";
 
-export const REQUIRES = new Set(["bash_match", "agent_dispatch"]);
-export const CARDINALITIES = new Set(["once-per-run", "once-per-phase"]);
+export const REQUIRES = new Set(["bash_match", "agent_dispatch", "agent_prompt"]);
+export const CARDINALITIES = new Set(["once-per-run", "once-per-phase", "every-dispatch"]);
 export const OPS = new Set(["==", "!=", "exists", "absent"]);
+
+// `every-dispatch` needs a denominator the run declares about itself, because the phase count
+// cannot supply one: a review loop dispatches the same phase several times, so `matched >=
+// phaseCount` passes while one dispatch of eleven silently carried nothing. `dispatch_scope`
+// names a telemetry field listing the agents the contract applies to; expected is then the
+// number of dispatches TO those agents, and one miss is one short.
+const SCOPE = /^telemetry\.([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*)$/;
 
 // A fenced block whose info string is exactly `sdlc-contract`. Non-greedy body so
 // consecutive blocks do not merge into one.
@@ -45,8 +52,24 @@ function validate(raw, seen) {
   }
   if (typeof raw.pattern !== "string" || !raw.pattern) {
     errs.push(`${label}: missing required field 'pattern'`);
-  } else if (raw.requires === "bash_match") {
+  } else if (raw.requires === "bash_match" || raw.requires === "agent_prompt") {
     try { new RegExp(raw.pattern); } catch (e) { errs.push(`${label}: uncompilable pattern — ${e.message}`); }
+  }
+
+  // `dispatch_scope` belongs to `every-dispatch` and to nothing else: required there so the
+  // denominator is never guessed, rejected elsewhere so it cannot sit in a contract reading as
+  // if it constrained something.
+  let dispatch_scope = null;
+  if (raw.cardinality === "every-dispatch") {
+    if (typeof raw.dispatch_scope !== "string" || !raw.dispatch_scope) {
+      errs.push(`${label}: cardinality 'every-dispatch' requires 'dispatch_scope' (a telemetry.<field> naming the agents in scope)`);
+    } else {
+      const m = SCOPE.exec(raw.dispatch_scope.trim());
+      if (!m) errs.push(`${label}: dispatch_scope must be telemetry.<field>, got '${raw.dispatch_scope}'`);
+      else dispatch_scope = m[1];
+    }
+  } else if (raw.dispatch_scope != null) {
+    errs.push(`${label}: dispatch_scope is only meaningful with cardinality 'every-dispatch'`);
   }
   if (typeof raw.since !== "string" || !ISO_DATE.test(raw.since) || Number.isNaN(Date.parse(raw.since))) {
     errs.push(`${label}: since must be YYYY-MM-DD, got '${raw.since}'`);
@@ -78,7 +101,7 @@ function validate(raw, seen) {
     contract: {
       id, requires: raw.requires, pattern: raw.pattern,
       cardinality: raw.cardinality, since: raw.since, until: raw.until ?? null,
-      applies_when: conditions,
+      applies_when: conditions, dispatch_scope,
     },
   };
 }

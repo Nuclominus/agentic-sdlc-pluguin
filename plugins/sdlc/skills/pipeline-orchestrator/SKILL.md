@@ -135,6 +135,7 @@ that status is available to a wrapper script, but it is not the hosting session'
 | `profile.extension_skills` | `EFFECTIVE_PROFILE.extension_skills` *(**Step 1b-ext**)* | Step 3b-1a |
 | `profile.role_expertise` | `EFFECTIVE_PROFILE.role_expertise` *(**ADR-0021**)* | Step 5 telemetry (which stack expertise was in force) |
 | `profile.prompt_blocks` | `EFFECTIVE_PROFILE.prompt_blocks[agent]` *(**ADR-0021**)* | Step 3b-1 — `.expertise` and `.skills` pasted verbatim |
+| `profile.expertise_block_agents` | `EFFECTIVE_PROFILE.expertise_block_agents` *(**ADR-0021**)* | Step 5 telemetry `expertise_blocks` — copy the array verbatim; do NOT recount it from `prompt_blocks` |
 | `profile.post_pipeline_checks` | `EFFECTIVE_PROFILE.post_pipeline_checks` *(**Step 1b**)* | Step 4 |
 | `profile.heal_checks` | `EFFECTIVE_PROFILE.heal_checks` | Step 3e-heal |
 | `profile.phase_command_overrides` | `EFFECTIVE_PROFILE.phase_command_overrides` | Step 3b-1 |
@@ -512,6 +513,30 @@ Note: this covers the **pipeline phase agents** the orchestrator dispatches. ON-
 run outside the orchestrator (debugger / devops / cicd / aar-analyst) obtain the SAME two blocks by
 running one command themselves — `node {SDLC_PLUGIN_ROOT}/tools/resolve/cli.mjs expertise --role <name>` —
 as their `.md` body instructs. There is no self-read of `rules/skills.md` or `sdlc.local.yaml` any more.
+
+```sdlc-contract
+id: 3b-1a-expertise-block
+requires: agent_prompt
+pattern: Stack expertise for
+cardinality: every-dispatch
+dispatch_scope: telemetry.expertise_blocks
+since: 2026-09-07
+```
+
+> **Why this step is gated.** ADR-0021 moved platform expertise out of the agent bodies, where it
+> was structurally guaranteed — an agent's body *is* its system prompt, present on every turn — and
+> into a block this step pastes. That trade buys a platform-neutral roster and costs a guarantee:
+> the expertise now arrives only if this step runs. The first real run measured the difference. Of
+> the ten dispatches that went to agents the resolver had rendered a block for, **nine received it**;
+> the `documentation` phase did not, and the run completed green with nobody the wiser. The block it
+> lost carried the commit/PR conventions and a mandatory skill.
+>
+> The denominator is the whole difficulty, and it is why this contract needed a new cardinality
+> rather than reusing `once-per-phase`. A review loop dispatches `development` three times, so
+> counting matches against the phase count reads 9 ≥ 7 and passes. `every-dispatch` scopes instead
+> to `telemetry.expertise_blocks` — the agents the resolver states it rendered a block for — so
+> nine of ten is nine of ten. A vanilla stack renders no blocks, declares none, and is scored `n/a`
+> rather than passed.
 
 **3b-1b. Build the `sdlc_lessons_block`** (AAR lessons injection).
 
@@ -1189,6 +1214,7 @@ their checkpoints, not lost). Then write `docs/plans/{task_slug}/_telemetry.json
   "priority": 300,
   "aspects": ["android"],
   "additive_profiles": ["retrofit"],
+  "expertise_blocks": "<copy CONTEXT.expertise_block_agents verbatim — the agents the resolver rendered a Stack expertise block for; `sdlc-lint compliance` uses it as the denominator for 3b-1a-expertise-block>",
   "profile_source": "android-foundation/manifest.yaml",
   "narrative_language": "uk",
   "headless_mode": false,

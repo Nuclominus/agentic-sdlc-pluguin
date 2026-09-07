@@ -349,6 +349,13 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
       // orchestrator pastes verbatim into each agent's stable prefix (3b-1).
       role_expertise: resolved.role_expertise,
       prompt_blocks: resolved.prompt_blocks,
+      // The compliance denominator (PR-4). Which agents the resolver actually rendered an
+      // expertise block for — stated here rather than counted by the orchestrator (ADR-0015),
+      // and carried into telemetry so `sdlc-lint compliance` can check every dispatch in scope
+      // received one. A phase count cannot serve: a review loop dispatches one phase repeatedly.
+      expertise_block_agents: Object.keys(resolved.prompt_blocks)
+        .filter((a) => resolved.prompt_blocks[a]?.expertise)
+        .sort(),
     },
     models: models.overrides,
     cost_cap: cap.cost_cap,
