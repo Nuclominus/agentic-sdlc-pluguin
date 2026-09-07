@@ -375,6 +375,46 @@ test("renderSkillsBlock downgrades a role skill whose plugin is not installed, e
   );
 });
 
+test("renderSkillsBlock planning variant states the same rows as future obligations, never as live ones", () => {
+  // Measured on run 4 (child-profile-screen). The development phase runs two passes, and Pass 1 —
+  // `development_plan` — writes one markdown file and no code. It received the developer's three
+  // MANDATORY rows anyway, whose `when` clauses read "before your first Write/Edit of production
+  // Kotlin in THIS dispatch", "before writing or changing any Compose UI" and "before every
+  // hand-off back to review". None can fire in a pass that implements nothing, so the agent
+  // correctly invoked none of them — and `3b-1a-mandatory-skill` scored it 0/3, three of the seven
+  // apparent misses in a run whose real rate on applicable mandates was 16/16.
+  //
+  // The fix is upstream of the auditor: a dispatch that cannot implement is not told to. The
+  // planning block therefore carries no `MANDATORY — invoke` token at all, so the contract's
+  // pattern matches nothing and the mandates are owed by the pass that can actually meet them.
+  const roleSkills = [
+    { skill: "superpowers:test-driven-development", policy: "mandatory", when: "before the first edit" },
+    { skill: "acme:zed", policy: "recommended", when: "" },
+  ];
+  const block = renderSkillsBlock("developer", { roleSkills, extensionRows: [], variant: "planning" });
+
+  assert.equal(block, [
+    "Skills mandated for the implementation pass — name them, and the point each applies, in your plan.",
+    "Do NOT invoke them now: this pass writes no production code, so none of their triggers can fire.",
+    "- `superpowers:test-driven-development` (mandatory) — before the first edit",
+    "- `acme:zed` (recommended)",
+  ].join("\n"));
+
+  // The load-bearing property, asserted directly rather than inferred from the string above:
+  // `tools/sdlc-lint/lib/compliance.mjs` counts obligations by this exact pattern.
+  assert.ok(!/MANDATORY — invoke `/.test(block),
+    "the planning block must not carry the token 3b-1a-mandatory-skill counts as an owed mandate");
+
+  // Same rows, same order, same dedupe — only the framing differs. A planning block that dropped
+  // or reordered rows would make the plan disagree with the pass it plans for.
+  const dispatch = renderSkillsBlock("developer", { roleSkills, extensionRows: [] });
+  const ids = (s) => [...s.matchAll(/`([^`]+)`/g)].map((m) => m[1]);
+  assert.deepEqual(ids(block), ids(dispatch));
+
+  // Nothing to say stays nothing to say, in both variants.
+  assert.equal(renderSkillsBlock("developer", { roleSkills: [], extensionRows: [], variant: "planning" }), null);
+});
+
 test("an extension row targeting an agent that does not exist is reported, not silently ignored", () => {
   // ADR-0021 renamed the roster and ships NO aliases: a project still naming `android-developer`
   // targets nothing. Translating it silently was the bug class this replaces — say so instead.

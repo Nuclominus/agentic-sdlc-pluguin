@@ -56,6 +56,24 @@ test("5b-2-report carries its confounder annotation", () => {
   assert.ok(rows.contracts[0].annotations.includes("confounded by --no-report (not recorded)"));
 });
 
+test("an every-mandate contract says beside its number that the number is an upper bound", () => {
+  // Run 4 (child-profile-screen) scored `3b-1a-mandatory-skill` at 16/23, printed as 0% — and all
+  // seven gaps were `when` triggers that could not fire in the dispatch that carried them. The
+  // auditor cannot evaluate a natural-language `when`, so it charges every MANDATORY row as owed.
+  // The ratio is honest about what it counts and misleading about what it implies, and the fix for
+  // that is a caveat next to it, not a quieter number.
+  const mandate = [{ id: "m", requires: "agent_skill", pattern: "MANDATORY — invoke `([^`]+)`",
+                     cardinality: "every-mandate", since: "2026-09-07", applies_when: [] }];
+  const rows = aggregate([{ run: "r", status: "auditable", date: "2026-09-07", date_source: "started_at",
+    plugin_version: "2.2.0",
+    verdicts: [{ id: "m", verdict: "partial", reason: null, matched: 16, expected: 23 }] }], mandate);
+  assert.ok(rows.contracts[0].annotations.includes("upper bound — `when` triggers are not evaluated; adjudicate per dispatch"),
+    rows.contracts[0].annotations.join("; "));
+
+  // Only this cardinality earns it: a once-per-run step either ran or did not.
+  assert.ok(!aggregate(results, contracts).contracts.some((c) => c.annotations.some((a) => /upper bound/.test(a))));
+});
+
 test("a zero denominator yields a null rate rather than NaN", () => {
   const agg = aggregate([{ run: "r", status: "auditable", date: "2026-07-01", date_source: "started_at",
     plugin_version: "1.14.1",

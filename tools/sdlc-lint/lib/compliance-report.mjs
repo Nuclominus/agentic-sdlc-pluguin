@@ -29,6 +29,14 @@ export function aggregate(results, contracts) {
     if (c.until) annotations.push(`retired ${c.until}`);
     if (denominator < THIN) annotations.push(`thin denominator (n=${denominator})`);
     if (c.id === "5b-2-report") annotations.push("confounded by --no-report (not recorded)");
+    // A mandate's `when` clause is prose, and nothing here evaluates it: a row whose trigger never
+    // fired is charged exactly like one that fired and was ignored. So `matched/expected` bounds
+    // the obligation from above — it marks a run for adjudication, it does not establish a miss.
+    // Run 4 read 16/23 with all seven gaps inapplicable by construction (a planning pass, a
+    // review round that touched no UI, a remediation pass that edited only XML).
+    if (c.cardinality === "every-mandate") {
+      annotations.push("upper bound — `when` triggers are not evaluated; adjudicate per dispatch");
+    }
     return { id: c.id, ...counts, denominator, rate: denominator ? counts.pass / denominator : null, annotations };
   });
 

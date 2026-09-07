@@ -134,7 +134,7 @@ that status is available to a wrapper script, but it is not the hosting session'
 | `profile.phase_prompts_injection` | `EFFECTIVE_PROFILE.phase_prompts_injection` | Step 3b-1 |
 | `profile.extension_skills` | `EFFECTIVE_PROFILE.extension_skills` *(**Step 1b-ext**)* | Step 3b-1a |
 | `profile.role_expertise` | `EFFECTIVE_PROFILE.role_expertise` *(**ADR-0021**)* | Step 5 telemetry (which stack expertise was in force) |
-| `profile.prompt_blocks` | `EFFECTIVE_PROFILE.prompt_blocks[agent]` *(**ADR-0021**)* | Step 3b-1 — `.expertise` and `.skills` pasted verbatim |
+| `profile.prompt_blocks` | `EFFECTIVE_PROFILE.prompt_blocks[agent]` *(**ADR-0021**)* | Step 3b-1 — `.expertise` and `.skills` pasted verbatim (`.skills_planning` replaces `.skills` for development Pass 1 only, 3b-special) |
 | `profile.expertise_block_agents` | `EFFECTIVE_PROFILE.expertise_block_agents` *(**ADR-0021**)* | Step 5 telemetry, under the SAME key — copy the array; never recount it from `prompt_blocks` |
 | `profile.post_pipeline_checks` | `EFFECTIVE_PROFILE.post_pipeline_checks` *(**Step 1b**)* | Step 4 |
 | `profile.heal_checks` | `EFFECTIVE_PROFILE.heal_checks` | Step 3e-heal |
@@ -434,7 +434,7 @@ The prompt MUST be assembled in this exact order so the stable prefix (everythin
 
 Convention skills to consider invoking: {convention_skills (sorted, deterministic)}
 
-{skills_block — the "Skills for this role (…):" list, EFFECTIVE_PROFILE.prompt_blocks[agent].skills pasted VERBATIM; OMITTED ENTIRELY when null — see 3b-1a}
+{skills_block — EFFECTIVE_PROFILE.prompt_blocks[agent].skills pasted VERBATIM; for the development phase's Pass 1 only (3b-special) use .skills_planning instead; OMITTED ENTIRELY when null — see 3b-1a}
 
 Output language contract:
 - code, identifiers, branch names, commit messages, PR titles: always English
@@ -498,7 +498,7 @@ Both blocks are **rendered by the resolve command**, not by you. `EFFECTIVE_PROF
 carries one entry per agent the core manifest binds (phase agents and on-demand agents alike):
 
 ```
-prompt_blocks[agent] = { expertise: <string | null>, skills: <string | null> }
+prompt_blocks[agent] = { expertise: <string | null>, skills: <string | null>, skills_planning: <string | null> }
 ```
 
 - `expertise` — the `Stack expertise for <role> (<stack>):` block: the active foundation's (and
@@ -508,6 +508,13 @@ prompt_blocks[agent] = { expertise: <string | null>, skills: <string | null> }
   project's `sdlc.local.yaml` `extensions.skills` rows that target this agent (`agents` contains its
   name, or is `"all"`), **deduped by skill id with the strictest policy winning, mandatory first,
   alphabetical within each group**. Rendered by `profile.mjs renderSkillsBlock`.
+- `skills_planning` — the SAME rows, in the same order, framed as the obligations of the pass that
+  follows rather than of this one. Use it **only** for the development phase's Pass 1
+  (`development_plan`, 3b-special); every other dispatch gets `skills`. A planning pass writes a
+  plan and no code, so every mandate's trigger ("before your first Write/Edit…", "before writing or
+  changing any Compose UI…", "before every hand-off back to review") is false there by
+  construction — pasting live mandates into it asks for something that cannot be done and teaches
+  the agent that a MANDATORY row is sometimes inert.
 
 Paste each string **verbatim** at its placeholder in 3b-1. When a value is `null`, omit the
 placeholder entirely — no blank header — so the stable prefix stays byte-identical for agents the
@@ -557,6 +564,25 @@ since: 2026-09-07
 > Three runs were audited by hand before this existed, one dispatch at a time — which is how a
 > review-loop round that made seven edits to production code while invoking none of its three
 > mandated skills went unnoticed by every gate in the suite.
+>
+> **What a `partial` here does and does not prove.** The contract counts every `MANDATORY — invoke`
+> row in a dispatch's prompt as owed. A row's `when` clause is natural-language and the auditor
+> does not evaluate it, so a mandate whose trigger never fired is counted exactly like one that
+> fired and was ignored. `matched/expected` is therefore an **upper bound on obligation**: a
+> `partial` marks a run for adjudication, it does not by itself establish non-compliance. Read it
+> by opening the named dispatches, not by reading the ratio.
+>
+> Run 4 (`child-profile-screen`) is the worked example. It scored 16/23 — and all seven gaps were
+> triggers that could not fire: a planning pass that writes no code (3), a review-loop round that
+> changed a view-model but no Compose UI (1), and a remediation pass that edited two XML files (3).
+> Its rate on applicable mandates was 16/16. The first of those three is now fixed upstream, where
+> such a fix belongs: 3b-special Pass 1 receives `skills_planning`, which owes nothing by this
+> pattern, so the denominator stops counting a dispatch that cannot implement.
+>
+> The contract is also blind to ORDER. A `when` of "before your first Write/Edit" is met, as far as
+> this measurement goes, by a skill invoked after the last one — which run 4's review-loop round
+> did (two edits at 13:26:24/29, `test-driven-development` at 13:26:35). Presence is what is
+> gated here; sequence is not yet gated anywhere.
 
 > **Why this step is gated.** ADR-0021 moved platform expertise out of the agent bodies, where it
 > was structurally guaranteed — an agent's body *is* its system prompt, present on every turn — and
@@ -624,8 +650,14 @@ The development phase runs in TWO passes with a user approval gate between them.
 **Pass 1 — Planning:**
 
 1. Use base prompt `development_plan` (instead of `development`).
-2. Spawn the agent. It reads the BA spec + codebase and writes an implementation plan to `docs/plans/{task_slug}/02-development-plan{-aspect_suffix}.md`.
-3. Agent returns a plan summary.
+2. Paste `EFFECTIVE_PROFILE.prompt_blocks[agent].skills_planning` at the `skills_block` placeholder
+   — **not** `.skills`. This pass writes a plan, not code, so none of the mandates' triggers can
+   fire in it; the planning framing asks the plan to name them and the point each applies. Pass 2
+   and every other dispatch use `.skills`. (Run 4, `child-profile-screen`: the planning dispatch
+   received three live mandates it could not meet, correctly invoked none, and was scored 0/3 —
+   three of the seven apparent misses in a run whose rate on applicable mandates was 16/16.)
+3. Spawn the agent. It reads the BA spec + codebase and writes an implementation plan to `docs/plans/{task_slug}/02-development-plan{-aspect_suffix}.md`.
+4. Agent returns a plan summary.
 
 **Approval gate:**
 
