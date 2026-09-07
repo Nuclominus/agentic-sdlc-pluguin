@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-09-07 | #144 | `docs` | — | [[changes/2026-09-07-PR-144-reconcile-the-board-with-what-shipped-trim-the-readme-to-fiv]] |
 | 2026-09-07 | #142 | `feat` | — | [[changes/2026-09-07-PR-142-agents-live-in-the-core-foundations-carry-expertise-adr-0021]] |
 | 2026-09-04 | #137 | `other` | — | [[changes/2026-09-04-PR-137-refresh-the-model-registry-to-fable-5-1-and-current-per-mtok]] |
 | 2026-09-04 | #135 | `other` | — | [[changes/2026-09-04-PR-135-separate-development-and-release-logging-and-gate-it-at-publ]] |
