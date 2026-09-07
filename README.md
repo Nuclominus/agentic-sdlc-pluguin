@@ -55,15 +55,19 @@ This repo's own architecture, decisions, per-PR changes, and roadmap live in the
 
 ## Roadmap
 
-Top priorities right now:
+What's next, in order:
 
-| Priority | Task | Status |
-| -------- | ---- | ------ |
-| 1 | Instruction fidelity (Track H) — re-measure the collapsed run start/tail before deciding H4 | In progress |
-| 2 | Pipeline cache & cost efficiency | In progress |
-| 3 | Micro-task batching (3–5 bugfixes per run) | Planned |
+| # | Next | Why now |
+| - | ---- | ------- |
+| 1 | Gate the expertise hand-off (Track I, PR-4) | ADR-0021 moved platform expertise out of agent bodies and into a block the orchestrator pastes. A real run delivered it on 10 of 11 dispatches — and nothing catches the eleventh. |
+| 2 | Re-measure the collapsed run start (Track H) | ADR-0019's DoD is a before/after on the start window. The first post-2.0.0 run can't settle it: a dry run shared its session, so both resolves landed inside the measured window. |
+| 3 | Replace Track E's prefix DoD | `peak_prefix_tokens < 60k` failed to discriminate in an A/B where both arms passed, and a real run now puts `test` at 200k. The threshold measures task size as much as read discipline. |
+| 4 | Prune context inside review loops (E7) | That same 200k peak is the target: a review loop re-reads every earlier attempt. |
+| 5 | Amortize per-run init cost (E8's open half) | `/sdlc:batch` already runs pipelines in parallel, but each pays its own start — $8.75 of a $16.06 run was orchestration, more than all eight agents combined. |
 
-<a href="docs/assets/roadmap-board.jpg" target="_blank"><img src="docs/assets/roadmap-board.jpg" alt="SDLC Roadmap board" width="100%"></a>
+The full board — every track, status and landing PR — is generated from the vault roadmap into
+[`roadmap/index.html`](roadmap/index.html); the table it reads is
+[`.brain/planning/roadmap.md`](.brain/planning/roadmap.md).
 
 ---
 

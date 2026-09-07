@@ -11,15 +11,14 @@ status: in-progress
 | A  | (foundation retune)              | done        | #23 |
 | B1 | `--resume` checkpoints            | done        | #25 |
 | B2 | cross-run rollup `/sdlc:report`   | done        | #28 |
-| B3 | (planned)                         | planned     | — |
 | B4 | `session-recorder` run journal + measured run clock | done | #35 |
 | C1 | AAR learning cycle `/sdlc:aar`    | done        | #27 |
 | C2 | framework providers (WorkManager, Koin, Ktor, DataStore-Proto) | done | #29, #64 |
 | D  | HTML run-report artifact          | done        | #26 |
 | E  | pipeline cache/cost efficiency    | in-progress | #50 |
-| E6 | deterministic prefix ordering (prompt-cache) | planned | — |
+| E6 | deterministic prefix ordering (prompt-cache) | done — goal met, nothing to build | measured #142 |
 | E7 | dynamic context pruning (review loops) | planned | — |
-| E8 | micro-task batching (3–5 bugfixes) | planned | — |
+| E8 | micro-task batching — throughput half shipped as `/sdlc:batch`; init-cost amortization still open | in-progress | — |
 | F1 | speculative TDD (QA ∥ Dev)        | planned     | — |
 | F2 | fast-track bugfix DAG (LOC-gated) | planned     | — |
 | G1 | self-healing compiler/lint micro-loops | done | #77 |
@@ -33,8 +32,14 @@ status: in-progress
 | H6 | `Stop` hook sealing the run (deterministic tail) | done | #107 |
 | I1 | agents in the core, expertise in the foundations (`role_expertise`, ADR-0021) | done, validated on a real run | #139, #140, #141, #142 |
 
-_Remaining: B3. (`kotlinx.serialization` deferred — needs a `serialization` aspect decision before
-it can land as a provider.)_
+_Open: E1, E3, E4, E7, E8, F1, F2, G2, and the two Track H re-measurements. (`kotlinx.serialization`
+stays deferred under C2 — it needs a `serialization` aspect decision before it can land as a
+provider.)_
+
+_**B3 was dropped on 2026-09-07.** It sat as `(planned)` with the description "next Track B item —
+scope TBD" for the life of the board: a placeholder that never acquired a scope, while everything it
+might have covered was absorbed by tracks E through I. A row that reads as queued work but names
+none is worse than no row._
 
 **Track I — plugin topology.** I1 splits the marketplace along the line the framework plugins
 already drew: the core owns every agent (process), a foundation owns expertise (skills, rules,
@@ -57,21 +62,52 @@ boilerplate floor** re-read every turn, **~73% accumulated context**. Sub-items 
 `peak_prefix_tokens` in the report and `cache_pressure_phases` in the AAR.
 **E2 (surgical reads) landed in 1.10.0** — read-discipline contract in the orchestrator stable
 prefix, four agent contracts de-contradicted, enforced by `sdlc-lint read-discipline`
-([[decisions/ADR-0008-read-discipline-contract]]). Its behavioural half is **landed but unmeasured**:
-`peak_prefix_tokens` < 60k (from the 101k baseline) is verified on the next real downstream run.
-Remaining: E1 (trim floor), E3 (fewer turns), E4 (routing).
+([[decisions/ADR-0008-read-discipline-contract]]).
 
-**Next evolutionary phase — from the Roadmap Development Plan (repo-root `Roadmap Development
-Plan.md`).** Goal: scale complex-task completion from ~70% → 90%, with cost/throughput wins on
-micro-tasks. Three themes, mapped onto tracks; all items specced in [[planning/backlog]], promote
-here when scheduled.
+**E2's behavioural half is now measured on its first real downstream run, and it misses.** The DoD
+was `peak_prefix_tokens` under 60k, down from a 101k baseline. The I1 validation run
+(2026-09-06, a modular Compose app, 8 dispatches) records, per phase: documentation 44k,
+security 53k, business_analysis 60k, review 77k, qa 80k, **development 121k**, **test 200k**. Five
+of seven phases are over the threshold and two are above the baseline the contract was meant to pull
+down. One run is not a verdict on the contract — a different project and a larger task both move
+these numbers — but it is the measurement the DoD asked for, and it did not come back clean. Read it
+next to the A/B result already recorded in [[planning/backlog]], where **both** arms met `<60k` and
+the threshold was judged not to discriminate: taken together the honest reading is that
+`peak_prefix_tokens < 60k` measures task size at least as much as read discipline, and E2's DoD
+needs replacing before it can be passed or failed.
 
-- **Track E (cost, extended)** — E6 deterministic prefix ordering for max cache hits (plan §1.1);
-  E7 dynamic Haiku context pruning inside review loops (§1.2); E8 micro-task batching that
-  amortizes init cost across 3–5 bugfixes via `/sdlc:batch` (§1.3).
+**E6 is closed as achieved rather than built.** Its goal was a byte-identical stable prefix for
+maximum prompt-cache hits. The same validation run reports `cache_hit_ratio: 1.0` — 17.5M cached
+input tokens against 577 uncached — across 11 dispatches, *with* the new `role_expertise` blocks
+sitting in the prefix. There is no cache-hit headroom left to build for, so the item is done by
+measurement.
+
+Remaining on the track: E1 (trim the fixed floor), E3 (fewer turns), E4 (routing), E7 (prune context
+inside review loops — the 200k `test` peak above is exactly its target), and the open half of E8.
+
+**E8, precisely.** `/sdlc:batch` ships and covers the *throughput* half: it decomposes scope,
+detects file conflicts, and dispatches worktree-isolated pipelines in parallel. It does **not**
+deliver what E8 was specced for — amortizing initialization cost across 3–5 bugfixes — because each
+dispatched pipeline still pays its own start window. That half stays open, and the I1 run put a
+number on the prize: $8.75 of a $16.06 run was main-loop orchestration, more than all eight agents
+combined ($7.31).
+
+**Next evolutionary phase.** Goal: scale complex-task completion from ~70% → 90%, with
+cost/throughput wins on micro-tasks. Three themes, mapped onto tracks; all items are specced in
+[[planning/backlog]] — promote them here when scheduled. (The `§` references below point at the
+repo-root `Roadmap Development Plan.md` that seeded these themes; **that file no longer exists**,
+absorbed into [[planning/backlog]] when the vault became the SSOT. The section numbers are kept only
+because the backlog entries still carry them.)
+
+- **Track E (cost, extended)** — E6 deterministic prefix ordering (§1.1) is **closed as achieved**,
+  see above; E7 dynamic Haiku context pruning inside review loops (§1.2); E8's remaining half —
+  amortizing init cost across 3–5 bugfixes (§1.3), the parallel dispatch itself having shipped as
+  `/sdlc:batch`.
 - **Track F — time optimization & parallelism.** F1 speculative TDD running QA ∥ Dev after BA
   approval (§2.1); F2 LOC-gated fast-track DAG (`Dev → QA → Docs` when `LOC_TOUCHED < 20 AND
-  NO_ARCHITECTURE_CHANGES`) (§2.2). Builds on the shipped `[security ‖ test]` group.
+  NO_ARCHITECTURE_CHANGES`) (§2.2). Builds on the shipped `[security ‖ test]` group. F2's *mechanism*
+  already exists — the skip-rules engine (#119) gates phases on `LOC_TOUCHED` and fired on the I1
+  validation project's dry run — so what remains is the recipe, not the machinery.
 - **Track G — quality & autonomy.** G1 self-healing compiler/lint micro-loops feeding `stderr` back
   to the phase's own agent, hard-capped at 2 attempts before recording a blocker and continuing
   (§3.1) — **done in #77**, see [[decisions/ADR-0010-self-healing-micro-loop]]; G2 semantic tagging
@@ -114,6 +150,15 @@ stays deferred, but its Direction 2 — the run start as one command,
 #125 (with #128 fixing the run-date chain that instrument reads). **The track's next step is still
 the re-measurement**: ADR-0019's DoD is a before/after on the start window in API calls
 (median 9 → 2–3) that needs real downstream runs on the new version, and H4 stays gated on ~10 runs
-carrying the new tail (5 exist, all 5/5 on `5b-finish`). See [[planning/h-instruction-fidelity]],
+carrying the new tail (5 exist, all 5/5 on `5b-finish`).
+
+**Track H, state on 2026-09-07 — the first post-2.0.0 run, and why it does not count.** The I1
+validation run carries `plugin_version: 2.0.0` and scores 100% on all five live contracts, so the
+H4 gate advances by one run. Its start-window number does **not** advance the H5-D2 DoD:
+`sdlc-lint start-window` reports 9 API calls for Steps 0→1d, which looks like no movement against
+the 9-call baseline — but the operator ran `/sdlc:start --dry-run` and the real `/sdlc:start` in the
+**same session**, so both resolve invocations fall inside the window the tool measures. The number
+is an artefact of the session shape, not a measurement of the collapsed start. Whoever measures next
+must use a clean session, one `/sdlc:start`, no dry run. See [[planning/h-instruction-fidelity]],
 [[planning/h5-prompt-surface]], [[planning/h5-d2-start-resolution-command]],
 [[planning/h6-hook-deterministic-tail]].
