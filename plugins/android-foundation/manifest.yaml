@@ -81,9 +81,9 @@ role_expertise:
       - { path: rules/documentation.md, note: "vault reading map" }
       - { path: rules/skills.md, note: "only if the optional `android` CLI is on PATH — capability bindings" }
     skills:
-      - { skill: superpowers:test-driven-development, when: "before the first Write/Edit of production Kotlin" }
-      - { skill: frontend-design:frontend-design, when: "before implementing a Compose screen" }
-      - { skill: superpowers:verification-before-completion, when: "before the development->review handoff" }
+      - { skill: superpowers:test-driven-development, when: "before your first Write/Edit of production Kotlin in THIS dispatch — a review-loop round counts" }
+      - { skill: frontend-design:frontend-design, when: "before writing or changing any Compose UI, a review-loop fix included" }
+      - { skill: superpowers:verification-before-completion, when: "before every hand-off back to review, each loop round included" }
 
   reviewer:
     invariants: |
@@ -103,7 +103,7 @@ role_expertise:
       - { path: rules/logging.md, note: "logging conventions under review" }
       - { path: rules/skills.md, note: "only if the optional `android` CLI is on PATH — capability bindings" }
     skills:
-      - { skill: android-foundation:android-review, when: "before the first finding" }
+      - { skill: android-foundation:android-review, when: "before your first finding in THIS dispatch — each loop round is a fresh review" }
       - { skill: superpowers:requesting-code-review, when: "when generating the review report" }
       - { skill: superpowers:receiving-code-review, policy: recommended, when: "when evaluating the developer's response" }
       - { skill: superpowers:verification-before-completion, policy: recommended, when: "before approving" }
@@ -124,7 +124,7 @@ role_expertise:
       - { path: rules/snippets/gradle-commands.md, note: "test / lint task names" }
       - { path: rules/logging.md, note: "test-source exemptions for log calls" }
     skills:
-      - { skill: android-foundation:android-testing, when: "before writing the first test" }
+      - { skill: android-foundation:android-testing, when: "before writing or changing a test in THIS dispatch, a heal retry included" }
       - { skill: superpowers:test-driven-development, policy: recommended, when: "when writing new tests from scratch" }
 
   qa-engineer:
@@ -200,7 +200,7 @@ role_expertise:
       - { path: rules/snippets/non-negotiable.md, note: "what a prescribed fix must not introduce" }
       - { path: rules/enforcement.md, note: "when a foundation hook is the thing misbehaving" }
     skills:
-      - { skill: android-foundation:android-debugging, when: "before the first hypothesis" }
+      - { skill: android-foundation:android-debugging, when: "before your first hypothesis in THIS dispatch" }
       - { skill: superpowers:systematic-debugging, when: "before any diagnosis — the method is not optional" }
       - { skill: superpowers:verification-before-completion, when: "before declaring a root cause" }
 

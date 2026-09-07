@@ -4,7 +4,29 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
-`sdlc` `1.16.0` → `2.1.0`, `android-foundation` `1.7.0` → `2.0.0`, marketplace `1.13.0` → `1.14.0`.
+`sdlc` `1.16.0` → `2.1.1`, `android-foundation` `1.7.0` → `2.0.1`, marketplace `1.13.0` → `1.14.0`.
+
+### Fixed
+
+- **Mandatory skills are now due on a re-dispatch too (`sdlc` 2.1.1, `android-foundation` 2.0.1).**
+  Two measured Android runs (2026-09-06, 2026-09-07) show the same miss: the review loop
+  re-dispatches `developer`, that round makes 5 and then 7 edits to production Kotlin, and it
+  invokes **none** of its three MANDATORY skills. The agent was not ignoring the instruction — it
+  was obeying it. The trigger read `before the first Write/Edit of production Kotlin`, while the
+  round's own `loop_findings` text says the implementation is *already on disk* and must not be
+  re-implemented. Read literally, two of the three triggers had already passed and the third was
+  moot.
+
+  A `when` is scoped to the dispatch now, not to the run — `before your first Write/Edit of
+  production Kotlin in THIS dispatch — a review-loop round counts` — and `sdlc-lint roster` rejects
+  the run-scoped form, which found three more of the same shape (reviewer, tester, debugger) that
+  had not yet been measured failing. The schema's own `when` example was the defective phrasing
+  every foundation author copies; it now teaches the per-dispatch form. The orchestrator's loop
+  section says explicitly that `loop_findings` narrows the round's *scope* and retires none of the
+  role's obligations.
+
+  This is not the "firmer wording" H1 measured at ~3%. The instruction was not weak, it was
+  **false** on a re-dispatch; the fix makes it true.
 
 ### Added
 
