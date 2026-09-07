@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 ---
 
 # I1 — Agents in the core, expertise in the foundations
@@ -183,8 +183,61 @@ and rewrites the preflight stamp on every on-demand bootstrap, and `resolveStack
 project tree once per framework. Both are startup cost on a path that now runs per agent, measured
 at roughly 180 ms on a real project. Fold into PR-4 with the prefix measurement.
 
-## Measurements owed
+## Landed — #142 into `develop`, 2026-09-07
 
-- Per-turn prefix size before/after on an Android run (the ADR predicts a net shrink; PR-4 measures it).
-- `sdlc-lint compliance` on the first three runs that dispatch core agents on Android: did the
-  mandatory `role_expertise` skills get invoked?
+The three PRs merged into `agents-relocation`, and the integration branch landed as **#142** (merge
+commit `55a342a`) after one full validation run on a real project.
+
+## The validation run (2026-09-06)
+
+The branch was installed from its own ref (`/plugin marketplace add …@agents-relocation`) and run
+end to end on a real modular Compose app — all five framework plugins attaching. One
+`android-feature` run: 8 phases, review loop, parallel `[security ‖ test]`, gated remediation
+correctly skipped. `plugin_version: 2.0.0`, `model_enforcement_corrections: 0`, all three
+post-pipeline checks green, `sdlc-lint compliance` 100% on its five live contracts, $16.06 against a
+$19.75 cap.
+
+The strongest single result: a regex for every retired `android-*` name over the main transcript and
+**all 11 subagent transcripts** returned nothing. The expertise also demonstrably arrived — the
+developer used `collectAsStateWithLifecycle` and created the project's first central `TestTag`
+object instead of inlining literals; `tester` stayed on JVM tests while `qa-engineer` wrote the
+Compose UI test; security cited 8 MASVS groups and 4 MASTG test IDs; the reviewer edited nothing and
+drove two loop rounds, catching a `String`/`Long` DAO mismatch and two missing testTags.
+
+### What it exposed
+
+The track moved expertise out of a place that was structurally guaranteed — an agent's own body is
+its system prompt, present on every turn — into a place that depends on the orchestrator pasting a
+block. This run measured that dependency for the first time:
+
+| Observation | Detail |
+|---|---|
+| Blocks delivered | **10 of 11** dispatches. The `documentation` phase got neither block. |
+| Not the resolver | The installed 2.0.0 returns a 1240-char block plus a skills block for `document-writer` on that same project, and 3b-1's placeholders are shared by every phase — there is no separate documentation template. An orchestrator omission on the last phase. |
+| Mandatory skills | Honored on 7 of 9 dispatches that carried MANDATORY rows. The `development plan` dispatch wrote no production Kotlin, so its trigger did not fire; the round-2 loop dispatch made 5 edits to production Kotlin with three MANDATORY rows and zero `Skill` calls. |
+| Nothing gates either | `compliance` matches a dispatch only by `subagent_type` or a Bash command, and `transcript-facts.mjs` captures no dispatch prompt at all. |
+
+## PR-4
+
+1. **Gate the delivery mechanism.** Capture the dispatch prompt in `transcript-facts.mjs`, add a
+   matcher branch to `countMatches`, and declare two `sdlc-contract` blocks — block presence at
+   3b-1a and mandatory-skill invocation. The unresolved design point is the denominator: a vanilla
+   stack legitimately has no blocks, so telemetry has to record which agents the resolver produced a
+   block for, and the contract must compare intent against trace rather than assume.
+2. **Core `debug.yaml` gains the `debugging` phase.** Its description still says "vanilla ships no
+   dedicated debugger agent", which PR-1 made false — the core roster ships `debugger` and the core
+   manifest binds `debugging: debugger`. Today a vanilla debug run hands root-cause analysis to
+   `development`, which holds `Edit`, while the read-only agent built for it sits unused.
+3. **Measure**, on those runs: per-turn prefix size before/after (the ADR predicts a net shrink), and
+   orchestration overhead — this run spent $8.75 on the main loop against $7.31 for all eight agents
+   combined, 64 opus turns at a 1.0 cache-hit ratio.
+4. **Deferred from PR-1's review:** `resolveExpertise` runs a full dependency preflight and rewrites
+   the preflight stamp on every on-demand bootstrap; `resolveStack` re-walks the project tree once
+   per framework (~180 ms measured).
+5. **Inherited cosmetic:** `renderDryRun` prints `Phases (N)` from the recipe's slot count while
+   enumerating expanded rows, so a recipe with a parallel group reads "Phases (7)" above a list
+   numbered to 8. Pre-existing in `caps.mjs`, untouched by this track.
+
+The mandatory-skill gap deliberately gets **no fix in PR-4** beyond the measurement. H1 already
+showed that rewording a mandate buys about 3% while cardinality is what moves compliance; one
+observation is not enough to choose, and item 1 is what turns it into data.
