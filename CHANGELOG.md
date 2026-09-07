@@ -4,7 +4,31 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
-`sdlc` `1.16.0` → `2.1.1`, `android-foundation` `1.7.0` → `2.0.1`, marketplace `1.13.0` → `1.14.0`.
+`sdlc` `1.16.0` → `2.2.0`, `android-foundation` `1.7.0` → `2.0.1`, marketplace `1.13.0` → `1.14.0`.
+
+### Added
+
+- **Mandatory-skill invocation is gated (`sdlc` 2.2.0).** `3b-1a-expertise-block` asks whether a
+  dispatch *received* its expertise block; the new `3b-1a-mandatory-skill` asks whether the subagent
+  then *invoked* what that block mandated — pairing every `MANDATORY — invoke` row in a dispatch's
+  prompt against the `Skill` calls in that dispatch's own transcript.
+
+  The auditor could not previously ask this at all: `resolveRunSessions` resolves a subagent
+  transcript only to walk **up** to the parent session, so a subagent's own `Skill` calls — the
+  entire evidence — were never read. Three runs were audited by hand instead, one dispatch at a
+  time, which is how a review-loop round that made seven edits to production code while invoking
+  none of its three mandated skills went unnoticed by every gate in the suite.
+
+  The join is by tool_use id, never by array position: `deriveDispatchMap` now returns the dispatch's
+  `id` alongside the `agentId` its tool_result carries, and the transcript is named after that.
+  Position would hold only while two independent filters kept agreeing, and would fail silently the
+  day they stopped.
+
+  The new `every-mandate` cardinality counts **mandates, not dispatches** — "9 of 12 mandates met"
+  says how much is being lost, where "3 of 4 dispatches complied" hides whether a dispatch missed
+  one skill or all three. An `agent_skill` pattern must capture the skill id in a group, enforced at
+  parse time: without it every mandate scores unmet, a flat 0% indistinguishable from total
+  non-compliance. A dispatch whose transcript cannot be resolved is counted neither way.
 
 ### Fixed
 

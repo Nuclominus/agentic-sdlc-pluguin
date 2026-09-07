@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { extractFactsFrom } from "./transcript-facts.mjs";
-import { knownRunAgentIds, findAgentTranscript } from "./usage.mjs";
+import { extractFacts, extractFactsFrom } from "./transcript-facts.mjs";
+import { knownRunAgentIds, findAgentTranscript, deriveDispatchMap } from "./usage.mjs";
 
 /**
  * Every session transcript that owns at least one of this run's agents, oldest first.
@@ -66,7 +66,7 @@ function countMatches(contract, facts) {
  * reads 9 matches against 7 phases as a pass while one dispatch of eleven carried nothing —
  * which is exactly the miss this contract exists to catch.
  */
-function scopedDispatches(contract, facts, tel) {
+function scopedDispatchFacts(contract, facts, tel) {
   const scope = telemetryValue(tel, contract.dispatch_scope);
   if (!Array.isArray(scope)) return null;             // the run does not declare it: n/a, not a pass
   const inScope = new Set(scope.filter((s) => typeof s === "string"));
@@ -82,10 +82,64 @@ function scopedDispatches(contract, facts, tel) {
         return !Number.isFinite(t) || (t >= from && t <= to);
       })
     : facts;
-  const dispatches = windowed.filter((f) => f.tool === "Agent" && f.subagent_type
+  return windowed.filter((f) => f.tool === "Agent" && f.subagent_type
     && [...inScope].some((name) => dispatchMatches(f.subagent_type, name)));
+}
+
+/** `every-dispatch`: how many in-scope dispatches carried what the contract's pattern describes. */
+function scopedDispatches(contract, facts, tel) {
+  const dispatches = scopedDispatchFacts(contract, facts, tel);
+  if (!dispatches) return null;
   const re = new RegExp(contract.pattern);
   return { expected: dispatches.length, matched: dispatches.filter((f) => f.prompt && re.test(f.prompt)).length };
+}
+
+/**
+ * `every-mandate`: of the skills a dispatch's prompt MANDATED of it, how many did that dispatch's
+ * own subagent actually invoke?
+ *
+ * This is the one question the auditor could not previously ask. It resolves a subagent transcript
+ * only to walk UP to the parent session (`resolveRunSessions`), so a subagent's own `Skill` calls —
+ * the entire evidence — were never read. Three runs were measured by hand instead, one dispatch at
+ * a time, which is how a review-loop round making seven production edits with none of its three
+ * mandated skills stayed invisible to every gate.
+ *
+ * The join is by tool_use id, never by position: `deriveDispatchMap` reads the session's dispatches
+ * and the `agentId` its tool_result carries, and the transcript is named after that id. A dispatch
+ * whose transcript cannot be resolved is counted NEITHER way — a denominator quietly filled with
+ * unjudgeable rows is worse than a smaller honest one.
+ */
+function scopedMandates(contract, facts, tel, opts = {}) {
+  const dispatches = scopedDispatchFacts(contract, facts, tel);
+  if (!dispatches) return null;
+  const re = new RegExp(contract.pattern, "g");
+  const agentBySession = new Map();     // session path -> (tool_use id -> agent id)
+  const skillsByAgent = new Map();      // agent id -> Set of invoked skill ids, or null if unresolved
+  let expected = 0, matched = 0, judged = 0;
+
+  for (const f of dispatches) {
+    const mandated = [...String(f.prompt ?? "").matchAll(re)].map((m) => m[1]).filter(Boolean);
+    if (!mandated.length) continue;
+    if (!agentBySession.has(f.source)) {
+      const m = new Map();
+      try { for (const d of deriveDispatchMap(f.source)) if (d.id) m.set(d.id, d.agent_id); } catch { /* unreadable */ }
+      agentBySession.set(f.source, m);
+    }
+    const agentId = agentBySession.get(f.source)?.get(f.tool_use_id) ?? null;
+    if (!agentId) continue;
+    if (!skillsByAgent.has(agentId)) {
+      const p = findAgentTranscript(agentId, { projectsRoot: opts.projectsRoot });
+      skillsByAgent.set(agentId, p
+        ? new Set(extractFacts(p).filter((x) => x.tool === "Skill" && x.skill).map((x) => x.skill))
+        : null);
+    }
+    const invoked = skillsByAgent.get(agentId);
+    if (!invoked) continue;             // no transcript: unjudgeable, not a failure
+    judged += 1;
+    expected += mandated.length;
+    matched += mandated.filter((id) => invoked.has(id)).length;
+  }
+  return judged === 0 ? { expected: 0, matched: 0 } : { expected, matched };
 }
 
 // Phases that actually dispatched an agent. NOT the id set: one resumed subagent can
@@ -193,7 +247,7 @@ function firstTranscriptTime(sessions) {
   return best;
 }
 
-function evaluate(contract, { facts, tel, phaseCount, date }) {
+function evaluate(contract, { facts, tel, phaseCount, date, opts = {} }) {
   const na = (reason) => ({ id: contract.id, verdict: "na", reason, matched: 0, expected: 0 });
 
   // An undated run cannot be placed relative to a contract's window, so it is scored against
@@ -210,8 +264,10 @@ function evaluate(contract, { facts, tel, phaseCount, date }) {
   if (contract.until && contract.until < date) return na("retired");
   for (const c of contract.applies_when) if (!conditionHolds(c, tel)) return na("not-applicable");
 
-  if (contract.cardinality === "every-dispatch") {
-    const counted = scopedDispatches(contract, facts, tel);
+  if (contract.cardinality === "every-dispatch" || contract.cardinality === "every-mandate") {
+    const counted = contract.cardinality === "every-mandate"
+      ? scopedMandates(contract, facts, tel, opts)
+      : scopedDispatches(contract, facts, tel);
     if (!counted) return na("no-dispatch-scope");
     const { expected, matched } = counted;
     if (expected === 0) return na("no-dispatch-in-scope");
@@ -273,6 +329,6 @@ export function auditRun(runDir, contracts, opts = {}) {
     sessions,
     status: "auditable",
     reason: null,
-    verdicts: contracts.map((c) => evaluate(c, { facts, tel, phaseCount, date })),
+    verdicts: contracts.map((c) => evaluate(c, { facts, tel, phaseCount, date, opts })),
   };
 }

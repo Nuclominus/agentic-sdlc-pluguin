@@ -534,6 +534,30 @@ dispatch_scope: telemetry.expertise_block_agents
 since: 2026-09-07
 ```
 
+```sdlc-contract
+id: 3b-1a-mandatory-skill
+requires: agent_skill
+pattern: MANDATORY — invoke `([^`]+)`
+cardinality: every-mandate
+dispatch_scope: telemetry.expertise_block_agents
+since: 2026-09-07
+```
+
+> **Delivering the block is half the contract; the other half is whether it was acted on.**
+> `3b-1a-expertise-block` asks whether each dispatch RECEIVED its block.
+> `3b-1a-mandatory-skill` asks whether the subagent then invoked what that block MANDATED of it —
+> pairing every `MANDATORY — invoke` row in a dispatch's prompt against the `Skill` calls in that
+> dispatch's own transcript, joined by tool_use id.
+>
+> It counts mandates, not dispatches, because that is the number that decides anything: "9 of 12
+> mandates met" tells you how much is being lost, where "3 of 4 dispatches complied" hides whether
+> a dispatch missed one skill or all three. A dispatch whose transcript cannot be resolved is
+> counted neither way.
+>
+> Three runs were audited by hand before this existed, one dispatch at a time — which is how a
+> review-loop round that made seven edits to production code while invoking none of its three
+> mandated skills went unnoticed by every gate in the suite.
+
 > **Why this step is gated.** ADR-0021 moved platform expertise out of the agent bodies, where it
 > was structurally guaranteed — an agent's body *is* its system prompt, present on every turn — and
 > into a block this step pastes. That trade buys a platform-neutral roster and costs a guarantee:

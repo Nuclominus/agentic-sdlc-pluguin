@@ -1,0 +1,12 @@
+{
+  "task_slug": "mandate-gap",
+  "started_at": "2026-09-07T14:00:00Z",
+  "completed_at": "2026-09-07T14:00:10Z",
+  "plugin_version": "2.1.1",
+  "stack": "android",
+  "expertise_block_agents": ["developer", "document-writer"],
+  "phases": [
+    { "phase": "development", "agent_id": "aaa000000001" },
+    { "phase": "documentation", "agent_id": "aaa000000002" }
+  ]
+}

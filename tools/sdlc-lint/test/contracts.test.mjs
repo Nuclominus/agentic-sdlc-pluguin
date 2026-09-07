@@ -63,7 +63,8 @@ test("the orchestrator declares exactly the live contract set", () => {
     // shape that measures 100% over 28 runs: one Bash line, once per run.
     // 3b-1a-expertise-block joined it when ADR-0021 made platform expertise something the
     // orchestrator hands over rather than something the agent body already carried (PR-4).
-    "0-resolve", "2-4-anchor", "3b-1a-expertise-block", "3d-1b-phase-cost", "5b-finish", "6-journal",
+    "0-resolve", "2-4-anchor", "3b-1a-expertise-block", "3b-1a-mandatory-skill", "3d-1b-phase-cost",
+    "5b-finish", "6-journal",
   ]);
   assert.equal(contracts.every((c) => c.until === null), true);
 });
@@ -80,7 +81,7 @@ test("live and retired sets parse together without a duplicate id", () => {
   const base = join(REPO, "plugins/sdlc/skills/pipeline-orchestrator");
   const { contracts, errors } = parseContracts([join(base, "SKILL.md"), join(base, "contracts-retired.md")]);
   assert.deepEqual(errors, []);
-  assert.equal(contracts.length, 9);
+  assert.equal(contracts.length, 10);
 });
 
 test("until is optional and defaults to null", () => {
