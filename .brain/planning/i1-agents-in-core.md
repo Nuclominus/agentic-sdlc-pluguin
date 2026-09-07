@@ -232,12 +232,14 @@ block. This run measured that dependency for the first time:
    The list comes from `plan.profile.expertise_block_agents`, so the orchestrator copies it rather
    than recounting it (ADR-0015).
 
-   **The mandatory-skill contract is NOT in PR-4, and the reason is structural, not a deferral of
-   effort.** `resolveRunSessions` walks from a subagent transcript *up* to its parent session, so
-   the auditor reads the main transcript only. A subagent's own `Skill` calls live in
-   `subagents/agent-*.jsonl`, which it never opens. Gating skill invocation means teaching the
-   auditor a second transcript tier and deciding how a dispatch's mandated set is recovered from
-   its prompt — its own piece of work, on evidence, not a line of YAML.
+   **The mandatory-skill contract was deferred out of PR-4 for a structural reason, and landed
+   separately in #150 once three runs had supplied the evidence.** `resolveRunSessions` walks from
+   a subagent transcript *up* to its parent session, so the auditor read the main transcript only,
+   and a subagent's own `Skill` calls in `subagents/agent-*.jsonl` were invisible to it. #150
+   teaches it that second tier: `3b-1a-mandatory-skill` pairs every `MANDATORY — invoke` row in a
+   dispatch's prompt against the `Skill` calls in that dispatch's own transcript, joined by
+   tool_use id, counting **mandates** rather than dispatches. Both halves of the ADR-0021 hand-off
+   — delivery and use — are now gated.
 2. **Core `debug.yaml` gains the `debugging` phase — DONE.** The recipe now runs
    `debugging → development → qa`, and its description no longer claims vanilla ships no debugger
    agent (PR-1 made that false). Cap re-based on the same measured p90s as `android-debug`:
