@@ -1,0 +1,11 @@
+{
+  "task_slug": "expertise-window",
+  "started_at": "2026-09-07T10:00:02Z",
+  "completed_at": "2026-09-07T10:00:03Z",
+  "plugin_version": "2.1.0",
+  "stack": "android",
+  "expertise_block_agents": ["developer", "reviewer", "document-writer"],
+  "phases": [
+    { "phase": "review", "agent_id": "iii999" }
+  ]
+}

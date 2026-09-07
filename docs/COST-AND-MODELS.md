@@ -108,7 +108,7 @@ these were added. Project-local recipes under `.claude/sdlc-workflows/` may stil
 | `docs-only` | $0.35 | `hotfix` | $9.00 |
 | `testing` | $2.00 | `android-debug` | $11.00 |
 | `analysis` | $4.25 | `default` | $12.75 |
-| `debug` | $8.50 | `android-bugfix` | $12.75 |
+| `debug` | $9.00 | `android-bugfix` | $12.75 |
 | `bugfix` / `refactor` | $9.00 | `android-feature` | $16.50 |
 
 All are derived the same way: **sum of measured per-phase p90 × 1.2, rounded up to the next $0.25**,

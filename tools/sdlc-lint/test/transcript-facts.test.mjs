@@ -30,6 +30,19 @@ test("a missing transcript yields no facts rather than an error", () => {
   assert.deepEqual(extractFacts(join(FIX, "does-not-exist.jsonl")), []);
 });
 
+test("carries the Agent dispatch prompt, so a consumer can audit what was handed to a subagent", () => {
+  const facts = extractFacts(join(FIX, "session-dispatch-prompts.jsonl"));
+  const agents = facts.filter((f) => f.tool === "Agent");
+  assert.equal(agents.length, 2);
+  assert.match(agents[0].prompt, /Stack expertise for developer/);
+  assert.equal(agents[1].prompt, "no block here");
+});
+
+test("a tool_use with no prompt carries null rather than an absent field", () => {
+  const [bash] = extractFacts(join(FIX, "session-basic.jsonl"));
+  assert.equal(bash.prompt, null);
+});
+
 test("extractFactsFrom concatenates, renumbers seq globally and records the source", () => {
   const p = join(FIX, "session-basic.jsonl");
   const facts = extractFactsFrom([p, p]);

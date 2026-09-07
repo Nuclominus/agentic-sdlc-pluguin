@@ -61,7 +61,9 @@ test("the orchestrator declares exactly the live contract set", () => {
   assert.deepEqual(contracts.map((c) => c.id).sort(), [
     // 0-resolve joined the set when Steps 0→1d collapsed into one command (ADR-0019). It is the
     // shape that measures 100% over 28 runs: one Bash line, once per run.
-    "0-resolve", "2-4-anchor", "3d-1b-phase-cost", "5b-finish", "6-journal",
+    // 3b-1a-expertise-block joined it when ADR-0021 made platform expertise something the
+    // orchestrator hands over rather than something the agent body already carried (PR-4).
+    "0-resolve", "2-4-anchor", "3b-1a-expertise-block", "3d-1b-phase-cost", "5b-finish", "6-journal",
   ]);
   assert.equal(contracts.every((c) => c.until === null), true);
 });
@@ -78,7 +80,7 @@ test("live and retired sets parse together without a duplicate id", () => {
   const base = join(REPO, "plugins/sdlc/skills/pipeline-orchestrator");
   const { contracts, errors } = parseContracts([join(base, "SKILL.md"), join(base, "contracts-retired.md")]);
   assert.deepEqual(errors, []);
-  assert.equal(contracts.length, 8);
+  assert.equal(contracts.length, 9);
 });
 
 test("until is optional and defaults to null", () => {
@@ -141,4 +143,42 @@ test("every bash_match pattern matches a command this document actually tells yo
       `contract '${c.id}' pattern /${c.pattern}/ matches no shell block in SKILL.md. A pattern that ` +
       "cannot match reports 0% compliance forever, and reads as a step the orchestrator skipped");
   }
+});
+
+test("accepts a dispatch-scoped agent_prompt contract", () => {
+  const { contracts, errors } = parseContracts(join(FIX, "skill-contracts-dispatch.md"));
+  const ok = contracts.find((c) => c.id === "3b-1a-expertise-block");
+  assert.ok(ok, `expected the well-formed contract to parse; errors: ${errors.join("; ")}`);
+  assert.equal(ok.requires, "agent_prompt");
+  assert.equal(ok.cardinality, "every-dispatch");
+  assert.equal(ok.dispatch_scope, "expertise_block_agents");
+});
+
+test("every-dispatch without a dispatch_scope is an error, not a silent default", () => {
+  const { contracts, errors } = parseContracts(join(FIX, "skill-contracts-dispatch.md"));
+  assert.equal(contracts.some((c) => c.id === "scope-missing"), false);
+  assert.ok(errors.some((e) => /scope-missing/.test(e) && /dispatch_scope/.test(e)), errors.join("; "));
+});
+
+test("a dispatch_scope that is not a telemetry path is rejected", () => {
+  const { contracts, errors } = parseContracts(join(FIX, "skill-contracts-dispatch.md"));
+  assert.equal(contracts.some((c) => c.id === "scope-malformed"), false);
+  assert.ok(errors.some((e) => /scope-malformed/.test(e)), errors.join("; "));
+});
+
+test("an uncompilable agent_prompt pattern is caught, as it is for bash_match", () => {
+  const { contracts, errors } = parseContracts(join(FIX, "skill-contracts-dispatch.md"));
+  assert.equal(contracts.some((c) => c.id === "pattern-broken"), false);
+  assert.ok(errors.some((e) => /pattern-broken/.test(e) && /uncompilable/.test(e)), errors.join("; "));
+});
+
+test("every-dispatch is rejected on a requires it cannot evaluate", () => {
+  // Review finding 2 on #146: `scopedDispatches` compiles the pattern and tests it against the
+  // dispatch prompt whatever `requires` says, while validation compiled it only for bash_match
+  // and agent_prompt. `requires: agent_dispatch` + an uncompilable pattern therefore parsed
+  // cleanly and threw out of `new RegExp` at audit time — breaking auditRun's "never throws"
+  // contract and aborting the whole corpus run.
+  const { contracts, errors } = parseContracts(join(FIX, "skill-contracts-dispatch-bad.md"));
+  assert.equal(contracts.some((c) => c.id === "wrong-requires"), false);
+  assert.ok(errors.some((e) => /wrong-requires/.test(e) && /agent_prompt/.test(e)), errors.join("; "));
 });

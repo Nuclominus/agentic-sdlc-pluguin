@@ -18,7 +18,7 @@ discovered across **all** plugins (`**/workflows/*.yaml`), validated against
 | `docs-only`     | sdlc (core)    | Docs                                                              |
 | `analysis`      | sdlc (core)    | BA → Security (reports only — no code, no PR)                     |
 | `testing`       | sdlc (core)    | QA (backfill / verify tests)                                      |
-| `debug`         | sdlc (core)    | Dev → QA (fix-and-verify; developer does root-cause)             |
+| `debug`         | sdlc (core)    | Debugger → Dev → QA (read-only root cause, then the fix)         |
 | `android-feature` | android-foundation | BA → Dev → Review(⇄Dev ×3) → [Security ‖ Test] → Remediation? → QA → Docs |
 | `android-bugfix`  | android-foundation | Dev → Review(⇄Dev ×3) → [Security ‖ Test] → Remediation? → QA |
 | `android-debug`   | android-foundation | Debugger → Dev → Review(⇄Dev ×2) → Test                     |

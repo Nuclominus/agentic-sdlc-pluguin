@@ -1,0 +1,1 @@
+{"type":"assistant","timestamp":"2026-09-07T10:00:05Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"s1","name":"Write","input":{"file_path":"docs/plans/expertise-gap/02-development.md"}}]}}

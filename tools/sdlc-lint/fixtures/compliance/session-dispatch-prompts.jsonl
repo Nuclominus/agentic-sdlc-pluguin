@@ -1,0 +1,2 @@
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Agent","input":{"subagent_type":"sdlc:developer","description":"Phase 2/7: development","prompt":"=== STABLE PREFIX ===\nStack expertise for developer (android):\nNative Android (Kotlin).\n"}}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t2","name":"Agent","input":{"subagent_type":"sdlc:document-writer","description":"Phase 7/7: documentation","prompt":"no block here"}}]}}

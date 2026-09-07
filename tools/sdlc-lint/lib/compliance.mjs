@@ -52,7 +52,40 @@ function countMatches(contract, facts) {
       && dispatchMatches(f.subagent_type, contract.pattern)).length;
   }
   const re = new RegExp(contract.pattern);
+  if (contract.requires === "agent_prompt") {
+    return facts.filter((f) => f.tool === "Agent" && f.prompt && re.test(f.prompt)).length;
+  }
   return facts.filter((f) => f.tool === "Bash" && f.command && re.test(f.command)).length;
+}
+
+/**
+ * `every-dispatch`: the dispatches a contract applies to, and how many of them satisfied it.
+ *
+ * Scope comes from the run's own telemetry (`dispatch_scope` names the field), never from the
+ * phase list. A review loop dispatches one phase several times, so a phase-count denominator
+ * reads 9 matches against 7 phases as a pass while one dispatch of eleven carried nothing —
+ * which is exactly the miss this contract exists to catch.
+ */
+function scopedDispatches(contract, facts, tel) {
+  const scope = telemetryValue(tel, contract.dispatch_scope);
+  if (!Array.isArray(scope)) return null;             // the run does not declare it: n/a, not a pass
+  const inScope = new Set(scope.filter((s) => typeof s === "string"));
+  // The fact stream is SESSION-wide, and a session can host more than one run. For a counting
+  // cardinality that only dilutes; here a neighbouring run's dispatch would enter `expected` and
+  // never match, inventing a failure. Bound it by the run's own clock when the run states both
+  // edges; when it does not, fall back to the whole stream rather than to an empty one — a
+  // half-open window would drop every dispatch and read as a clean `n/a`.
+  const from = Date.parse(tel?.started_at ?? ""), to = Date.parse(tel?.completed_at ?? "");
+  const windowed = Number.isFinite(from) && Number.isFinite(to)
+    ? facts.filter((f) => {
+        const t = Date.parse(f.timestamp ?? "");
+        return !Number.isFinite(t) || (t >= from && t <= to);
+      })
+    : facts;
+  const dispatches = windowed.filter((f) => f.tool === "Agent" && f.subagent_type
+    && [...inScope].some((name) => dispatchMatches(f.subagent_type, name)));
+  const re = new RegExp(contract.pattern);
+  return { expected: dispatches.length, matched: dispatches.filter((f) => f.prompt && re.test(f.prompt)).length };
 }
 
 // Phases that actually dispatched an agent. NOT the id set: one resumed subagent can
@@ -176,6 +209,15 @@ function evaluate(contract, { facts, tel, phaseCount, date }) {
   // it measured is gone — but says nothing about a run that postdates the change.
   if (contract.until && contract.until < date) return na("retired");
   for (const c of contract.applies_when) if (!conditionHolds(c, tel)) return na("not-applicable");
+
+  if (contract.cardinality === "every-dispatch") {
+    const counted = scopedDispatches(contract, facts, tel);
+    if (!counted) return na("no-dispatch-scope");
+    const { expected, matched } = counted;
+    if (expected === 0) return na("no-dispatch-in-scope");
+    const verdict = matched >= expected ? "pass" : matched > 0 ? "partial" : "fail";
+    return { id: contract.id, verdict, reason: null, matched, expected };
+  }
 
   const matched = countMatches(contract, facts);
   if (contract.cardinality === "once-per-phase") {

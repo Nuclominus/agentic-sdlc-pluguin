@@ -1,0 +1,9 @@
+{
+  "task_slug": "no-expertise-scope",
+  "started_at": "2026-09-07T12:00:00Z",
+  "plugin_version": "2.0.0",
+  "stack": "vanilla",
+  "phases": [
+    { "phase": "development", "agent_id": "iii999" }
+  ]
+}

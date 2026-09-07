@@ -4,7 +4,42 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
-`sdlc` `1.16.0` → `2.0.0`, `android-foundation` `1.7.0` → `2.0.0`, marketplace `1.13.0` → `1.14.0`.
+`sdlc` `1.16.0` → `2.1.0`, `android-foundation` `1.7.0` → `2.0.0`, marketplace `1.13.0` → `1.14.0`.
+
+### Added
+
+- **The expertise hand-off is gated (ADR-0021 follow-up, `sdlc` 2.1.0).** ADR-0021 moved platform
+  expertise out of the agent bodies, where it was structurally guaranteed — an agent's body *is*
+  its system prompt — and into a block the orchestrator pastes at Step 3b-1a. The first real run
+  showed what that costs: of the ten dispatches going to agents the resolver had rendered a block
+  for, **nine received it**; the `documentation` phase did not, and the run finished green.
+  `sdlc-lint compliance` now audits it via a new `3b-1a-expertise-block` contract.
+
+  The denominator needed a new cardinality rather than a new pattern. A review loop dispatches
+  `development` several times, so counting matches against the phase count reads 9 ≥ 7 and passes
+  the very run that missed one. `every-dispatch` scopes to `dispatch_scope:
+  telemetry.expertise_block_agents` — the agents *this run dispatches* that the resolver rendered a
+  block for, stated by the plan under the same key so the orchestrator copies rather than recounts
+  (ADR-0015). The on-demand roster (debugger, devops, cicd, aar-analyst) is excluded: it holds
+  blocks so `expertise --role` can serve it, but nothing is pasted for it, so counting it would
+  make a `/sdlc:aar` in the same session fail a compliant run. The audit is bounded by the run's
+  own `started_at`/`completed_at`, since one session can host two runs. A vanilla stack renders no
+  blocks, declares none, and scores `n/a` instead of passing; so does a run predating the field —
+  silence, not a guess.
+
+  Mandatory-skill invocation is deliberately **not** gated here: `resolveRunSessions` reads only
+  the main session transcript, while a subagent's `Skill` calls live in its own
+  `subagents/agent-*.jsonl`. Gating that needs a second transcript tier and its own design.
+
+### Changed
+
+- **The core `debug` recipe uses the core debugger (`sdlc` 2.1.0).** It now runs
+  `debugging → development → qa`. PR-1 added `debugger` to the core roster and bound
+  `debugging: debugger`, but the recipe kept the shape it had when vanilla shipped no such agent —
+  handing root-cause analysis to `development`, which holds `Edit`, while the read-only agent built
+  for the job sat unused. Its description asserted that absence, which had stopped being true. Cap
+  re-based on the same measured p90s as `android-debug`: $0.52 + $5.41 + $1.48 = $7.41, ×1.2 →
+  **$9.00**.
 
 **Why both plugins go major.** ADR-0021 removes a documented extension point: a foundation manifest
 could bind `agents_per_phase` / `on_demand_agents` / `aar_analyst`, and now the schema rejects those

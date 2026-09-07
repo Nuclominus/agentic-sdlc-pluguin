@@ -302,6 +302,18 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
     if (!bound(name)) warn(`WARN: phase '${name}' in workflow '${resolvedName.name}' has no agent bound in the core manifest — it will be skipped`);
   }
 
+  // The agents THIS run dispatches: the resolved workflow's phases (after skips, parallel groups
+  // flattened) mapped through the core roster. Narrower than `agentsBound(agents_per_phase)`,
+  // which also names agents for phases this recipe never runs.
+  const dispatchedAgents = new Set();
+  for (const name of built.phases.flatMap((p) => (Array.isArray(p.parallel) ? p.parallel : [p.name]))) {
+    const mapping = effective.agents_per_phase?.[name];
+    if (typeof mapping === "string") dispatchedAgents.add(mapping);
+    else if (mapping && typeof mapping === "object") {
+      for (const a of Object.values(mapping)) if (typeof a === "string") dispatchedAgents.add(a);
+    }
+  }
+
   // ---- Step 1d: cap
   const cap = resolveCostCap({ recipe: located.recipe.doc, workflowName: resolvedName.name, costCaps: effective.cost_caps });
   const capPrint = renderCapOverridePrint(cap, located.recipe.doc);
@@ -349,6 +361,19 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
       // orchestrator pastes verbatim into each agent's stable prefix (3b-1).
       role_expertise: resolved.role_expertise,
       prompt_blocks: resolved.prompt_blocks,
+      // The compliance denominator (PR-4). Stated here rather than counted by the orchestrator
+      // (ADR-0015), and carried into telemetry so `sdlc-lint compliance` can check that every
+      // dispatch in scope received its block. A phase count cannot serve: a review loop
+      // dispatches one phase repeatedly.
+      //
+      // Scope is the agents THIS RUN WILL DISPATCH that have a block — not every agent holding
+      // one. `prompt_blocks` deliberately covers the on-demand roster (debugger, devops, cicd,
+      // aar-analyst) so `expertise --role` can serve them, but 3b-1a pastes nothing for those:
+      // they fetch their own. Counting them would make a `/sdlc:aar` in the same session an
+      // expected dispatch that can never match, and report a compliant run as short.
+      expertise_block_agents: [...dispatchedAgents]
+        .filter((a) => resolved.prompt_blocks[a]?.expertise)
+        .sort(),
     },
     models: models.overrides,
     cost_cap: cap.cost_cap,

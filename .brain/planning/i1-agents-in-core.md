@@ -212,22 +212,37 @@ block. This run measured that dependency for the first time:
 
 | Observation | Detail |
 |---|---|
-| Blocks delivered | **10 of 11** dispatches. The `documentation` phase got neither block. |
+| Blocks delivered | **9 of the 10 dispatches in scope.** The `documentation` phase got neither block. (The run made 11 dispatches; `session-recorder` is out of scope — no `role_expertise` names it. The first write-up of this said "10 of 11", counting the wrong denominator on both sides. Getting it wrong by hand is the argument for the gate.) |
 | Not the resolver | The installed 2.0.0 returns a 1240-char block plus a skills block for `document-writer` on that same project, and 3b-1's placeholders are shared by every phase — there is no separate documentation template. An orchestrator omission on the last phase. |
 | Mandatory skills | Honored on 7 of 9 dispatches that carried MANDATORY rows. The `development plan` dispatch wrote no production Kotlin, so its trigger did not fire; the round-2 loop dispatch made 5 edits to production Kotlin with three MANDATORY rows and zero `Skill` calls. |
 | Nothing gates either | `compliance` matches a dispatch only by `subagent_type` or a Bash command, and `transcript-facts.mjs` captures no dispatch prompt at all. |
 
 ## PR-4
 
-1. **Gate the delivery mechanism.** Capture the dispatch prompt in `transcript-facts.mjs`, add a
-   matcher branch to `countMatches`, and declare two `sdlc-contract` blocks — block presence at
-   3b-1a and mandatory-skill invocation. The unresolved design point is the denominator: a vanilla
-   stack legitimately has no blocks, so telemetry has to record which agents the resolver produced a
-   block for, and the contract must compare intent against trace rather than assume.
-2. **Core `debug.yaml` gains the `debugging` phase.** Its description still says "vanilla ships no
-   dedicated debugger agent", which PR-1 made false — the core roster ships `debugger` and the core
-   manifest binds `debugging: debugger`. Today a vanilla debug run hands root-cause analysis to
-   `development`, which holds `Edit`, while the read-only agent built for it sits unused.
+1. **Gate the delivery mechanism — DONE.** `transcript-facts.mjs` captures the dispatch prompt;
+   `contracts.mjs` gains `requires: agent_prompt` and a `every-dispatch` cardinality; the
+   orchestrator declares `3b-1a-expertise-block`.
+
+   The denominator was the whole difficulty and it needed a new cardinality, not a new pattern.
+   `once-per-phase` cannot express this: a review loop dispatches `development` three times, so
+   `matched >= phaseCount` reads 9 ≥ 7 and **passes the very run that missed a block**. So the
+   contract carries `dispatch_scope: telemetry.expertise_block_agents` — the agents the resolver states
+   it rendered a block for — and expected is the number of dispatches to those agents. Nine of ten
+   is nine of ten. A vanilla stack declares no scope and scores `n/a`, never a silent pass.
+   The list comes from `plan.profile.expertise_block_agents`, so the orchestrator copies it rather
+   than recounting it (ADR-0015).
+
+   **The mandatory-skill contract is NOT in PR-4, and the reason is structural, not a deferral of
+   effort.** `resolveRunSessions` walks from a subagent transcript *up* to its parent session, so
+   the auditor reads the main transcript only. A subagent's own `Skill` calls live in
+   `subagents/agent-*.jsonl`, which it never opens. Gating skill invocation means teaching the
+   auditor a second transcript tier and deciding how a dispatch's mandated set is recovered from
+   its prompt — its own piece of work, on evidence, not a line of YAML.
+2. **Core `debug.yaml` gains the `debugging` phase — DONE.** The recipe now runs
+   `debugging → development → qa`, and its description no longer claims vanilla ships no debugger
+   agent (PR-1 made that false). Cap re-based on the same measured p90s as `android-debug`:
+   $0.52 + $5.41 + $1.48 = $7.41, ×1.2 → **$9.00**. Root cause is now diagnosed by the read-only
+   agent instead of by `development`, which holds `Edit`.
 3. **Measure**, on those runs: per-turn prefix size before/after (the ADR predicts a net shrink), and
    orchestration overhead — this run spent $8.75 on the main loop against $7.31 for all eight agents
    combined, 64 opus turns at a 1.0 cache-hit ratio.

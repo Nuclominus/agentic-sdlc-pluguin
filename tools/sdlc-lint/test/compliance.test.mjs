@@ -319,3 +319,64 @@ test("a run spanning two sessions is audited as ONE fact stream", () => {
     "seq is renumbered across files, so a contract counting occurrences sees one ordered stream");
   assert.equal(new Set(facts.map((f) => f.source)).size, 2, "and both files really did contribute");
 });
+
+// --- every-dispatch: the ADR-0021 expertise hand-off (PR-4) -------------------------------
+// The denominator is the point. A review loop dispatches `development` three times, so a
+// once-per-phase count of matches passes at 9 matches against 7 phases while one dispatch
+// carried nothing. Scoping to the agents the run says it rendered a block for makes one
+// miss one short.
+const DISPATCH_FIX = join(FIX, "skill-contracts-dispatch.md");
+
+test("every-dispatch counts dispatches in scope, so a single missed block fails the run", () => {
+  const { contracts: cs } = parseContracts(DISPATCH_FIX);
+  const c = cs.filter((x) => x.id === "3b-1a-expertise-block");
+  const res = auditRun(run("expertise-gap"), c, { projectsRoot: PROJECTS });
+  assert.equal(res.status, "auditable");
+  const v = verdict(res, "3b-1a-expertise-block");
+  assert.equal(v.expected, 3, "three dispatches went to agents the run rendered a block for");
+  assert.equal(v.matched, 2, "document-writer's dispatch carried no block");
+  assert.equal(v.verdict, "partial");
+});
+
+test("a dispatch to an agent outside the scope is not counted for or against", () => {
+  const { contracts: cs } = parseContracts(DISPATCH_FIX);
+  const c = cs.filter((x) => x.id === "3b-1a-expertise-block");
+  const res = auditRun(run("expertise-gap"), c, { projectsRoot: PROJECTS });
+  // session-recorder is dispatched but has no role_expertise, so it is neither expected nor matched.
+  assert.equal(verdict(res, "3b-1a-expertise-block").expected, 3);
+});
+
+test("a run whose telemetry names no scope field is n/a, never a silent pass", () => {
+  const { contracts: cs } = parseContracts(DISPATCH_FIX);
+  const c = cs.filter((x) => x.id === "3b-1a-expertise-block");
+  // Same era as the contract, but the run declares no expertise_block_agents — a vanilla stack
+  // legitimately renders no block, and that must read as "nothing to check", not as compliance.
+  const res = auditRun(run("no-expertise-scope"), c, { projectsRoot: PROJECTS });
+  const v = verdict(res, "3b-1a-expertise-block");
+  assert.equal(v.verdict, "na");
+  assert.equal(v.reason, "no-dispatch-scope");
+});
+
+test("every-dispatch counts only the dispatches inside the run's own window", () => {
+  // Review finding 3 on #146. The fact stream is SESSION-wide: two SDLC runs in one session see
+  // each other's dispatches. For once-per-run that only dilutes; for every-dispatch it invents a
+  // failure, because a neighbouring run's dispatch enters `expected` and can never match. The
+  // run's own started_at/completed_at bound it. sess-e dispatches at :01 developer(block),
+  // :02 reviewer(block), :03 document-writer(no block), :04 session-recorder(out of scope);
+  // this run owns :02-:03 only.
+  const { contracts: cs } = parseContracts(DISPATCH_FIX);
+  const c = cs.filter((x) => x.id === "3b-1a-expertise-block");
+  const v = verdict(auditRun(run("expertise-window"), c, { projectsRoot: PROJECTS }), "3b-1a-expertise-block");
+  assert.equal(v.expected, 2, "the developer dispatch at :01 belongs to a different run");
+  assert.equal(v.matched, 1);
+  assert.equal(v.verdict, "partial");
+});
+
+test("a run with no completed_at is scored against its whole session rather than nothing", () => {
+  // A half-open window would silently drop every dispatch and read as a clean n/a. Falling back
+  // to the full stream keeps the old (diluting) behaviour, which is the honest degradation.
+  const { contracts: cs } = parseContracts(DISPATCH_FIX);
+  const c = cs.filter((x) => x.id === "3b-1a-expertise-block");
+  const v = verdict(auditRun(run("expertise-gap"), c, { projectsRoot: PROJECTS }), "3b-1a-expertise-block");
+  assert.equal(v.expected, 3, "expertise-gap carries no completed_at — all three in-scope dispatches count");
+});

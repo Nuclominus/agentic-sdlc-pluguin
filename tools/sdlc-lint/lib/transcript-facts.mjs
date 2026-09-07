@@ -39,6 +39,11 @@ export function extractFacts(transcriptPath) {
         // them it would have to re-parse the JSONL, which is what this module exists to prevent.
         timestamp: typeof d.timestamp === "string" ? d.timestamp : null,
         skill: typeof input.skill === "string" ? input.skill : null,
+        // The dispatch prompt. Same justification as `skill`: a consumer auditing what a
+        // subagent was actually handed (ADR-0021 moved platform expertise into a block the
+        // orchestrator pastes here) would otherwise re-parse the JSONL. It is large, and only
+        // Agent dispatches carry one — every other tool leaves it null.
+        prompt: typeof input.prompt === "string" ? input.prompt : null,
       });
     }
   }
