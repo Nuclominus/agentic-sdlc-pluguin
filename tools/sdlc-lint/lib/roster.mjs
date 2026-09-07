@@ -23,6 +23,11 @@ import { frontmatter, parseTools } from "./agent-tools.mjs";
 export const CORE_MANIFEST = "plugins/sdlc/manifest.yaml";
 export const CORE_AGENTS_DIR = "plugins/sdlc/agents";
 export const ORCHESTRATOR = "plugins/sdlc/skills/pipeline-orchestrator/SKILL.md";
+
+// A skill trigger that counts occurrences across the RUN rather than within the dispatch. The
+// negative lookahead lets a trigger say `first … in this dispatch` and pass, so the rule bites the
+// scoping, not the word.
+const RUN_SCOPED = /\bthe first\b(?![^.]*\bthis dispatch\b)/i;
 /** The header `renderRoleExpertiseBlock` emits — the orchestrator must paste a block that carries it. */
 export const EXPERTISE_HEADER = "Stack expertise for";
 
@@ -125,6 +130,15 @@ export function checkRoster(root = process.cwd()) {
       }
       for (const row of decl?.skills ?? []) {
         const id = typeof row === "string" ? row : row?.skill;
+        // A `when` is read inside a block pasted on EVERY dispatch of the role, so it must be true
+        // on every one of them. A run-scoped trigger is silently false from the second dispatch on.
+        // Measured twice: the review loop re-dispatches `developer` telling it the implementation
+        // is already on disk, and against that `before the first Write/Edit` reads as already-past
+        // — so a round that made 5 and then 7 production edits invoked no mandatory skill at all.
+        const when = typeof row === "object" && typeof row?.when === "string" ? row.when : null;
+        if (when && RUN_SCOPED.test(when)) {
+          errors.push(`role_expertise.${role}.skills: ${id ?? "(unnamed)"} — \`when: "${when}"\` is run-scoped ("the first …"). The block is pasted per dispatch, so this trigger goes silently false on every re-dispatch (review loop, heal retry). Scope it to the dispatch, e.g. "before your first … in THIS dispatch — a review-loop round counts"`);
+        }
         if (typeof id !== "string" || !id.includes(":")) continue;
         const [owner, skill] = id.split(":");
         if (owner === plugin) {

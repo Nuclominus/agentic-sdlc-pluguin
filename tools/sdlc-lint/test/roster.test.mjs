@@ -236,3 +236,45 @@ test("the shipped marketplace honors every roster invariant", () => {
   assert.deepEqual(failures(results), []);
   assert.ok(results.some((r) => r.check === "agents" && /plugins\/sdlc\/agents\/reviewer\.md/.test(r.file)), "the new core roles are in scope");
 });
+
+test("expertise: a run-scoped skill trigger is rejected — the block is pasted per dispatch", () => {
+  // Measured twice on real Android runs (2026-09-06, 2026-09-07). The review loop re-dispatches
+  // `developer`, and its per-call text says the implementation is ALREADY ON DISK and must not be
+  // re-implemented. Against that, `before the first Write/Edit of production Kotlin` reads as
+  // already-past and `before implementing a Compose screen` reads as not-applicable, so a dispatch
+  // that then made 5 and 7 production edits invoked no mandatory skill at all. The agent was
+  // obeying the trigger, not ignoring it: a `when` scoped to the RUN is silently false on every
+  // re-dispatch, and the block carrying it is pasted per dispatch.
+  const root = goodTree();
+  try {
+    write(root, "plugins/foo-foundation/manifest.yaml", [
+      "kind: foundation", "stack: foo", "priority: 300", "detect:", "  any: [{ file_exists: foo }]",
+      "role_expertise:",
+      "  developer:",
+      "    invariants: Foo rule.",
+      "    skills:",
+      '      - { skill: superpowers:test-driven-development, when: "before the first Write/Edit of production Kotlin" }',
+      "",
+    ].join("\n"));
+    const errs = failures(checkRoster(root)).filter((e) => e.startsWith("expertise:"));
+    assert.equal(errs.length, 1, errs.join("\n"));
+    assert.match(errs[0], /run-scoped/);
+    assert.match(errs[0], /the first/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("expertise: a per-dispatch trigger naming the same moment is accepted", () => {
+  const root = goodTree();
+  try {
+    write(root, "plugins/foo-foundation/manifest.yaml", [
+      "kind: foundation", "stack: foo", "priority: 300", "detect:", "  any: [{ file_exists: foo }]",
+      "role_expertise:",
+      "  developer:",
+      "    invariants: Foo rule.",
+      "    skills:",
+      '      - { skill: superpowers:test-driven-development, when: "before your first Write/Edit of production code in THIS dispatch — a review-loop round counts" }',
+      "",
+    ].join("\n"));
+    assert.deepEqual(failures(checkRoster(root)).filter((e) => e.startsWith("expertise:")), []);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

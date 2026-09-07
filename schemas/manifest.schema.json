@@ -459,7 +459,7 @@
                   },
                   "when": {
                     "type": "string",
-                    "description": "The moment to invoke it, e.g. 'before the first Write/Edit of production Kotlin'."
+                    "description": "The moment to invoke it. Scope it to the DISPATCH, never to the run: this block is pasted into every dispatch of the role, so a run-scoped trigger ('before the first X') goes silently false on each re-dispatch — a review-loop round, a heal retry. Write 'before your first Write/Edit of production code in THIS dispatch — a review-loop round counts', not 'before the first Write/Edit'. `sdlc-lint roster` rejects the run-scoped form."
                   }
                 }
               }

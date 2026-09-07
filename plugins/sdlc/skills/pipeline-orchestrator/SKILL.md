@@ -353,6 +353,17 @@ For a phase carrying `loop: {return_to, max_rounds}` (e.g. a review phase that b
 
 If `return_to` is a multi-pass phase with an approval gate (e.g. development's plan→approve→implement), loop re-runs go straight to the implement pass with `loop_findings` applied — the plan was already approved, so do NOT re-open the planning gate each round.
 
+**What `loop_findings` must NOT imply.** It narrows the *scope* of the round — address these
+findings, keep the diff minimal, do not re-implement what is already on disk. It does not retire the
+role's obligations. A re-dispatch is a fresh agent with a fresh stable prefix: its `skills_block`
+still applies in full, and every MANDATORY row in it is due again in this round. Say so in the block
+— one line, `The role's MANDATORY skills apply to this round as they do to a first dispatch.` —
+because two measured runs (2026-09-06, 2026-09-07) show the omission is not hypothetical: a round
+told the implementation was "already on disk" made 5 and then 7 edits to production code and invoked
+none of its three mandatory skills. The triggers were rewritten to be per-dispatch at the same time
+(`sdlc-lint roster` now rejects a run-scoped one); this line removes the contradiction the loop text
+itself was creating.
+
 The verdict contract (approved vs changes-requested) is read from the loop phase agent's compact summary — review-role agents state their verdict explicitly. The orchestrator keys off "findings present?" only; it stays platform-agnostic.
 
 For each phase:
