@@ -362,9 +362,13 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
       heal_checks: effective.heal_checks,
       phase_command_overrides: effective.phase_command_overrides,
       extension_skills: effective.extension_skills,
-      // ADR-0021: merged per-role expertise (absolute rule paths) and the pre-rendered blocks the
-      // orchestrator pastes verbatim into each agent's stable prefix (3b-1).
-      role_expertise: resolved.role_expertise,
+      // ADR-0021: the pre-rendered blocks the orchestrator pastes verbatim into each agent's
+      // stable prefix (3b-1). The merged `role_expertise` map they are rendered FROM is
+      // deliberately not emitted: it was 17,910 of one real plan's 54,746 characters — a third of
+      // everything the orchestrator carries before it dispatches anything — and nothing read it.
+      // Its one documented consumer was a Step 5 telemetry field that was never written, and what
+      // expertise was in force is already recorded by `primary_profile` + `additive_profiles` +
+      // `plugin_version`. `resolveExpertise` reads the in-process value, not this output.
       prompt_blocks: resolved.prompt_blocks,
       // The compliance denominator (PR-4). Stated here rather than counted by the orchestrator
       // (ADR-0015), and carried into telemetry so `sdlc-lint compliance` can check that every
