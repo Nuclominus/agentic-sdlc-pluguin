@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-09-07 | #142 | `feat` | — | [[changes/2026-09-07-PR-142-agents-live-in-the-core-foundations-carry-expertise-adr-0021]] |
 | 2026-09-04 | #137 | `other` | — | [[changes/2026-09-04-PR-137-refresh-the-model-registry-to-fable-5-1-and-current-per-mtok]] |
 | 2026-09-04 | #135 | `other` | — | [[changes/2026-09-04-PR-135-separate-development-and-release-logging-and-gate-it-at-publ]] |
 | 2026-09-04 | #133 | `docs` | — | [[changes/2026-09-04-PR-133-reconcile-the-roadmap-table-board-and-screenshot-with-track]] |

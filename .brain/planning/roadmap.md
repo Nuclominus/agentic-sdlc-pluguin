@@ -31,7 +31,7 @@ status: in-progress
 | H5 | prompt surface reduction / JIT procedure loading | measured, not decided | #110, #117 |
 | H5-D2 | the run start is one command (`resolve/cli.mjs plan`, ADR-0019) | landed, DoD unmeasured | #119, #121, #125 |
 | H6 | `Stop` hook sealing the run (deterministic tail) | done | #107 |
-| I1 | agents in the core, expertise in the foundations (`role_expertise`, ADR-0021) | in-progress (PR-3 of 3) | #139 |
+| I1 | agents in the core, expertise in the foundations (`role_expertise`, ADR-0021) | done, validated on a real run | #139, #140, #141, #142 |
 
 _Remaining: B3. (`kotlinx.serialization` deferred — needs a `serialization` aspect decision before
 it can land as a provider.)_
@@ -39,8 +39,12 @@ it can land as a provider.)_
 **Track I — plugin topology.** I1 splits the marketplace along the line the framework plugins
 already drew: the core owns every agent (process), a foundation owns expertise (skills, rules,
 hooks, workflows, and a per-role `role_expertise` block the resolver renders into each agent's
-stable prefix). Three PRs; see [[planning/i1-agents-in-core]] and
-[[decisions/ADR-0021-agents-live-in-the-core-foundations-carry-expertise]].
+stable prefix). Three PRs onto an integration branch, landed as #142; see
+[[planning/i1-agents-in-core]] and
+[[decisions/ADR-0021-agents-live-in-the-core-foundations-carry-expertise]]. A real Android run on
+the merged branch dispatched only core agents and mentioned no retired name anywhere, but it also
+showed the cost of the move: expertise that used to be structurally guaranteed (an agent's own body)
+now depends on the orchestrator pasting a block, and nothing gates that. PR-4 adds the gate.
 
 **Track E — pipeline cache/cost efficiency.** Now that per-run cost is measured accurately
 (transcript-derived, #46; over-count fixed in #48), reduce the dominant cost driver: prompt-cache
