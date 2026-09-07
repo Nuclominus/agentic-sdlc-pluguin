@@ -1,8 +1,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import YAML from "yaml";
 
-export const REQUIRES = new Set(["bash_match", "agent_dispatch", "agent_prompt"]);
-export const CARDINALITIES = new Set(["once-per-run", "once-per-phase", "every-dispatch"]);
+export const REQUIRES = new Set(["bash_match", "agent_dispatch", "agent_prompt", "agent_skill"]);
+export const CARDINALITIES = new Set(["once-per-run", "once-per-phase", "every-dispatch", "every-mandate"]);
+// `agent_skill` needs the pattern to CAPTURE the skill id out of the dispatch prompt; without a
+// group there is nothing to compare against what the subagent invoked, and every mandate would
+// score unmet — a flat 0% indistinguishable from total non-compliance.
+const CAPTURING = /\((?!\?[:=!])/;
 export const OPS = new Set(["==", "!=", "exists", "absent"]);
 
 // `every-dispatch` needs a denominator the run declares about itself, because the phase count
@@ -52,31 +56,36 @@ function validate(raw, seen) {
   }
   if (typeof raw.pattern !== "string" || !raw.pattern) {
     errs.push(`${label}: missing required field 'pattern'`);
-  } else if (raw.requires === "bash_match" || raw.requires === "agent_prompt") {
+  } else if (raw.requires === "bash_match" || raw.requires === "agent_prompt" || raw.requires === "agent_skill") {
     try { new RegExp(raw.pattern); } catch (e) { errs.push(`${label}: uncompilable pattern — ${e.message}`); }
+    if (raw.requires === "agent_skill" && !CAPTURING.test(raw.pattern)) {
+      errs.push(`${label}: an 'agent_skill' pattern must capture the skill id in a group, e.g. \`MANDATORY — invoke \\\`([^\\\`]+)\\\`\``);
+    }
   }
 
   // `dispatch_scope` belongs to `every-dispatch` and to nothing else: required there so the
   // denominator is never guessed, rejected elsewhere so it cannot sit in a contract reading as
   // if it constrained something.
   let dispatch_scope = null;
-  if (raw.cardinality === "every-dispatch") {
-    // It evaluates the dispatch PROMPT, so it is meaningful only with `agent_prompt`. Paired with
-    // anything else the evaluator would still compile this pattern — which validation above only
-    // checks for the two requires that own one — and throw out of `new RegExp` mid-audit, taking
-    // the whole corpus run down with it.
-    if (raw.requires !== "agent_prompt") {
-      errs.push(`${label}: cardinality 'every-dispatch' requires 'agent_prompt', got '${raw.requires}'`);
+  const SCOPED_CARDINALITY = { "every-dispatch": "agent_prompt", "every-mandate": "agent_skill" };
+  if (SCOPED_CARDINALITY[raw.cardinality]) {
+    // Each evaluates the dispatch PROMPT, so each is meaningful only with its own `requires`.
+    // Paired with anything else the evaluator would still compile this pattern — which validation
+    // above only checks for the requires that own one — and throw out of `new RegExp` mid-audit,
+    // taking the whole corpus run down with it.
+    const need = SCOPED_CARDINALITY[raw.cardinality];
+    if (raw.requires !== need) {
+      errs.push(`${label}: cardinality '${raw.cardinality}' requires '${need}', got '${raw.requires}'`);
     }
     if (typeof raw.dispatch_scope !== "string" || !raw.dispatch_scope) {
-      errs.push(`${label}: cardinality 'every-dispatch' requires 'dispatch_scope' (a telemetry.<field> naming the agents in scope)`);
+      errs.push(`${label}: cardinality '${raw.cardinality}' requires 'dispatch_scope' (a telemetry.<field> naming the agents in scope)`);
     } else {
       const m = SCOPE.exec(raw.dispatch_scope.trim());
       if (!m) errs.push(`${label}: dispatch_scope must be telemetry.<field>, got '${raw.dispatch_scope}'`);
       else dispatch_scope = m[1];
     }
   } else if (raw.dispatch_scope != null) {
-    errs.push(`${label}: dispatch_scope is only meaningful with cardinality 'every-dispatch'`);
+    errs.push(`${label}: dispatch_scope is only meaningful with a dispatch-scoped cardinality (${Object.keys(SCOPED_CARDINALITY).join(" | ")})`);
   }
   if (typeof raw.since !== "string" || !ISO_DATE.test(raw.since) || Number.isNaN(Date.parse(raw.since))) {
     errs.push(`${label}: since must be YYYY-MM-DD, got '${raw.since}'`);

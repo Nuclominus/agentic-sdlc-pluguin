@@ -29,6 +29,11 @@ export function extractFacts(transcriptPath) {
       const input = b.input && typeof b.input === "object" ? b.input : {};
       facts.push({
         seq: facts.length,
+        // The block's own id. For an Agent dispatch it is the ONLY explicit link to the subagent
+        // that ran it: the tool_result carries it alongside the agentId, and the transcript is
+        // named after that. Joining the two by position instead would hold only while two
+        // independent filters keep agreeing, and would fail silently the day they stop.
+        tool_use_id: typeof b.id === "string" ? b.id : null,
         tool: typeof b.name === "string" ? b.name : null,
         command: typeof input.command === "string" ? input.command : null,
         subagent_type: typeof input.subagent_type === "string" ? input.subagent_type : null,

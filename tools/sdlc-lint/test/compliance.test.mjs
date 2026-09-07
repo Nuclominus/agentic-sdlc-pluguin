@@ -380,3 +380,36 @@ test("a run with no completed_at is scored against its whole session rather than
   const v = verdict(auditRun(run("expertise-gap"), c, { projectsRoot: PROJECTS }), "3b-1a-expertise-block");
   assert.equal(v.expected, 3, "expertise-gap carries no completed_at — all three in-scope dispatches count");
 });
+
+// --- every-mandate: did the subagent invoke what its prompt mandated of it? -----------------
+// Three runs measured this by hand, one dispatch at a time. The auditor could not: it resolves
+// a subagent transcript only to walk UP to the parent session, so a subagent's own `Skill` calls
+// — the entire evidence — were never read.
+const MANDATE_FIX = join(FIX, "skill-contracts-mandate.md");
+const mandateContract = () => parseContracts(MANDATE_FIX).contracts.filter((c) => c.id === "3b-1a-mandatory-skill");
+
+test("every-mandate counts skill mandates, not dispatches, and pairs each with its own subagent", () => {
+  // developer was mandated 2 and invoked 1; document-writer was mandated 1 and invoked none —
+  // the two shapes measured on real runs (a review-loop round, and a documentation phase).
+  const res = auditRun(run("mandate-gap"), mandateContract(), { projectsRoot: PROJECTS });
+  assert.equal(res.status, "auditable");
+  const v = verdict(res, "3b-1a-mandatory-skill");
+  assert.equal(v.expected, 3, "two mandates on one dispatch plus one on the other");
+  assert.equal(v.matched, 1);
+  assert.equal(v.verdict, "partial");
+});
+
+test("every-mandate is n/a when the run declares no scope, never a pass", () => {
+  const v = verdict(auditRun(run("no-expertise-scope"), mandateContract(), { projectsRoot: PROJECTS }),
+    "3b-1a-mandatory-skill");
+  assert.equal(v.verdict, "na");
+  assert.equal(v.reason, "no-dispatch-scope");
+});
+
+test("a mandate pattern that captures nothing is rejected at parse time", () => {
+  // Without a capture group there is no skill id to compare, so the contract would silently
+  // score every mandate as unmet — a flat 0% that reads exactly like total non-compliance.
+  const { contracts, errors } = parseContracts(MANDATE_FIX);
+  assert.equal(contracts.some((c) => c.id === "no-capture"), false);
+  assert.ok(errors.some((e) => /no-capture/.test(e) && /capture/.test(e)), errors.join("; "));
+});

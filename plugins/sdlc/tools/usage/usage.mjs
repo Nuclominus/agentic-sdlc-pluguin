@@ -392,7 +392,9 @@ export function deriveDispatchMap(sessionTranscriptPath) {
   return order.map((id, index) => {
     const u = uses.get(id) || {};
     const phase = (u.description.match(/Phase\s+\d+\/\d+:\s*(\S+)/) || [])[1] || null;
-    return { index, phase, subagent_type: u.subagent_type, agent_id: results.get(id) || null, description: u.description };
+    // `id` is the tool_use id. It is what lets a consumer holding the DISPATCH (its prompt, and
+    // so what was mandated of it) find the agent that ran it, without joining on array position.
+    return { id, index, phase, subagent_type: u.subagent_type, agent_id: results.get(id) || null, description: u.description };
   });
 }
 

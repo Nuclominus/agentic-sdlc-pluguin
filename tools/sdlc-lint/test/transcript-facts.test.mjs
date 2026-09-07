@@ -50,3 +50,8 @@ test("extractFactsFrom concatenates, renumbers seq globally and records the sour
   assert.deepEqual(facts.map((f) => f.seq), [0, 1, 2, 3, 4, 5]);
   assert.ok(facts.every((f) => f.source === p));
 });
+
+test("carries the tool_use id, the only explicit link from a dispatch to its subagent transcript", () => {
+  const facts = extractFacts(join(FIX, "session-dispatch-prompts.jsonl"));
+  assert.deepEqual(facts.map((f) => f.tool_use_id), ["t1", "t2"]);
+});

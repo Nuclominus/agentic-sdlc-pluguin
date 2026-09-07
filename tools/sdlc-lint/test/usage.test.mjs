@@ -958,3 +958,19 @@ test("a run where nothing resolved is still left untouched — no stamp, no rewr
   assert.equal(r.skipped_all, true);
   assert.equal(readFileSync(join(dir, "_telemetry.json"), "utf8"), before);
 });
+
+test("deriveDispatchMap carries the tool_use id, so a consumer can join it to a dispatch by id", () => {
+  // The compliance auditor holds the dispatch (prompt, mandated skills) and needs the agent
+  // that ran it. Position is not a join: it holds only while two independent filters agree.
+  const dir = mkdtempSync(join(tmpdir(), "sess-"));
+  const sess = join(dir, "sid.jsonl");
+  writeFileSync(sess, [
+    JSON.stringify({ type: "assistant", message: { role: "assistant", content: [
+      { type: "tool_use", id: "tu-1", name: "Agent", input: { subagent_type: "x:dev", description: "Phase 2/6: development" } }] } }),
+    JSON.stringify({ type: "user", message: { role: "user", content: [
+      { type: "tool_result", tool_use_id: "tu-1", content: "Async agent launched. agentId: bc70de3f30beff162 ok" }] } }),
+  ].join("\n") + "\n");
+  const dm = deriveDispatchMap(sess);
+  assert.equal(dm[0].id, "tu-1");
+  assert.equal(dm[0].agent_id, "bc70de3f30beff162");
+});
