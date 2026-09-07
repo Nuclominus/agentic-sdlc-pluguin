@@ -534,9 +534,16 @@ since: 2026-09-07
 > The denominator is the whole difficulty, and it is why this contract needed a new cardinality
 > rather than reusing `once-per-phase`. A review loop dispatches `development` three times, so
 > counting matches against the phase count reads 9 ≥ 7 and passes. `every-dispatch` scopes instead
-> to `telemetry.expertise_block_agents` — the agents the resolver states it rendered a block for — so
-> nine of ten is nine of ten. A vanilla stack renders no blocks, declares none, and is scored `n/a`
-> rather than passed.
+> to `telemetry.expertise_block_agents` — the agents **this run dispatches** that the resolver
+> rendered a block for — so nine of ten is nine of ten. A vanilla stack renders no blocks, declares
+> none, and is scored `n/a` rather than passed.
+>
+> The scope is narrower than "every agent holding a block", deliberately. `prompt_blocks` also
+> covers the on-demand roster (debugger, devops, cicd, aar-analyst) so `expertise --role` can serve
+> them, but this step pastes nothing for those — they fetch their own. Counting them would make a
+> `/sdlc:aar` in the same session an expected dispatch that can never match, and report a compliant
+> run as short. The audit is bounded by the run's own `started_at`/`completed_at` for the same
+> reason: one session can host two runs.
 
 **3b-1b. Build the `sdlc_lessons_block`** (AAR lessons injection).
 

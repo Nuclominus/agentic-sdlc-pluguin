@@ -206,7 +206,7 @@ Additional built-in intents ship with a `match:` block for auto-selection:
 
 - `analysis` (core) — BA → Security, **reports only** (no code, no PR); matches "analyze/audit/assess".
 - `testing` (core) — QA only; backfill/verify tests; matches "test/coverage".
-- `debug` (core) — Dev → QA fix-and-verify (developer does root-cause; vanilla has no debugger agent).
+- `debug` (core) — Debugger → Dev → QA (the read-only debugger finds the root cause and prescribes the fix; the developer applies it).
 - `android-debug` (android) — Debugger → Dev → Review(⇄Dev ×2) → Test; wires `debugger` via the
   `debugging` phase. On Android both `debug` and `android-debug` match; `android-debug` wins the tie
   via `match.priority: 10` (the first tie-break rule), not by name order.

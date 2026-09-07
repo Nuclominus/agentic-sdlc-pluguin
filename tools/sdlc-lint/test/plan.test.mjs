@@ -337,6 +337,14 @@ test("role_expertise reaches the plan as absolute rule paths and pre-rendered pr
     assert.ok(scoped.includes("developer"), "developer has an expertise block");
     assert.ok(!scoped.includes("qa-engineer"), "a role with a null block is out of scope, not a silent failure");
     assert.deepEqual(scoped, [...scoped].sort(), "stable order — it lands in telemetry and in diffs");
+    // Review finding 1 on #146. On-demand agents get a block in `prompt_blocks` so the
+    // `expertise --role` command can serve them, but the orchestrator pastes nothing for them —
+    // they fetch it themselves. Counting them would make `/sdlc:aar` in the same session an
+    // expected dispatch that can never match, failing a fully compliant run.
+    for (const onDemand of ["debugger", "devops", "cicd", "aar-analyst"]) {
+      assert.ok(!scoped.includes(onDemand),
+        `${onDemand} runs on demand and is never handed a pasted block — it cannot be in the denominator`);
+    }
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
 

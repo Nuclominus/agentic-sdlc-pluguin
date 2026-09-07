@@ -171,3 +171,14 @@ test("an uncompilable agent_prompt pattern is caught, as it is for bash_match", 
   assert.equal(contracts.some((c) => c.id === "pattern-broken"), false);
   assert.ok(errors.some((e) => /pattern-broken/.test(e) && /uncompilable/.test(e)), errors.join("; "));
 });
+
+test("every-dispatch is rejected on a requires it cannot evaluate", () => {
+  // Review finding 2 on #146: `scopedDispatches` compiles the pattern and tests it against the
+  // dispatch prompt whatever `requires` says, while validation compiled it only for bash_match
+  // and agent_prompt. `requires: agent_dispatch` + an uncompilable pattern therefore parsed
+  // cleanly and threw out of `new RegExp` at audit time — breaking auditRun's "never throws"
+  // contract and aborting the whole corpus run.
+  const { contracts, errors } = parseContracts(join(FIX, "skill-contracts-dispatch-bad.md"));
+  assert.equal(contracts.some((c) => c.id === "wrong-requires"), false);
+  assert.ok(errors.some((e) => /wrong-requires/.test(e) && /agent_prompt/.test(e)), errors.join("; "));
+});

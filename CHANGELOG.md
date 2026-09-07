@@ -18,10 +18,14 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
   The denominator needed a new cardinality rather than a new pattern. A review loop dispatches
   `development` several times, so counting matches against the phase count reads 9 ≥ 7 and passes
   the very run that missed one. `every-dispatch` scopes to `dispatch_scope:
-  telemetry.expertise_block_agents` — the agents the resolver *states* it rendered a block for, carried
-  into telemetry from `plan.profile.expertise_block_agents` so the orchestrator copies rather than
-  recounts (ADR-0015). A vanilla stack renders no blocks, declares none, and is scored `n/a`
-  instead of passed. Runs that predate the telemetry field also score `n/a` — silence, not a guess.
+  telemetry.expertise_block_agents` — the agents *this run dispatches* that the resolver rendered a
+  block for, stated by the plan under the same key so the orchestrator copies rather than recounts
+  (ADR-0015). The on-demand roster (debugger, devops, cicd, aar-analyst) is excluded: it holds
+  blocks so `expertise --role` can serve it, but nothing is pasted for it, so counting it would
+  make a `/sdlc:aar` in the same session fail a compliant run. The audit is bounded by the run's
+  own `started_at`/`completed_at`, since one session can host two runs. A vanilla stack renders no
+  blocks, declares none, and scores `n/a` instead of passing; so does a run predating the field —
+  silence, not a guess.
 
   Mandatory-skill invocation is deliberately **not** gated here: `resolveRunSessions` reads only
   the main session transcript, while a subagent's `Skill` calls live in its own

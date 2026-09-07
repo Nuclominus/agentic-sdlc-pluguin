@@ -61,6 +61,13 @@ function validate(raw, seen) {
   // if it constrained something.
   let dispatch_scope = null;
   if (raw.cardinality === "every-dispatch") {
+    // It evaluates the dispatch PROMPT, so it is meaningful only with `agent_prompt`. Paired with
+    // anything else the evaluator would still compile this pattern — which validation above only
+    // checks for the two requires that own one — and throw out of `new RegExp` mid-audit, taking
+    // the whole corpus run down with it.
+    if (raw.requires !== "agent_prompt") {
+      errs.push(`${label}: cardinality 'every-dispatch' requires 'agent_prompt', got '${raw.requires}'`);
+    }
     if (typeof raw.dispatch_scope !== "string" || !raw.dispatch_scope) {
       errs.push(`${label}: cardinality 'every-dispatch' requires 'dispatch_scope' (a telemetry.<field> naming the agents in scope)`);
     } else {
