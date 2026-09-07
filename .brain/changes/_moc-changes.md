@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-09-07 | #148 | `fix` | — | [[changes/2026-09-07-PR-148-scope-skill-triggers-to-the-dispatch-a-re-dispatch-owes-them]] |
 | 2026-09-07 | #146 | `feat` | — | [[changes/2026-09-07-PR-146-gate-the-expertise-hand-off-the-core-debug-recipe-uses-the-c]] |
 | 2026-09-07 | #144 | `docs` | — | [[changes/2026-09-07-PR-144-reconcile-the-board-with-what-shipped-trim-the-readme-to-fiv]] |
 | 2026-09-07 | #142 | `feat` | — | [[changes/2026-09-07-PR-142-agents-live-in-the-core-foundations-carry-expertise-adr-0021]] |
