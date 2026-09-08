@@ -4,7 +4,9 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
-`sdlc` `1.16.0` → `2.4.1`, `android-foundation` `1.7.0` → `2.0.2`, marketplace `1.13.0` → `1.16.1`.
+`sdlc` `1.16.0` → `2.4.1`, `android-foundation` `1.7.0` → `2.0.2`, marketplace `1.13.0` → `2.0.0`.
+Every framework plugin gains a patch: `dagger` `1.1.1`, `retrofit` `1.1.1`, `room` `1.1.1`,
+`datastore-proto` `1.0.1`, `koin` `1.0.1`, `ktor` `1.0.1`, `workmanager` `1.0.1`.
 
 ### ⚠️ BREAKING CHANGES — `1.*` → `2.*`
 
@@ -38,6 +40,11 @@ files, and never runs non-interactively or under `--json`.
 
 **Not migrating degrades rather than breaks.** An extension row naming a retired agent injects
 nothing; a stale model key leaves the agent's frontmatter tier in force. Both are named on every run.
+
+**Update the framework plugins too, not just `sdlc` and `android-foundation`.** All seven carry the
+rename in their `loaded_by:` frontmatter and cross-references; an installed copy left at its old
+version keeps rules addressed to agents that no longer exist, and those rules reach nobody. Each
+ships a patch bump so `/plugin marketplace update` picks them up.
 
 ### Added
 
