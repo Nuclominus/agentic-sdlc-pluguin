@@ -4,9 +4,38 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
-`sdlc` `1.16.0` → `2.4.0`, `android-foundation` `1.7.0` → `2.0.1`, marketplace `1.13.0` → `1.16.0`.
+`sdlc` `1.16.0` → `2.4.1`, `android-foundation` `1.7.0` → `2.0.2`, marketplace `1.13.0` → `1.16.1`.
 
 ### Fixed
+
+- **A mandate is met by the bare skill name the harness also accepts (`sdlc` 2.4.1).** The mandate
+  reads `frontend-design:frontend-design`; run 5's review-loop round invoked `frontend-design`,
+  which the harness resolves to the same skill. `3b-1a-mandatory-skill` compared the two strings
+  exactly and scored a skill that *was* invoked as a miss — the same defect `dispatchMatches`
+  already fixes for agent names, where a contract written against the bare name must still match a
+  namespaced dispatch. Left unfixed, the contract measures the namespace.
+
+  The rule is narrow on purpose: equal, or one side is bare and equals the other's skill segment.
+  A bare name is inherently ambiguous — two plugins may both ship `brainstorming` — but that
+  ambiguity belongs to the harness, which resolves the bare name the author typed. Matching two
+  *namespaced* ids by their tails would invent an ambiguity nobody wrote. Re-auditing run 5 moves
+  it from 15/20 to **16/20**; run 4 is unchanged at 16/23.
+
+- **`workflow` is now part of the Step 5 telemetry shape (`sdlc` 2.4.1).** It was never listed
+  there, so whether a run recorded which recipe it executed was down to the model: run 4 wrote
+  `"workflow": "android-feature"`, run 5 omitted the key entirely. `CONTEXT.active_workflow` was
+  resolved correctly in both cases — `.checkpoint/_run.json` carries it on run 5 — so this is a
+  gap in the documented shape, not a resolution failure. A run's phase list is only interpretable
+  against the recipe that produced it.
+
+- **The document-writer mandate leads with the trigger that always fires
+  (`android-foundation` 2.0.2).** Runs 3 and 5 both ran `gh pr create` without invoking
+  `android-foundation:android-docs-vault`. Its `when` read "before filling vault notes and before
+  `gh pr create`" — leading with the *conditional* half, so a run with no vault notes to fill can
+  read the whole clause as inapplicable and the PR half never gets its own turn. Reworded to lead
+  with the act every documentation dispatch performs, and scoped to the dispatch (the #148 lesson):
+  "before your first commit, `gh pr create`, or vault-note write in THIS dispatch — whichever comes
+  first". Two measured misses on the same clause, so this is a specification defect, not variance.
 
 - **The run start reads its own plan once instead of discovering it (`sdlc` 2.4.0).** A plan
   carrying a full stack profile exceeds the inline tool-output limit, so the harness saves it to a

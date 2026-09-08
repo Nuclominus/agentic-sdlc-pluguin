@@ -181,7 +181,12 @@ role_expertise:
       - { path: rules/documentation.md, note: "vault canon, triggers, and the Definition of Done" }
       - { path: rules/git-operations.md, note: "commit / PR conventions" }
     skills:
-      - { skill: android-foundation:android-docs-vault, when: "before filling vault notes and before `gh pr create`" }
+      # Measured misses on runs 3 and 5: both dispatches ran `gh pr create` without invoking this.
+      # The old wording — "before filling vault notes and before `gh pr create`" — led with the
+      # conditional half. A run whose project has no vault notes to fill can read the whole clause
+      # as inapplicable, and the PR half never gets its own turn. Lead with the act that happens on
+      # EVERY documentation dispatch instead, and scope it to the dispatch (the #148 lesson).
+      - { skill: android-foundation:android-docs-vault, when: "before your first commit, `gh pr create`, or vault-note write in THIS dispatch — whichever comes first" }
 
   debugger:
     invariants: |
