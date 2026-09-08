@@ -13,6 +13,9 @@ import { checkMachineValues } from "./lib/machine-values.mjs";
 import { checkAgentTools } from "./lib/agent-tools.mjs";
 import { checkRoster } from "./lib/roster.mjs";
 import { parseContracts } from "./lib/contracts.mjs";
+import { loadHost, listHosts, emitAll } from "./lib/emit/index.mjs";
+import { checkHost } from "./lib/emit/check.mjs";
+import { writeEmission } from "./lib/emit/write.mjs";
 import { auditRun } from "./lib/compliance.mjs";
 import { aggregate, renderText } from "./lib/compliance-report.mjs";
 import { measureRun, aggregate as aggregateWindows, renderText as renderWindows } from "./lib/start-window.mjs";
@@ -281,6 +284,34 @@ function printCompliance() {
   return errors.length ? 2 : 0;
 }
 
+/**
+ * Track J: dist/ is committed, so it can be hand-edited. `--check` is what makes
+ * that safe; the writing form must never run in CI.
+ */
+function printEmit(results, { write } = { write: false }) {
+  const failed = results.filter((r) => !r.ok);
+  if (jsonOut) {
+    console.log(JSON.stringify({ command: "emit", write, checked: results.length, failed: failed.length, results }));
+  } else {
+    for (const r of results) {
+      if (write) {
+        console.log(`emit: ${r.host} — wrote ${r.written} file(s) to ${r.dist}${r.drops ? `, ${r.drops} declared drop(s)` : ""}`);
+        continue;
+      }
+      for (const e of r.errors) console.error(`✗ ${r.host}: ${e}`);
+      for (const w of r.warnings) console.error(`  ${r.host}: ${w}`);
+      if (r.ok) console.log(`emit: ${r.host} — ${r.counts.compared} file(s) match, ${r.counts.drops} declared drop(s)`);
+    }
+    if (!write && failed.length) console.log(`emit: ${results.length - failed.length}/${results.length} host(s) in sync`);
+  }
+  return failed.some((r) => r.tool_error) ? 2 : failed.length ? 1 : 0;
+}
+
+function emitHosts() {
+  const named = opt("--host");
+  return !named || named === "all" ? listHosts(root) : [named];
+}
+
 function runAll() {
   const codes = [
     printSchema(checkSchemas(root)),
@@ -290,6 +321,9 @@ function runAll() {
     printMachineValues(checkMachineValues(root)),
     printAgentTools(checkAgentTools(root)),
     printRoster(checkRoster(root)),
+    // After roster: a roster failure is the more informative error, so it should
+    // surface before a dist/ diff that is usually its downstream symptom.
+    printEmit(listHosts(root).map((h) => checkHost(root, loadHost(root, h)))),
     printDetect2(detectRows()),
     printResumeFixtures(),
   ];
@@ -299,7 +333,7 @@ function runAll() {
 }
 
 const VERBS = ["schema", "cycles", "detect", "resume", "report", "rollup", "read-discipline",
-  "plugin-paths", "machine-values", "agent-tools", "roster", "compliance", "start-window", "all"];
+  "plugin-paths", "machine-values", "agent-tools", "roster", "emit", "compliance", "start-window", "all"];
 
 let code = 0;
 switch (cmd) {
@@ -310,6 +344,25 @@ switch (cmd) {
   case "machine-values": code = printMachineValues(checkMachineValues(root)); break;
   case "agent-tools": code = printAgentTools(checkAgentTools(root)); break;
   case "roster": code = printRoster(checkRoster(root)); break;
+  case "emit": {
+    const hosts = emitHosts();
+    try {
+      if (args.includes("--check")) {
+        code = printEmit(hosts.map((h) => checkHost(root, loadHost(root, h))));
+      } else {
+        code = printEmit(hosts.map((h) => {
+          const host = loadHost(root, h);
+          const plan = emitAll(root, host);
+          if (plan.errors.length) return { ok: false, tool_error: true, host: h, errors: plan.errors, warnings: [] };
+          const w = writeEmission(root, host, plan);
+          return { ok: true, host: h, errors: [], warnings: [], written: w.written, dist: w.dist, drops: plan.drops.length };
+        }), { write: true });
+      }
+    } catch (e) {
+      code = fail("emit", e.message);
+    }
+    break;
+  }
   case "detect": code = printDetect(); break;
   case "resume":
     code = args[1] && !args[1].startsWith("--") ? printResumeOne(resolve(root, args[1])) : printResumeFixtures();
@@ -354,12 +407,13 @@ switch (cmd) {
     // Even the help path owes a JSON consumer an envelope — `--json` must never leave stdout
     // unparseable, whatever the exit code (#126).
     if (jsonOut) { console.log(JSON.stringify({ command: "help", ok: true, verbs: VERBS })); break; }
-    console.log("Usage: sdlc-lint <schema|cycles|detect|resume|report|rollup|read-discipline|plugin-paths|machine-values|agent-tools|roster|compliance|start-window|all> [--json]");
+    console.log("Usage: sdlc-lint <schema|cycles|detect|resume|report|rollup|read-discipline|plugin-paths|machine-values|agent-tools|roster|emit|compliance|start-window|all> [--json]");
     console.log("  read-discipline   E2: contract present in the stable prefix; no re-read phrasing in agents");
     console.log("  plugin-paths      #70: no home-anchored ~/.claude paths in shipped plugin text");
     console.log("  machine-values    H3: no prose computing a value a machine already writes");
     console.log("  agent-tools       ADR-0018: every agent declares tools; none may dispatch agents; reviewers hold no Edit");
     console.log("  roster            ADR-0021: core binds every phase to a shipped agent; role_expertise keys/rules/skills resolve; expertise slot present");
+    console.log("  emit              Track J: render dist/<host>/ from the plugins/ SSOT [--host <id>|all]; --check compares without writing (CI runs only --check)");
     console.log("  compliance        H1: did the orchestrator run its own mandated steps? [--runs <glob>]... [--config-dir <path>]");
     console.log("  start-window      ADR-0019 DoD: turns/cost between loading the orchestrator and its first dispatch [--runs <glob>]... [--config-dir <path>]");
     break;

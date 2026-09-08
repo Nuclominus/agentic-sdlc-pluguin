@@ -1,0 +1,57 @@
+---
+description: List all stack profiles found in installed plugins, with priority and detection rules. Useful for verifying setup and debugging stack auto-detection.
+argument-hint: ""
+---
+
+# /sdlc:list-stacks
+
+List every `manifest.yaml` profile registered in installed plugins. Shows which foundation (`kind: foundation`) would match the current project, plus which frameworks (`kind: framework`) activate.
+
+## What this command does
+
+1. Resolve `{PLUGIN_CACHE_ROOT}` per `plugins/sdlc/PLUGIN-PATHS.md` (orchestrator Step 0), then use
+   `Glob` to find all profiles — the active config dir's cache, never a literal `~`:
+   ```
+   {PLUGIN_CACHE_ROOT}/**/manifest.yaml
+   ```
+2. For each manifest found:
+   - `Read` / parse the YAML.
+   - Read the fields (`kind`, `stack`, `priority`, `detect`, `enriches_aspect`, `hosts_aspects`).
+   - For `kind: foundation`, evaluate `detect` rules against the current working directory:
+     - `detect.any: ["*"]` → always matches.
+     - `detect.all: [...]` → all sub-rules must match.
+     - `file_exists: <path>` → check via `Glob` if file exists in project root.
+     - `file_contains: { path, pattern }` → `Read` the file and run regex.
+3. Print a table summarizing each profile.
+
+## Output format
+
+```
+Stack profiles found:
+
+  🎯 vanilla       priority=0     (always matches)              ← active fallback
+  🎯 android       priority=300   matches: settings.gradle.kts
+
+Additive framework providers:
+  ➕ retrofit      framework      enriches: network · matches: libs.versions.toml contains retrofit
+
+Active profile for this project: android (from android-foundation/manifest.yaml)
+Active frameworks: retrofit
+Override with: /sdlc:start --stack=NAME "<feature>"  ·  toggle frameworks via .claude/sdlc.local.yaml
+```
+
+If no profiles found except vanilla:
+```
+Only the vanilla profile is registered. Install the Android Foundation plugin
+(/plugin install android-foundation@agentic-sdlc) to add platform-specific agents.
+```
+
+## When to use
+
+- After installing a new stack plugin — verify the profile is picked up.
+- When `/sdlc:start` chose the wrong stack — debug detection rules.
+- Before running a pipeline on a new project — confirm what will run.
+
+## Instructions
+
+Be concise. Print the table as plain text (no markdown table syntax — that renders poorly in chat). Mark the active profile with `← active`. If multiple profiles share the same priority and all match, mark them all and warn about ambiguity.

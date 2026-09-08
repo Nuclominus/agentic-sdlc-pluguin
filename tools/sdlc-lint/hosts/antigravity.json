@@ -1,0 +1,85 @@
+{
+  "host": "antigravity",
+  "cli": "agy",
+  "_comment": "Host descriptor for Antigravity CLI. Every entry under `native`, `package`, `models` and `telemetry` was observed on a live CLI, not read from docs — the docs disagree with the binary in two places (see `native`). Re-verify and bump `verified_on` when the CLI minor moves.",
+  "verified_on": {
+    "cli_version": "1.1.27",
+    "date": "2026-09-08",
+    "method": "agy plugin validate + agy plugin install + agy models, against a probe tree built from unmodified plugins/sdlc"
+  },
+
+  "native": {
+    "_comment": "What the host does for us, so the emitter must NOT. Both entries observed: `agy plugin validate` on an unmodified agents/skills/commands/hooks tree reported `commands: 11 processed (converted to skills)`, and every installed file was byte-identical to its source (diff clean on agents/reviewer.md). This is why the Antigravity target is a repackager, not a translator.",
+    "commands_to_skills": true,
+    "agent_frontmatter_passthrough": true,
+    "flat_agent_files": true
+  },
+
+  "plugins": ["sdlc"],
+  "_plugins_comment": "Which plugins this host's package carries. Phase 1 is the core alone — the vanilla profile exercises the whole pipeline, and android-foundation plus the seven framework plugins add 14 skills and 8 hook files of schedule without reducing any risk. Widened in Phase 3.",
+
+  "package": {
+    "_comment": "The whole structural transform is two moves. Antigravity looks for plugin.json and hooks.json at the PLUGIN ROOT; Claude Code keeps them at .claude-plugin/plugin.json and hooks/hooks.json. `agy plugin validate <dir>` fails with `missing plugin.json` until the first move, and reports `hooks: skipped (not found)` until the second.",
+    "moves": [
+      { "from": ".claude-plugin/plugin.json", "to": "plugin.json" },
+      { "from": "hooks/hooks.json", "to": "hooks.json" }
+    ]
+  },
+
+  "models": {
+    "_comment": "Antigravity model ids embed reasoning effort in the id itself (`agy models`: gemini-3.8-flash-high|medium|low, gemini-3.1-pro-high|low), so the tier+effort PAIR maps to one string. That is why `effort:` is not a dropped field on this host: it is half the key. Pro is the strong family, Flash the fast one; with only two families, sonnet/low and haiku/low necessarily collapse onto one id.",
+    "key": "tier+effort",
+    "map": {
+      "opus/high": "gemini-3.1-pro-high",
+      "opus/medium": "gemini-3.1-pro-high",
+      "opus/low": "gemini-3.1-pro-low",
+      "sonnet/high": "gemini-3.8-flash-high",
+      "sonnet/medium": "gemini-3.8-flash-medium",
+      "sonnet/low": "gemini-3.8-flash-low",
+      "haiku/high": "gemini-3.8-flash-medium",
+      "haiku/medium": "gemini-3.8-flash-medium",
+      "haiku/low": "gemini-3.8-flash-low",
+      "fable/high": "gemini-3.1-pro-high",
+      "fable/medium": "gemini-3.1-pro-high",
+      "fable/low": "gemini-3.1-pro-low"
+    },
+    "alternatives_not_used": {
+      "_comment": "`agy models` also lists these. Not used: availability varies by plan, and one model family per host keeps the mapping legible.",
+      "seen": ["claude-sonnet-4-6", "claude-opus-4-6-thinking", "gpt-oss-120b-medium"]
+    }
+  },
+
+  "hook_events": {
+    "supported": ["PreToolUse", "PostToolUse", "PreInvocation", "PostInvocation", "Stop"],
+    "unsupported": ["SessionStart", "SubagentStop", "SubagentStart", "SessionEnd", "PreCompact", "PostCompact", "UserPromptSubmit", "PermissionRequest", "Interrupt"]
+  },
+
+  "drop_hooks": [
+    {
+      "script": "enforce-agent-model.sh",
+      "reason": "Enforces the tier by rewriting the dispatch through the PreToolUse `updatedInput` envelope, which this host does not document, and matches on the tool name `Agent`, which this host does not have. Superseded at emit time: the tier is baked into each agent's `model:` (see models.map), which is enforcement by construction rather than by hook."
+    }
+  ],
+
+  "telemetry": {
+    "_comment": "`agy -p --output-format json` returns a per-run envelope carrying usage directly, so this host may need no transcript parser at all (Phase 4). Observed through a pipe on a non-TTY on 1.1.27 — antigravity-cli#76 (silent stdout drop) did NOT reproduce with --output-format json.",
+    "mode": "run-envelope",
+    "usage_fields": ["input_tokens", "output_tokens", "thinking_tokens", "cache_read_tokens", "total_tokens"],
+    "never_gate_on": ["status", "exit_code"],
+    "never_gate_reason": "A run that produced nothing and had an action auto-denied still reported status SUCCESS with an empty response and a populated denied_actions[]. Gate on _telemetry.json on disk (ADR-0015)."
+  },
+
+  "validate": { "command": ["agy", "plugin", "validate"], "zero_tokens": true },
+
+  "install": {
+    "command": ["agy", "plugin", "install"],
+    "roots": [
+      "$PWD/.agents/plugins",
+      "${GEMINI_CONFIG_DIR:-$HOME/.gemini}/config/plugins",
+      "${GEMINI_CONFIG_DIR:-$HOME/.gemini}/antigravity-cli/plugins"
+    ],
+    "observed_install_root": "${GEMINI_CONFIG_DIR:-$HOME/.gemini}/config/plugins"
+  },
+
+  "drops": []
+}

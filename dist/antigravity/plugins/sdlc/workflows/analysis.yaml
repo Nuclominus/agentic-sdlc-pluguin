@@ -1,0 +1,35 @@
+name: analysis
+description: >
+  Assessment pipeline — business-analysis + security review that produce reports.
+  No development phase and no PR are created. Note: the security phase runs the
+  security-analyst, which may still apply Critical/High fixes directly per its spec —
+  so this is "no new feature work", not a guaranteed read-only run. Use to audit,
+  assess, or analyze an area before deciding what (if anything) to build.
+match:
+  arguments_pattern: "\\banaly[sz]e\\b|\\baudit\\b|\\bassess(ment)?\\b"
+caps:
+  # Sized from MEASURED transcript cost. The old $0.75 was derived from the Step 1d-1 dry-run
+  # estimate back when that estimate modelled a dispatch as a single API call (35k in / 3k out) and
+  # so under-reported a real multi-turn phase by 6-10x; it was breached by the very first run able
+  # to measure itself — $3.37 of phase spend under a $0.75 cap
+  # (`flutter-to-native-migration-plan`, BA $2.97 + security $0.40).
+  #
+  # That estimate has since been recalibrated against the same measurements (its baselines now live
+  # in config/models.json `estimation_baselines`), so preview and cap no longer contradict each
+  # other. Caps still come from measured p90 rather than from the estimate: the estimate predicts a
+  # typical run, while a cap must clear the tail.
+  #
+  # Basis: 56 transcript-priced phases across 10 real runs. Per-phase p90 —
+  #   business_analysis $2.97, security $0.40  =>  base_p90 = $3.37
+  # Cap = base_p90 * 1.2 = $4.044, rounded UP to the next quarter = 4.25. Round up, never down: a
+  # cap rounded below its own derivation is a cap that fires on the run it was sized to allow.
+  #
+  # The 20% is headroom for healing and run-to-run variance, NOT a measurement: no heal attempt has
+  # ever actually fired in the data (every observed heal_status is "skipped"), so heal cost is
+  # unmeasured and a worst-case heal multiplier would be invented, not derived. Revisit once real
+  # heal_attempts_used > 0 runs exist. Summing per-phase p90 is already conservative — it assumes
+  # every phase lands in its own tail simultaneously.
+  max_total_cost_usd: 4.25
+phases:
+  - business_analysis
+  - security
