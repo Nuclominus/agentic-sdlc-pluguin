@@ -22,9 +22,15 @@ Every agent declares its `model:` tier in frontmatter; the pipeline guarantees t
 
 Cost is controlled exclusively through `model` + `effort` (Claude Code does not expose per-subagent `temperature`). The tier → model mapping is in [Model Enforcement](#model-enforcement) above; the **per-agent `model`/`effort` roster lives in each plugin's README** so it stays next to the agents it describes:
 
-- core fallback agents → [`plugins/sdlc/README.md`](../plugins/sdlc/README.md)
-- Android roster → [`plugins/android-foundation/README.md`](../plugins/android-foundation/README.md)
-- framework providers ship no agents → [`retrofit-plugin`](../plugins/retrofit-plugin/README.md) · [`room-plugin`](../plugins/room-plugin/README.md) · [`dagger-plugin`](../plugins/dagger-plugin/README.md) · [`workmanager-plugin`](../plugins/workmanager-plugin/README.md)
+- the whole roster → [`plugins/sdlc/README.md`](../plugins/sdlc/README.md). Since ADR-0021 every
+  agent lives in `sdlc`, so there is exactly one `model`/`effort` table to read.
+- foundations and framework providers ship **no agents** — they contribute expertise
+  (`role_expertise`, injections, rules), which does not carry a tier:
+  [`android-foundation`](../plugins/android-foundation/README.md) ·
+  [`retrofit-plugin`](../plugins/retrofit-plugin/README.md) ·
+  [`room-plugin`](../plugins/room-plugin/README.md) ·
+  [`dagger-plugin`](../plugins/dagger-plugin/README.md) ·
+  [`workmanager-plugin`](../plugins/workmanager-plugin/README.md)
 
 > `effort: high` on Opus is the costliest combination — reserved for leverage agents (BA, Security) where reasoning quality affects every downstream phase.
 
