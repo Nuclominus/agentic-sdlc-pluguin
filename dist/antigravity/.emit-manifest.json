@@ -1,7 +1,7 @@
 {
   "emitter_version": 1,
   "host": "antigravity",
-  "host_descriptor_sha": "1fe2b0ca88f0bcc55078a24b1ec0f35fff1852a162be35599e43883412d66bc3",
+  "host_descriptor_sha": "04fe3d0b00ad70df2985bf2a3c00080f4adf78c867abe781ef33eefe8a5b9a20",
   "host_cli_version": "1.1.27",
   "plugins": [
     "sdlc"

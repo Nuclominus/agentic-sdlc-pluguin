@@ -23,6 +23,21 @@ import { discoverRecipes, resolveWorkflowName, locateRecipe, validateWorkflow, n
 import { resolveCostCap, renderCapOverridePrint, expandRows, estimate, renderDryRun, renderHeadlessDryRun } from "./caps.mjs";
 import { parseYaml } from "./yaml.mjs";
 
+/** Immediate children of the given roots that carry a manifest.yaml. */
+function pluginDirsUnder(searchPaths) {
+  const out = [];
+  for (const base of searchPaths) {
+    let entries;
+    try { entries = readdirSync(base, { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      const dir = join(base, e.name);
+      if (existsSync(join(dir, "manifest.yaml"))) out.push(dir);
+    }
+  }
+  return out;
+}
+
 const readJson = (f) => { try { return JSON.parse(readFileSync(f, "utf8")); } catch { return null; } };
 const readYaml = (f) => { try { return parseYaml(readFileSync(f, "utf8")); } catch (e) { return { __error: e.message }; } };
 
@@ -101,15 +116,22 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   const headless = env.SDLC_NONINTERACTIVE === "true" || env.SDLC_NONINTERACTIVE === "1";
 
   // ---- Step 0: roots
-  const roots = resolveRoots(env);
+  const roots = resolveRoots(env, cwd);
   const configDir = roots.config_dir;
+
+  // On a host with no installed_plugins.json registry, discovery is the search
+  // paths the running package declares: every immediate child of them that
+  // carries a manifest.yaml. Empty on Claude Code, where the registry answers.
+  const hostRoots = roots.host === "claude" ? [] : pluginDirsUnder(roots.plugin_search_paths ?? []);
 
   // ---- Step 0b inputs: what is installed and enabled
   const { installs, conflicts } = readInstalledPlugins({ configDir });
   const enabled = readEnabledPlugins({ configDir, projectRoot: cwd });
   for (const c of conflicts) warn(`WARN: ${c.key} is installed at several paths; using the ${c.scope} copy (${c.chosen})`);
 
-  const manifests = mode === "tree" ? loadManifestsFromTree(cwd) : loadInstalledManifests({ configDir, projectRoot: cwd });
+  const manifests = mode === "tree"
+    ? loadManifestsFromTree(cwd)
+    : loadInstalledManifests({ configDir, projectRoot: cwd, extraRoots: hostRoots });
   for (const s of manifests.skipped ?? []) warn(`WARN: ${s.key} ships a manifest but is disabled — not considered for detection`);
   for (const e of manifests.errors ?? []) warn(`WARN: unreadable manifest ${e.file}: ${e.error}`);
 
@@ -194,7 +216,7 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   warnAll([...new Set(blockWarnings)]);
 
   return {
-    prints, warnings, halt: null, headless, roots, installs, enabled, manifests, deps, stack, local,
+    prints, warnings, halt: null, headless, roots, installs, enabled, manifests, deps, stack, local, hostRoots,
     primary, vanilla, additive, effective, models,
     role_expertise: expertise.role_expertise, prompt_blocks: promptBlocks, known_agents: blockAgents,
     profile_dir: primaryRecord?.file ? dirname(primaryRecord.file) : null,
@@ -244,7 +266,7 @@ export function resolveExpertise({ cwd = process.cwd(), args = "", env = process
  */
 export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env, mode = "installed" } = {}) {
   const resolved = resolveProfile({ cwd, args, env, mode });
-  const { prints, warnings, headless, roots, installs, enabled, deps, stack, local, effective, models } = resolved;
+  const { prints, warnings, headless, roots, installs, enabled, deps, stack, local, effective, models, hostRoots } = resolved;
   if (resolved.halt) return { plan: null, prints, warnings, halt: resolved.halt };
   /** Record a diagnostic in both channels — see the note above. */
   const warn = (msg) => { warnings.push(msg); prints.push(msg); };
@@ -255,7 +277,7 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
   if (signals.degraded) warn(`WARN: skip-rule signals unavailable (${signals.reason ?? "git"}) — no rule will fire`);
 
   // ---- Step 1c: workflow
-  const recipes = discoverRecipes({ projectRoot: cwd, installs, enabled });
+  const recipes = discoverRecipes({ projectRoot: cwd, installs, enabled, extraRoots: hostRoots });
   const resolvedName = resolveWorkflowName({
     args,
     activeWorkflow: local?.active_workflow ?? null,

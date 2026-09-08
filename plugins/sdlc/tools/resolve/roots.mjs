@@ -59,6 +59,22 @@ export function resolveConfigDir(env = process.env) {
  * version. Only the last is a guess, and it says so.
  */
 export function resolveSdlcRoot(configDir, env = process.env) {
+  // A package built for another host is SELF-LOCATING and answers before anything
+  // else is consulted. Without this, running `cli.mjs` out of an Antigravity
+  // install still resolved sdlc_plugin_root to a Claude Code cache copy — the
+  // package delegated its own identity to a different install, which would read
+  // that install's config/host.json (absent), conclude "claude", and try to price
+  // the run from transcripts that do not exist. That is issue #70's failure mode
+  // (one run silently mixing two plugin trees) reappearing across hosts, so it
+  // gets ADR-0009's answer: resolve from the install that is actually running.
+  //
+  // Gated on the declaration file, which the authored tree does not carry, so
+  // Claude Code resolution is byte-for-byte unchanged.
+  const own = ownPluginRoot();
+  if (own && existsSync(join(own, "config", "host.json"))) {
+    return { value: own, source: "own-package (declared host)" };
+  }
+
   if (env.CLAUDE_PLUGIN_ROOT) return { value: env.CLAUDE_PLUGIN_ROOT, source: "CLAUDE_PLUGIN_ROOT" };
 
   const registry = readJson(join(configDir, "plugins", "installed_plugins.json"));
@@ -92,18 +108,55 @@ function safeDirs(dir) {
   catch { return []; }
 }
 
-/** All three roots plus the provenance of each. */
-export function resolveRoots(env = process.env) {
+/**
+ * All three roots plus the provenance of each.
+ *
+ * `plugin_search_paths` generalizes `plugin_cache_root` to hosts that lay their
+ * plugins out differently. On Claude Code it is the one cache root, unchanged.
+ * On a declared host it comes from that package's own `config/host.json` — the
+ * package states where its siblings live rather than any code guessing.
+ */
+export function resolveRoots(env = process.env, cwd = process.cwd()) {
+  const declared = readDeclaredHost();
+  if (declared) {
+    const configDir = (declared.config_dir_env && env[declared.config_dir_env])
+      || join(env.HOME || "", declared.config_dir_default || "");
+    const searchPaths = [
+      ...(declared.workspace_plugin_subdirs ?? []).map((s) => join(cwd, s)),
+      ...(declared.plugin_search_subdirs ?? []).map((s) => join(configDir, s)),
+    ];
+    return {
+      config_dir: configDir,
+      plugin_cache_root: searchPaths[0] ?? null,
+      plugin_search_paths: searchPaths,
+      sdlc_plugin_root: ownPluginRoot(),
+      host: declared.host,
+      sources: { config_dir: declared.config_dir_env ?? "host declaration", sdlc_plugin_root: "own-package (declared host)" },
+      sdlc_version: null,
+      sdlc_ambiguous: false,
+    };
+  }
+
   const config = resolveConfigDir(env);
   const sdlc = resolveSdlcRoot(config.value, env);
+  const cacheRoot = join(config.value, "plugins", "cache");
   return {
     config_dir: config.value,
-    plugin_cache_root: join(config.value, "plugins", "cache"),
+    plugin_cache_root: cacheRoot,
+    plugin_search_paths: [cacheRoot],
     sdlc_plugin_root: sdlc.value,
+    host: "claude",
     sources: { config_dir: config.source, sdlc_plugin_root: sdlc.source },
     sdlc_version: sdlc.version ?? null,
     sdlc_ambiguous: sdlc.ambiguous === true,
   };
+}
+
+/** The running package's host declaration, or null on the authored tree. */
+function readDeclaredHost() {
+  const own = ownPluginRoot();
+  if (!own) return null;
+  return readJson(join(own, "config", "host.json"));
 }
 
 /** Where the module itself lives — the development-checkout escape hatch. */

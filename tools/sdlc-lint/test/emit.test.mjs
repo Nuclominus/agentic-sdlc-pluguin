@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
 import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { execFileSync } from "node:child_process";
 import { resolveHost, hasTranscriptCost } from "../../../plugins/sdlc/tools/resolve/host.mjs";
 import { loadHost, listHosts, emitAll, emitPlugin, rewriteAgent, rewriteHooks } from "../lib/emit/index.mjs";
 import { resolveModel, modelPairs, TIERS } from "../lib/emit/models.mjs";
@@ -294,6 +295,53 @@ test("a malformed declaration is reported, not guessed around", () => {
   assert.equal(h.telemetry_mode, "none");
   assert.match(h.source, /unreadable/);
   rmSync(dir, { recursive: true, force: true });
+});
+
+// ------------------------------------------------- cross-host root isolation
+
+test("an emitted package resolves its own root, never another host's install", () => {
+  // The defect this locks: running the emitted cli.mjs still resolved
+  // sdlc_plugin_root to a Claude Code cache copy, so the package read a foreign
+  // install's config (no host declaration -> "claude") and would have tried to
+  // price the run from transcripts that do not exist. Issue #70's failure mode —
+  // one run mixing two plugin trees — reappearing across hosts.
+  const project = mkdtempSync(join(tmpdir(), "sdlc-xhost-"));
+  writeFileSync(join(project, "package.json"), '{"name":"x","version":"1.0.0"}\n');
+  writeFileSync(join(project, ".sdlc-enable-vanilla"), "");
+
+  const cli = join(REPO, "dist", "antigravity", "plugins", "sdlc", "tools", "resolve", "cli.mjs");
+  const out = execFileSync(process.execPath, [cli, "plan", "--json", "add a thing"], {
+    cwd: project,
+    encoding: "utf8",
+    // A CLAUDE_PLUGIN_ROOT in the environment must NOT win over the package's
+    // own declaration — that is exactly how the leak happened.
+    env: { ...process.env, CLAUDE_PLUGIN_ROOT: join(REPO, "plugins", "sdlc") },
+  });
+  const r = JSON.parse(out);
+  assert.ok(r.ok, `resolver failed: ${r.halt ?? r.error}`);
+  assert.equal(r.plan.roots.host, "antigravity");
+  assert.ok(
+    r.plan.roots.sdlc_plugin_root.includes(join("dist", "antigravity")),
+    `resolved outside its own package: ${r.plan.roots.sdlc_plugin_root}`,
+  );
+  // The leak's signature is the Claude plugin CACHE, not the substring
+  // ".claude" — this repo's own worktrees live under .claude/worktrees/.
+  assert.equal(r.plan.roots.sdlc_plugin_root.includes("/plugins/cache/"), false, "reached into a Claude Code plugin cache");
+  rmSync(project, { recursive: true, force: true });
+});
+
+test("an emitted package finds its own recipes", () => {
+  // Discovery runs off installed_plugins.json, which only Claude Code writes. A
+  // package that ships workflows and then reports `Available: (none)` is worse
+  // than one that ships none.
+  const project = mkdtempSync(join(tmpdir(), "sdlc-recipes-"));
+  writeFileSync(join(project, "package.json"), '{"name":"x","version":"1.0.0"}\n');
+  const cli = join(REPO, "dist", "antigravity", "plugins", "sdlc", "tools", "resolve", "cli.mjs");
+  const r = JSON.parse(execFileSync(process.execPath, [cli, "plan", "--json", "add a thing"], { cwd: project, encoding: "utf8" }));
+  assert.ok(r.ok, `resolver failed: ${r.halt ?? r.error}`);
+  assert.equal(r.plan.workflow.name, "default");
+  assert.ok(r.plan.workflow.resolved_phases.length >= 5);
+  rmSync(project, { recursive: true, force: true });
 });
 
 // ---------------------------------------------------------------- check

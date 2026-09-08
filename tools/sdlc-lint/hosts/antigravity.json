@@ -83,6 +83,14 @@
 
   "validate": { "command": ["agy", "plugin", "validate"], "zero_tokens": true },
 
+  "discovery": {
+    "_comment": "Written into the emitted package's config/host.json so the shipped resolver can find sibling plugins without guessing. Without it, `cli.mjs` run out of an Antigravity install resolved its own root to a Claude Code cache copy — the same cross-tree mixing as issue #70. Workspace paths come first: a project-local plugin should win over a globally installed one.",
+    "config_dir_env": "GEMINI_CONFIG_DIR",
+    "config_dir_default": ".gemini",
+    "workspace_plugin_subdirs": [".agents/plugins"],
+    "plugin_search_subdirs": ["config/plugins", "antigravity-cli/plugins"]
+  },
+
   "install": {
     "command": ["agy", "plugin", "install"],
     "roots": [

@@ -198,6 +198,10 @@ export function emitPlugin(root, pluginName, host) {
         host: host.host,
         telemetry_mode: host.telemetry?.mode ?? "none",
         host_cli_version: host.verified_on?.cli_version ?? null,
+        config_dir_env: host.discovery?.config_dir_env ?? null,
+        config_dir_default: host.discovery?.config_dir_default ?? null,
+        workspace_plugin_subdirs: host.discovery?.workspace_plugin_subdirs ?? [],
+        plugin_search_subdirs: host.discovery?.plugin_search_subdirs ?? [],
       }, null, 2) + "\n",
     });
   }
