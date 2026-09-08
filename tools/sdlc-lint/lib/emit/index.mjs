@@ -23,6 +23,7 @@ import { join, relative, posix } from "node:path";
 import { globSync } from "tinyglobby";
 import { frontmatter } from "../agent-tools.mjs";
 import { resolveModel } from "./models.mjs";
+import { overlaysFor, applyOverlays } from "./overlay.mjs";
 
 /** Where emitted packages land, relative to the repo root. */
 export const DIST_ROOT = "dist";
@@ -153,9 +154,26 @@ export function emitPlugin(root, pluginName, host) {
     // Moved files are emitted under their new name, below.
     if (moves.has(rel)) continue;
 
+    // Overlay sources are build INPUTS, not package content — they have already
+    // landed, spliced into the skill body above. Not recorded as a drop: the
+    // drops list is for things that would otherwise have shipped, and padding it
+    // with build inputs trains the reader to skim it.
+    if (rel.startsWith("hosts/")) continue;
+
     if (rel.startsWith(".claude-plugin/")) {
       drops.push({ path: rel, reason: "Claude-Code-only manifest directory; the manifest is moved to the plugin root" });
       continue;
+    }
+
+    const skill = rel.match(/^skills\/([^/]+)\/SKILL\.md$/)?.[1];
+    if (skill) {
+      const overlays = overlaysFor(root, pluginName, host.host, skill);
+      if (overlays.size) {
+        const r = applyOverlays(readFileSync(abs, "utf8"), overlays);
+        if (!r.ok) { errors.push(...r.errors.map((e) => `${pluginName}/${rel}: ${e}`)); continue; }
+        outputs.set(posix.join(outDir, rel), { kind: "rewrite", content: r.text, changes: r.applied.map((a) => `overlay ${a}`) });
+        continue;
+      }
     }
 
     if (/^agents\/[^/]+\.md$/.test(rel)) {

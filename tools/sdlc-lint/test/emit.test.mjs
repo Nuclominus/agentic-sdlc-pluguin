@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { loadHost, listHosts, emitAll, emitPlugin, rewriteAgent, rewriteHooks } from "../lib/emit/index.mjs";
 import { resolveModel, modelPairs, TIERS } from "../lib/emit/models.mjs";
 import { checkHost } from "../lib/emit/check.mjs";
+import { sectionRange, applyOverlays, overlaysFor } from "../lib/emit/overlay.mjs";
 import { frontmatter, parseTools } from "../lib/agent-tools.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
@@ -183,6 +184,82 @@ test("every drop states a reason", () => {
   // error, it just stops existing. A drop without a reason is that failure.
   const { drops } = emitAll(REPO, ANTIGRAVITY);
   for (const d of drops) assert.ok(d.reason && d.reason.trim(), `${d.plugin}/${d.path} was dropped with no reason`);
+});
+
+// ---------------------------------------------------------------- overlays
+
+const DOC = [
+  "intro line",
+  "**3b. Earlier step** does things.",
+  "more earlier",
+  "",
+  "**3c. Spawn the agent** via the `Agent` tool:",
+  "```",
+  "Agent({ subagent_type: 'x' })",
+  "```",
+  "trailing note",
+  "",
+  "**3d. Save the summary** and move on.",
+  "tail",
+].join("\n");
+
+test("a section runs from its own heading to the next step heading", () => {
+  const r = sectionRange(DOC, "3c");
+  assert.deepEqual(r, { start: 4, end: 10 });
+});
+
+test("the last section runs to end of file", () => {
+  const r = sectionRange(DOC, "3d");
+  assert.equal(r.end, DOC.split("\n").length);
+});
+
+test("a dashed step id anchors exactly, not as a prefix", () => {
+  // `3c` must not swallow `3c-crash`, and vice versa.
+  const doc = "**3c. A** x\n**3c-crash. B** y\n**3d. C** z\n";
+  assert.deepEqual(sectionRange(doc, "3c"), { start: 0, end: 1 });
+  assert.deepEqual(sectionRange(doc, "3c-crash"), { start: 1, end: 2 });
+});
+
+test("applying an overlay replaces the whole section and nothing else", () => {
+  const dir = join(REPO, "plugins", "sdlc", "hosts", "antigravity", "overlays", "pipeline-orchestrator");
+  const r = applyOverlays(DOC, new Map([["3c", join(dir, "3c.md")]]));
+  assert.ok(r.ok);
+  assert.ok(r.text.includes("**3b. Earlier step**"), "the preceding section survived");
+  assert.ok(r.text.includes("**3d. Save the summary**"), "the following section survived");
+  assert.ok(r.text.includes("invoke_subagent"), "the overlay landed");
+  assert.equal(r.text.includes("Agent({ subagent_type: 'x' })"), false, "the replaced body is gone");
+});
+
+test("a renamed heading fails emission — it never silently passes through", () => {
+  // This is the whole reason the module exists. An overlay that stops applying
+  // ships the Claude Code text on another host, and raises nothing.
+  const renamed = DOC.replace("**3c. Spawn the agent**", "**3c9. Spawn the agent**");
+  const r = applyOverlays(renamed, new Map([["3c", join(REPO, "plugins", "sdlc", "hosts", "antigravity", "overlays", "pipeline-orchestrator", "3c.md")]]));
+  assert.equal(r.ok, false);
+  assert.match(r.errors[0], /matches nothing in the SSOT/);
+});
+
+test("every declared overlay anchor resolves in the live orchestrator", () => {
+  const ssot = readFileSync(join(REPO, "plugins", "sdlc", "skills", "pipeline-orchestrator", "SKILL.md"), "utf8");
+  const overlays = overlaysFor(REPO, "sdlc", "antigravity", "pipeline-orchestrator");
+  assert.ok(overlays.size >= 3, "expected the dispatch overlays to be declared");
+  for (const anchor of overlays.keys()) {
+    assert.ok(sectionRange(ssot, anchor), `overlay \`${anchor}\` anchors to nothing`);
+  }
+});
+
+test("the emitted orchestrator carries no Claude-only dispatch vocabulary", () => {
+  // A live instruction naming a tool the host does not have is worse than no
+  // instruction: the model can follow it.
+  const body = readFileSync(join(REPO, "dist", "antigravity", "plugins", "sdlc", "skills", "pipeline-orchestrator", "SKILL.md"), "utf8");
+  assert.equal(/`Agent` tool/.test(body), false, "still tells the model to use the Agent tool");
+  assert.equal(/subagent_type/.test(body), false, "still names the subagent_type parameter");
+  assert.ok(body.includes("invoke_subagent"), "the host's own dispatch tool is not named");
+});
+
+test("overlay sources are build inputs and never ship", () => {
+  const { outputs } = emitPlugin(REPO, "sdlc", ANTIGRAVITY);
+  assert.equal([...outputs.keys()].some((p) => p.includes("/hosts/")), false);
 });
 
 // ---------------------------------------------------------------- check

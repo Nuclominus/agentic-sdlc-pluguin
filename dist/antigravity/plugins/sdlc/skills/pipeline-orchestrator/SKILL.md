@@ -675,7 +675,26 @@ Examples:
 
 This is a contract with the user. Do not skip.
 
-**3b-3. Resolve model (project override → frontmatter)** — before spawning, resolve `{model_tier}` by precedence (first hit wins): `CONTEXT.model_overrides.agents[<bare>]` where `<bare>` is the agent name after the last `:` (e.g. `sdlc:developer` → `developer`) → `CONTEXT.model_overrides.default` → the `model:` YAML field from the agent's `.md` file (`plugins/**/agents/{agent_name}.md`; once a stack profile carries no agents of its own, that is always `{SDLC_PLUGIN_ROOT}/agents/`) → `sonnet`. Agent names are never translated: the key in `model.local.json`, the name dispatched and the file on disk are one string (ADR-0021), and a key matching no agent is reported by the resolve command rather than remapped. An override value that is not a valid tier (`opus|sonnet|haiku|fable`) is skipped with an inline warning and resolution falls through to the next source. The `enforce-agent-model.sh` hook applies this SAME override, so the resolved tier is not reverted at dispatch. This resolved tier (the SHORT name: `opus` / `sonnet` / `haiku` / `fable`) is what you print in 3b-2 AND pass verbatim to `Agent()` in 3c. The `Agent` tool's `model` parameter accepts the short tier ONLY — passing a full model ID raises `InputValidationError`. The tier→model-ID mapping is resolved from the model registry (`plugins/sdlc/config/models.json`) and is used ONLY for telemetry/cost accounting in 3d-1, never for dispatch. If the file is missing or the field is absent, warn inline and fall back to `sonnet`.
+**3b-3. Resolve model — already resolved, at package build time.** On this host you do NOT resolve a
+model tier and you do NOT pass one at dispatch. Each agent file in this package carries its concrete
+model (`model: gemini-…`), written by the emitter from the tier + effort the agent declares, because
+Antigravity model ids embed the reasoning budget and so the tier+effort pair maps to exactly one id.
+Enforcement is by construction: there is no dispatch-time argument that could disagree with the file.
+
+What this changes for you, concretely:
+
+- **3b-2 prints the model that the agent file carries** — read it from
+  `{SDLC_PLUGIN_ROOT}/agents/{agent_name}.md` if you need to name it. Do not print a tier
+  (`opus`/`sonnet`/`haiku`); no tier is in play at run time on this host.
+- **3c passes no `model` argument.** See 3c.
+- **`CONTEXT.model_overrides`** — from `.claude/model.local.json` — has **no mechanism here**. The
+  override was applied by the `enforce-agent-model.sh` hook, which this package does not ship: it
+  depends on the `PreToolUse` `updatedInput` envelope, which this host does not document. If the
+  resolve command reports overrides, print one line saying they are not enforced on this host and
+  continue. Do NOT attempt to honour them by editing agent files or by passing a model at dispatch —
+  a substitute mechanism invented at run time is exactly the drift this package is built to avoid.
+- **The model registry is still read** (3d-0), but only for telemetry and pricing, never for
+  dispatch.
 
 **3b-special. Development phase two-pass execution**
 
@@ -786,33 +805,48 @@ it is this same phase's own carryover from an earlier, superseded attempt, and m
   with its own heal budget (see the closing note of 3e-heal), so it needs its own pre-dispatch
   snapshot.
 
-**3c. Spawn the agent** via the `Agent` tool with `subagent_type` and the short tier resolved in 3b-3:
+**3c. Spawn the agent** via the `invoke_subagent` tool, using the agent name resolved in 3a:
 
 ```
-Agent({
-  subagent_type: "{agent_from_profile}",
-  model: "{model_tier_resolved_in_3b-3}",   // SHORT tier: opus|sonnet|haiku|fable — NOT a full model ID
-  description: "Phase {N}/{total}: {phase_name}",
+invoke_subagent({
+  TypeName: "{agent_from_profile}",
   prompt: <the prompt built in 3b>
 })
 ```
 
+The model tier is NOT passed here. On this host each agent file already carries its resolved model
+(`model: gemini-…`, written at package build time from the tier + effort the agent declares), so the
+tier is enforced by construction rather than at the call site. Do not add a `model` argument.
+
+**Deliverable paths in the prompt MUST be absolute.** A subagent here runs with its own scratch
+working directory beside yours — measured: a probe subagent wrote its file into BOTH the parent's
+cwd and `~/.gemini/antigravity-cli/scratch/`. A relative `docs/plans/…` path can therefore produce an
+agent that genuinely did the work and a 3d `Glob` verification that says it did not. Expand
+`{detailed_output_path}` to an absolute path before putting it in the prompt.
+
+**Parallel groups** dispatch every member with several `invoke_subagent` calls in ONE assistant
+message. Concurrency is real on this host — two subagents were observed running at once.
+
+**There is no retrieval call.** A finished subagent pushes its message into your context and your
+turn resumes on its own; its compact summary arrives as text without you asking for it. Do not
+call, or wait for, a `wait_agent`-style tool — there isn't one, and waiting for a result that has
+already arrived is how a phase hangs.
+
 **3c-crash. Recovering a subagent that died on a mid-response server error.**
 
-This is platform-neutral and applies to every dispatched agent, in every recipe:
+This host has no documented way to resume a dead subagent — there is no `SendMessage`-style call
+that continues an existing one, and dispatch itself is fire-and-push rather than a handle you hold.
+So the recovery path here has one branch, not two:
 
-1. **Resume FIRST.** `SendMessage` to the SAME `agentId` to continue where it stopped — its
-   in-agent context is intact, so it finishes with a handful of tool calls instead of re-reading
-   the whole task.
-2. **Fall back to a fresh `Agent` only if the resume fails.** A fresh agent must re-`Read`
-   everything the crashed one had loaded, roughly doubling the phase's tokens.
-3. **Record the mechanism** so telemetry stays honest — set the phase's `recovery` field to
-   `sendmessage-resume` or `fresh-restart` (Step 5 / `schemas/checkpoint.schema.json`). Do NOT
-   label a fresh-restart as a same-session resume.
+1. **Dispatch a fresh subagent** with the same prompt (3c).
+2. **Record the mechanism** so telemetry stays honest — set the phase's `recovery` field to
+   `fresh-restart` (Step 5 / `schemas/checkpoint.schema.json`). Never write `sendmessage-resume` on
+   this host: it names a mechanism that did not run.
 
-Honest caveat: a resume replays context, so the concrete saving is the redundant re-reads it
-avoids, not a dramatic token cut — but it also preserves correctness, since a fresh agent can
-diverge from the crashed one's partial work.
+The cost is real and should not be papered over: a fresh agent re-`Read`s everything the crashed one
+had loaded, roughly doubling the phase's tokens, and it can diverge from the crashed one's partial
+work. If the crashed phase had already written its detailed file, say so in the fresh prompt so it
+resumes from that artifact instead of starting blind.
 
 **3d. Save the COMPACT summary** returned by the agent to `CONTEXT.{phase}_output`. Verify the agent also wrote the detailed file to `docs/plans/{task_slug}/0X-{phase}.md` (use `Glob` to check). If the file is missing, ask the agent again to write it before proceeding.
 
@@ -1593,10 +1627,11 @@ cardinality: once-per-run
 since: 2026-07-06
 ```
 
-Dispatch via the `Agent` tool:
-- `subagent_type`: `session-recorder` (the neutral core agent; not a workflow phase, so it takes no
+Dispatch a subagent **exactly as in 3c** — the dispatch mechanics live there and are not restated
+here — with:
+- agent: `session-recorder` (the neutral core agent; not a workflow phase, so it takes no
   `agents_per_phase` binding).
-- `model`: `haiku` (resolve through `.claude/model.local.json` like any other agent).
+- model tier: `haiku`, resolved through 3b-3 like any other agent.
 - `description`: `"Close SDLC session — journal entry for {task_slug}"`.
 - `prompt` (per-call context): `task_slug`, `journal_path: docs/plans/_journal.md`,
   `telemetry_path: docs/plans/{task_slug}/_telemetry.json`.

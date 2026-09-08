@@ -1593,10 +1593,11 @@ cardinality: once-per-run
 since: 2026-07-06
 ```
 
-Dispatch via the `Agent` tool:
-- `subagent_type`: `session-recorder` (the neutral core agent; not a workflow phase, so it takes no
+Dispatch a subagent **exactly as in 3c** — the dispatch mechanics live there and are not restated
+here — with:
+- agent: `session-recorder` (the neutral core agent; not a workflow phase, so it takes no
   `agents_per_phase` binding).
-- `model`: `haiku` (resolve through `.claude/model.local.json` like any other agent).
+- model tier: `haiku`, resolved through 3b-3 like any other agent.
 - `description`: `"Close SDLC session — journal entry for {task_slug}"`.
 - `prompt` (per-call context): `task_slug`, `journal_path: docs/plans/_journal.md`,
   `telemetry_path: docs/plans/{task_slug}/_telemetry.json`.
