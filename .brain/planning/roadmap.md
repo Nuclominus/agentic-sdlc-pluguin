@@ -31,6 +31,7 @@ status: in-progress
 | H5-D2 | the run start is one command (`resolve/cli.mjs plan`, ADR-0019) | landed, DoD unmeasured | #119, #121, #125 |
 | H6 | `Stop` hook sealing the run (deterministic tail) | done | #107 |
 | I1 | agents in the core, expertise in the foundations (`role_expertise`, ADR-0021) | done, validated on a real run | #139, #140, #141, #142 |
+| J1 | multi-host portability — one SSOT, emitted host packages (ADR-0022) | in-progress — Antigravity emitter landed, live run blocked on the dispatch spike | — |
 
 _Open: E1, E3, E4, E7, E8, F1, F2, G2, and the two Track H re-measurements. (`kotlinx.serialization`
 stays deferred under C2 — it needs a `serialization` aspect decision before it can land as a
@@ -50,6 +51,16 @@ stable prefix). Three PRs onto an integration branch, landed as #142; see
 the merged branch dispatched only core agents and mentioned no retired name anywhere, but it also
 showed the cost of the move: expertise that used to be structurally guaranteed (an agent's own body)
 now depends on the orchestrator pasting a block, and nothing gates that. PR-4 adds the gate.
+
+**Track J — multi-host portability.** Ship the pipeline on Antigravity CLI and Codex CLI from the
+one authoring surface that already exists. The decision is
+[[decisions/ADR-0022-one-ssot-emitted-host-packages]]: emit host packages at build time, commit
+them, gate them with `sdlc-lint emit --check` — never translate at run time, which is the shape
+ADR-0021 §5 deleted. Probing `agy` 1.1.27 changed the size of the job: an unmodified plugin tree
+validates after two file moves, and the host converts commands to skills itself, so the Antigravity
+target is a repackager rather than a translator. The unsettled question is not text transformation
+but **dispatch semantics** — whether a subagent there can take a full per-phase brief and return the
+compact summary the whole cost model rests on. See [[planning/j1-multi-host]].
 
 **Track E — pipeline cache/cost efficiency.** Now that per-run cost is measured accurately
 (transcript-derived, #46; over-count fixed in #48), reduce the dominant cost driver: prompt-cache
