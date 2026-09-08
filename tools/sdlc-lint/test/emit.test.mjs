@@ -146,6 +146,17 @@ test("commands are carried verbatim — the host converts them itself", () => {
   assert.equal(outputs.get(commands[0]).kind, "copy");
 });
 
+test("commands are renamed into the plugin's namespace", () => {
+  // The skill name comes from the filename, and the host registers skills
+  // globally — so unprefixed files would claim /start, /init, /report, /doctor.
+  const { outputs } = emitPlugin(REPO, "sdlc", ANTIGRAVITY);
+  const commands = [...outputs.keys()].filter((p) => p.includes("/commands/"));
+  for (const p of commands) {
+    assert.match(p, /\/commands\/sdlc-[^/]+\.md$/, `${p} would register outside the plugin's namespace`);
+  }
+  assert.ok(outputs.has("dist/antigravity/plugins/sdlc/commands/sdlc-start.md"));
+});
+
 test("every emitted agent carries a host model id, never a tier tag", () => {
   const { outputs, errors } = emitPlugin(REPO, "sdlc", ANTIGRAVITY);
   assert.deepEqual(errors, []);

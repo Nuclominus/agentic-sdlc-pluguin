@@ -23,7 +23,9 @@
     "moves": [
       { "from": ".claude-plugin/plugin.json", "to": "plugin.json" },
       { "from": "hooks/hooks.json", "to": "hooks.json" }
-    ]
+    ],
+    "command_prefix": "sdlc-",
+    "_command_prefix_comment": "The host converts commands to skills, but the skill NAME comes from the filename — so `commands/start.md` would register as a global `/start`, alongside `/init`, `/report` and `/doctor`. Claude Code namespaces these as `/sdlc:start`; here the namespace has to be in the name. Renaming the file is the whole change: the body is untouched."
   },
 
   "models": {
@@ -98,7 +100,9 @@
       "${GEMINI_CONFIG_DIR:-$HOME/.gemini}/config/plugins",
       "${GEMINI_CONFIG_DIR:-$HOME/.gemini}/antigravity-cli/plugins"
     ],
-    "observed_install_root": "${GEMINI_CONFIG_DIR:-$HOME/.gemini}/config/plugins"
+    "observed_install_root": "${GEMINI_CONFIG_DIR:-$HOME/.gemini}/config/plugins",
+    "merges_not_replaces": true,
+    "merge_caveat": "`agy plugin install` MERGES into an existing install of the same name rather than replacing it. After renaming the command files, a reinstall reported `commands: 22 processed` — the 11 old unprefixed files were still there beside the 11 new ones. Uninstall first when file names change, or the install carries orphans the emitter would never produce. Same failure the emit --check orphan axis exists to catch, one layer out."
   },
 
   "drops": []

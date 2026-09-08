@@ -183,6 +183,16 @@ export function emitPlugin(root, pluginName, host) {
       continue;
     }
 
+    // A command's skill name comes from its FILENAME on hosts that register
+    // skills in one global namespace, so the plugin namespace has to live in the
+    // name. Body untouched — this is a rename, not a rewrite.
+    const command = host.package?.command_prefix && rel.match(/^commands\/([^/]+\.md)$/)?.[1];
+    if (command && !command.startsWith(host.package.command_prefix)) {
+      outputs.set(posix.join(outDir, "commands", host.package.command_prefix + command),
+        { kind: "copy", from: posix.join("plugins", pluginName, rel) });
+      continue;
+    }
+
     outputs.set(posix.join(outDir, rel), { kind: "copy", from: posix.join("plugins", pluginName, rel) });
   }
 
