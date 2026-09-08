@@ -181,12 +181,18 @@ role_expertise:
       - { path: rules/documentation.md, note: "vault canon, triggers, and the Definition of Done" }
       - { path: rules/git-operations.md, note: "commit / PR conventions" }
     skills:
-      # Measured misses on runs 3 and 5: both dispatches ran `gh pr create` without invoking this.
+      # Measured misses on runs 3 and 5: both dispatches opened the PR without invoking this.
       # The old wording — "before filling vault notes and before `gh pr create`" — led with the
-      # conditional half. A run whose project has no vault notes to fill can read the whole clause
-      # as inapplicable, and the PR half never gets its own turn. Lead with the act that happens on
-      # EVERY documentation dispatch instead, and scope it to the dispatch (the #148 lesson).
-      - { skill: android-foundation:android-docs-vault, when: "before your first commit, `gh pr create`, or vault-note write in THIS dispatch — whichever comes first" }
+      # conditional half, so a run with no vault notes to fill can read the whole clause as
+      # inapplicable and the PR half never gets its own turn. Lead with the act EVERY documentation
+      # dispatch performs, and scope it to the dispatch (the #148 lesson).
+      #
+      # Name that act by its OUTCOME, not by a command. `gh pr create` is the documented FALLBACK —
+      # the agent prefers `mcp__github__create_pull_request` — so a host with the GitHub MCP would
+      # fire none of it; and committing is something this role is told never to do
+      # (agents/document-writer.md, rules/git-operations.md), so a trigger naming it is unreachable
+      # by construction. Both would rebuild the very defect this replaces.
+      - { skill: android-foundation:android-docs-vault, when: "before you open the PR in THIS dispatch — by any mechanism — and before your first vault-note write" }
 
   debugger:
     invariants: |

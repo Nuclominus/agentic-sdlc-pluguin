@@ -405,12 +405,20 @@ test("a mandate is met by the bare skill name the harness also accepts", () => {
   // the two strings exactly scored a skill that WAS invoked as a miss — the same defect
   // `dispatchMatches` already fixes for agent names, where a contract written against the bare name
   // must still match a namespaced dispatch. Left unfixed, the auditor measures the namespace.
+  // Five mandates against three invocations, covering every branch of the rule:
+  //   `frontend-design:frontend-design` ← Skill(`frontend-design`)            bare invoked   ✓
+  //   `superpowers:test-driven-development` ← same                            exact          ✓
+  //   `brainstorming` ← Skill(`superpowers:brainstorming`)                    bare mandated  ✓
+  //   `acme:other`                                                            never invoked  ✗
+  //   `acme:brainstorming` vs Skill(`superpowers:brainstorming`)              same tail      ✗
+  // The last row is the one that pins the rule's narrowness: two namespaced ids that share a
+  // skill segment are different skills, and matching them would invent an ambiguity nobody wrote.
   const res = auditRun(run("mandate-bare"), mandateContract(), { projectsRoot: PROJECTS });
   assert.equal(res.status, "auditable");
   const v = verdict(res, "3b-1a-mandatory-skill");
-  assert.equal(v.expected, 3);
-  assert.equal(v.matched, 2, "the bare `frontend-design` and the namespaced TDD row both count");
-  assert.equal(v.verdict, "partial", "`acme:other` was genuinely never invoked");
+  assert.equal(v.expected, 5);
+  assert.equal(v.matched, 3);
+  assert.equal(v.verdict, "partial");
 });
 
 test("every-mandate is n/a when the run declares no scope, never a pass", () => {

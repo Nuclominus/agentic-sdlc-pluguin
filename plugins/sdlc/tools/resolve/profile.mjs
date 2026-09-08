@@ -146,6 +146,28 @@ export function mergeProfiles({ primary, active = {}, additive = [], vanilla = n
 
 const POLICY_RANK = { mandatory: 2, recommended: 1 };
 
+/**
+ * Do two skill ids name the same skill?
+ *
+ * `enumerateSkills` registers a plugin's skills only as `plugin:skill`, but the harness resolves
+ * the bare name too — and an author may write either. Judging by exact string made a row spelled
+ * `frontend-design` read as "not installed" and demoted it out of the mandate the manifest
+ * intended, while `computeDepsStatus` accepted both forms two files away.
+ *
+ * The rule is deliberately narrow, and MIRRORS `skillMatches` in tools/sdlc-lint/lib/compliance.mjs
+ * — keep them in sync: equal, or one side is BARE (no `:`) and equals the other's skill segment.
+ * Two *namespaced* ids never match by their tails; `acme:brainstorming` and
+ * `superpowers:brainstorming` are different skills, and pretending otherwise would invent an
+ * ambiguity nobody wrote. A bare name is ambiguous, but that ambiguity is the harness's.
+ */
+export function skillIdMatches(a, b) {
+  if (a === b) return true;
+  const tail = (s) => s.slice(s.lastIndexOf(":") + 1);
+  if (!a.includes(":")) return a === tail(b);
+  if (!b.includes(":")) return b === tail(a);
+  return false;
+}
+
 /** One `role_expertise.<role>.skills[]` row, normalised. `policy` defaults to mandatory. */
 function normalizeSkillRow(row) {
   if (typeof row === "string") return { skill: row, policy: "mandatory", when: "" };
@@ -168,15 +190,30 @@ function normalizeSkillRow(row) {
  */
 function dedupeSkills(rows) {
   const out = new Map();
+  /**
+   * The key is the id already held for this skill, so the two spellings of one skill collapse to
+   * one row. Keying on the exact string instead rendered `frontend-design:frontend-design`
+   * (mandatory) and `frontend-design` (recommended) as two lines in the same prompt: one skill,
+   * two policies, two `when` clauses, and a `expected` that counts one obligation twice.
+   * Whichever spelling arrives first names the merged row — arrival order is deterministic here
+   * (profile rows, then extension rows).
+   */
+  const keyFor = (skill) => {
+    for (const k of out.keys()) if (skillIdMatches(k, skill)) return k;
+    return skill;
+  };
   for (const row of rows) {
     if (!row) continue;
-    const prev = out.get(row.skill);
-    if (!prev) { out.set(row.skill, { ...row }); continue; }
-    if (POLICY_RANK[row.policy] > POLICY_RANK[prev.policy]) { out.set(row.skill, { ...row }); continue; }
+    const key = keyFor(row.skill);
+    const prev = out.get(key);
+    if (!prev) { out.set(key, { ...row }); continue; }
+    // Keep the established spelling; only policy and `when` are contested.
+    const take = (r) => out.set(key, { ...r, skill: prev.skill });
+    if (POLICY_RANK[row.policy] > POLICY_RANK[prev.policy]) { take(row); continue; }
     if (POLICY_RANK[row.policy] < POLICY_RANK[prev.policy]) continue;
     const a = prev.when ?? "", b = row.when ?? "";
     if (a === b) continue;
-    if (!a || (b && b < a)) out.set(row.skill, { ...row });
+    if (!a || (b && b < a)) take(row);
   }
   return [...out.values()];
 }
@@ -260,7 +297,9 @@ function downgradeIfMissing(row, { availableSkills = null, unavailablePlugins = 
   if (!availableSkills && !unavailablePlugins) return row;
   const pluginOf = row.skill.includes(":") ? row.skill.split(":")[0] : null;
   const pluginDown = pluginOf && unavailablePlugins ? unavailablePlugins[`${pluginOf}_unavailable`] === true : false;
-  const notListed = availableSkills ? !availableSkills.has(row.skill) : false;
+  const notListed = availableSkills
+    ? ![...availableSkills].some((s) => skillIdMatches(s, row.skill))
+    : false;
   if (!pluginDown && !notListed) return row;
   warnings.push(`WARN: ${where} ${row.skill} not installed — downgraded to recommended`);
   return {

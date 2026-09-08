@@ -108,6 +108,19 @@ export function finishRun(runDir, opts = {}) {
   try {
     const tel = JSON.parse(readFileSync(telPath, "utf8"));
     tel.sealed_by = sealedBy;
+    // Same write, one more machine value: which recipe this run executed. It used to live only in
+    // Step 5's prose, so whether a run recorded it was model discretion — one measured run wrote
+    // `"workflow": "android-feature"`, the next omitted the key entirely, while both had resolved
+    // it correctly. `.checkpoint/_run.json` is schema-required to carry it, and this function is
+    // already rewriting the file (ADR-0015: a value the machine can compute is never left to
+    // prose). Fill only — a run that already states its own workflow keeps what it said, and a
+    // missing or unreadable `_run.json` leaves the key absent rather than failing the seal.
+    if (tel.workflow == null) {
+      try {
+        const run = JSON.parse(readFileSync(join(runDir, ".checkpoint", "_run.json"), "utf8"));
+        if (typeof run.workflow === "string" && run.workflow) tel.workflow = run.workflow;
+      } catch { /* no resolved-run manifest: nothing to copy, and nothing to report */ }
+    }
     writeFileSync(telPath, JSON.stringify(tel, null, 2) + "\n");
     mkdirSync(join(runDir, ".checkpoint"), { recursive: true });
     writeFileSync(join(runDir, ".checkpoint", "_sealed"),
