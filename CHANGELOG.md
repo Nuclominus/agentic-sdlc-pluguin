@@ -4,9 +4,32 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
-`sdlc` `1.16.0` → `2.3.0`, `android-foundation` `1.7.0` → `2.0.1`, marketplace `1.13.0` → `1.15.0`.
+`sdlc` `1.16.0` → `2.4.0`, `android-foundation` `1.7.0` → `2.0.1`, marketplace `1.13.0` → `1.16.0`.
 
 ### Fixed
+
+- **The run start reads its own plan once instead of discovering it (`sdlc` 2.4.0).** A plan
+  carrying a full stack profile exceeds the inline tool-output limit, so the harness saves it to a
+  file and hands the orchestrator a path. Nothing said what to do next, so run 4 spent five of its
+  nine Steps 0→1d tool calls probing that file — `keys[]`, then `.prints[]`, then two subset
+  projections — and then invented a spill-to-scratchpad convention for the prompt blocks. Steps
+  0→1d measured 10 turns / 9 calls against a 2–3 call target; the two runs before it, which never
+  reached the file path, took 6 each.
+
+  Step **0-large** now states the read verbatim: one `jq` that emits `prints[]` followed by every
+  `CONTEXT` value in the key map, with `prompt_blocks` projected out and read one agent at a time at
+  3b-1. Measured against run 4's own plan file, that projection is **10,676 characters against
+  54,746**. A new test parses the projection out of `SKILL.md` and asserts every name in it is a key
+  `resolvePlan` actually emits, so a renamed key fails the suite instead of silently dropping a
+  `CONTEXT` value.
+
+- **`plan.profile.role_expertise` is no longer emitted (`sdlc` 2.4.0).** The merged, unrendered
+  expertise map was **17,910 of that plan's 54,746 characters** — a third of everything the
+  orchestrator carries before it dispatches anything — and nothing read it. Its one documented
+  consumer was a Step 5 telemetry field that was never written; what expertise was in force is
+  already recorded by `primary_profile`, `additive_profiles` and `plugin_version`, and
+  `resolveExpertise` reads the in-process value rather than this output. The rendered
+  `prompt_blocks` remain the contract.
 
 - **A planning pass is no longer given mandates it cannot meet (`sdlc` 2.3.0).** The development
   phase runs two passes (3b-special); Pass 1 (`development_plan`) writes an implementation plan and

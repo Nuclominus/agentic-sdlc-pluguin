@@ -93,6 +93,41 @@ Then do exactly three things:
    exactly what
    [ADR-0019](../../../../.brain/decisions/ADR-0019-the-run-start-is-one-command.md) removed.
 
+#### 0-large. When the harness saves the output to a file — read it ONCE, with this program
+
+A plan carrying a full stack profile can exceed the inline tool-output limit, in which case the
+harness writes it to a `tool-results/*.txt` path and hands you that path instead of the JSON. That
+is a normal outcome, not an error, and it has exactly one procedure. **Do not explore the file.**
+Run this, substituting the path, and nothing else:
+
+```bash
+F=<the tool-results path>
+jq -r '.prints[], "=== CONTEXT ===", (.plan | {roots, deps_preflight, availability_flags, stack, headless, plugin_version, cost_cap, cost_cap_source, models, skip_rules: .skip_rules.applied, workflow, profile: (.profile | del(.prompt_blocks))} | tojson)' "$F"
+```
+
+One call yields both obligations above: `prints[]` to echo verbatim, then every `CONTEXT` value in
+the key map. `prompt_blocks` is deliberately excluded — it is the largest thing in the plan and you
+need exactly one agent's entry at a time. On the run this was measured against, that projection is
+**10,676 characters against the file's 54,746**. Read the entry you need at 3b-1, when you dispatch
+that agent:
+
+```bash
+jq -r '.plan.profile.prompt_blocks["{agent}"] | .expertise // empty, "---", .skills // empty' "$F"
+```
+
+For the development phase's Pass 1 only (3b-special), read `.skills_planning` in place of `.skills`.
+The `---` separator is there so an empty `expertise` cannot be mistaken for the start of the skills
+block; drop it when you paste, and omit either block entirely when its side is empty.
+
+**Why this is spelled out.** Run 4 measured Steps 0→1d at 10 turns and 9 tool calls against a 2–3
+call target, and five of those nine were consecutive `jq` probes of this same file — `keys[]`, then
+`.prints[]`, then two subset projections — because the shape had to be discovered before it could
+be read. Discovery is not needed: the shape is fixed by the key map above. The two prior runs
+measured 6 calls each and neither reached the file path; the difference is entirely this
+exploration. A second consequence was that the model invented its own spill-to-scratchpad
+convention for the blocks — procedure that belongs here, stated once, rather than re-derived per
+run.
+
 The command reads the CONSUMER's project from the current working directory and loads only itself
 from the plugin root, per `plugins/sdlc/PLUGIN-PATHS.md`.
 
@@ -133,7 +168,6 @@ that status is available to a wrapper script, but it is not the hosting session'
 | `profile.convention_skills` | `EFFECTIVE_PROFILE.convention_skills` | Step 3b-1a |
 | `profile.phase_prompts_injection` | `EFFECTIVE_PROFILE.phase_prompts_injection` | Step 3b-1 |
 | `profile.extension_skills` | `EFFECTIVE_PROFILE.extension_skills` *(**Step 1b-ext**)* | Step 3b-1a |
-| `profile.role_expertise` | `EFFECTIVE_PROFILE.role_expertise` *(**ADR-0021**)* | Step 5 telemetry (which stack expertise was in force) |
 | `profile.prompt_blocks` | `EFFECTIVE_PROFILE.prompt_blocks[agent]` *(**ADR-0021**)* | Step 3b-1 — `.expertise` and `.skills` pasted verbatim (`.skills_planning` replaces `.skills` for development Pass 1 only, 3b-special) |
 | `profile.expertise_block_agents` | `EFFECTIVE_PROFILE.expertise_block_agents` *(**ADR-0021**)* | Step 5 telemetry, under the SAME key — copy the array; never recount it from `prompt_blocks` |
 | `profile.post_pipeline_checks` | `EFFECTIVE_PROFILE.post_pipeline_checks` *(**Step 1b**)* | Step 4 |

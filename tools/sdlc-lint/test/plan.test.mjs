@@ -5,7 +5,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -316,8 +316,13 @@ test("role_expertise reaches the plan as absolute rule paths and pre-rendered pr
     assert.equal(plan.stack.profile_dir, w.plug, "the directory the rule paths were resolved against");
     assert.deepEqual(plan.profile.agents_per_phase.development, { demo: "developer" }, "the core agent, fanned out over the foundation's aspect");
 
-    const rx = plan.profile.role_expertise.developer;
-    assert.equal(rx.rules[0].path, join(w.plug, "rules", "house.md"), "relative in the manifest, absolute in the plan");
+    // The merged `role_expertise` map is NOT emitted. It is the unrendered input to the blocks
+    // below, and measuring one real run showed nothing reads it: 17,910 of the plan JSON's 54,746
+    // characters — a third of everything the orchestrator carries at start — for a key whose only
+    // documented consumer was a telemetry field Step 5 never wrote. What was in force is already
+    // recorded by `primary_profile`, `additive_profiles` and `plugin_version`.
+    assert.ok(!("role_expertise" in plan.profile),
+      "the rendered blocks are the contract; the map they were rendered from is not carried");
 
     const dev = plan.profile.prompt_blocks.developer;
     assert.match(dev.expertise, /^Stack expertise for developer \(demo\):\nDemo house rule: never block main\./);
@@ -472,5 +477,43 @@ test("cli.mjs expertise --role prints the block, exits 2 on an unknown role, and
     const vanilla = run(["expertise", "--role", "developer", "--stack=vanilla"]);
     assert.equal(vanilla.code, 0);
     assert.match(vanilla.out, /^no stack expertise for developer \(stack: vanilla\)$/m);
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+// ---- 0-large: the prescribed digest must keep naming keys the plan actually has ---------------
+
+test("the orchestrator's 0-large jq projection names only real plan keys", () => {
+  // Run 4 spent five of its nine start-window tool calls probing the plan file for its shape
+  // (`keys[]`, then `.prints[]`, then two subset projections) before it could read it. Step 0-large
+  // now states the projection once so no run has to rediscover it — which makes that literal a
+  // contract with `resolvePlan`'s output. A renamed plan key would otherwise drop a CONTEXT value
+  // silently, with every test still green. This is the guard for that.
+  const skillPath = resolve(dirname(fileURLToPath(import.meta.url)),
+    "..", "..", "..", "plugins", "sdlc", "skills", "pipeline-orchestrator", "SKILL.md");
+  const skill = readFileSync(skillPath, "utf8");
+  const m = skill.match(/=== CONTEXT ===", \(\.plan \| \{([^}]*?), profile: \(\.profile \| del\(\.prompt_blocks\)\)\}/);
+  assert.ok(m, "Step 0-large must carry the `.plan | {…}` digest projection verbatim");
+
+  // `a, b, skip_rules: .skip_rules.applied` -> the names on the LEFT of any colon.
+  const projected = m[1].split(",").map((s) => s.trim().split(":")[0].trim()).filter(Boolean);
+
+  const w = world({ roleExpertise: true });
+  try {
+    const { plan, halt } = resolvePlan({ cwd: w.proj, args: "--dry-run", env: w.env });
+    assert.equal(halt, null);
+    for (const key of projected) {
+      assert.ok(key in plan, `0-large projects '${key}', which resolvePlan does not emit`);
+    }
+    // The one nested path in the projection, checked as a path rather than as a name.
+    assert.ok(plan.skip_rules && "applied" in plan.skip_rules, "0-large reads .skip_rules.applied");
+
+    // Every CONTEXT key the map owes must survive the projection. `profile` is carried whole
+    // (minus the blocks), so its rows are covered by the parent name.
+    for (const owed of ["roots", "deps_preflight", "availability_flags", "stack", "workflow",
+                        "models", "cost_cap", "cost_cap_source", "headless", "plugin_version"]) {
+      assert.ok(projected.includes(owed), `the key map owes CONTEXT.${owed}; 0-large does not project it`);
+    }
+    // The exclusion is the point of the projection: the blocks are read one agent at a time.
+    assert.ok(!projected.includes("prompt_blocks"));
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
