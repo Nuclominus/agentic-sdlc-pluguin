@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-09-08 | #158 | `docs` | — | [[changes/2026-09-08-PR-158-lead-the-2-0-entry-with-breaking-changes-compress-the-rest]] |
 | 2026-09-08 | #156 | `fix` | — | [[changes/2026-09-08-PR-156-three-defects-run-5-surfaced-in-the-mandate-gate-and-its-inp]] |
 | 2026-09-08 | #153 | `perf` | — | [[changes/2026-09-08-PR-153-read-the-resolved-plan-once-instead-of-discovering-it]] |
 | 2026-09-08 | #152 | `fix` | — | [[changes/2026-09-08-PR-152-stop-mandating-skills-a-planning-pass-cannot-invoke]] |
