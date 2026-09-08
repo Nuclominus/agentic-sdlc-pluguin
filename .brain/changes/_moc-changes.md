@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-09-08 | #153 | `perf` | — | [[changes/2026-09-08-PR-153-read-the-resolved-plan-once-instead-of-discovering-it]] |
 | 2026-09-08 | #152 | `fix` | — | [[changes/2026-09-08-PR-152-stop-mandating-skills-a-planning-pass-cannot-invoke]] |
 | 2026-09-07 | #150 | `feat` | — | [[changes/2026-09-07-PR-150-gate-mandatory-skill-invocation-not-just-block-delivery]] |
 | 2026-09-07 | #148 | `fix` | — | [[changes/2026-09-07-PR-148-scope-skill-triggers-to-the-dispatch-a-re-dispatch-owes-them]] |
