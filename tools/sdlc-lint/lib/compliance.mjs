@@ -46,6 +46,27 @@ function dispatchMatches(subagentType, pattern) {
   return subagentType === pattern || subagentType.endsWith(`:${pattern}`);
 }
 
+/**
+ * The same question for a SKILL id, and it cuts both ways.
+ *
+ * A mandate names `frontend-design:frontend-design`; run 5's review-loop round invoked
+ * `frontend-design`, which the harness resolves to the same skill. Comparing the two strings
+ * exactly scored a skill that WAS invoked as a miss. The inverse also occurs — a bare mandate
+ * against a namespaced invocation — so neither side may be assumed qualified.
+ *
+ * The rule is deliberately narrow: equal, or one side is BARE (no `:`) and equals the other's
+ * skill segment. A bare name is inherently ambiguous — two plugins may both ship `brainstorming`
+ * — but that ambiguity is the harness's, which resolves the bare name the author typed. Matching
+ * two *namespaced* ids by their tails would invent an ambiguity nobody wrote.
+ */
+function skillMatches(invoked, mandated) {
+  if (invoked === mandated) return true;
+  const tail = (s) => s.slice(s.lastIndexOf(":") + 1);
+  if (!invoked.includes(":")) return invoked === tail(mandated);
+  if (!mandated.includes(":")) return mandated === tail(invoked);
+  return false;
+}
+
 function countMatches(contract, facts) {
   if (contract.requires === "agent_dispatch") {
     return facts.filter((f) => f.tool === "Agent" && f.subagent_type
@@ -137,7 +158,7 @@ function scopedMandates(contract, facts, tel, opts = {}) {
     if (!invoked) continue;             // no transcript: unjudgeable, not a failure
     judged += 1;
     expected += mandated.length;
-    matched += mandated.filter((id) => invoked.has(id)).length;
+    matched += mandated.filter((id) => [...invoked].some((got) => skillMatches(got, id))).length;
   }
   return judged === 0 ? { expected: 0, matched: 0 } : { expected, matched };
 }

@@ -4,9 +4,57 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
-`sdlc` `1.16.0` → `2.4.0`, `android-foundation` `1.7.0` → `2.0.1`, marketplace `1.13.0` → `1.16.0`.
+`sdlc` `1.16.0` → `2.4.1`, `android-foundation` `1.7.0` → `2.0.2`, marketplace `1.13.0` → `1.16.1`.
 
 ### Fixed
+
+- **A mandate is met by the bare skill name the harness also accepts (`sdlc` 2.4.1).** The mandate
+  reads `frontend-design:frontend-design`; run 5's review-loop round invoked `frontend-design`,
+  which the harness resolves to the same skill. `3b-1a-mandatory-skill` compared the two strings
+  exactly and scored a skill that *was* invoked as a miss — the same defect `dispatchMatches`
+  already fixes for agent names, where a contract written against the bare name must still match a
+  namespaced dispatch. Left unfixed, the contract measures the namespace.
+
+  The rule is narrow on purpose: equal, or one side is bare and equals the other's skill segment.
+  A bare name is inherently ambiguous — two plugins may both ship `brainstorming` — but that
+  ambiguity belongs to the harness, which resolves the bare name the author typed. Matching two
+  *namespaced* ids by their tails would invent an ambiguity nobody wrote. Re-auditing run 5 moves
+  it from 15/20 to **16/20**; run 4 is unchanged at 16/23.
+
+  The same equivalence now holds on the **authoring** side, where it was missing:
+  `enumerateSkills` registers a plugin's skills only as `plugin:skill`, so a project row spelled
+  `frontend-design` — the very spelling this change blesses — was reported "not installed" and
+  silently demoted out of the mandate it declared. `skillIdMatches` in `profile.mjs` is the shared
+  rule (mirrored by `skillMatches` in the auditor), and `dedupeSkills` keys through it too, so the
+  two spellings of one skill collapse into one prompt line instead of rendering as two rows with
+  different policies and `when` clauses.
+
+- **`workflow` is written by the machine, not stated by the model (`sdlc` 2.4.1).** It was listed
+  in no telemetry shape at all, so whether a run recorded which recipe it executed was model
+  discretion: run 4 wrote `"workflow": "android-feature"`, run 5 omitted the key entirely.
+  `CONTEXT.active_workflow` was resolved correctly in both cases — `.checkpoint/_run.json` carries
+  it on run 5 — so this was a gap in the shape, not a resolution failure.
+
+  Documenting it would have left the same discretion in place. `.checkpoint/_run.json` is
+  schema-required to carry the value and `finishRun` already rewrites telemetry, so Step 5b copies
+  it across instead (ADR-0015: a value the machine can compute is never left to prose). Fill only —
+  a run that already states its own workflow keeps what it said, and a missing `_run.json` leaves
+  the key absent rather than failing the seal.
+
+- **The document-writer mandate leads with the trigger that always fires
+  (`android-foundation` 2.0.2).** Runs 3 and 5 both ran `gh pr create` without invoking
+  `android-foundation:android-docs-vault`. Its `when` read "before filling vault notes and before
+  `gh pr create`" — leading with the *conditional* half, so a run with no vault notes to fill can
+  read the whole clause as inapplicable and the PR half never gets its own turn. Reworded to lead
+  with the act every documentation dispatch performs, scoped to the dispatch (the #148 lesson), and
+  named by its **outcome** rather than by a command: "before you open the PR in THIS dispatch — by
+  any mechanism — and before your first vault-note write".
+
+  Naming a command would have rebuilt the defect. `gh pr create` is the documented *fallback* —
+  the agent prefers `mcp__github__create_pull_request` — so a host with the GitHub MCP fires none
+  of it; and committing is something this role is told never to do, so a trigger naming it is
+  unreachable by construction. Two measured misses on one clause make this a specification defect,
+  not variance.
 
 - **The run start reads its own plan once instead of discovering it (`sdlc` 2.4.0).** A plan
   carrying a full stack profile exceeds the inline tool-output limit, so the harness saves it to a

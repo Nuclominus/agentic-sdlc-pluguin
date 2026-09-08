@@ -1,0 +1,11 @@
+{
+  "task_slug": "mandate-bare",
+  "started_at": "2026-09-08T09:00:00Z",
+  "completed_at": "2026-09-08T09:00:10Z",
+  "plugin_version": "2.4.0",
+  "stack": "android",
+  "expertise_block_agents": ["developer"],
+  "phases": [
+    { "phase": "development", "agent_id": "bbb000000001" }
+  ]
+}

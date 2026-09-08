@@ -283,3 +283,37 @@ test("the seal marker is written AFTER enrich, which rewrites the whole telemetr
   assert.equal(t.cost_basis, "transcript", "enrich's own write must survive");
   assert.equal(t.sealed_by, "orchestrator", "sealed_by must survive enrich's rewrite");
 });
+
+test("finishRun copies the recipe name from _run.json rather than trusting the model to state it", () => {
+  // Review finding on #156. `workflow` was documented in Step 5's telemetry shape and nowhere
+  // else, so recording which recipe a run executed was down to model compliance — run 4 wrote it,
+  // run 5 omitted the key. It is a machine value: `.checkpoint/_run.json` is schema-required to
+  // carry it (`schemas/run.schema.json`), and this function already rewrites telemetry.
+  // ADR-0015 — a value the machine can compute is never left to prose.
+  const dir = makeRun({ task_slug: "x", phases: [] }, ANCHOR);
+  writeFileSync(join(dir, ".checkpoint", "_run.json"), JSON.stringify({
+    task_slug: "x", workflow: "android-feature", stack: "android", resolved_phases: [],
+  }));
+
+  finishRun(dir, { now: (ANCHOR + 60) * 1000, noReport: true, registryPath: REGISTRY,
+    projectsRoot: join(dir, "no-projects") });
+  assert.equal(tel(dir).workflow, "android-feature");
+});
+
+test("a workflow already in telemetry is not overwritten, and a missing _run.json is not an error", () => {
+  // The model may legitimately have written it (run 4 did); this fills a gap, it does not police.
+  const withValue = makeRun({ task_slug: "x", workflow: "custom", phases: [] }, ANCHOR);
+  writeFileSync(join(withValue, ".checkpoint", "_run.json"), JSON.stringify({
+    task_slug: "x", workflow: "android-feature", resolved_phases: [],
+  }));
+  finishRun(withValue, { now: (ANCHOR + 60) * 1000, noReport: true, registryPath: REGISTRY,
+    projectsRoot: join(withValue, "no-projects") });
+  assert.equal(tel(withValue).workflow, "custom", "what the run already claims about itself wins");
+
+  // Fail-open: sealing must never turn a successful run into a failed one.
+  const bare = makeRun({ task_slug: "x", phases: [] }, ANCHOR);
+  const r = finishRun(bare, { now: (ANCHOR + 60) * 1000, noReport: true, registryPath: REGISTRY,
+    projectsRoot: join(bare, "no-projects") });
+  assert.equal(r.clock.wall_clock_seconds, 60);
+  assert.equal(tel(bare).workflow, undefined);
+});

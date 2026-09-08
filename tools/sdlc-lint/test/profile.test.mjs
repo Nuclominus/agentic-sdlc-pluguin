@@ -415,6 +415,42 @@ test("renderSkillsBlock planning variant states the same rows as future obligati
   assert.equal(renderSkillsBlock("developer", { roleSkills: [], extensionRows: [], variant: "planning" }), null);
 });
 
+test("a bare skill name is judged installed when the enumeration lists it namespaced, and dedupes against it", () => {
+  // Review finding on #156. `enumerateSkills` registers a plugin's skills ONLY as `plugin:skill`,
+  // while `downgradeIfMissing` looked the row up by exact string — so a project row spelled
+  // `frontend-design`, the very spelling #156 blessed on the measuring side, was reported "not
+  // installed" and silently demoted out of the mandate denominator. The repo would then answer one
+  // question three ways: `computeDepsStatus` accepted both forms, `skillMatches` accepted both,
+  // and this accepted neither.
+  const available = new Set(["frontend-design:frontend-design", "superpowers:brainstorming"]);
+
+  const warnings = [];
+  const rows = parseExtensionSkills(
+    { skills: [{ skill: "frontend-design", agents: ["developer"], policy: "mandatory", when: "before a Compose screen" }] },
+    { availableSkills: available }, warnings);
+  assert.equal(rows[0].policy, "mandatory", "the harness resolves the bare name; so must we");
+  assert.deepEqual(warnings, []);
+
+  // The narrow rule holds here too: two NAMESPACED ids never match by their tails.
+  const w2 = [];
+  const other = parseExtensionSkills(
+    { skills: [{ skill: "acme:brainstorming", agents: ["developer"], policy: "mandatory" }] },
+    { availableSkills: available }, w2);
+  assert.equal(other[0].policy, "recommended");
+  assert.ok(w2.some((x) => /acme:brainstorming not installed/.test(x)), w2.join("; "));
+
+  // And the two spellings collapse to ONE row rather than rendering the same skill twice with
+  // different policies and `when` clauses.
+  const merged = renderSkillsBlock("developer", {
+    roleSkills: [{ skill: "frontend-design:frontend-design", policy: "mandatory", when: "before a Compose screen" }],
+    extensionRows: [{ skill: "frontend-design", agents: "all", policy: "recommended", when: "project says so" }],
+  });
+  const bullets = merged.split("\n").filter((l) => l.startsWith("- "));
+  assert.equal(bullets.length, 1, merged);
+  assert.match(bullets[0], /^- MANDATORY — invoke `frontend-design:frontend-design`/,
+    "strictest policy wins, and the spelling that arrived first names the merged row");
+});
+
 test("an extension row targeting an agent that does not exist is reported, not silently ignored", () => {
   // ADR-0021 renamed the roster and ships NO aliases: a project still naming `android-developer`
   // targets nothing. Translating it silently was the bug class this replaces — say so instead.

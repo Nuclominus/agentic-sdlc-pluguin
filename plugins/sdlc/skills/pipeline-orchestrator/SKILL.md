@@ -1317,6 +1317,7 @@ their checkpoints, not lost). Then write `docs/plans/{task_slug}/_telemetry.json
 ```json
 {
   "task_slug": "...",
+  "workflow": "<CONTEXT.active_workflow — the recipe this run executed, the SAME value .checkpoint/_run.json carries. Never omit it: a run's phase list is only interpretable against the recipe that produced it, and two runs of different recipes are not comparable rows in a rollup>",
   "stack": "android",
   "primary_profile": "android",
   "priority": 300,
