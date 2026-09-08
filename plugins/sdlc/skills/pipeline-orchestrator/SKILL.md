@@ -1482,7 +1482,7 @@ The remaining keys ARE yours — they are decisions the run made, not measuremen
   (resolved in Step 0 — never assume `origin/main`; neither downstream project uses that name).
   On any git error, **omit the key** (never fabricate). Consumed by the HTML report (Step 5b).
 
-> The split `input/output/cached` counts come from each phase's subagent transcript, read by 3d-1b and again by Step 5b's `finish`, and carry `usage_source: "transcript"`. What 3d-1 records off the envelope is only the aggregate `subagent_tokens` (`usage_source: "subagent_aggregate"`), or nothing at all (`"pending"`) — never an estimate.
+> The split `input/output/cached` counts come from each phase's subagent transcript, read by 3d-1b and again by Step 5b's `finish`, and carry `usage_source: "transcript"`. What 3d-1 records instead is defined in 3d-1 and not restated here — the one rule that holds everywhere is that it is transcribed, never estimated.
 
 Print the final summary to the user:
 

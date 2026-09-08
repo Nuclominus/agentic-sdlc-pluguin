@@ -858,26 +858,32 @@ MODELS = parse(Read("{SDLC_PLUGIN_ROOT}/config/models.json"))   # { pipeline_tie
 
 Resolve a tier to its concrete model ID via the `models[]` entry whose `tag` equals the declared tier. This registry is the single source of truth for model IDs **and pricing** — never hardcode either here.
 
-**3d-1. Capture per-phase telemetry** — record from the Agent tool result **only what nothing on
-disk can give back**. Everything priceable is read from the phase's own subagent transcript by
-3d-1b, one step later; this step must not anticipate it, estimate it, or compute it. See
-`{SDLC_PLUGIN_ROOT}/MACHINE-VALUES.md` for the invariant and the full list of machine-owned keys.
+**3d-1. Capture per-phase telemetry** — record **only what nothing on disk can give back**, and on
+this host that is a short list. There is no dispatch result envelope here: a finished subagent pushes
+its message into your context as text, so there is no `agentId`, no `subagent_tokens`, and no
+per-subagent transcript to locate later. See `{SDLC_PLUGIN_ROOT}/MACHINE-VALUES.md` for the invariant.
 
-**Always** record `agent_id` on the phase entry — the subagent id from the Agent result envelope (e.g. `agentId: a1b2c3…`). For a multi-pass phase (e.g. dev plan + implement), record the list of ids. This is what 3d-1b and Step 5b use to locate each phase's subagent transcript (`{CONFIG_DIR}/projects/<encoded-cwd>/<session>/subagents/agent-<id>.jsonl`) and derive the **real** input/output/cache split and cost.
+Record:
 
-> **This is REQUIRED, not best-effort.** A phase whose `agent_id` is absent from `_telemetry.json` loses its real cost (the whole run then reads as `$—`). Write the id verbatim into **both** the checkpoint (Step 3d-3) **and** the `phases[]` entry. Step 5b now recovers a missing id from `.checkpoint/<phase>.json` as a safety net, but do not rely on the net — record it here.
->
-> `agent_id` is the one number in this step that is genuinely yours: it exists only in the result
-> envelope, and no file records it. That is why it is transcribed and the token counts beside it
-> are not.
-
-Then record:
-
-- `subagent_tokens` — when the envelope carries an aggregate (`<usage>subagent_tokens: N, tool_uses, duration_ms</usage>`, the ordinary shape on this harness), write `N` **verbatim** and set `usage_source: "subagent_aggregate"`. When the envelope carries no usage at all, omit the key and set `usage_source: "pending"`. Never split an aggregate into `input_tokens` / `output_tokens` / `cached_input_tokens`, and never estimate any of them from text length: those three come from the transcript in 3d-1b, and a fabricated number would be indistinguishable from a measured one.
-- `cost_usd: null` — always, here. Pricing is 3d-1b's job, from the transcript and the registry. A `null` reaching the cost cap is counted as `$0` and flagged `cap_gate_blind` (3d-1b point 3), which is the honest signal; a guessed price would silence it.
-- `model` — the full model ID, derived from the agent's declared `model:` tier by resolving it against the model registry loaded in 3d-0 (`MODELS.models[].model_id` where `tag` == the tier). The tier is the authoritative value because the PreToolUse hook enforces it at dispatch time; this mapping exists solely so telemetry/cost records the concrete model. **Do not** read this from the Agent result envelope (it is not exposed there).
-- `compact_summary_chars` — `len(CONTEXT.{phase}_output)`. If > 3000 chars (≈ 3K-token target), record `compact_handoff_violation: true` and emit a one-line warning to stderr: `WARN: {phase} compact summary exceeded budget ({chars} chars > 3000)`. Do not abort — the violation is recorded for post-run analysis.
-- For aspect-aware phase fan-out, push one entry **per aspect** into `phases[]` with `phase: "{phase_name}"` and `aspect: "{aspect}"` set; aspect-agnostic phases omit `aspect`.
+- **`agent_id` — omit it.** It does not exist on this host. On Claude Code its absence would mean a
+  phase lost its real cost; here there was never a real cost to lose, and inventing an id would point
+  Step 5b at a transcript that does not exist. Set `usage_source: "pending"`.
+- **`subagent_tokens` — omit it.** No envelope carries an aggregate. Never estimate one from text
+  length: a fabricated number is indistinguishable from a measured one, which is precisely what makes
+  it worse than no number.
+- **`cost_usd: null`** — always. Pricing is 3d-1b's job, and on this host 3d-1b will honestly report
+  `resolved: false`, which sets `cap_gate_blind` and leaves the run unpriced. That is the correct
+  outcome, not a failure: a run that reads `$—` is telling the truth. A guessed price would silence
+  the signal ADR-0012 exists to preserve.
+- **`model`** — read the concrete model from the agent's own file
+  (`{SDLC_PLUGIN_ROOT}/agents/{agent_name}.md`, the `model:` field). The emitter wrote it there at
+  build time; there is no tier to resolve and no registry lookup to do (3b-3).
+- **`compact_summary_chars`** — `len(CONTEXT.{phase}_output)`. If > 3000 chars, record
+  `compact_handoff_violation: true` and emit `WARN: {phase} compact summary exceeded budget ({chars} chars > 3000)`
+  to stderr. Do not abort. This one is fully meaningful here — the compact handoff works on this host,
+  so its budget still matters.
+- For aspect-aware fan-out, push one entry **per aspect** into `phases[]` with `phase` and `aspect`
+  set; aspect-agnostic phases omit `aspect`.
 
 ```sdlc-contract
 id: 3d-1b-phase-cost
@@ -1516,7 +1522,7 @@ The remaining keys ARE yours — they are decisions the run made, not measuremen
   (resolved in Step 0 — never assume `origin/main`; neither downstream project uses that name).
   On any git error, **omit the key** (never fabricate). Consumed by the HTML report (Step 5b).
 
-> The split `input/output/cached` counts come from each phase's subagent transcript, read by 3d-1b and again by Step 5b's `finish`, and carry `usage_source: "transcript"`. What 3d-1 records off the envelope is only the aggregate `subagent_tokens` (`usage_source: "subagent_aggregate"`), or nothing at all (`"pending"`) — never an estimate.
+> The split `input/output/cached` counts come from each phase's subagent transcript, read by 3d-1b and again by Step 5b's `finish`, and carry `usage_source: "transcript"`. What 3d-1 records instead is defined in 3d-1 and not restated here — the one rule that holds everywhere is that it is transcribed, never estimated.
 
 Print the final summary to the user:
 

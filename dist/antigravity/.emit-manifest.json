@@ -6,6 +6,6 @@
   "plugins": [
     "sdlc"
   ],
-  "files": 78,
+  "files": 80,
   "regenerate": "node tools/sdlc-lint/cli.mjs emit --host antigravity"
 }

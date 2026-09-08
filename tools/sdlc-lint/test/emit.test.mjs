@@ -2,7 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { resolveHost, hasTranscriptCost } from "../../../plugins/sdlc/tools/resolve/host.mjs";
 import { loadHost, listHosts, emitAll, emitPlugin, rewriteAgent, rewriteHooks } from "../lib/emit/index.mjs";
 import { resolveModel, modelPairs, TIERS } from "../lib/emit/models.mjs";
 import { checkHost } from "../lib/emit/check.mjs";
@@ -260,6 +262,38 @@ test("the emitted orchestrator carries no Claude-only dispatch vocabulary", () =
 test("overlay sources are build inputs and never ship", () => {
   const { outputs } = emitPlugin(REPO, "sdlc", ANTIGRAVITY);
   assert.equal([...outputs.keys()].some((p) => p.includes("/hosts/")), false);
+});
+
+// ---------------------------------------------------------------- host declaration
+
+test("the authored tree declares no host and defaults to Claude Code", () => {
+  const h = resolveHost(join(REPO, "plugins", "sdlc"));
+  assert.equal(h.host, "claude");
+  assert.equal(h.declared, false);
+  assert.equal(hasTranscriptCost(join(REPO, "plugins", "sdlc")), true);
+});
+
+test("an emitted package declares its host, so nothing has to guess", () => {
+  // Env sniffing would be wrong in exactly the cases that matter — two packages
+  // under one config dir, or a dev checkout run by hand — and a wrong answer
+  // silently changes how cost is accounted.
+  const root = join(REPO, "dist", "antigravity", "plugins", "sdlc");
+  const h = resolveHost(root);
+  assert.equal(h.host, "antigravity");
+  assert.equal(h.declared, true);
+  assert.equal(h.telemetry_mode, "run-envelope");
+  assert.equal(hasTranscriptCost(root), false);
+});
+
+test("a malformed declaration is reported, not guessed around", () => {
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-host-"));
+  mkdirSync(join(dir, "config"), { recursive: true });
+  writeFileSync(join(dir, "config", "host.json"), "{ not json");
+  const h = resolveHost(dir);
+  assert.equal(h.host, "unknown");
+  assert.equal(h.telemetry_mode, "none");
+  assert.match(h.source, /unreadable/);
+  rmSync(dir, { recursive: true, force: true });
 });
 
 // ---------------------------------------------------------------- check

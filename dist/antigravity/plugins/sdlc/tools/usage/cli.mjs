@@ -11,6 +11,7 @@
 import { resolve, join } from "node:path";
 import { existsSync } from "node:fs";
 import { enrichTelemetry, phaseCost } from "./usage.mjs";
+import { resolveHost, hasTranscriptCost } from "../resolve/host.mjs";
 
 const args = process.argv.slice(2);
 const cmd = args[0];
@@ -36,6 +37,22 @@ if (cmd === "phase-cost") {
   const ids = list(args[1] && !args[1].startsWith("--") ? args[1] : null);
   if (!ids.length) {
     code = usage();
+  } else if (!hasTranscriptCost()) {
+    // This install has no transcript source to price from. Report the honest
+    // negative and exit 0 — Step 3d-1b already handles `resolved: false` by
+    // setting `cap_gate_blind` and leaving cost null (never 0), and ADR-0012
+    // then refuses to render a cap verdict. A non-zero exit here would add a
+    // second path to the same outcome; an estimate would be a fabricated number.
+    const h = resolveHost();
+    const reason = `no transcript parser for host ${h.host}`;
+    if (jsonOut) {
+      console.log(JSON.stringify({
+        command: "phase-cost", ok: true, resolved: false, reason,
+        cost_usd: null, host: h.host, telemetry_mode: h.telemetry_mode,
+      }));
+    } else {
+      console.log(`phase-cost: unresolved (${reason}) — cost unknown, not $0`);
+    }
   } else {
     const session = opt("--session");
     try {

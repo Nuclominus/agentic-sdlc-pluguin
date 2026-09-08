@@ -186,6 +186,22 @@ export function emitPlugin(root, pluginName, host) {
     outputs.set(posix.join(outDir, rel), { kind: "copy", from: posix.join("plugins", pluginName, rel) });
   }
 
+  // Every non-Claude package declares which host it is for. Shipped tools read
+  // this instead of probing the environment, because an env guess is wrong in
+  // exactly the cases that matter and a wrong answer silently changes how cost is
+  // accounted. Absence means Claude Code — the tree authors work in.
+  if (pluginName === "sdlc") {
+    outputs.set(posix.join(outDir, "config", "host.json"), {
+      kind: "rewrite",
+      content: JSON.stringify({
+        _comment: "Written by `sdlc-lint emit`. Declares which host this package was built for; tools/resolve/host.mjs reads it. Do not hand-edit — regenerate.",
+        host: host.host,
+        telemetry_mode: host.telemetry?.mode ?? "none",
+        host_cli_version: host.verified_on?.cli_version ?? null,
+      }, null, 2) + "\n",
+    });
+  }
+
   for (const [from, to] of moves) {
     const abs = join(src, from);
     if (!existsSync(abs)) continue;             // not every plugin ships hooks
