@@ -326,7 +326,18 @@ test("role_expertise reaches the plan as absolute rule paths and pre-rendered pr
     assert.match(dev.skills, /\n- MANDATORY — invoke `superpowers:test-driven-development` — before the first edit\./);
     assert.ok(dev.skills.indexOf("MANDATORY") < dev.skills.indexOf("RECOMMENDED"), "mandatory rows first");
 
+    // The development phase runs two passes (3b-special) and only the second one implements, so
+    // the resolver renders both framings and the orchestrator picks per pass. Same rows, same
+    // order; the planning text carries no live mandate for a pass that cannot meet one.
+    assert.match(dev.skills_planning, /^Skills mandated for the implementation pass/);
+    assert.match(dev.skills_planning, /\n- `superpowers:test-driven-development` \(mandatory\) — before the first edit$/m);
+    assert.ok(!/MANDATORY — invoke `/.test(dev.skills_planning),
+      "3b-1a-mandatory-skill counts this token; the planning pass must owe nothing by it");
+
     assert.ok("debugger" in plan.profile.prompt_blocks, "on-demand agents get a block too — the expertise command serves them");
+    assert.equal(plan.profile.prompt_blocks["qa-engineer"].skills_planning,
+      plan.profile.prompt_blocks["qa-engineer"].skills,
+      "a role with nothing to mandate has nothing to plan for either — both null");
     assert.equal(plan.profile.prompt_blocks["qa-engineer"].expertise, null, "a role the stack says nothing about gets no header");
     assert.ok(plan.dry_run.rows.every((r) => !/^demo-/.test(r.agent)), "every dispatch row names a core agent");
 

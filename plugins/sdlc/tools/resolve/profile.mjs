@@ -292,9 +292,22 @@ function downgradeIfMissing(row, { availableSkills = null, unavailablePlugins = 
  * plugin this row depends on usable in this session?" A plugin's own skills ship with it and are
  * never in question. With no flags at all the rows render exactly as authored — absent evidence is
  * not evidence of absence.
+ *
+ * `variant` picks the framing, never the content:
+ *
+ * - `"dispatch"` (default) — live obligations, the `MANDATORY — invoke` form the orchestrator
+ *   pastes for a pass that does the work.
+ * - `"planning"` — the SAME rows in the same order, stated as obligations of the pass that
+ *   follows. The development phase runs two passes (3b-special) and Pass 1 writes a plan, not
+ *   code, so every mandate's trigger ("before your first Write/Edit…", "before writing or
+ *   changing any Compose UI…") is false by construction there. Run 4 measured the cost of not
+ *   distinguishing them: the planning dispatch was scored 0/3 for correctly invoking nothing.
+ *   The planning text deliberately omits the `MANDATORY — invoke` token so that
+ *   `3b-1a-mandatory-skill`, which counts that exact pattern in a dispatch's prompt, charges the
+ *   mandates to the pass that can meet them and to no other.
  */
 export function renderSkillsBlock(agent, {
-  roleSkills = [], extensionRows = [], unavailablePlugins = null, warnings = [],
+  roleSkills = [], extensionRows = [], unavailablePlugins = null, warnings = [], variant = "dispatch",
 } = {}) {
   const targeted = extensionRows.filter((r) => r && (r.agents === "all" || arr(r.agents).includes(agent)));
   // Extension rows arrive already downgraded (1b-ext); only the profile's own rows need it here.
@@ -302,6 +315,14 @@ export function renderSkillsBlock(agent, {
   const rows = dedupeSkills([...own, ...targeted.map(normalizeSkillRow)]);
   if (rows.length === 0) return null;
   rows.sort((a, b) => (POLICY_RANK[b.policy] - POLICY_RANK[a.policy]) || a.skill.localeCompare(b.skill));
+  if (variant === "planning") {
+    const lines = [
+      "Skills mandated for the implementation pass — name them, and the point each applies, in your plan.",
+      "Do NOT invoke them now: this pass writes no production code, so none of their triggers can fire.",
+    ];
+    for (const r of rows) lines.push(`- \`${r.skill}\` (${r.policy})${r.when ? ` — ${r.when}` : ""}`);
+    return lines.join("\n");
+  }
   const lines = ["Skills for this role (from the active stack profile and this project's .claude/sdlc.local.yaml):"];
   for (const r of rows) {
     const when = r.when ? ` — ${r.when}` : "";

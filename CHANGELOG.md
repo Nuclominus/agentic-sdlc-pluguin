@@ -4,7 +4,41 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
-`sdlc` `1.16.0` → `2.2.0`, `android-foundation` `1.7.0` → `2.0.1`, marketplace `1.13.0` → `1.14.0`.
+`sdlc` `1.16.0` → `2.3.0`, `android-foundation` `1.7.0` → `2.0.1`, marketplace `1.13.0` → `1.15.0`.
+
+### Fixed
+
+- **A planning pass is no longer given mandates it cannot meet (`sdlc` 2.3.0).** The development
+  phase runs two passes (3b-special); Pass 1 (`development_plan`) writes an implementation plan and
+  no code. It was handed the developer's live `MANDATORY — invoke` rows anyway, whose triggers read
+  "before your first Write/Edit of production Kotlin in THIS dispatch", "before writing or changing
+  any Compose UI" and "before every hand-off back to review". None can fire in a pass that
+  implements nothing.
+
+  The resolver now renders a second framing, `prompt_blocks[agent].skills_planning` — the same rows
+  in the same order, stated as the obligations of the pass that follows — and 3b-special Pass 1
+  pastes that instead of `skills`. The planning text deliberately carries no `MANDATORY — invoke`
+  token, which is the exact pattern `3b-1a-mandatory-skill` counts, so the mandates are charged to
+  the pass that can meet them and to no other.
+
+  Measured on run 4 (`child-profile-screen`): the planning dispatch received three live mandates,
+  correctly invoked none, and was scored 0/3 — three of the seven apparent misses in a run whose
+  rate on *applicable* mandates was 16 of 16.
+
+### Changed
+
+- **`3b-1a-mandatory-skill` now says beside its number what the number means.** The auditor counts
+  every `MANDATORY — invoke` row as owed; a row's `when` clause is prose and nothing evaluates it,
+  so a mandate whose trigger never fired is charged exactly like one that fired and was ignored.
+  `matched/expected` is an **upper bound on obligation** — a `partial` marks a run for adjudication,
+  it does not establish non-compliance. Every `every-mandate` contract now carries that caveat in
+  `sdlc-lint compliance` output, and the orchestrator documents the worked example: run 4's 16/23
+  decomposed into a planning pass (3), a review round that changed a view-model but no Compose UI
+  (1), and a remediation pass that edited two XML files (3) — all inapplicable.
+
+  Also recorded there: the contract is blind to **order**. A `when` of "before your first
+  Write/Edit" is satisfied, as far as this measurement goes, by a skill invoked after the last edit
+  — which run 4's review-loop round did. Presence is gated; sequence is not gated anywhere yet.
 
 ### Added
 

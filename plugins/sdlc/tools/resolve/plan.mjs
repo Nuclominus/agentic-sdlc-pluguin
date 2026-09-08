@@ -68,13 +68,18 @@ function renderPromptBlocks({ agents, roleExpertise, extensionRows, stack, unava
   const blocks = {};
   for (const agent of agents) {
     const exp = roleExpertise[agent];
+    // A stack that mandates a skill from a plugin the preflight flagged unavailable gets that
+    // row downgraded, not printed as a hard requirement the agent then has to disobey. Rendered
+    // once and reused for both framings so the two can never disagree about which rows exist —
+    // and so the downgrade WARN is emitted once, not twice.
+    const skillArgs = { roleSkills: exp?.skills ?? [], extensionRows, unavailablePlugins, warnings };
     blocks[agent] = {
       expertise: renderRoleExpertiseBlock(agent, exp, { stack }),
-      // A stack that mandates a skill from a plugin the preflight flagged unavailable gets that
-      // row downgraded, not printed as a hard requirement the agent then has to disobey.
-      skills: renderSkillsBlock(agent, {
-        roleSkills: exp?.skills ?? [], extensionRows, unavailablePlugins, warnings,
-      }),
+      skills: renderSkillsBlock(agent, skillArgs),
+      // 3b-special Pass 1 (`development_plan`) writes a plan, not code: every mandate's trigger is
+      // false there by construction. It gets the same rows to plan around, stated as the NEXT
+      // pass's obligations — see renderSkillsBlock's `variant`.
+      skills_planning: renderSkillsBlock(agent, { ...skillArgs, warnings: [], variant: "planning" }),
     };
   }
   return blocks;
