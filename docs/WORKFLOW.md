@@ -30,11 +30,11 @@ flowchart LR
     subgraph CORE["sdlc (core, platform-agnostic)"]
       ORC["pipeline-orchestrator skill<br/>generic control flow:<br/>phases, review-loops, parallel groups"]
       WF["generic workflows<br/>default / bugfix / hotfix / refactor / docs-only"]
-      FB["fallback agents (vanilla)"]
+      FB["the whole 12-agent roster<br/>platform-neutral"]
     end
     subgraph AND["android-foundation (stack provider, aspect: android)"]
       AST["manifest.yaml<br/>kind: foundation<br/>workflow: android-feature"]
-      AAG["11 android-* agents"]
+      AAG["role_expertise per core role<br/>invariants + rule paths + mandatory skills<br/>(no agents)"]
       AWF["android-feature / android-bugfix workflows"]
     end
     subgraph RET["retrofit-plugin (additive framework provider)"]
@@ -43,7 +43,8 @@ flowchart LR
     end
     AST -. registers .-> ORC
     AWF -. discovered by glob .-> ORC
-    ORC -. dispatches .-> AAG
+    AAG -. pasted into each phase prompt .-> FB
+    ORC -. dispatches .-> FB
     RFM -. auto-detected, merged into ADDITIVE_PROFILES .-> ORC
     RSK -. enrich-only .-> ORC
 ```
@@ -61,7 +62,7 @@ per-aspect winner resolution and `PRIMARY_PROFILE` selection.
 ### Key principles
 
 1. **Core never changes.** Pipeline logic lives exclusively in `pipeline-orchestrator/SKILL.md`. It has zero knowledge of any platform, library, security standard, or workflow recipe.
-2. **The foundation registers itself** via `manifest.yaml` (`kind: foundation`) — it declares auto-detection rules, priority, agents per phase, an optional default workflow, and convention skills.
+2. **The foundation registers itself** via `manifest.yaml` (`kind: foundation`) — it declares auto-detection rules, priority, an optional default workflow, convention skills, and `role_expertise` per core role. It declares **no agents and no phase bindings**: since ADR-0021 the roster and the only `agents_per_phase` map in the marketplace live in `plugins/sdlc/manifest.yaml`, and the schema rejects those keys on any other foundation.
 3. **Framework plugins attach additively** via `manifest.yaml` (`kind: framework`). They enrich existing phases (convention skill + dev/security injections + ProGuard) and ship **no agents** — they never win an aspect or own a phase. The core picks the foundation, then **delegates** framework discovery to it: the foundation collects every `kind: framework` manifest whose `enriches_aspect` (a functional category like `network`/`persistence`/`di`) is in its `hosts_aspects`, and detects them via its own `framework_detection`. Frameworks point *up* to a category, never sideways at a plugin.
 4. **Priority wins.** When multiple foundations match, the highest priority takes over. Framework manifests do not compete.
 5. **Everything is discovered, not hardcoded.** Manifests (`**/manifest.yaml`, split by `kind`), workflows (`**/workflows/*.yaml`), and runtime dependencies (`**/runtime-dependencies.json`) are globbed across all installed plugins.
@@ -162,26 +163,28 @@ flowchart LR
   `android-debug` / `android-bugfix` recipes route the fix to `developer` in the next
   phase, where it passes through the normal review loop.
 - On-demand agents (not in the pipeline; invoke directly): `devops`, `cicd`,
-  `aar-analyst`. `debugger` is on-demand **and** wired as the `debugging` phase of the
-  `android-debug` recipe (manifest `agents_per_phase.debugging → debugger`).
+  `aar-analyst`. `debugger` is on-demand **and** wired as the `debugging` phase of the `debug` and
+  `android-debug` recipes (`agents_per_phase.debugging → debugger`, in the core manifest).
 
-The agent assigned to each phase (and the on-demand agents) is documented in
-[`plugins/android-foundation/README.md`](../plugins/android-foundation/README.md#agent-roster).
+Every phase→agent binding lives in [`plugins/sdlc/manifest.yaml`](../plugins/sdlc/manifest.yaml) —
+the only such map in the marketplace since ADR-0021 — and each agent's model tier, tools and role
+are tabulated in [`plugins/sdlc/README.md`](../plugins/sdlc/README.md#the-roster).
 
-### Standard 5-phase pipeline (vanilla fallback)
+### Standard 5-phase pipeline (vanilla)
 
-When no foundation matches, the platform-agnostic core runs its own 5-phase pipeline:
+The same roster runs when no foundation matches; what is missing on a vanilla project is the
+*expertise*, not the agents. The `default` recipe:
 
 ```
 Phase 1: BA       → business-analyst (opus/high)
           ↓ docs/plans/{slug}/01-business-analysis.md
-Phase 2: Dev      → [stack agent] (sonnet/medium)
+Phase 2: Dev      → developer (sonnet/medium) — two-pass: plan, approve, implement
           ↓ docs/plans/{slug}/02-development.md
 Phase 3: QA       → qa-engineer (sonnet/medium, max 3 attempts)
           ↓ docs/plans/{slug}/03-qa.md
 Phase 4: Security → security-analyst (opus/high, platform-neutral baseline; READ-ONLY)
           ↓ docs/plans/{slug}/04-security.md
-Phase 5: Remediation → [stack agent] (GATED — only on Critical/High findings)
+Phase 5: Remediation → developer (GATED — only on Critical/High findings)
           ↓ docs/plans/{slug}/0X-remediation.md
 Phase 6: Docs     → document-writer (haiku/low)
           ↓ Pull Request

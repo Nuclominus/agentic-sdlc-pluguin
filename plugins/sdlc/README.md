@@ -12,28 +12,50 @@ sdlc/
 ├── manifest.yaml                            # vanilla profile (kind: foundation, priority 0, detect *)
 ├── config/aspects.yaml                       # aspect vocabulary (platform + functional)
 ├── PLUGIN-PATHS.md                          # path-resolution contract (ADR-0009) — no literal `~`
-├── commands/{init,start,doctor,list-stacks,batch,security-init}.md
-├── skills/pipeline-orchestrator/SKILL.md    # the orchestrator + RESOLVER reference
-├── workflows/{default,bugfix,hotfix,refactor,docs-only}.yaml + RESOLVER.md
+├── commands/{init,start,doctor,list-stacks,batch,security-init,
+│             aar,extension,model-config,report,workflow-config}.md
+├── skills/{pipeline-orchestrator,aar,create-pluguin}/SKILL.md
+├── workflows/{default,bugfix,hotfix,refactor,docs-only,
+│             analysis,testing,debug}.yaml + RESOLVER.md
+├── manifest.yaml                            # stack: vanilla — the ONLY agents_per_phase map
+├── config/{models.json,agent-migrations.json,aspects.yaml}
+├── tools/{resolve,run,usage,report,rollup,   # shipped runtime, called by the orchestrator
+│          migrate,aar}/
 ├── hooks/{hooks.json,enforce-agent-model.sh}
 ├── runtime-dependencies.json                # declares superpowers (policy: warn)
-└── agents/  (5 fallback agents)
+└── agents/  (the whole 12-agent roster)
 ```
 
 ---
 
-## Fallback agents
+## The roster
 
-Used only when no platform plugin provides an agent for a phase (the vanilla path). Platform plugins override these per phase.
+Since **ADR-0021** this is the *whole* roster, not a fallback set: no other plugin ships agents, and
+`plugins/sdlc/manifest.yaml` holds the only phase→agent map in the marketplace. Each agent is
+platform-neutral; the platform's conventions reach it as a `Stack expertise for <role>` block that
+the active foundation supplies through `role_expertise`.
+
+**Pipeline phases** — dispatched by the orchestrator:
+
+| Agent | model | effort | Edits code? | Phase | Role |
+| ----- | ----- | ------ | ----------- | ----- | ---- |
+| `business-analyst` | `opus` | `high` | no | `business_analysis` | Requirements + acceptance criteria |
+| `developer` | `sonnet` | `medium` | **yes** | `development`, `remediation` | Implementation against an approved plan; also applies security findings |
+| `reviewer` | `sonnet` | `medium` | no | `review` | Findings by severity; drives the review ⇄ development loop. **Read-only** (ADR-0018) |
+| `security-analyst` | `opus` | `high` | no | `security` | Applies the stack's security standard, generic baseline otherwise. **Read-only** |
+| `tester` | `sonnet` | `medium` | **yes** | `test` | Unit / integration tests; hard 3-attempt cap |
+| `qa-engineer` | `sonnet` | `medium` | **yes** | `qa` | Verification; E2E / UI when a `test` phase precedes it. Hard 3-attempt cap |
+| `document-writer` | `haiku` | `low` | no | `documentation` | Structured PR output from known facts |
+| `session-recorder` | `haiku` | `low` | **yes** | Step 6 | Appends the run's journal entry — closing act of every run |
+
+**On demand** — invoked directly, not bound to a workflow phase. They fetch their own expertise with
+`node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs expertise --role <name>`:
 
 | Agent | model | effort | Edits code? | Role |
 | ----- | ----- | ------ | ----------- | ---- |
-| `business-analyst` | `opus` | `high` | no | Requirements + acceptance criteria |
-| `developer` | `sonnet` | `medium` | **yes** | Implementation against a clear spec; also the gated `remediation` phase |
-| `qa-engineer` | `sonnet` | `medium` | **yes** | Tests against criteria; hard 3-attempt cap |
-| `security-analyst` | `opus` | `high` | no | Platform-neutral security baseline; applies the profile-injected standard. **Read-only** — reports findings, `developer` applies them via `remediation` |
-| `document-writer` | `haiku` | `low` | no | Structured PR output from known facts |
-| `session-recorder` | `haiku` | `low` | no | Appends the run's journal entry (closing act, every run) |
+| `debugger` | `sonnet` | `high` | no | Root cause with `file:line` precision; **prescribes** the fix, `developer` applies it (ADR-0018). Also the `debugging` phase of the `debug` recipe |
+| `devops` | `sonnet` | `medium` | **yes** | Build config, signing, shrinking, distribution |
+| `cicd` | `sonnet` | `medium` | **yes** | CI workflow definitions, stages, caching, release automation |
 | `aar-analyst` | `sonnet` | `medium` | no | Read-only retrospective for `/sdlc:aar` |
 
 Every agent declares an explicit `tools:` allowlist in its frontmatter. An agent that omits `tools:`

@@ -31,6 +31,12 @@ follow it instead of the development branch. Omit the suffix to track `develop` 
 
 Full install, optional dependencies, and requirements → [`docs/INSTALLATION.md`](docs/INSTALLATION.md).
 
+> **Upgrading from `1.x`?** `2.0.0` retired the eleven `android-*` agents in favour of a single
+> platform-neutral roster, and ships **no runtime aliases**. Update every plugin, then run
+> `/sdlc:doctor` — it lists any config entry naming a retired agent and rewrites it after you
+> approve. Nothing breaks if you skip it, but those entries stop taking effect. Details and the
+> full rename table: [`CHANGELOG.md`](CHANGELOG.md#200--2026-09-08).
+
 ---
 
 ## Documentation
@@ -82,7 +88,7 @@ The full board — every track, status and landing PR — is generated from the 
 | `/sdlc:report`                  | Cross-run cost rollup over all runs → `docs/plans/rollup/index.html` + digest (deterministic, no LLM) |
 | `/sdlc:aar`                     | After Action Review of a run — token cost + agent cooperation; persists approved lessons |
 | `/sdlc:list-stacks`             | Show detected stack profiles and their priorities                  |
-| `/sdlc:doctor`                  | Preflight: deps, stack detection, host capability (uname/toolchains), cost |
+| `/sdlc:doctor`                  | Preflight: deps, stack detection, host capability (uname/toolchains), cost. Also migrates config that names a retired agent — the one thing a `1.x` project needs after upgrading |
 | `/sdlc:security-init`           | Materialize security-patterns for the security-guidance plugin     |
 
 ---
