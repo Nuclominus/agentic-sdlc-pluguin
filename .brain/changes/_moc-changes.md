@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-09-08 | #162 | `docs` | — | [[changes/2026-09-08-PR-162-bring-readme-and-docs-back-in-line-with-2-0-0]] |
 | 2026-09-08 | #160 | `chore` | — | [[changes/2026-09-08-PR-160-patch-every-framework-plugin-so-the-adr-0021-rename-ships]] |
 | 2026-09-08 | #158 | `docs` | — | [[changes/2026-09-08-PR-158-lead-the-2-0-entry-with-breaking-changes-compress-the-rest]] |
 | 2026-09-08 | #156 | `fix` | — | [[changes/2026-09-08-PR-156-three-defects-run-5-surfaced-in-the-mandate-gate-and-its-inp]] |
