@@ -19,7 +19,7 @@
 //
 // Source-tree only — never runs at pipeline runtime (like lib/plugin-paths.mjs).
 
-import { readFileSync, existsSync, statSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join, posix } from "node:path";
 import { globSync } from "tinyglobby";
@@ -130,37 +130,21 @@ function firstDiff(want, got) {
 }
 
 /**
- * The manifest written beside an emitted tree. Its only job is the fast path:
- * if every source hash and the emitter version match, dist/ cannot be stale, so
- * `check` can skip rendering entirely.
+ * Provenance written beside an emitted tree: which emitter, which host
+ * descriptor, which plugins. It is not an input to `check` — a full re-render
+ * costs well under a second, so a hash-manifest fast path would only add a
+ * second way to decide the same question, and two paths can disagree. What it is
+ * for is the reviewer of a committed generated tree, who can otherwise not tell
+ * which descriptor produced these bytes.
  */
 export function buildManifest(root, host, plan) {
-  const sources = {};
-  for (const entry of plan.outputs.values()) {
-    if (entry.kind !== "copy") continue;
-    sources[entry.from] = sha(readFileSync(join(root, entry.from)));
-  }
-  const outputs = {};
-  for (const [rel, entry] of plan.outputs) outputs[rel] = sha(renderEntry(root, entry));
   return {
     emitter_version: EMITTER_VERSION,
     host: host.host,
     host_descriptor_sha: sha(readFileSync(join(root, "tools", "sdlc-lint", "hosts", `${host.host}.json`))),
+    host_cli_version: host.verified_on?.cli_version ?? null,
     plugins: plan.plugins,
-    sources,
-    outputs,
+    files: plan.outputs.size,
+    regenerate: `node tools/sdlc-lint/cli.mjs emit --host ${host.host}`,
   };
-}
-
-/** True when nothing that feeds the render has moved since the manifest was written. */
-export function manifestIsCurrent(root, host, manifest) {
-  if (!manifest || manifest.emitter_version !== EMITTER_VERSION) return false;
-  const descPath = join(root, "tools", "sdlc-lint", "hosts", `${host.host}.json`);
-  if (!existsSync(descPath) || manifest.host_descriptor_sha !== sha(readFileSync(descPath))) return false;
-  for (const [rel, want] of Object.entries(manifest.sources ?? {})) {
-    const abs = join(root, rel);
-    if (!existsSync(abs) || !statSync(abs).isFile()) return false;
-    if (sha(readFileSync(abs)) !== want) return false;
-  }
-  return true;
 }

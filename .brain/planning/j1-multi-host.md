@@ -44,22 +44,44 @@ field (openai/codex#28491), so agent TOMLs ship as plain files plus an install s
 - **Open in Phase 1:** the live `/sdlc-start` run on a plain-Node fixture. Blocked on the dispatch
   spike below.
 
-## The open risk, precisely
+## The dispatch risk — settled for Antigravity
 
-Everything shipped so far is text transformation, which a golden test settles. The unsettled question
-is **dispatch semantics**: whether a subagent on this host can be handed a full per-phase brief and
-return a ≤3K-char compact summary the orchestrator reads as `CONTEXT.{phase}_output`. That handoff is
-the entire cost model. If it does not exist on a host, that host is not a port.
+The question was whether a subagent here can take a full per-phase brief and return a compact
+summary the orchestrator reads as `CONTEXT.{phase}_output`. That handoff is the entire cost model; a
+host without it is not a port. Two subagents were dispatched in parallel on a live run
+(conversation `9a5ccef4`, 81 s, `--dangerously-skip-permissions`, run by the operator because
+headless mode auto-denies the `command` permission).
 
-The spike is one prompt: dispatch two subagents in parallel, each writing a file and returning a
-one-sentence summary, then report the dispatch tool name, the retrieval tool name, both summaries,
-and whether both files exist. It could not be run from an automated session — headless mode
-auto-denies the `command` permission and the auto-approve flag is not available to the agent — so it
-is run by the operator.
+**It works, and the shape is simpler than assumed.**
 
-Two further unknowns it should settle: whether `${CLAUDE_PLUGIN_ROOT}` (or any plugin-root variable)
-is set for a hook command on this host, since the surviving `Stop`/`seal-run.sh` hook depends on it;
-and whether `agy plugin import claude` makes even the two file moves unnecessary.
+| Question | Answer |
+|---|---|
+| Dispatch tool | `invoke_subagent` — the community-sourced name is correct |
+| Parallel | Yes, both ran concurrently |
+| Compact summary returned | Yes, both came back verbatim into the parent's context |
+| Retrieval tool | **None.** A finished subagent pushes its message into the parent's context and execution resumes on its own |
+| File side effects | Both files created |
+
+The absence of a retrieval call matters for the overlay: this is closer to Claude Code's inline
+`Agent` result than to Codex's `spawn_agent` + `wait_agent`, so the 3c overlay stays a one-call
+shape. An overlay that added a wait step would be waiting for something that had already arrived.
+
+**One anomaly, and it is a real constraint.** Both subagents wrote their file *twice* — into the
+parent's cwd and into `~/.gemini/antigravity-cli/scratch/`. A subagent here has a scratch working
+directory beside the parent's. Our phases write deliverables to `docs/plans/{slug}/0X-*.md` and the
+orchestrator verifies them with `Glob` at step 3d, so a relative path that resolves into scratch
+would produce an agent that did its work and a verification that says it did not. **Deliverable
+paths handed to a phase must be absolute on this host.**
+
+## Still open
+
+- Whether `${CLAUDE_PLUGIN_ROOT}`, or any plugin-root variable, is set for a hook command here — the
+  surviving `Stop`/`seal-run.sh` hook depends on it.
+- Whether `agy plugin import claude` makes even the two file moves unnecessary.
+- Whether per-phase cost can be attributed at all: the run envelope's `usage` looks aggregate
+  (`cache_read_tokens: 418022` on a `num_turns: 1` run that dispatched two subagents), so this host
+  may price per run rather than per phase. A Phase 4 question, recorded now so it is not discovered
+  late.
 
 ## Not in Phase 1
 
