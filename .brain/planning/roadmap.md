@@ -162,3 +162,23 @@ is an artefact of the session shape, not a measurement of the collapsed start. W
 must use a clean session, one `/sdlc:start`, no dry run. See [[planning/h-instruction-fidelity]],
 [[planning/h5-prompt-surface]], [[planning/h5-d2-start-resolution-command]],
 [[planning/h6-hook-deterministic-tail]].
+
+**Track H, state on 2026-09-08 — four measured runs; the start window went the wrong way.** Runs 2
+and 3 (clean sessions, one `/sdlc:start`, no dry run) both measured **6** API calls for Steps 0→1d
+against the 9-call baseline — real movement, still short of the 2–3 DoD. Run 4 measured **9**, and
+the regression is legible in its transcript rather than statistical: its plan exceeded the inline
+tool-output limit, the harness saved it to a file, and nothing in the orchestrator said what to do
+with a saved plan — so five of the nine calls were consecutive `jq` probes discovering the file's
+shape. #153 states that read once (Step 0-large) and drops `plan.profile.role_expertise`, which was
+17,910 of that file's 54,746 characters and read by nobody. **Unmeasured until run 5.**
+
+Run 4 also produced the first real `3b-1a-mandatory-skill` number, 16/23 — which adjudicated to
+16/16 on applicable mandates, and to the caveat now printed beside every `every-mandate` rate
+(#152). It is the first run whose review loop ran, so it is also the first actual test of #148:
+the review-fix dispatch invoked 2 of 3 mandates where the same dispatch shape on run 1 invoked 0
+of 3.
+
+Two numbers from run 4 that no track currently owns: **orchestration overhead was $6.73 of $11.23
+(60%)** — more than all eight agent phases combined — and `peak_prefix_tokens` exceeded Track E's
+`< 60k` DoD on five of eight phases (max 99,412). That DoD has now missed on four consecutive real
+runs and needs replacing rather than re-measuring.
