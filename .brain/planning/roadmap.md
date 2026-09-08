@@ -182,3 +182,36 @@ Two numbers from run 4 that no track currently owns: **orchestration overhead wa
 (60%)** — more than all eight agent phases combined — and `peak_prefix_tokens` exceeded Track E's
 `< 60k` DoD on five of eight phases (max 99,412). That DoD has now missed on four consecutive real
 runs and needs replacing rather than re-measuring.
+
+**Run 5, 2026-09-08 — the start window collapsed, but H5-D2's DoD is NOT met.** Mind the unit: the
+DoD is fixed in **API calls** (deduped `message.id`), median 9 → 2–3, and the "6 / 6 / 9" series
+recorded above is *tool calls*, a different column of the same table. Measured in each unit, over
+the two runs whose telemetry survives:
+
+| | run 4 | run 5 | baseline | DoD |
+|---|---|---|---|---|
+| API calls (the DoD's unit) | 10 | **4** | 9 | 2–3 |
+| tool calls | 9 | **3** | 14 | — |
+
+So run 5 is a large, real collapse — 10 → 4 API calls, 9 → 3 tool calls — and still **one API call
+outside** the DoD. It was measured on a run that exercised the saved-plan path: the plan spilled to
+`tool-results/`, and Step 0-large's single `jq` replaced run 4's five probes. The sequence is legible
+end to end — Skill, resolve, one digest read, anchor, `_run.json`, per-agent block, dispatch.
+**H5-D2 stays open**, and what remains is arithmetic rather than discovery: the resolve call and the
+digest read are two of the four, and folding the digest into the resolve command's own output would
+close it.
+
+Run 5 also gave #152 its first measurement — the planning dispatch arrived with `mandated=0`, out of
+a denominator it could never satisfy — and turned up three defects (#156): the auditor compared skill
+ids by exact string and so measured the *namespace* rather than the skill, on both the measuring and
+the authoring side; `workflow` was a machine value left to model discretion and is now copied from
+`_run.json` by `finishRun`; and the `document-writer` mandate had missed on runs 3 and 5 because its
+`when` named commands rather than the outcome. Adjudicated, run 5 met **16 of 17** applicable
+mandates.
+
+Two open items carried forward unchanged: the contract is still **blind to order** (a skill invoked
+after the edits satisfies a "before your first Write/Edit" clause — run 4 did exactly that, run 5
+did not, and nothing gates it), and Track E's `peak_prefix_tokens` DoD missed again (185,774 on
+development) — a fifth consecutive run, and the case for replacing it rather than re-measuring is
+now closed. Orchestration overhead fell to **$6.07 of $14.41 (42%)** from 60%, still unowned by any
+track.
