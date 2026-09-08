@@ -6,338 +6,85 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 `sdlc` `1.16.0` → `2.4.1`, `android-foundation` `1.7.0` → `2.0.2`, marketplace `1.13.0` → `1.16.1`.
 
-### Fixed
+### ⚠️ BREAKING CHANGES — `1.*` → `2.*`
 
-- **A mandate is met by the bare skill name the harness also accepts (`sdlc` 2.4.1).** The mandate
-  reads `frontend-design:frontend-design`; run 5's review-loop round invoked `frontend-design`,
-  which the harness resolves to the same skill. `3b-1a-mandatory-skill` compared the two strings
-  exactly and scored a skill that *was* invoked as a miss — the same defect `dispatchMatches`
-  already fixes for agent names, where a contract written against the bare name must still match a
-  namespaced dispatch. Left unfixed, the contract measures the namespace.
+**A foundation no longer ships agents (ADR-0021).** The whole roster moved into `sdlc`, which now
+owns 12 platform-neutral agents. A foundation contributes *expertise* instead — `role_expertise`
+per core role: invariants, rule paths and mandatory skills, rendered into each agent's prompt.
 
-  The rule is narrow on purpose: equal, or one side is bare and equals the other's skill segment.
-  A bare name is inherently ambiguous — two plugins may both ship `brainstorming` — but that
-  ambiguity belongs to the harness, which resolves the bare name the author typed. Matching two
-  *namespaced* ids by their tails would invent an ambiguity nobody wrote. Re-auditing run 5 moves
-  it from 15/20 to **16/20**; run 4 is unchanged at 16/23.
+**The eleven `android-*` agents are gone**, each replaced by a core role:
 
-  The same equivalence now holds on the **authoring** side, where it was missing:
-  `enumerateSkills` registers a plugin's skills only as `plugin:skill`, so a project row spelled
-  `frontend-design` — the very spelling this change blesses — was reported "not installed" and
-  silently demoted out of the mandate it declared. `skillIdMatches` in `profile.mjs` is the shared
-  rule (mirrored by `skillMatches` in the auditor), and `dedupeSkills` keys through it too, so the
-  two spellings of one skill collapse into one prompt line instead of rendering as two rows with
-  different policies and `when` clauses.
+| retired | replacement | | retired | replacement |
+|---|---|---|---|---|
+| `android-ba` | `business-analyst` | | `android-docs` | `document-writer` |
+| `android-developer` | `developer` | | `android-debugger` | `debugger` |
+| `android-reviewer` | `reviewer` | | `android-devops` | `devops` |
+| `android-security` | `security-analyst` | | `android-cicd` | `cicd` |
+| `android-tester` | `tester` | | `android-aar` | `aar-analyst` |
+| `android-qa` | `qa-engineer` | | | |
 
-- **`workflow` is written by the machine, not stated by the model (`sdlc` 2.4.1).** It was listed
-  in no telemetry shape at all, so whether a run recorded which recipe it executed was model
-  discretion: run 4 wrote `"workflow": "android-feature"`, run 5 omitted the key entirely.
-  `CONTEXT.active_workflow` was resolved correctly in both cases — `.checkpoint/_run.json` carries
-  it on run 5 — so this was a gap in the shape, not a resolution failure.
+**There are no runtime aliases.** An agent name is used exactly as written — the key in
+`.claude/model.local.json`, the name dispatched, the `role_expertise` key and the file on disk are
+one string. A first cut of this release did keep the old names alive by rewriting them in three
+places; review found six defects in that layer, every one a disagreement between two copies of the
+same map. The layer was removed rather than repaired.
 
-  Documenting it would have left the same discretion in place. `.checkpoint/_run.json` is
-  schema-required to carry the value and `finishRun` already rewrites telemetry, so Step 5b copies
-  it across instead (ADR-0015: a value the machine can compute is never left to prose). Fill only —
-  a run that already states its own workflow keeps what it said, and a missing `_run.json` leaves
-  the key absent rather than failing the seal.
+**Migrate with `/sdlc:doctor`.** Every run reports config entries naming a retired agent
+(`extensions.skills[].agents`, `model.local.json` `agents{}`); doctor lists each `from → to` from
+`plugins/sdlc/config/agent-migrations.json` and rewrites only those name tokens **after you
+approve**. YAML is patched by targeted replacement so comments and formatting survive. This is the
+first time doctor writes anything — diagnosis stays read-only, the write is bounded to those two
+files, and never runs non-interactively or under `--json`.
 
-- **The document-writer mandate leads with the trigger that always fires
-  (`android-foundation` 2.0.2).** Runs 3 and 5 both ran `gh pr create` without invoking
-  `android-foundation:android-docs-vault`. Its `when` read "before filling vault notes and before
-  `gh pr create`" — leading with the *conditional* half, so a run with no vault notes to fill can
-  read the whole clause as inapplicable and the PR half never gets its own turn. Reworded to lead
-  with the act every documentation dispatch performs, scoped to the dispatch (the #148 lesson), and
-  named by its **outcome** rather than by a command: "before you open the PR in THIS dispatch — by
-  any mechanism — and before your first vault-note write".
-
-  Naming a command would have rebuilt the defect. `gh pr create` is the documented *fallback* —
-  the agent prefers `mcp__github__create_pull_request` — so a host with the GitHub MCP fires none
-  of it; and committing is something this role is told never to do, so a trigger naming it is
-  unreachable by construction. Two measured misses on one clause make this a specification defect,
-  not variance.
-
-- **The run start reads its own plan once instead of discovering it (`sdlc` 2.4.0).** A plan
-  carrying a full stack profile exceeds the inline tool-output limit, so the harness saves it to a
-  file and hands the orchestrator a path. Nothing said what to do next, so run 4 spent five of its
-  nine Steps 0→1d tool calls probing that file — `keys[]`, then `.prints[]`, then two subset
-  projections — and then invented a spill-to-scratchpad convention for the prompt blocks. Steps
-  0→1d measured 10 turns / 9 calls against a 2–3 call target; the two runs before it, which never
-  reached the file path, took 6 each.
-
-  Step **0-large** now states the read verbatim: one `jq` that emits `prints[]` followed by every
-  `CONTEXT` value in the key map, with `prompt_blocks` projected out and read one agent at a time at
-  3b-1. Measured against run 4's own plan file, that projection is **10,676 characters against
-  54,746**. A new test parses the projection out of `SKILL.md` and asserts every name in it is a key
-  `resolvePlan` actually emits, so a renamed key fails the suite instead of silently dropping a
-  `CONTEXT` value.
-
-- **`plan.profile.role_expertise` is no longer emitted (`sdlc` 2.4.0).** The merged, unrendered
-  expertise map was **17,910 of that plan's 54,746 characters** — a third of everything the
-  orchestrator carries before it dispatches anything — and nothing read it. Its one documented
-  consumer was a Step 5 telemetry field that was never written; what expertise was in force is
-  already recorded by `primary_profile`, `additive_profiles` and `plugin_version`, and
-  `resolveExpertise` reads the in-process value rather than this output. The rendered
-  `prompt_blocks` remain the contract.
-
-- **A planning pass is no longer given mandates it cannot meet (`sdlc` 2.3.0).** The development
-  phase runs two passes (3b-special); Pass 1 (`development_plan`) writes an implementation plan and
-  no code. It was handed the developer's live `MANDATORY — invoke` rows anyway, whose triggers read
-  "before your first Write/Edit of production Kotlin in THIS dispatch", "before writing or changing
-  any Compose UI" and "before every hand-off back to review". None can fire in a pass that
-  implements nothing.
-
-  The resolver now renders a second framing, `prompt_blocks[agent].skills_planning` — the same rows
-  in the same order, stated as the obligations of the pass that follows — and 3b-special Pass 1
-  pastes that instead of `skills`. The planning text deliberately carries no `MANDATORY — invoke`
-  token, which is the exact pattern `3b-1a-mandatory-skill` counts, so the mandates are charged to
-  the pass that can meet them and to no other.
-
-  Measured on run 4 (`child-profile-screen`): the planning dispatch received three live mandates,
-  correctly invoked none, and was scored 0/3 — three of the seven apparent misses in a run whose
-  rate on *applicable* mandates was 16 of 16.
-
-### Changed
-
-- **`3b-1a-mandatory-skill` now says beside its number what the number means.** The auditor counts
-  every `MANDATORY — invoke` row as owed; a row's `when` clause is prose and nothing evaluates it,
-  so a mandate whose trigger never fired is charged exactly like one that fired and was ignored.
-  `matched/expected` is an **upper bound on obligation** — a `partial` marks a run for adjudication,
-  it does not establish non-compliance. Every `every-mandate` contract now carries that caveat in
-  `sdlc-lint compliance` output, and the orchestrator documents the worked example: run 4's 16/23
-  decomposed into a planning pass (3), a review round that changed a view-model but no Compose UI
-  (1), and a remediation pass that edited two XML files (3) — all inapplicable.
-
-  Also recorded there: the contract is blind to **order**. A `when` of "before your first
-  Write/Edit" is satisfied, as far as this measurement goes, by a skill invoked after the last edit
-  — which run 4's review-loop round did. Presence is gated; sequence is not gated anywhere yet.
+**Not migrating degrades rather than breaks.** An extension row naming a retired agent injects
+nothing; a stale model key leaves the agent's frontmatter tier in force. Both are named on every run.
 
 ### Added
 
-- **Mandatory-skill invocation is gated (`sdlc` 2.2.0).** `3b-1a-expertise-block` asks whether a
-  dispatch *received* its expertise block; the new `3b-1a-mandatory-skill` asks whether the subagent
-  then *invoked* what that block mandated — pairing every `MANDATORY — invoke` row in a dispatch's
-  prompt against the `Skill` calls in that dispatch's own transcript.
+- **The 12-agent core roster** (`sdlc` 2.0.0): `reviewer`, `tester`, `debugger`, `devops` and `cicd`
+  join the existing seven, all platform-neutral.
+- **`role_expertise` in foundation manifests** — per-role invariants, rule paths and mandatory
+  skills, merged by the resolver and pasted into each agent's stable prefix.
+- **`resolve/cli.mjs expertise --role <name>`** — one command that hands an on-demand agent the same
+  blocks the orchestrator pastes for a pipeline phase.
+- **The expertise hand-off is gated** (`sdlc` 2.1.0). `3b-1a-expertise-block` checks that every
+  dispatch in scope actually received its expertise block; the first audited run had missed one.
+- **Mandatory-skill invocation is gated** (`sdlc` 2.2.0). `3b-1a-mandatory-skill` pairs each
+  `MANDATORY — invoke` row against the `Skill` calls in that dispatch's own transcript.
+- **The core `debug` recipe uses the core `debugger`**, running `debugging → development → qa` so a
+  read-only root cause is applied by the developer (ADR-0018).
+- **A publish-time gate for the logging rule** (`android-foundation`). `hooks/git-guard.sh` blocks `git commit`, `git push`
+  and `gh pr create` when the published code violates `rules/logging.md`. It reports `file:line` and
+  never edits code.
 
-  The auditor could not previously ask this at all: `resolveRunSessions` resolves a subagent
-  transcript only to walk **up** to the parent session, so a subagent's own `Skill` calls — the
-  entire evidence — were never read. Three runs were audited by hand instead, one dispatch at a
-  time, which is how a review-loop round that made seven edits to production code while invoking
-  none of its three mandated skills went unnoticed by every gate in the suite.
+### Changed
 
-  The join is by tool_use id, never by array position: `deriveDispatchMap` now returns the dispatch's
-  `id` alongside the `agentId` its tool_result carries, and the transcript is named after that.
-  Position would hold only while two independent filters kept agreeing, and would fail silently the
-  day they stopped.
-
-  The new `every-mandate` cardinality counts **mandates, not dispatches** — "9 of 12 mandates met"
-  says how much is being lost, where "3 of 4 dispatches complied" hides whether a dispatch missed
-  one skill or all three. An `agent_skill` pattern must capture the skill id in a group, enforced at
-  parse time: without it every mandate scores unmet, a flat 0% indistinguishable from total
-  non-compliance. A dispatch whose transcript cannot be resolved is counted neither way.
+- **Model registry refreshed** against Anthropic's current pricing, with Fable 5.1 added to the
+  pipeline tiers.
+- **Logging guidance was separated, not deleted** — `rules/logging.md` now covers placement and
+  decorators; the forbidden constructs stay in `non-negotiable.md`.
+- **`3b-1a-mandatory-skill` states that its ratio is an upper bound.** The auditor cannot evaluate a
+  natural-language `when`, so a `partial` marks a run for adjudication, not a proven miss.
 
 ### Fixed
 
-- **Mandatory skills are now due on a re-dispatch too (`sdlc` 2.1.1, `android-foundation` 2.0.1).**
-  Two measured Android runs (2026-09-06, 2026-09-07) show the same miss: the review loop
-  re-dispatches `developer`, that round makes 5 and then 7 edits to production Kotlin, and it
-  invokes **none** of its three MANDATORY skills. The agent was not ignoring the instruction — it
-  was obeying it. The trigger read `before the first Write/Edit of production Kotlin`, while the
-  round's own `loop_findings` text says the implementation is *already on disk* and must not be
-  re-implemented. Read literally, two of the three triggers had already passed and the third was
-  moot.
-
-  A `when` is scoped to the dispatch now, not to the run — `before your first Write/Edit of
-  production Kotlin in THIS dispatch — a review-loop round counts` — and `sdlc-lint roster` rejects
-  the run-scoped form, which found three more of the same shape (reviewer, tester, debugger) that
-  had not yet been measured failing. The schema's own `when` example was the defective phrasing
-  every foundation author copies; it now teaches the per-dispatch form. The orchestrator's loop
-  section says explicitly that `loop_findings` narrows the round's *scope* and retires none of the
-  role's obligations.
-
-  This is not the "firmer wording" H1 measured at ~3%. The instruction was not weak, it was
-  **false** on a re-dispatch; the fix makes it true.
-
-### Added
-
-- **The expertise hand-off is gated (ADR-0021 follow-up, `sdlc` 2.1.0).** ADR-0021 moved platform
-  expertise out of the agent bodies, where it was structurally guaranteed — an agent's body *is*
-  its system prompt — and into a block the orchestrator pastes at Step 3b-1a. The first real run
-  showed what that costs: of the ten dispatches going to agents the resolver had rendered a block
-  for, **nine received it**; the `documentation` phase did not, and the run finished green.
-  `sdlc-lint compliance` now audits it via a new `3b-1a-expertise-block` contract.
-
-  The denominator needed a new cardinality rather than a new pattern. A review loop dispatches
-  `development` several times, so counting matches against the phase count reads 9 ≥ 7 and passes
-  the very run that missed one. `every-dispatch` scopes to `dispatch_scope:
-  telemetry.expertise_block_agents` — the agents *this run dispatches* that the resolver rendered a
-  block for, stated by the plan under the same key so the orchestrator copies rather than recounts
-  (ADR-0015). The on-demand roster (debugger, devops, cicd, aar-analyst) is excluded: it holds
-  blocks so `expertise --role` can serve it, but nothing is pasted for it, so counting it would
-  make a `/sdlc:aar` in the same session fail a compliant run. The audit is bounded by the run's
-  own `started_at`/`completed_at`, since one session can host two runs. A vanilla stack renders no
-  blocks, declares none, and scores `n/a` instead of passing; so does a run predating the field —
-  silence, not a guess.
-
-  Mandatory-skill invocation is deliberately **not** gated here: `resolveRunSessions` reads only
-  the main session transcript, while a subagent's `Skill` calls live in its own
-  `subagents/agent-*.jsonl`. Gating that needs a second transcript tier and its own design.
-
-### Changed
-
-- **The core `debug` recipe uses the core debugger (`sdlc` 2.1.0).** It now runs
-  `debugging → development → qa`. PR-1 added `debugger` to the core roster and bound
-  `debugging: debugger`, but the recipe kept the shape it had when vanilla shipped no such agent —
-  handing root-cause analysis to `development`, which holds `Edit`, while the read-only agent built
-  for the job sat unused. Its description asserted that absence, which had stopped being true. Cap
-  re-based on the same measured p90s as `android-debug`: $0.52 + $5.41 + $1.48 = $7.41, ×1.2 →
-  **$9.00**.
-
-**Why both plugins go major.** ADR-0021 removes a documented extension point: a foundation manifest
-could bind `agents_per_phase` / `on_demand_agents` / `aar_analyst`, and now the schema rejects those
-keys and the resolver ignores them. That breaks any third-party stack provider written against the
-old contract, so the core carries the major too — not only the Android plugin whose roster moved.
-A project that merely *uses* the marketplace sees no breakage beyond the agent names in its own
-`.claude/sdlc.local.yaml` and `.claude/model.local.json`, which `/sdlc:doctor` migrates with your
-approval.
-
-### Changed
-
-- **Model registry refreshed against Anthropic's current pricing** (`plugins/sdlc/config/models.json`,
-  checked 2026-09-04). The `fable` tier now resolves to **Claude Fable 5.1** (`claude-fable-5-1`)
-  instead of the legacy `claude-fable-5` — the same failure shape as the earlier `opus` repoint:
-  sessions are served by Fable 5.1, so a fable-tier phase priced against the old id resolved
-  `cost_usd: null`. Fable 5.1 also prices cache reads at **0.025×** input (`$0.25/MTok`) rather than
-  the standard 0.1×, so `cached_input` moves from `1.00` to `0.25`; input/output stay `$10/$50`.
-  Sonnet 5's `$2 / $0.20 / $10` is now Anthropic's standard price (the scheduled 2026-09-01 rise to
-  `$3/$15` was cancelled), so the `pricing.note` that flagged it as intro pricing is gone. New
-  `mythos` moves to `claude-mythos-5-1` (same 0.025× cache-read rate). Pin-only entries keep every
-  active id priceable: `fable-5` (`claude-fable-5`) and `mythos-5` (`claude-mythos-5`) at the old
-  rates, `opus-4-5` (`claude-opus-4-5`) and `sonnet-4-5` (`claude-sonnet-4-5`). Pins are keyed on
-  the bare id — the pricing lookup strips a snapshot date, never adds one, so a dated key would not
-  resolve from its alias. No tier was added, so `pipeline_tiers`, the hook and both schemas are
-  untouched.
-- The usage test's `TIER_MODEL` map is derived from the registry so it cannot drift on a repoint,
-  with the current tier ids, tag uniqueness and the Fable 5.1 estimate row pinned explicitly. The orchestrator's
-  `_telemetry.json` example shows `claude-opus-5` for an opus-tier phase, not `claude-opus-4-8`.
-
-- **Logging is separated, not deleted.** `android-foundation/rules/logging.md` was "Logging
-  Hygiene": logs were a temporary debugging aid, and the rule's operative section was a pre-Done
-  cleanup sweep that deleted every log statement added during a session. It is now organised around
-  *which artifact a log line is compiled into* — a `Development<Type>` decorator bound by DI in the
-  debug source set (preferred), a lazy runtime severity gate where there is no seam to decorate
-  (baseline), or a build-flag level set once at a third-party component's configuration point (the
-  narrow exception). Hand-rolled `if (isDebugBuild)` guards inside business logic are forbidden;
-  decorators carry logging and no behaviour; substitution keys on the build-type axis, not the
-  flavor axis. Recorded as ADR-0020.
-- The rule's audience widens from `[developer, reviewer]` to
-  `[developer, reviewer, debugger, tester, security-scanner]`, and `rules/INDEX.md` is updated in
-  step. It now cross-references the test-source exemption in `rules/testing.md`, so an agent reading
-  "one facade only" does not read it as a ban in `src/test/`.
-- `rules/workflow.md` no longer contradicts the rule it links to — its General Rules bullet said
-  "Debug logs are session-only. Remove before Done." while pointing straight at `logging.md`.
-
-### Added
-
-- **Agents live in the core; foundations carry expertise — PR-1 of 3 (ADR-0021, `sdlc` 2.0.0).**
-  The core now ships the whole roster: `reviewer`, `tester` (3-attempt cap), `debugger`
-  (read-only), `devops` and `cicd` join the existing seven, and `plugins/sdlc/manifest.yaml` binds
-  every phase (`review`, `test`, `debugging` included) plus the on-demand agents. Every role agent
-  carries the same **Stack expertise slot**: orchestrated, it receives a `Stack expertise for
-  <role>` block and a `Skills for this role` list in its stable prefix; on demand, it runs exactly
-  one command — `node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs expertise --role <name>` — and
-  receives the same two blocks. A foundation declares that expertise in a new manifest block,
-  `role_expertise` (per core role: `invariants` ≤ 1400 chars, `rules` paths emitted absolute,
-  `skills` rows with a mandatory/recommended policy); the resolve command merges it (foundation
-  first, frameworks alphabetically), renders `plan.profile.prompt_blocks[agent]`, and the
-  orchestrator pastes the blocks verbatim (3b-1) instead of hand-rendering the extension list
-  (3b-1a). `sdlc-lint roster` (part of `all`) holds the four seams: every bound role ships a core
-  `.md`, every recipe phase is bound, every `role_expertise` key/rule/skill resolves (a
-  `superpowers:*` skill must be declared by the plugin that mandates it), and every agent carries
-  its bootstrap line.
-  Design: `docs/superpowers/specs/2026-09-05-agents-in-core-design.md`;
-  track: `.brain/planning/i1-agents-in-core.md`.
-- **Android runs now dispatch the core roster — PR-2 of 3 (ADR-0021, `android-foundation`).** An
-  Android pipeline prints `development → developer`, not `development → android-developer`: the
-  foundation no longer declares `agents_per_phase`, `on_demand_agents`, `aar_analyst` or
-  `phase_injections`, and `plugins/sdlc/manifest.yaml` is the only manifest that binds a phase to an
-  agent. What the foundation contributes instead is `role_expertise` for all eleven core roles —
-  invariants that ride in the stable prefix, rule paths the resolver emits absolute, and the
-  mandatory/recommended skill rows that used to live in a `rules/skills.md` matrix.
-  **Nine skills** carry what the agent bodies carried: `android-requirements`, `android-review`,
-  `android-security-masvs`, `android-testing`, `android-e2e`, `android-docs-vault`,
-  `android-debugging`, `android-build-release`, `android-ci`. The Architecture Detection grep moved
-  into `android-architecture`; `rules/testing.md` folded into `android-testing`; `rules/skills.md`
-  keeps only the optional `android` CLI capability bindings; `rules/workflow.md` shrank to what
-  Android actually adds per step; `rules/documentation.md` gained a per-role vault reading map; and
-  no rules file names the plugin-root variable any more, because the agent that reads them now lives
-  in `sdlc`, where it would resolve to the wrong plugin. `/sdlc:aar` always dispatches the core
-  `aar-analyst`, passing the stack's block from `expertise --role aar-analyst --json`, and the
-  orchestrator carries its own crash-recovery rule (Step 3c-crash) rather than pointing at a
-  foundation rules file for it. `frontend-design` is now declared in the foundation's
-  `runtime-dependencies.json` — it was mandated but undeclared — and `role_expertise` skill rows are
-  now downgraded to `recommended` when the deps preflight flags their plugin unavailable, exactly as
-  a project's own `extensions.skills` row already was. The signal is the preflight's per-plugin flag
-  and deliberately NOT the enumerated skill list that judges an extension row: the enumeration
-  describes the installed cache, so on any checkout whose cache lags the tree it would downgrade
-  every one of the foundation's own skills while leaving a genuinely-absent dependency mandatory.
-  `sdlc-lint roster` now requires a declaration for any external skill, not just `superpowers:*` —
-  the check was keyed on that literal, which is why the `frontend-design` omission passed it green. New CI gate `tools/sdlc-lint/scripts/expertise-coverage.mjs` asserts that every
-  `##` section of every Android agent has a row in the track note's coverage table and that each
-  row's anchor phrase is literally present in the destination — and, while the agent files are still
-  on disk, that the mapping is a bijection. The agent files stay one more PR for side-by-side
-  review; PR-3 deletes them.
-- **`plugins/android-foundation/agents/` is gone — PR-3 of 3 (ADR-0021, `android-foundation` 2.0.0).**
-  **Breaking for plugin authors:** `agents_per_phase`, `on_demand_agents` and `aar_analyst` are now
-  rejected by `schemas/manifest.schema.json` on any foundation but the core's own `stack: vanilla`
-  profile, and `mergeProfiles` **ignores** a roster that reaches it anyway (PR-1 honored it with a
-  deprecation warning) — the phase falls back to the core binding and the run prints one WARN naming
-  `role_expertise` as the replacement. Honoring it would dispatch a roster that no longer ships, and
-  the failure would land at dispatch rather than at resolve. Nothing changes for a project that just
-  *uses* the marketplace beyond the agent names in its own config, which `/sdlc:doctor` migrates.
-  `sdlc-lint roster` gains the two checks that make the split irreversible: **home** — no `agents/`
-  outside `plugins/sdlc`; and **stragglers** — no retired `android-<role>` name and no plugin-root
-  variable inside a foundation's `rules/**` anywhere under `plugins/`, exempting only
-  `config/agent-migrations.json` and the doctor command that applies it. The sweep those checks
-  forced touched 24 files (framework ProGuard snippets, convention skills, `manage-vault`, the vault
-  template, both bug-fix recipes). `create-pluguin` now asks a new foundation for `role_expertise`
-  instead of a roster and scaffolds no `agents/`; CONTRIBUTING, the root README, `workflow-config`
-  (the phase palette is the CORE manifest's keys plus the profile's `extra_phases`), `extension` and
-  `model-config` follow. ADR-0021 is `accepted`.
-- **`/sdlc:doctor` migrates a project's config across an agent rename — and there are no runtime
-  aliases.** An agent name is used exactly as written: the key in `.claude/model.local.json`, the
-  name dispatched, the `role_expertise` key and the file on disk are one string. A first cut of this
-  release kept the retired `android-*` names alive by rewriting them in the resolver, the tier
-  lookup and the model-enforcement hook; review found six defects in that layer, every one a
-  disagreement between two copies of the same map about which spelling a given step was keyed on.
-  The layer is gone. Instead, every run now REPORTS a config entry that names an agent the
-  marketplace does not ship (`extensions.skills[].agents`, `model.local.json` `agents{}`), and
-  `/sdlc:doctor` fixes them: it reads the versioned rename data in
-  `plugins/sdlc/config/agent-migrations.json`, lists each `from → to`, and rewrites only those name
-  tokens **after you approve** (`tools/migrate/cli.mjs check|apply` — YAML by targeted replacement
-  so comments and formatting survive, JSON by re-serialisation). This is the first time doctor
-  writes anything; diagnosis stays read-only, the write is bounded to those two files and is never
-  performed non-interactively or under `--json`. An un-migrated project degrades rather than
-  misbehaves: the extension row injects nothing, the model key leaves the frontmatter tier in force,
-  and both are named on every run.
-- **A publish-time gate for the logging rule.** `hooks/git-guard.sh` (`PreToolUse(Bash)`) blocks
-  `git commit`, `git push` and `gh pr create` when the code being published violates
-  `rules/logging.md`, and `hooks/validate-logging.sh` is the per-file checker behind it. This closes
-  a real gap: `kotlin-guard.sh` is `PostToolUse(Edit|Write)`, so it only ever sees files edited
-  through those tools — a hand edit, a `sed` in a Bash call, a merge, a rebase or a cherry-pick
-  reached the commit unchecked. The gate re-scans the staged diff on `commit`, and the branch's
-  commits over its base on `push` / `pr create`.
-  It checks Tier 1 constructs (`println(`, `android.util.Log.*`, `.printStackTrace()`) plus the
-  ADR-0020 rules: eager message construction, hand-rolled `if (BuildConfig.DEBUG)` guards around a
-  log call, a `Development*` decorator outside a development source set, and a `src/debug/**` DI
-  provider with no `src/release/**` counterpart. Test sources are exempt throughout.
-  **It reports `file:line` and blocks; it never edits code** — the fix for a misplaced trace is to
-  move it into a decorator, which is a refactor, and deleting a legitimately-placed log is itself a
-  violation under the new rule. It fails open on every condition it cannot evaluate (no `jq`, not a
-  git repo, an undeterminable base).
-
-Enforcement of the forbidden constructs themselves is unchanged: `println`, `android.util.Log.*`
-and `.printStackTrace()` in production Kotlin are still blocked at write time by the
-`validate-kotlin.sh` hook and `rules/snippets/non-negotiable.md`.
+- **Mandatory skills are due on a re-dispatch too** (`sdlc` 2.1.1, `android-foundation` 2.0.1).
+  Triggers now scope to THIS dispatch, so a review-loop round owes them again.
+- **A planning pass is no longer given mandates it cannot meet** (`sdlc` 2.3.0). It writes a plan,
+  not code, so it receives the rows to plan around rather than obligations it cannot discharge.
+- **The run start reads its own plan once** (`sdlc` 2.4.0). Step 0-large states the single `jq` that
+  yields both `prints[]` and every `CONTEXT` value; one measured run had spent five calls
+  rediscovering the shape.
+- **`plan.profile.role_expertise` is no longer emitted** (`sdlc` 2.4.0) — 17,910 of one plan's
+  54,746 characters, carried into context before any dispatch and read by nobody.
+- **A mandate is met by the bare skill name the harness also accepts** (`sdlc` 2.4.1). Comparing
+  skill ids exactly measured the namespace, scoring an invoked skill as a miss on both the
+  measuring and the authoring side.
+- **`workflow` is written by the machine, not stated by the model** (`sdlc` 2.4.1). `finishRun`
+  copies it from `.checkpoint/_run.json`, which is schema-required to carry it (ADR-0015).
+- **The document-writer mandate names its outcome, not a command** (`android-foundation` 2.0.2).
+  Two measured runs opened a PR without invoking the docs skill, because its trigger named the
+  fallback command and an act the role may never perform.
 
 ## [1.13.0] — 2026-08-05
 
