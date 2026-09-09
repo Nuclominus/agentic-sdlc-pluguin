@@ -209,6 +209,27 @@ test("a partial estimate keeps EXCEEDS and loses WITHIN", () => {
   assert.match(out, /phase\(s\) unpriced/);
 });
 
+test("the phase header never contradicts the list it introduces", () => {
+  // `slots` counts recipe entries, the rows count dispatches, and a parallel
+  // group is one of the former and two of the latter — so `Phases (7):` sat
+  // above eight numbered rows, in the block a reader uses to decide whether to
+  // spend money. Both numbers are real; the header names both when they differ.
+  const phases = [{ name: "development" }, { parallel: ["security", "test"] }];
+  const rows = expandRows(phases, { agentsPerPhase: AGENTS });
+  const est = estimate(rows, registry);
+  assert.equal(rows.length, 3, "the parallel group fans out to two dispatches");
+
+  const out = renderDryRun({ estimate: est, slots: phases.length, stack: "s", workflow: "w", cap: 99 });
+  assert.match(out, /Phases \(2\) · 3 dispatches/);
+  // The last row's number must not exceed a count the header states alone.
+  assert.match(out, /^ {3}3\. /m);
+
+  // When they agree, the header stays short — no noise for the common case.
+  const flat = [{ name: "development" }];
+  const flatEst = estimate(expandRows(flat, { agentsPerPhase: AGENTS }), registry);
+  assert.match(renderDryRun({ estimate: flatEst, slots: 1, stack: "s", workflow: "w", cap: 99 }), /Phases \(1\):/);
+});
+
 test("a fully priced run is unaffected by the unpriced machinery", () => {
   // Claude Code prices every tier, so none of the above may change its output.
   const rows = expandRows([{ name: "documentation" }], { agentsPerPhase: AGENTS });

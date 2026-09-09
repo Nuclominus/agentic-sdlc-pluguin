@@ -218,10 +218,18 @@ const moneyOrDash = (n, known) => (known ? money(n) : "$—");
 
 /** 1d-2 — the human dry-run block. Segments concatenate; only `‖ parallel` is exclusive. */
 export function renderDryRun({ estimate: est, slots, stack, workflow, autoselected, skipRules = [], cap, healEnabled, healBlocks = 0 }) {
+  // `slots` counts RECIPE entries; the rows below count DISPATCHES, and a
+  // parallel group is one of the former and several of the latter. Printing
+  // `Phases (7):` over eight numbered rows made the header contradict the list
+  // it introduces, in the one block a reader uses to decide whether to spend
+  // money. Both numbers are real, so both are named when they differ.
+  const dispatches = est.rows.length;
   const lines = [
     "🔎 DRY RUN — no agents dispatched, no code written.",
     `Stack: ${stack} | Workflow: ${workflow}${autoselected ? " (auto-selected)" : ""}`,
-    `Phases (${slots}):`,
+    dispatches === slots
+      ? `Phases (${slots}):`
+      : `Phases (${slots}) · ${dispatches} dispatches — a parallel group is one phase and several dispatches:`,
   ];
   est.rows.forEach((r, i) => {
     if (r.resumed) {

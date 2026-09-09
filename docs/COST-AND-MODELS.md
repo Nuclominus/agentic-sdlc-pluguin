@@ -48,7 +48,7 @@ and per-agent model tiers, the orchestrator prints a plan block and exits cleanl
 ```
 🔎 DRY RUN — no agents dispatched, no code written.
 Stack: android | Workflow: android-feature
-Phases (7):
+Phases (7) · 8 dispatches — a parallel group is one phase and several dispatches:
    1. business_analysis  → business-analyst (opus)          ~$0.94
    2. development         → developer (sonnet) ~$1.84
    ...
