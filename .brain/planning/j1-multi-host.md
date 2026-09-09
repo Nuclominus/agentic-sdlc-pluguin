@@ -203,6 +203,19 @@ shape: a Claude-only mechanism presented as active on a host that has none of it
    a fixture with no third-party plugins installed. A synthesized replacement for a host facility
    must be checked against what the real one admitted, not only against what the new code needs.
 
+10. **The synthesized registry dropped a duplicate in silence.** Surfaced by a doctor run on the
+   operator's real machine, which reported three plugins installed at multiple paths. Claude Code's
+   `readInstalledPlugins` records those conflicts and the resolver warns; the synthesized registry
+   deduped by identity and said nothing — narrower than the facility it stands in for, the same
+   mistake as (9) one layer along, and issue #70 is exactly one run reading two plugin trees. Now
+   reported, naming the winner, its source, and every ignored path.
+
+   Its own first fix was wrong in the way that matters most for a warning: the running package
+   normally ALSO sits under a search path, so a naive identity check printed
+   `sdlc is present at 2 paths` with the same directory as both winner and loser. A false alarm in
+   the one channel that has to stay worth reading. Paths are canonicalized before anything is
+   called a conflict.
+
 **Then changed, on the operator's call:** those files moved to `<project>/.sdlc/`
 ([[decisions/ADR-0023-the-project-sdlc-directory-is-ours]]) — one host-neutral directory, no
 fallback read, migrated once by `/sdlc-doctor`, with the old location noticed and reported on every

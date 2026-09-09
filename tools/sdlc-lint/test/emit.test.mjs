@@ -668,6 +668,54 @@ test("a declared host searches the env-named config dir AND the default", () => 
   }
 });
 
+test("one plugin at two paths is reported, and the same path twice is not", () => {
+  // Claude Code warns on a multi-path install (`readInstalledPlugins` records
+  // conflicts) and that warning is not decoration — issue #70 was one run
+  // reading two plugin trees. The synthesized registry dropped the loser in
+  // silence, which made it narrower than the facility it stands in for: the same
+  // mistake as filtering plugins on manifest.yaml, one layer along.
+  //
+  // The second half is the half that bites. The running package normally ALSO
+  // sits under a search path — that is what a plain install produces — so a
+  // naive identity check reported `sdlc is present at 2 paths` and printed one
+  // directory as both the winner and the loser. A false alarm in the only
+  // channel that has to stay worth reading.
+  const home = mkdtempSync(join(tmpdir(), "sdlc-dupe-home-"));
+  const project = mkdtempSync(join(tmpdir(), "sdlc-dupe-"));
+  try {
+    writeFileSync(join(project, "package.json"), '{"name":"x","version":"1.0.0"}\n');
+    for (const base of [join(home, ".gemini", "config", "plugins"), join(project, ".agents", "plugins")]) {
+      const dir = join(base, "probe-dep");
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, "plugin.json"), '{"name":"probe-dep","version":"1.0.0"}\n');
+    }
+
+    const cli = join(REPO, "dist", "antigravity", "plugins", "sdlc", "tools", "resolve", "cli.mjs");
+    const env = { ...process.env, HOME: home };
+    delete env.GEMINI_CONFIG_DIR;
+    const r = JSON.parse(execFileSync(process.execPath, [cli, "plan", "--json", "add a thing"], {
+      cwd: project, encoding: "utf8", env,
+    }));
+    assert.ok(r.ok, `resolver failed: ${r.halt ?? r.error}`);
+
+    const dupes = r.warnings.filter((w) => /is present at \d+ paths/.test(w));
+    assert.equal(dupes.length, 1, `expected exactly the probe-dep conflict: ${JSON.stringify(dupes)}`);
+    assert.match(dupes[0], /probe-dep is present at 2 paths/);
+    assert.match(dupes[0], /using the search path copy/, "the workspace copy wins over the global one");
+
+    // The package under test is reachable as its own root AND under no search
+    // path here, but the rule that matters is the general one: no warning may
+    // name the same directory as both winner and loser.
+    for (const w of dupes) {
+      const [, chosenPath, ignored] = w.match(/copy \(([^)]+)\)\. Ignored: (.+)$/) ?? [];
+      assert.ok(chosenPath && ignored, `unparseable conflict line: ${w}`);
+      assert.ok(!ignored.split(", ").includes(chosenPath), `a directory was reported as both chosen and ignored: ${w}`);
+    }
+  } finally {
+    for (const d of [home, project]) rmSync(d, { recursive: true, force: true });
+  }
+});
+
 test("the running package shadows an installed copy of itself", () => {
   // With the release installed AND a branch checkout running — the documented
   // way this project tests unreleased work against a real project — the same

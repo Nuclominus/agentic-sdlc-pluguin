@@ -8,8 +8,8 @@
 //
 // Every step's own module does its own reading. This function owns the order and the assembly.
 
-import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import { resolveRoots, PROJECT_DIR } from "./roots.mjs";
 import { readInstalledPlugins, readEnabledPlugins, loadInstalledManifests, loadManifestsFromTree } from "./manifests.mjs";
 import { resolveStack } from "./detect.mjs";
@@ -117,19 +117,39 @@ function installsFromRoots(hostRoots) {
  * mixing two copies of one plugin tree is issue #70's failure, one layer out.
  */
 function hostPluginRoots(roots) {
-  if (roots.host === "claude") return [];
+  if (roots.host === "claude") return { roots: [], conflicts: [] };
   const out = [];
-  const seen = new Set();
-  const consider = (dir) => {
+  const chosen = new Map();
+  const conflicts = new Map();
+  // Same directory reached twice is not a conflict. The own package normally
+  // ALSO sits under a search path — that is what a plain `agy plugin install`
+  // produces — and reporting it as two copies of itself, naming one path twice,
+  // is a false alarm in the one channel that must stay worth reading.
+  const canonical = (d) => { try { return realpathSync(d); } catch { return resolve(d); } };
+
+  const consider = (dir, source) => {
     if (!dir) return;
     const id = pluginIdentity(dir);
-    if (seen.has(id)) return;
-    seen.add(id);
+    const won = chosen.get(id);
+    if (won) {
+      if (canonical(won.dir) === canonical(dir)) return;
+      // Losing a duplicate is REPORTED, never silent. `readInstalledPlugins`
+      // warns on a multi-path install on Claude Code and that warning is not
+      // decoration — issue #70 was one run reading two plugin trees. A
+      // synthesized registry that drops the loser quietly is narrower than the
+      // facility it stands in for, in exactly the way that already cost this
+      // phase one defect.
+      const rec = conflicts.get(id) ?? { key: id, chosen: won.dir, source: won.source, others: [] };
+      rec.others.push(dir);
+      conflicts.set(id, rec);
+      return;
+    }
+    chosen.set(id, { dir, source });
     out.push(dir);
   };
-  consider(roots.sdlc_plugin_root);
-  for (const dir of pluginDirsUnder(roots.plugin_search_paths ?? [])) consider(dir);
-  return out;
+  consider(roots.sdlc_plugin_root, "own package");
+  for (const dir of pluginDirsUnder(roots.plugin_search_paths ?? [])) consider(dir, "search path");
+  return { roots: out, conflicts: [...conflicts.values()] };
 }
 
 /**
@@ -233,7 +253,7 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   // On a host with no installed_plugins.json registry, discovery is the search
   // paths the running package declares: every immediate child of them that
   // carries a manifest.yaml. Empty on Claude Code, where the registry answers.
-  const hostRoots = hostPluginRoots(roots);
+  const { roots: hostRoots, conflicts: hostConflicts } = hostPluginRoots(roots);
 
   // ---- Step 0b inputs: what is installed and enabled
   const { installs, conflicts } = readInstalledPlugins({ configDir });
@@ -242,6 +262,14 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   for (const [key, info] of installsFromRoots(hostRoots)) if (!installs.has(key)) installs.set(key, info);
   const enabled = readEnabledPlugins({ configDir, projectRoot: cwd, projectSettingsFiles: roots.project_settings_files ?? null });
   for (const c of conflicts) warn(`WARN: ${c.key} is installed at several paths; using the ${c.scope} copy (${c.chosen})`);
+  // Same warning for the synthesized registry. The `own package` source is the
+  // documented dev-checkout flow rather than a misconfiguration, so it says which
+  // it is — a developer running an unreleased branch beside an install should
+  // read one sentence, not go looking for a problem.
+  for (const c of hostConflicts) {
+    warn(`WARN: ${c.key} is present at ${c.others.length + 1} paths; using the ${c.source} copy (${c.chosen}).`
+      + ` Ignored: ${c.others.join(", ")}`);
+  }
 
   const manifests = mode === "tree"
     ? loadManifestsFromTree(cwd)
