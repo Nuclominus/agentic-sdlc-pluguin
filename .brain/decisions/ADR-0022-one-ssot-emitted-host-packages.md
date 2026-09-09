@@ -82,16 +82,32 @@ committed, and gated. Nothing translates at run time.**
    different model ids per host. The tag in the frontmatter, the tag in `model.local.json` and the
    key in the map are one string by construction — the same rule ADR-0021 applied to agent names.
 
-7. **One registry for every provider, not one registry per host.** The first draft of this ADR said
-   `config/models.json` would be regenerated per host. It is not, and the reason is that the
-   tier→id mapping and the id→price mapping are different questions. The tier→id map is host
-   knowledge and lives in `tools/sdlc-lint/hosts/<host>.json`, keyed on tier+effort where the host
-   needs it. Pricing is provider knowledge and stays in the one registry that is already the SSOT
-   for it, now carrying the `gemini-*` families beside the Claude ones as reference/pin-only
-   entries — the same slot the dated Claude pins already used. The emitter copies the registry
-   verbatim. A per-host registry would have split one price list into N, which is how price lists
-   drift. `sdlc-lint emit` asserts the seam: every model the host map can emit must be priced by the
-   registry, so a host mapping cannot outrun it.
+7. **One registry per dispatcher: `config/models/<host>.yaml`.** The tier→id mapping and the
+   id→price mapping are different questions, so they live in different places. **Tier→id is host
+   knowledge** and lives in `tools/sdlc-lint/hosts/<host>.json`, keyed on tier+effort where the host
+   needs it. **id→price is provider knowledge** and lives in one file per dispatcher, which a
+   package carries exactly one of, chosen by its own `config/host.json`.
+
+   An intermediate draft kept a single registry holding every provider, on the argument that
+   splitting a price list into N is how price lists drift. That argument does not survive contact
+   with the case: drift needs the *same fact* in two places, and Claude prices and Gemini prices are
+   disjoint sets with no shared number between them. What a shared file did produce was every
+   package shipping a price list it could never use, plus `pipeline_tiers` and
+   `estimation_baselines` — Claude-only concepts — arriving at a host where nothing is dispatched
+   by tag at all. The Antigravity file therefore has no `pipeline_tiers`, and that absence is
+   information.
+
+   YAML rather than JSON because the rationale is most of the content: the >200K Gemini tier this
+   registry cannot express, the Flash intro price expiring 2027-01-01, `fable`'s `cached_input` of
+   0.25 where every neighbour uses 10%. In JSON each of those had to be smuggled into a
+   machine-read `note`/`description` string; in YAML they are comments. The shipped, dependency-free
+   `resolve/yaml.mjs` parses the shape correctly (floats stay floats), and `sdlc-lint schema`
+   already validates YAML against JSON Schema for manifests and workflows, so this added no
+   machinery.
+
+   Two seams are asserted rather than trusted: every model a host map can emit must be priced by
+   that host's registry, and a cross-provider lookup must return `null` — a mis-attributed model
+   ends up unpriced rather than priced at someone else's rate.
 
 ## Consequences
 

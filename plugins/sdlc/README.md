@@ -18,7 +18,7 @@ sdlc/
 ├── workflows/{default,bugfix,hotfix,refactor,docs-only,
 │             analysis,testing,debug}.yaml + RESOLVER.md
 ├── manifest.yaml                            # stack: vanilla — the ONLY agents_per_phase map
-├── config/{models.json,agent-migrations.json,aspects.yaml}
+├── config/{models/<host>.yaml,agent-migrations.json,aspects.yaml}
 ├── tools/{resolve,run,usage,report,rollup,   # shipped runtime, called by the orchestrator
 │          migrate,aar}/
 ├── hooks/{hooks.json,enforce-agent-model.sh}
@@ -135,7 +135,7 @@ Create `<repo_root>/.claude/model.local.json` (or run `/sdlc:model-config`):
 → `sonnet`. Both the `enforce-agent-model.sh` hook and the orchestrator apply this same chain, so an
 override is honored at dispatch and not reverted. A missing or malformed file, or an invalid tier, falls
 back to the built-in tiers (fail-open). This changes only which tag an agent uses — the model registry
-(`config/models.json`) remains the single source of truth for tag→model_id and pricing.
+(`config/models/<host>.yaml`, one per dispatcher) remains the single source of truth for tag→model_id and pricing.
 
 Author it interactively with `/sdlc:model-config` (default tier first, then optional per-agent), or
 `/sdlc:model-config --list` to review the current mapping.

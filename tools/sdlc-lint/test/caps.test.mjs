@@ -9,9 +9,10 @@ import {
   resolveCostCap, renderCapOverridePrint, priceBaseline, resolveTier, expandRows,
   estimate, capVerdict, renderDryRun, renderHeadlessDryRun,
 } from "../../../plugins/sdlc/tools/resolve/caps.mjs";
+import { parseYaml } from "../../../plugins/sdlc/tools/resolve/yaml.mjs";
 
 const REPO = new URL("../../../", import.meta.url).pathname;
-const registry = JSON.parse(readFileSync(join(REPO, "plugins", "sdlc", "config", "models.json"), "utf8"));
+const registry = parseYaml(readFileSync(join(REPO, "plugins", "sdlc", "config", "models", "claude.yaml"), "utf8"));
 
 const AGENTS = {
   business_analysis: "business-analyst",

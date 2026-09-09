@@ -23,6 +23,8 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, dirname, basename } from "node:path";
 import { homedir } from "node:os";
+import { parseYaml } from "../resolve/yaml.mjs";
+import { resolveHost } from "../resolve/host.mjs";
 
 // ── config dir ──────────────────────────────────────────────────────────────
 
@@ -46,11 +48,22 @@ export function claudeConfigDir(env = process.env) {
 
 const defaultRegistry = () => join(claudeConfigDir(), "plugins", "cache");
 
-/** Load the model registry (models.json). Returns { byId, multipliers, raw }. */
+/**
+ * Load the model registry for the dispatcher this install runs under.
+ *
+ * One file per dispatcher (`config/models/<host>.yaml`, ADR-0022 decision 7): `tier -> id`
+ * is host knowledge and lives in the host descriptor, `id -> price` is provider knowledge
+ * and lives here. Which file to read is not guessed — the package declares its host in
+ * `config/host.json`, and the authored tree, which declares none, is Claude Code.
+ *
+ * Returns { byId, multipliers, raw, path }. `multipliers` falls back to the Anthropic
+ * cache-write standard for a registry that states none.
+ */
 export function loadRegistry(explicitPath) {
   const path = explicitPath || findRegistry();
-  if (!path) throw new Error("model registry (models.json) not found");
-  const raw = JSON.parse(readFileSync(path, "utf8"));
+  if (!path) throw new Error("model registry (config/models/<host>.yaml) not found");
+  const text = readFileSync(path, "utf8");
+  const raw = path.endsWith(".yaml") ? parseYaml(text) : JSON.parse(text);
   const byId = new Map();
   for (const m of raw.models || []) if (m.model_id) byId.set(m.model_id, m.pricing || null);
   const multipliers = raw.cache_write_multipliers || { ephemeral_5m: 1.25, ephemeral_1h: 2.0 };
@@ -59,9 +72,10 @@ export function loadRegistry(explicitPath) {
 
 function findRegistry() {
   // Prefer the shipped copy next to this file's plugin, then the plugin cache.
-  const local = join(dirname(dirname(new URL(".", import.meta.url).pathname)), "config", "models.json");
+  const own = dirname(dirname(new URL(".", import.meta.url).pathname));
+  const local = join(own, "config", "models", `${resolveHost(own).host}.yaml`);
   if (existsSync(local)) return local;
-  const hits = globJsonl(defaultRegistry(), /\/sdlc\/config\/models\.json$/);
+  const hits = globJsonl(defaultRegistry(), /\/sdlc\/config\/models\/claude\.yaml$/);
   return hits[0] || null;
 }
 

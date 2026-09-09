@@ -67,14 +67,33 @@ test("the model map is a golden table — a silent edit shows up here", () => {
   ]);
 });
 
-test("every model the host map can emit is known to the registry", () => {
-  // Ties hosts/<host>.json to config/models.json. Without this the emitter can
-  // dispatch a model string telemetry cannot price, and the failure shows up as
-  // a silently unpriced phase rather than as a broken build.
-  const registry = loadRegistry(join(REPO, "plugins", "sdlc", "config", "models.json"));
+test("every model the host map can emit is priced by that host's registry", () => {
+  // Ties hosts/<host>.json to config/models/<host>.yaml. Without it the emitter
+  // can bake in a model string telemetry cannot price, and the failure surfaces
+  // as a silently unpriced phase rather than as a broken build.
+  const registry = loadRegistry(join(REPO, "plugins", "sdlc", "config", "models", `${ANTIGRAVITY.host}.yaml`));
   for (const [pair, id] of modelPairs(ANTIGRAVITY)) {
-    assert.ok(lookupPricing(id, registry), `${pair} emits \`${id}\`, which config/models.json does not price`);
+    assert.ok(lookupPricing(id, registry), `${pair} emits \`${id}\`, which config/models/${ANTIGRAVITY.host}.yaml does not price`);
   }
+});
+
+test("a registry prices its own provider only — never another's by accident", () => {
+  // The split's whole safety property: a cross-provider lookup must return null,
+  // so a mis-attributed model is unpriced rather than priced at someone else's
+  // rate. A wrong number is worse than no number (ADR-0012).
+  const claude = loadRegistry(join(REPO, "plugins", "sdlc", "config", "models", "claude.yaml"));
+  const anti = loadRegistry(join(REPO, "plugins", "sdlc", "config", "models", "antigravity.yaml"));
+  assert.ok(lookupPricing("claude-opus-5", claude));
+  assert.equal(lookupPricing("gemini-3.1-pro-high", claude), null);
+  assert.ok(lookupPricing("gemini-3.1-pro-high", anti));
+  assert.equal(lookupPricing("claude-opus-5", anti), null);
+});
+
+test("a host package carries its own registry and no other", () => {
+  const { outputs, drops } = emitPlugin(REPO, "sdlc", ANTIGRAVITY);
+  const registries = [...outputs.keys()].filter((p) => p.includes("/config/models/"));
+  assert.deepEqual(registries, ["dist/antigravity/plugins/sdlc/config/models/antigravity.yaml"]);
+  assert.ok(drops.some((d) => d.path === "config/models/claude.yaml" && /this package is antigravity/.test(d.reason)));
 });
 
 // ---------------------------------------------------------------- agents

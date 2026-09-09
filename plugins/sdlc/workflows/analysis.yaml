@@ -15,7 +15,7 @@ caps:
   # (`flutter-to-native-migration-plan`, BA $2.97 + security $0.40).
   #
   # That estimate has since been recalibrated against the same measurements (its baselines now live
-  # in config/models.json `estimation_baselines`), so preview and cap no longer contradict each
+  # in config/models/claude.yaml `estimation_baselines`), so preview and cap no longer contradict each
   # other. Caps still come from measured p90 rather than from the estimate: the estimate predicts a
   # typical run, while a cap must clear the tail.
   #

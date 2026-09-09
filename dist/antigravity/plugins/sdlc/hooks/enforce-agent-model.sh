@@ -14,7 +14,7 @@ set -uo pipefail
 # tier and enforce it verbatim. Full model IDs (claude-opus-4-8, …) are used
 # only for telemetry/cost accounting in the orchestrator, never for dispatch.
 #
-# This list MIRRORS `pipeline_tiers` in plugins/sdlc/config/models.json (the
+# This list MIRRORS `pipeline_tiers` in plugins/sdlc/config/models/claude.yaml (the
 # model registry / single source of truth) — keep the two in sync. The hook
 # keeps its own inline copy on purpose: a PreToolUse hook must fail-open fast.
 # It ALSO reads an OPTIONAL per-project override, <project>/.claude/model.local.json.

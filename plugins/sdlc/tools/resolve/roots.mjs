@@ -82,19 +82,19 @@ export function resolveSdlcRoot(configDir, env = process.env) {
     for (const [key, entries] of Object.entries(registry.plugins)) {
       if (!/^sdlc@/.test(key)) continue;
       const list = (Array.isArray(entries) ? entries : [entries]).filter((e) => e?.installPath);
-      const hit = list.find((e) => existsSync(join(e.installPath, "config", "models.json")));
+      const hit = list.find((e) => existsSync(join(e.installPath, "config", "models", "claude.yaml")));
       if (hit) return { value: hit.installPath, source: "installed_plugins.json", version: hit.version ?? null };
     }
   }
 
-  // Last resort: the newest cached copy that actually carries config/models.json.
+  // Last resort: the newest cached copy that actually carries the Claude registry.
   const cacheRoot = join(configDir, "plugins", "cache");
   const candidates = [];
   for (const marketplace of safeDirs(cacheRoot)) {
     const sdlcDir = join(cacheRoot, marketplace, "sdlc");
     for (const version of safeDirs(sdlcDir)) {
       const root = join(sdlcDir, version);
-      if (existsSync(join(root, "config", "models.json"))) candidates.push({ root, version });
+      if (existsSync(join(root, "config", "models", "claude.yaml"))) candidates.push({ root, version });
     }
   }
   if (candidates.length === 0) return { value: null, source: "unresolved" };

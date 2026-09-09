@@ -8,7 +8,7 @@
 //
 // 2. An estimate and an actual differ only in their TOKEN COUNTS, never in how those tokens
 //    are valued. The pricing formula here mirrors priceUsage in tools/usage/usage.mjs, and the
-//    baselines come from config/models.json rather than being restated — the registry is their
+//    baselines come from config/models/<host>.yaml rather than being restated — the registry is their
 //    single source of truth, and a second copy would drift the moment either is retuned.
 //
 // The estimate is an ESTIMATE. Real cost comes from the transcript (ADR-0005/0011). The

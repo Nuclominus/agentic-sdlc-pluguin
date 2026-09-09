@@ -9,7 +9,7 @@ import { sealRunClock, finishRun } from "../lib/run.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..", "..", "..");
-const REGISTRY = join(REPO, "plugins", "sdlc", "config", "models.json");
+const REGISTRY = join(REPO, "plugins", "sdlc", "config", "models", "claude.yaml");
 
 // A run directory with the given telemetry and, optionally, a machine anchor.
 function makeRun(tel, anchorEpoch) {

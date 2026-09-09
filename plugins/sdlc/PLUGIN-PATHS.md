@@ -16,13 +16,13 @@ this way.
 
 | Symbol | What it points at | Use it for |
 |---|---|---|
-| `SDLC_PLUGIN_ROOT` | this plugin's own installed root (`.../plugins/cache/<marketplace>/sdlc/<version>`) | **self-referential** reads: `config/models.json`, `config/aspects.yaml`, `tools/**`, `runtime-dependencies.json` |
+| `SDLC_PLUGIN_ROOT` | this plugin's own installed root (`.../plugins/cache/<marketplace>/sdlc/<version>`) | **self-referential** reads: `config/models/<host>.yaml`, `config/aspects.yaml`, `tools/**`, `runtime-dependencies.json` |
 | `PLUGIN_CACHE_ROOT` | the cache root holding **every** installed plugin (`<CONFIG_DIR>/plugins/cache`) | **cross-plugin discovery**: `**/manifest.yaml`, `**/workflows/*.yaml`, `**/runtime-dependencies.json`, `**/skills/*/SKILL.md` |
 | `CONFIG_DIR` | the active Claude config dir — `${CLAUDE_CONFIG_DIR:-~/.claude}` | session/user state: the deps-preflight stamp, `projects/**` session transcripts |
 
 `SDLC_PLUGIN_ROOT` is not `PLUGIN_CACHE_ROOT/**`-globbed on purpose. The cache can hold **several
 versions of the same plugin side by side** (`sdlc/1.9.0/`, `sdlc/1.9.1/`); a `**` glob for
-`sdlc/config/models.json` matches all of them and picks arbitrarily. The running plugin knows its
+`sdlc/config/models/claude.yaml` matches all of them and picks arbitrarily. The running plugin knows its
 own root — read from it directly.
 
 ---
@@ -38,8 +38,9 @@ case "${CLAUDE_PLUGIN_ROOT:-}" in
 esac
 SDLC="${CLAUDE_PLUGIN_ROOT:-}"
 if [ -z "$SDLC" ]; then   # harness did not export it — find the newest cached sdlc
-  M=$(find "$CFG/plugins/cache" -path '*/sdlc/*config/models.json' 2>/dev/null | sort -V | tail -1)
-  [ -n "$M" ] && SDLC=$(dirname "$(dirname "$M")")
+  M=$(find "$CFG/plugins/cache" -path '*/sdlc/*config/models/claude.yaml' 2>/dev/null | sort -V | tail -1)
+  # three dirnames: .../config/models/claude.yaml -> .../config/models -> .../config -> plugin root
+  [ -n "$M" ] && SDLC=$(dirname "$(dirname "$(dirname "$M")")")
 fi
 printf 'CONFIG_DIR=%s\nPLUGIN_CACHE_ROOT=%s/plugins/cache\nSDLC_PLUGIN_ROOT=%s\n' "$CFG" "$CFG" "$SDLC"
 ```
@@ -61,7 +62,7 @@ Hold the three values in `CONTEXT` and substitute them into every subsequent `Gl
 ## Writing paths in plugin text
 
 - ✅ `Glob {PLUGIN_CACHE_ROOT}/**/manifest.yaml` — resolved symbol.
-- ✅ `Read {SDLC_PLUGIN_ROOT}/config/models.json` — self-referential.
+- ✅ `Read {SDLC_PLUGIN_ROOT}/config/models/{host}.yaml` — self-referential.
 - ✅ `node "${CLAUDE_PLUGIN_ROOT}/tools/usage/cli.mjs"` — inside `Bash`, where the shell expands it.
 - ✅ `node "${CLAUDE_PLUGIN_ROOT}/tools/run/cli.mjs" finish {task_slug}` — same, Step 5b's sealer.
 - ✅ `${CLAUDE_CONFIG_DIR:-~/.claude}/projects/...` — prose describing a config-dir-relative path.

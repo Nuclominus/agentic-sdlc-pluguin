@@ -6,9 +6,9 @@ import Ajv from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 
 const SCHEMA_MAP = [
+  { glob: "plugins/**/config/models/*.yaml", schema: "schemas/models.schema.json",      parse: "yaml" },
   { glob: "plugins/**/manifest.yaml",        schema: "schemas/manifest.schema.json",    parse: "yaml" },
   { glob: "plugins/**/workflows/*.yaml",     schema: "schemas/workflow.schema.json",    parse: "yaml" },
-  { glob: "plugins/sdlc/config/models.json", schema: "schemas/models.schema.json",      parse: "json" },
   { glob: "**/.claude/model.local.json",     schema: "schemas/model-local.schema.json", parse: "json" },
   { glob: "plugins/**/.claude-plugin/plugin.json", schema: "schemas/plugin.schema.json", parse: "json" },
   { glob: "docs/plans/**/.checkpoint/*.json", schema: "schemas/checkpoint.schema.json", parse: "json", reject: /\/_run\.json$/ },

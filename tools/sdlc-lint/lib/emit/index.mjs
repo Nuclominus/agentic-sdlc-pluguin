@@ -160,6 +160,15 @@ export function emitPlugin(root, pluginName, host) {
     // with build inputs trains the reader to skim it.
     if (rel.startsWith("hosts/")) continue;
 
+    // One registry per dispatcher: a package carries its own and no other. Shipping
+    // the whole set would put a price list in every package that it can never use,
+    // alongside tiers that do not exist at its runtime.
+    const registry = rel.match(/^config\/models\/([^/]+)\.yaml$/)?.[1];
+    if (registry && registry !== host.host) {
+      drops.push({ path: rel, reason: `model registry for host ${registry}; this package is ${host.host}` });
+      continue;
+    }
+
     if (rel.startsWith(".claude-plugin/")) {
       drops.push({ path: rel, reason: "Claude-Code-only manifest directory; the manifest is moved to the plugin root" });
       continue;

@@ -12,7 +12,7 @@ import {
   CACHE_PRESSURE_PEAK_TOKENS,
 } from "../lib/usage.mjs";
 
-const REGISTRY = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "plugins", "sdlc", "config", "models.json");
+const REGISTRY = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "plugins", "sdlc", "config", "models", "claude.yaml");
 const reg = loadRegistry(REGISTRY);
 
 // One assistant turn with a given usage block, as a Claude Code transcript line.

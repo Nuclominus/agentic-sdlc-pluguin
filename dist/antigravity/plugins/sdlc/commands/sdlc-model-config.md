@@ -23,7 +23,7 @@ frontmatter → sonnet`. This command only edits config — it never runs the pi
 3. **Discover valid choices** (so the user picks from real names/tiers, not free text). Resolve
    `{SDLC_PLUGIN_ROOT}` / `{PLUGIN_CACHE_ROOT}` first per `plugins/sdlc/PLUGIN-PATHS.md` — never
    glob a literal `~`:
-   - **Tiers:** `Read {SDLC_PLUGIN_ROOT}/config/models.json` (the running install's own registry —
+   - **Tiers:** `Read {SDLC_PLUGIN_ROOT}/config/models/claude.yaml` (the running install's own registry —
      a `**` glob would also match other cached versions of this plugin).
      Offer each tag in `pipeline_tiers`, annotated with its `model_id` and `pricing`
      (e.g. `haiku → claude-haiku-4-5-20251001  ($1/$5 per MTok)`).

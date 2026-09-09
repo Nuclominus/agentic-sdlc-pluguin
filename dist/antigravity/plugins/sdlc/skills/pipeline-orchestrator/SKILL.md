@@ -850,10 +850,10 @@ resumes from that artifact instead of starting blind.
 
 **3d. Save the COMPACT summary** returned by the agent to `CONTEXT.{phase}_output`. Verify the agent also wrote the detailed file to `docs/plans/{task_slug}/0X-{phase}.md` (use `Glob` to check). If the file is missing, ask the agent again to write it before proceeding.
 
-**3d-0. Load the model registry** (once per run) — read the tag→model-ID map from the single source of truth:
+**3d-0. Load the model registry** (once per run) — read the tag→model-ID map from the single source of truth. There is one registry per dispatcher; `{host}` is `plan.roots.host` from Step 0 (`claude` unless the package declares otherwise):
 
 ```
-MODELS = parse(Read("{SDLC_PLUGIN_ROOT}/config/models.json"))   # { pipeline_tiers: [...], models: [ { tag, model_id, pricing: { input, cached_input, output } }, ... ] }
+MODELS = parse(Read("{SDLC_PLUGIN_ROOT}/config/models/{host}.yaml"))   # { provider, pipeline_tiers?: [...], models: [ { tag, model_id, pricing: { input, cached_input, output } }, ... ] }
 ```
 
 Resolve a tier to its concrete model ID via the `models[]` entry whose `tag` equals the declared tier. This registry is the single source of truth for model IDs **and pricing** — never hardcode either here.

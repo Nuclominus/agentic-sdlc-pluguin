@@ -1,7 +1,7 @@
 // Tier+effort -> host model id, for Track J's emitters.
 //
 // The pipeline's model vocabulary is a pair of frontmatter keys: `model:` names a
-// TIER (opus|sonnet|haiku|fable — a tag in plugins/sdlc/config/models.json, never
+// TIER (opus|sonnet|haiku|fable — a tag in plugins/sdlc/config/models/claude.yaml, never
 // a provider model string) and `effort:` names the reasoning budget. On Claude
 // Code the two travel separately: the tier goes to the Agent tool's `model` field
 // and hooks/enforce-agent-model.sh enforces it.

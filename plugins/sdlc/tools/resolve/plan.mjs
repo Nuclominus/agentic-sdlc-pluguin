@@ -417,9 +417,13 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
   if (flag(args, "--dry-run")) {
     const tiers = frontmatterTiers(installs, enabled);
     const rows = expandRows(built.phases, { agentsPerPhase: effective.agents_per_phase, modelOverrides: models.overrides, frontmatterTiers: tiers });
-    const registry = readJson(join(roots.sdlc_plugin_root ?? "", "config", "models.json"));
+    // One registry per dispatcher (ADR-0022 decision 7). A host whose file carries no
+    // `estimation_baselines` — because none were ever measured there — yields no preview
+    // rather than a fabricated one.
+    const registryPath = join(roots.sdlc_plugin_root ?? "", "config", "models", `${roots.host ?? "claude"}.yaml`);
+    const registry = existsSync(registryPath) ? parseYaml(readFileSync(registryPath, "utf8")) : null;
     if (!registry) {
-      warn("WARN: model registry not found — dry-run cost preview unavailable");
+      warn(`WARN: model registry not found (${registryPath}) — dry-run cost preview unavailable`);
     } else {
       const healEnabled = (effective.heal_checks ?? []).length > 0;
       const est = estimate(rows, registry, { healEnabled });

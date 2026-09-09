@@ -74,20 +74,27 @@ function world({ localYaml = null, modelJson = null, recipe = null, roleExpertis
     "  max_total_cost_usd: 20",
     "",
   ].join("\n"));
-  write(join(core, "config", "models.json"), JSON.parse(JSON.stringify({
-    pipeline_tiers: ["opus", "sonnet", "haiku", "fable"],
-    cache_write_multipliers: { ephemeral_5m: 1.25 },
-    estimation_baselines: {
-      opus: { input: 30, cache_read: 670000, cache_write: 93000, output: 1125 },
-      sonnet: { input: 25, cache_read: 725000, cache_write: 73000, output: 1230 },
-      haiku: { input: 195, cache_read: 820000, cache_write: 51000, output: 30 },
-    },
-    models: [
-      { tag: "opus", model_id: "m-opus", pricing: { input: 5, cached_input: 0.5, output: 25 } },
-      { tag: "sonnet", model_id: "m-sonnet", pricing: { input: 3, cached_input: 0.3, output: 15 } },
-      { tag: "haiku", model_id: "m-haiku", pricing: { input: 1, cached_input: 0.1, output: 5 } },
-    ],
-  })));
+  write(join(core, "config", "models", "claude.yaml"), [
+    "provider: anthropic",
+    "pipeline_tiers: [opus, sonnet, haiku, fable]",
+    "cache_write_multipliers:",
+    "  ephemeral_5m: 1.25",
+    "estimation_baselines:",
+    "  opus:   { input: 30,  cache_read: 670000, cache_write: 93000, output: 1125 }",
+    "  sonnet: { input: 25,  cache_read: 725000, cache_write: 73000, output: 1230 }",
+    "  haiku:  { input: 195, cache_read: 820000, cache_write: 51000, output: 30 }",
+    "models:",
+    "  - tag: opus",
+    "    model_id: m-opus",
+    "    pricing: { input: 5, cached_input: 0.5, output: 25 }",
+    "  - tag: sonnet",
+    "    model_id: m-sonnet",
+    "    pricing: { input: 3, cached_input: 0.3, output: 15 }",
+    "  - tag: haiku",
+    "    model_id: m-haiku",
+    "    pricing: { input: 1, cached_input: 0.1, output: 5 }",
+    "",
+  ].join("\n"));
   write(join(plug, "runtime-dependencies.json"), { dependencies: [] });
 
   // The core plugin is a real participant, not scaffolding: it owns the model registry, and it

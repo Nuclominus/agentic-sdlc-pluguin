@@ -2,10 +2,9 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Nuclominus/Agentic-SDLC-Pluguin/schemas/models.schema.json",
   "title": "SDLC Model Registry",
-  "description": "Schema for plugins/sdlc/config/models.json — the machine-read single source of truth mapping a short `tag` (used in agent .md frontmatter `model: <tag>` and other local/plugin files) to the concrete provider `model_id`, and each model's `pricing` (USD per MTok, used for telemetry cost accounting). `pipeline_tiers` MIRRORS the is_valid_tier list in plugins/sdlc/hooks/enforce-agent-model.sh — keep them in sync. Entries outside `pipeline_tiers` are reference/pin-only: they exist so telemetry can price a model string the pipeline RECORDS but never dispatches by tag — including the models of a host this marketplace is emitted for (ADR-0022).",
+  "description": "Schema for plugins/sdlc/config/models/<host>.yaml — one registry per dispatcher (ADR-0022) — the machine-read single source of truth mapping a short `tag` (used in agent .md frontmatter `model: <tag>` and other local/plugin files) to the concrete provider `model_id`, and each model's `pricing` (USD per MTok, used for telemetry cost accounting). `pipeline_tiers` MIRRORS the is_valid_tier list in plugins/sdlc/hooks/enforce-agent-model.sh — keep them in sync. Entries outside `pipeline_tiers` are reference/pin-only: they exist so telemetry can price a model string the pipeline RECORDS but never dispatches by tag — including the models of a host this marketplace is emitted for (ADR-0022).",
   "type": "object",
   "required": [
-    "pipeline_tiers",
     "models"
   ],
   "additionalProperties": false,
@@ -16,9 +15,14 @@
     "description": {
       "type": "string"
     },
+    "provider": {
+      "type": "string",
+      "description": "Who sells these models (anthropic, google, openai). Documentation only — pricing is looked up by `model_id`, never by provider.",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
     "pipeline_tiers": {
       "type": "array",
-      "description": "Tags the pipeline dispatches and the enforcement hook validates. Every entry MUST also appear as a `tag` in `models`.",
+      "description": "Tags the pipeline dispatches and the enforcement hook validates. Every entry MUST also appear as a `tag` in `models`. ABSENT on a host where nothing is dispatched by tag — the emitter bakes the resolved model into each agent file at build time — and that absence is meaningful, not an omission.",
       "items": {
         "type": "string"
       },
