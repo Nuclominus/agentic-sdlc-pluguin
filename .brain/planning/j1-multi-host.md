@@ -184,9 +184,35 @@ shape: a Claude-only mechanism presented as active on a host that has none of it
    declare it; §4's wording has been corrected, because it promised doctor would do the reporting and
    what shipped reports it at the moment it would otherwise mislead.
 
-Worth naming as a pattern: **five of the seven defects in this phase were a Claude-only mechanism
+8. **Project-local paths were Claude Code's, on every host.** Raised by the operator. Project skills
+   were read from `<project>/.claude/skills` while this host loads them from
+   `<workspace>/.agents/skills` — so the resolver counted skills the CLI will never load (a mandated
+   skill reading as satisfied when it is not) and missed every one it does. Plugin enablement was
+   merged from `<project>/.claude/settings.json`, so a plugin disabled in Claude Code was silently
+   dropped from detection on Antigravity, in projects that may not use Claude Code at all. Both are
+   now declared per host; this one keeps no project settings file, and that empty list is an answer.
+9. **A third-party plugin was invisible — a defect introduced by fix (4) itself.** The synthesized
+   registry filtered on `manifest.yaml`, which is the *stack plugin* test, not the *is a plugin*
+   test. `superpowers` installs with twelve skills and a `plugin.json` but no manifest, so the
+   preflight reported all seven of its mandated skills missing while they were on disk and loadable.
+   `installed_plugins.json` lists plugins of every kind, so a substitute admitting fewer is not one.
+   Seven downgrades became one, and the survivor (`frontend-design`) is genuinely absent.
+
+   The compounding matters more than the bug: fix (4) replaced a broad registry with a narrow
+   substitute, and the narrowing was invisible for an hour because the only thing exercising it was
+   a fixture with no third-party plugins installed. A synthesized replacement for a host facility
+   must be checked against what the real one admitted, not only against what the new code needs.
+
+**Deliberately not changed:** `.claude/sdlc.local.yaml`, `.claude/model.local.json` and
+`.claude/sdlc-workflows/`. Those are the SDLC's own files parked in the host's directory, not the
+host's files, and their content is host-neutral — extensions, skill mappings, agent bindings, tier
+tags (ADR-0022 §6 keeps tier tags untranslated across hosts). A per-host copy would put the same fact
+in two places, which is the drift shape the registry split was corrected to avoid. Where they should
+live is a rename with a doctor-migration story, and that is a decision, not a side effect.
+
+Worth naming as a pattern: **seven of the nine defects in this phase were a Claude-only mechanism
 reading as present on a foreign host, and none of them threw.** `emit --check`, `agy plugin
-validate`, 720 unit tests and a green `sdlc-lint all` caught none of them. Every one was found by
+validate`, 723 unit tests and a green `sdlc-lint all` caught none of them. Every one was found by
 running the resolver against a real project and reading the output — which is the cheapest test in
 this track and had not been part of it.
 
