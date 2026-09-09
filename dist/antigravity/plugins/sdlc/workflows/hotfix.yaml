@@ -23,7 +23,7 @@ caps:
   # measured p90 for `development` alone is $5.41. The cap's job is to stop a runaway, not to
   # express an aspiration — a cap set below the median run is not a budget, it is a tripwire that
   # fires on every use and trains people to click through it. If hotfix should genuinely cost less,
-  # constrain the WORK (fewer phases, cheaper tiers via .claude/model.local.json), and let the cap
+  # constrain the WORK (fewer phases, cheaper tiers via .sdlc/model.local.json), and let the cap
   # follow the measurement.
   max_total_cost_usd: 12.50
 phases:

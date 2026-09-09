@@ -16,12 +16,31 @@
 //   - JSON is re-serialized (it has no comments to lose), preserving 2-space indent.
 //   - A name appearing in prose (a `when:` hint, a comment) is NOT a target.
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, renameSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { PROJECT_DIR } from "../resolve/roots.mjs";
 
 export const MIGRATIONS_FILE = "config/agent-migrations.json";
-const CONFIG_YAML = ".claude/sdlc.local.yaml";
-const CONFIG_JSON = ".claude/model.local.json";
+const CONFIG_YAML = ".sdlc/sdlc.local.yaml";
+const CONFIG_JSON = ".sdlc/model.local.json";
+
+/**
+ * The pre-rename location of this project's SDLC files, and everything that
+ * lived there.
+ *
+ * The marketplace used to keep its own project files in `<project>/.claude/` —
+ * another tool's directory, which stopped being merely untidy once the pipeline
+ * ran on CLIs that have no such directory. They moved to `<project>/.sdlc/`, one
+ * host-neutral directory, because their content means the same thing on every
+ * host.
+ *
+ * The move is a migration, not an alias: nothing reads the old path at run time
+ * (ADR-0021 §5 — a compatibility layer is six defects waiting to happen). The
+ * resolver notices the old files and says they are being ignored; this is what
+ * actually moves them, and only after the user says yes.
+ */
+const LEGACY_DIR = ".claude";
+const MOVED_ENTRIES = ["sdlc.local.yaml", "model.local.json", "sdlc-workflows", "sdlc-lessons.md"];
 
 const readJson = (file) => { try { return JSON.parse(readFileSync(file, "utf8")); } catch { return null; } };
 
@@ -200,5 +219,63 @@ export function renderReport(findings, { applied = false } = {}) {
     lines.push(`   ${f.file} ${f.where}: ${f.from} → ${f.to}${f.conflict ? "   (both spellings present — the stale one will be dropped)" : ""}`);
   }
   if (!applied) lines.push("   These entries currently target nothing. Approve the fix to rewrite them in place.");
+  return lines.join("\n");
+}
+
+/**
+ * SDLC project files still in the pre-rename location.
+ *
+ * Reports rather than assumes: an entry already present at the destination is a
+ * CONFLICT, never an overwrite. A user who half-migrated by hand has stated an
+ * intent, and silently replacing their new file with the old one would destroy
+ * it — the same rule `applyRenames` follows for a config carrying both agent
+ * spellings.
+ *
+ * @returns {Array<{from: string, to: string, conflict: boolean}>}
+ */
+export function scanLegacyLocation(projectRoot) {
+  const found = [];
+  for (const name of MOVED_ENTRIES) {
+    const from = join(projectRoot, LEGACY_DIR, name);
+    if (!existsSync(from)) continue;
+    found.push({
+      from: `${LEGACY_DIR}/${name}`,
+      to: `${PROJECT_DIR}/${name}`,
+      conflict: existsSync(join(projectRoot, PROJECT_DIR, name)),
+    });
+  }
+  return found;
+}
+
+/**
+ * Move them. Never over a conflict, and never a copy — a copy leaves two files
+ * that drift, and the whole point of the rename is that there is one.
+ * @returns {{moved: string[], skipped: string[]}}
+ */
+export function applyLegacyMove(projectRoot, findings) {
+  const moved = [];
+  const skipped = [];
+  for (const f of findings ?? []) {
+    if (f.conflict) { skipped.push(f.from); continue; }
+    const name = f.from.slice(LEGACY_DIR.length + 1);
+    try {
+      mkdirSync(join(projectRoot, PROJECT_DIR), { recursive: true });
+      renameSync(join(projectRoot, LEGACY_DIR, name), join(projectRoot, PROJECT_DIR, name));
+      moved.push(f.to);
+    } catch { skipped.push(f.from); }
+  }
+  return { moved: moved.sort(), skipped: skipped.sort() };
+}
+
+/** The human report for the relocation half. */
+export function renderLegacyReport(findings, { applied = false } = {}) {
+  if (!findings || findings.length === 0) return `✅ Config location: this project's SDLC files are in ${PROJECT_DIR}/.`;
+  const lines = [applied
+    ? `🔧 Config location migrated (${findings.length}):`
+    : `⚠️ Config location: ${findings.length} file(s) still in ${LEGACY_DIR}/ and NOT read — the marketplace keeps its own files in ${PROJECT_DIR}/ now:`];
+  for (const f of findings) {
+    lines.push(`   ${f.from} → ${f.to}${f.conflict ? "   (a file already exists there — yours is kept, this one is left in place)" : ""}`);
+  }
+  if (!applied) lines.push(`   Approve the move, or relocate them by hand: mkdir -p ${PROJECT_DIR} && git mv ${LEGACY_DIR}/<file> ${PROJECT_DIR}/`);
   return lines.join("\n");
 }

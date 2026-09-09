@@ -142,7 +142,7 @@ test("tie-break 4: alphabetical is the final backstop", () => {
 
 test("a project recipe SHADOWS a plugin one; two plugins colliding halts", () => {
   const recipes = [
-    { name: "bugfix", origin: "project", file: "/p/.claude/sdlc-workflows/bugfix.yaml", doc: {} },
+    { name: "bugfix", origin: "project", file: "/p/.sdlc/sdlc-workflows/bugfix.yaml", doc: {} },
     { name: "bugfix", origin: "plugin", file: "/cache/sdlc/workflows/bugfix.yaml", doc: {} },
   ];
   const r = locateRecipe("bugfix", recipes);
@@ -198,7 +198,7 @@ test("skips remove phases, and prune parallel groups without emptying the slot s
 test("discovery finds project recipes first and skips disabled plugins", () => {
   const dir = scratch();
   try {
-    recipeFile(join(dir, "proj", ".claude", "sdlc-workflows"), "bugfix", { name: "bugfix", phases: ["development"] });
+    recipeFile(join(dir, "proj", ".sdlc", "sdlc-workflows"), "bugfix", { name: "bugfix", phases: ["development"] });
     recipeFile(join(dir, "plug", "workflows"), "default", { name: "default", phases: ["development"] });
     recipeFile(join(dir, "off", "workflows"), "hidden", { name: "hidden", phases: ["development"] });
     const installs = new Map([

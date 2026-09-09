@@ -43,7 +43,7 @@ orchestrator executes the search on its behalf) — for Android Foundation:
    dependency declared in a module build file (e.g. `app/build.gradle`) is still detected on projects
    without a version catalog.
 
-Override per project in `.claude/sdlc.local.yaml`:
+Override per project in `.sdlc/sdlc.local.yaml`:
 
 ```yaml
 frameworks:

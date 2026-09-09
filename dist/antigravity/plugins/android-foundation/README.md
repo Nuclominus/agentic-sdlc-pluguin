@@ -131,6 +131,6 @@ Google's `android` binary (project scaffolding, emulator/device, SDK, docs, Stud
 
 ## Project specifics — no template substitution
 
-Agents detect the project's stack at runtime (module pattern, applicationId, build variants) via Architecture Detection. Project-level tuning uses the **generic** `.claude/sdlc.local.yaml` overrides — there is intentionally no Android-specific block in the core (that would break core platform-agnosticism).
+Agents detect the project's stack at runtime (module pattern, applicationId, build variants) via Architecture Detection. Project-level tuning uses the **generic** `.sdlc/sdlc.local.yaml` overrides — there is intentionally no Android-specific block in the core (that would break core platform-agnosticism).
 
 **Status:** complete — `role_expertise` for all eleven core roles, the extracted skills, rules, MASVS security, vault lifecycle (`manage-vault`) and hooks are in place; the orchestrator executes the full DAG (review-loop + parallel) generically against the core roster.

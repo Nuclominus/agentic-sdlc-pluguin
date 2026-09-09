@@ -524,7 +524,7 @@ test("a third-party plugin with no manifest still contributes its skills", () =>
 // -------------------------------------- a baked model makes overrides inert
 
 test("a project tier override is reported inert, not previewed as active", () => {
-  // The defect a real project surfaced: `.claude/model.local.json` said
+  // The defect a real project surfaced: `.sdlc/model.local.json` said
   // `business-analyst: opus` and the dry run printed
   // "Model tier overrides loaded" plus `(opus)` — while the emitted agent file
   // said `gemini-3.1-pro-high` and the dispatch passes no model at all. The
@@ -538,8 +538,8 @@ test("a project tier override is reported inert, not previewed as active", () =>
   const project = mkdtempSync(join(tmpdir(), "sdlc-inert-"));
   try {
     writeFileSync(join(project, "package.json"), '{"name":"x","version":"1.0.0"}\n');
-    mkdirSync(join(project, ".claude"), { recursive: true });
-    writeFileSync(join(project, ".claude", "model.local.json"),
+    mkdirSync(join(project, ".sdlc"), { recursive: true });
+    writeFileSync(join(project, ".sdlc", "model.local.json"),
       JSON.stringify({ default: "opus", agents: { "document-writer": "haiku" } }));
 
     const cli = join(REPO, "dist", "antigravity", "plugins", "sdlc", "tools", "resolve", "cli.mjs");

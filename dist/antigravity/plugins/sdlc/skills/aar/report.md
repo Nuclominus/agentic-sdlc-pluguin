@@ -40,5 +40,5 @@ ONE line: the single change with the best cost/quality payoff.
 ## Lessons candidates
 
 For each finding worth persisting, provide a ONE-LINE lesson (imperative,
-project-general) the skill can append to `.claude/sdlc-lessons.md` on approval —
+project-general) the skill can append to `.sdlc/sdlc-lessons.md` on approval —
 e.g. `- Dispatch security ‖ test in one message; the last run serialized them.`

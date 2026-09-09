@@ -17,7 +17,7 @@ set -uo pipefail
 # This list MIRRORS `pipeline_tiers` in plugins/sdlc/config/models/claude.yaml (the
 # model registry / single source of truth) — keep the two in sync. The hook
 # keeps its own inline copy on purpose: a PreToolUse hook must fail-open fast.
-# It ALSO reads an OPTIONAL per-project override, <project>/.claude/model.local.json.
+# It ALSO reads an OPTIONAL per-project override, <project>/.sdlc/model.local.json.
 # Resolution mirrors the orchestrator: agents[<name>] → default → frontmatter tier.
 # A present-but-invalid value at a given source is SKIPPED (falls through to the
 # next source, it does NOT abort resolution). The hook MUST still fail open (fall
@@ -37,14 +37,14 @@ is_valid_tier() {
 # four copies of one map, and every place they disagreed was a defect.
 
 # Read the two OPTIONAL project-local tier candidates from
-# <project_root>/.claude/model.local.json: the per-agent value (agents[<name>])
+# <project_root>/.sdlc/model.local.json: the per-agent value (agents[<name>])
 # on line 1, the default value on line 2 (each empty if absent). Fails open —
 # prints nothing on any error: missing file, bad JSON, or no JSON parser.
 # Validation and fall-through are the caller's job (an invalid per-agent value
 # must fall through to default, matching the orchestrator's resolution order).
 resolve_override_candidates() {
     # $1 = project_root, $2 = bare agent name
-    local file="$1/.claude/model.local.json"
+    local file="$1/.sdlc/model.local.json"
     [ -f "$file" ] || return 0
     if command -v jq >/dev/null 2>&1; then
         jq -r --arg a "$2" '(.agents[$a] // ""), (.default // "")' "$file" 2>/dev/null
@@ -155,7 +155,7 @@ if [ -n "$override_per_agent" ]; then
     if is_valid_tier "$override_per_agent"; then
         override_tier="$override_per_agent"
     else
-        printf '[model-enforcement] ignoring invalid agents override "%s" for %s in .claude/model.local.json — falling through\n' \
+        printf '[model-enforcement] ignoring invalid agents override "%s" for %s in .sdlc/model.local.json — falling through\n' \
             "$override_per_agent" "$agent_name" >&2
     fi
 fi
@@ -163,7 +163,7 @@ if [ -z "$override_tier" ] && [ -n "$override_default" ]; then
     if is_valid_tier "$override_default"; then
         override_tier="$override_default"
     else
-        printf '[model-enforcement] ignoring invalid default override "%s" in .claude/model.local.json — using frontmatter "%s" for %s\n' \
+        printf '[model-enforcement] ignoring invalid default override "%s" in .sdlc/model.local.json — using frontmatter "%s" for %s\n' \
             "$override_default" "$tier" "$agent_name" >&2
     fi
 fi

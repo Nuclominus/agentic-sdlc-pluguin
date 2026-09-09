@@ -107,14 +107,14 @@ Declares `obra/superpowers` with `policy: warn`: if absent, the pipeline still r
 
 ## Project overrides
 
-The orchestrator honors a project-level `.claude/sdlc.local.yaml` (post-pipeline checks, phase command overrides, extra phase prompts, skipped phases, extra convention skills, and the `extensions.skills` Project Extension Manifest) — see [Configuration & Local Overrides](../../docs/CONFIGURATION.md#local-overrides).
+The orchestrator honors a project-level `.sdlc/sdlc.local.yaml` (post-pipeline checks, phase command overrides, extra phase prompts, skipped phases, extra convention skills, and the `extensions.skills` Project Extension Manifest) — see [Configuration & Local Overrides](../../docs/CONFIGURATION.md#local-overrides).
 
 ---
 
-## Project-local model tiers (`.claude/model.local.json`)
+## Project-local model tiers (`.sdlc/model.local.json`)
 
 Each project can override which model **tier** its SDLC agents run on, without editing any plugin.
-Create `<repo_root>/.claude/model.local.json` (or run `/sdlc:model-config`):
+Create `<repo_root>/.sdlc/model.local.json` (or run `/sdlc:model-config`):
 
 ```json
 {

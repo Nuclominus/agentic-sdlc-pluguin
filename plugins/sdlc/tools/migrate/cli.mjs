@@ -13,7 +13,10 @@
 
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadRenames, scanConfigs, applyRenames, renderReport } from "./migrate.mjs";
+import {
+  loadRenames, scanConfigs, applyRenames, renderReport,
+  scanLegacyLocation, applyLegacyMove, renderLegacyReport,
+} from "./migrate.mjs";
 
 const argv = process.argv.slice(2);
 const cmd = argv[0];
@@ -30,17 +33,27 @@ const pluginRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const projectRoot = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 
 try {
+  // The relocation runs FIRST on apply: renaming agent names inside a file that
+  // is about to move would rewrite the copy nothing reads, and leave the moved
+  // one stale. Order is not cosmetic here.
+  const legacy = scanLegacyLocation(projectRoot);
+  const moved = cmd === "apply" ? applyLegacyMove(projectRoot, legacy) : { moved: [], skipped: [] };
+
   const renames = loadRenames(pluginRoot);
   const findings = scanConfigs(projectRoot, renames);
   const applied = cmd === "apply" ? applyRenames(projectRoot, findings) : [];
 
   if (jsonOut) {
-    console.log(JSON.stringify({ ok: true, command: cmd, findings, changed_files: applied }));
+    console.log(JSON.stringify({
+      ok: true, command: cmd, findings, changed_files: applied,
+      legacy_location: legacy, moved_files: moved.moved, move_skipped: moved.skipped,
+    }));
   } else {
+    console.log(renderLegacyReport(legacy, { applied: cmd === "apply" }));
     console.log(renderReport(findings, { applied: cmd === "apply" }));
     if (cmd === "apply" && applied.length) console.log(`   files rewritten: ${applied.join(", ")}`);
   }
-  process.exit(cmd === "check" && findings.length ? 2 : 0);
+  process.exit(cmd === "check" && (findings.length || legacy.length) ? 2 : 0);
 } catch (e) {
   const msg = e && e.message ? e.message : String(e);
   if (jsonOut) console.log(JSON.stringify({ ok: false, command: cmd, error: msg }));

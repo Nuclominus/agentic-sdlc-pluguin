@@ -1,11 +1,11 @@
 ---
-description: Configure per-project model tiers for SDLC agents step-by-step — writes .claude/model.local.json. Sets a project-wide default first, then optional per-agent overrides. Validates against the registry tiers; merges idempotently; never clobbers existing config.
+description: Configure per-project model tiers for SDLC agents step-by-step — writes .sdlc/model.local.json. Sets a project-wide default first, then optional per-agent overrides. Validates against the registry tiers; merges idempotently; never clobbers existing config.
 argument-hint: "[--list]"
 ---
 
 # /sdlc:model-config
 
-Interactive helper to author `<repo_root>/.claude/model.local.json` — the per-project
+Interactive helper to author `<repo_root>/.sdlc/model.local.json` — the per-project
 reassignment of which model **tier** each SDLC agent dispatches on, **without editing any
 plugin**. Both the enforcement hook (`enforce-agent-model.sh`) and the orchestrator
 (`tools/resolve/profile.mjs` → `parseModelOverrides`, then Step 3b-3) resolve tiers as `agents[<bare-name>] → default → agent .md
@@ -14,7 +14,7 @@ frontmatter → sonnet`. This command only edits config — it never runs the pi
 ## What this command does
 
 1. **Repo root check.** `git rev-parse --show-toplevel` should match CWD; otherwise tell the
-   user to `cd` there. Target file: `<repo_root>/.claude/model.local.json`. Create `.claude/` if absent.
+   user to `cd` there. Target file: `<repo_root>/.sdlc/model.local.json`. Create `.claude/` if absent.
 
 2. **`--list` fast path.** If `$ARGUMENTS` contains `--list`: read the target file (if present)
    and print `default` plus the `agents` map as a table (`agent │ tier`). If the file is absent,
@@ -76,7 +76,7 @@ agents:
   business-analyst   → sonnet
   security-analyst   → opus
 
-Wrote: .claude/model.local.json
+Wrote: .sdlc/model.local.json
 
 Next:
   /sdlc:start "<feature>"      # agents dispatch on these tiers (hook + orchestrator agree)
@@ -84,7 +84,7 @@ Next:
 
 ## Hard rules
 
-- **Non-destructive.** Merge into the existing `.claude/model.local.json`; never overwrite or drop
+- **Non-destructive.** Merge into the existing `.sdlc/model.local.json`; never overwrite or drop
   unrelated keys. Same agent ⇒ update in place, never duplicate.
 - **Tiers from the registry only.** Valid values are `pipeline_tiers` from `models.json`
   (`opus|sonnet|haiku|fable`) — never invent a tier.

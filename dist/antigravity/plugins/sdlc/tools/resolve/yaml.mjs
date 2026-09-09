@@ -3,7 +3,7 @@
 // WHY THIS EXISTS: the plugin has no package.json and no node_modules, so the dev/CI
 // dependency on the `yaml` package cannot come along (see ./fsglob.mjs for the same story
 // about tinyglobby). The resolve command must read manifests, workflow recipes,
-// config/aspects.yaml and the USER-AUTHORED .claude/sdlc.local.yaml at runtime.
+// config/aspects.yaml and the USER-AUTHORED .sdlc/sdlc.local.yaml at runtime.
 //
 // WHAT KEEPS IT HONEST: this file is not trusted on the grounds that it looks right. Every
 // YAML file in the repository, plus fixtures capturing the shapes found in real consumer
@@ -242,7 +242,7 @@ function nextMeaningful(lines, i) {
  * Found by the parity gate on a real `.gitlab-ci.yml`:
  *     - firebase appdistribution:distribute builds/x.aab
  *       --app "$APP_ID"
- * Ordinary YAML that a user can just as easily write in `.claude/sdlc.local.yaml`.
+ * Ordinary YAML that a user can just as easily write in `.sdlc/sdlc.local.yaml`.
  */
 function foldPlainContinuation(lines, start, ownerIndent, firstText) {
   // Only a PLAIN scalar continues. A quoted scalar or a flow collection that appears to run

@@ -44,7 +44,7 @@ test("a bare marker with no stated reason does not suppress", () => {
 });
 
 test("a project-relative .claude path is not a violation", () => {
-  assert.equal(scanPluginText("Write `<project>/.claude/sdlc.local.yaml`.\n").ok, true);
+  assert.equal(scanPluginText("Write `<project>/.sdlc/sdlc.local.yaml`.\n").ok, true);
 });
 
 test("the orchestrator must reference the contract and resolve from CLAUDE_PLUGIN_ROOT", () => {

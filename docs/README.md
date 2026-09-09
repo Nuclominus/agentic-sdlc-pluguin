@@ -9,7 +9,7 @@ for the overview and quickstart; the pages below go deep on each topic.
 | 🎬 [WALKTHROUGH.md](WALKTHROUGH.md) | A full end-to-end Android pipeline run, phase by phase, on a real task. |
 | 🧭 [RECIPES.md](RECIPES.md) | Dynamic workflow recipes — built-in recipes, control-flow shapes, selection precedence, auto-selection, and custom / project-local recipes. |
 | 💰 [COST-AND-MODELS.md](COST-AND-MODELS.md) | Model-tier enforcement, cost optimization (`model` + `effort`), dry-run & cost caps, and run reports / cross-run rollup / AAR. |
-| ⚙️ [CONFIGURATION.md](CONFIGURATION.md) | Per-project configuration — `.claude/sdlc.local.yaml` local overrides and the Project Extension Manifest. |
+| ⚙️ [CONFIGURATION.md](CONFIGURATION.md) | Per-project configuration — `.sdlc/sdlc.local.yaml` local overrides and the Project Extension Manifest. |
 | 📦 [INSTALLATION.md](INSTALLATION.md) | Step-by-step installation, optional dependencies, and requirements. |
 
 **Related, elsewhere in the repo:**

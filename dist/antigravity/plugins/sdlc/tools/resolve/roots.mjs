@@ -21,6 +21,31 @@ import { dirname, join } from "node:path";
 
 const CACHE_MARKER = "/plugins/cache/";
 
+/**
+ * The project-local directory the SDLC owns: `<project>/.sdlc/`.
+ *
+ * It used to be `<project>/.claude/`, which was never right and became visibly
+ * wrong once the pipeline ran on other CLIs — the marketplace was parking its
+ * own files in another tool's directory, and on a Gemini or Codex host that
+ * directory may not exist or may belong to a tool the project does not use.
+ *
+ * One directory, not one per host: the content here is host-neutral. Extensions,
+ * skill mappings, agent bindings, cost caps and tier tags mean the same thing
+ * everywhere (ADR-0022 §6 keeps tier tags untranslated across hosts), so a
+ * per-host copy would be the same fact in two places — the drift shape the model
+ * registry split was corrected to avoid.
+ *
+ * There is NO fallback to the old location. An alias layer is what ADR-0021 §5
+ * deleted after six defects; a project's files are migrated once, visibly, with
+ * the user's approval (tools/migrate), and everything downstream reads one
+ * spelling. What the resolver does instead is NOTICE the old directory and say
+ * so, because silently ignoring a cost cap the user set is worse than either.
+ */
+export const PROJECT_DIR = ".sdlc";
+
+/** The directory this project's SDLC config lives in. */
+export const projectDir = (cwd) => join(cwd, PROJECT_DIR);
+
 function readJson(file) {
   try { return JSON.parse(readFileSync(file, "utf8")); } catch { return null; }
 }

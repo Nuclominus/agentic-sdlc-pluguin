@@ -51,7 +51,7 @@ export function resolveCostCap({ recipe, workflowName, costCaps = {} } = {}) {
 export function renderCapOverridePrint({ cost_cap, cost_cap_source }, recipe) {
   if (cost_cap_source === "recipe") return null;
   const was = typeof recipe?.caps?.max_total_cost_usd === "number" ? recipe.caps.max_total_cost_usd : "none";
-  return `🔧 Cost cap overridden by .claude/sdlc.local.yaml: ${cost_cap ?? "none (uncapped)"} (was ${was}) — via ${cost_cap_source}`;
+  return `🔧 Cost cap overridden by .sdlc/sdlc.local.yaml: ${cost_cap ?? "none (uncapped)"} (was ${was}) — via ${cost_cap_source}`;
 }
 
 /** Price one dispatch's baseline with the registry's own rates — the usage.mjs formula. */
@@ -238,7 +238,7 @@ export function renderDryRun({ estimate: est, slots, stack, workflow, autoselect
   });
   lines.push(`Skip-rules applied: ${skipRules.length ? skipRules.map((s) => s.rule).join(", ") : "none"}`);
   if (healBlocks > 0 && !healEnabled) {
-    lines.push(`⚙ Healing inactive on this stack — ${healBlocks} guarded phase(s) carry a heal: block, but the active profile supplies no heal_checks. Set heal_checks in .claude/sdlc.local.yaml to enable it.`);
+    lines.push(`⚙ Healing inactive on this stack — ${healBlocks} guarded phase(s) carry a heal: block, but the active profile supplies no heal_checks. Set heal_checks in .sdlc/sdlc.local.yaml to enable it.`);
   }
   const anyPriced = est.priced_rows > 0;
   lines.push(est.fully_priced

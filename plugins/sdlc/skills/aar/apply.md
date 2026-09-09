@@ -12,7 +12,7 @@ to apply (e.g. by number). Nothing happens to unselected items.
 ### Tier 1 — Lessons (low-risk, always offered)
 
 For each approved lesson candidate: append the one-line lesson to
-`.claude/sdlc-lessons.md` (create the file with a `# SDLC lessons` header if
+`.sdlc/sdlc-lessons.md` (create the file with a `# SDLC lessons` header if
 absent). Keep lines short and imperative; do not duplicate an existing line.
 This file is injected verbatim into every future phase's prompt.
 

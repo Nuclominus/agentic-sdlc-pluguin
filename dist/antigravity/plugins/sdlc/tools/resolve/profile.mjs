@@ -362,7 +362,7 @@ export function renderSkillsBlock(agent, {
     for (const r of rows) lines.push(`- \`${r.skill}\` (${r.policy})${r.when ? ` — ${r.when}` : ""}`);
     return lines.join("\n");
   }
-  const lines = ["Skills for this role (from the active stack profile and this project's .claude/sdlc.local.yaml):"];
+  const lines = ["Skills for this role (from the active stack profile and this project's .sdlc/sdlc.local.yaml):"];
   for (const r of rows) {
     const when = r.when ? ` — ${r.when}` : "";
     lines.push(r.policy === "mandatory"
@@ -471,7 +471,7 @@ export function applyLocalOverrides(profile, local, opts = {}) {
   };
   if (local == null) return { profile: next, warnings, applied };
   if (!isPlainObject(local)) {
-    warnings.push("⚠️ .claude/sdlc.local.yaml is not a mapping. Continuing with plugin defaults.");
+    warnings.push("⚠️ .sdlc/sdlc.local.yaml is not a mapping. Continuing with plugin defaults.");
     return { profile: next, warnings, applied };
   }
 
@@ -559,7 +559,7 @@ export function renderStackPrint(stack) {
 export function renderOverridesPrint(applied) {
   const keys = Object.keys(applied ?? {});
   if (keys.length === 0) return null;
-  return ["🔧 Local overrides applied from .claude/sdlc.local.yaml:", ...keys.map((k) => `   ${k}: ${applied[k]}`)].join("\n");
+  return ["🔧 Local overrides applied from .sdlc/sdlc.local.yaml:", ...keys.map((k) => `   ${k}: ${applied[k]}`)].join("\n");
 }
 
 /**
@@ -574,33 +574,33 @@ export function parseModelOverrides(raw, { validTiers = DEFAULT_TIERS, knownAgen
   const empty = { overrides: {}, warnings };
   if (raw == null) return empty;
   if (!isPlainObject(raw)) {
-    warnings.push("⚠️ Failed to parse .claude/model.local.json: not an object. Continuing with agent frontmatter tiers.");
+    warnings.push("⚠️ Failed to parse .sdlc/model.local.json: not an object. Continuing with agent frontmatter tiers.");
     return empty;
   }
   const out = {};
   if (raw.default !== undefined) {
     if (!validTiers.includes(raw.default)) {
-      warnings.push(`⚠️ Failed to parse .claude/model.local.json: unknown tier '${raw.default}'. Continuing with agent frontmatter tiers.`);
+      warnings.push(`⚠️ Failed to parse .sdlc/model.local.json: unknown tier '${raw.default}'. Continuing with agent frontmatter tiers.`);
       return empty;
     }
     out.default = raw.default;
   }
   if (raw.agents !== undefined) {
     if (!isPlainObject(raw.agents)) {
-      warnings.push("⚠️ Failed to parse .claude/model.local.json: 'agents' is not an object. Continuing with agent frontmatter tiers.");
+      warnings.push("⚠️ Failed to parse .sdlc/model.local.json: 'agents' is not an object. Continuing with agent frontmatter tiers.");
       return empty;
     }
     const agents = {};
     for (const [agent, tier] of Object.entries(raw.agents)) {
       if (!validTiers.includes(tier)) {
-        warnings.push(`⚠️ Failed to parse .claude/model.local.json: unknown tier '${tier}' for '${agent}'. Continuing with agent frontmatter tiers.`);
+        warnings.push(`⚠️ Failed to parse .sdlc/model.local.json: unknown tier '${tier}' for '${agent}'. Continuing with agent frontmatter tiers.`);
         return empty;
       }
       // An unknown agent NAME is a no-op entry, not a corrupt file: it cannot mis-tier anything,
       // so it is dropped and reported rather than failing the whole map closed the way a bad tier
       // does. Never translated — see parseExtensionSkills and ADR-0021.
       if (knownAgents && knownAgents.size && !knownAgents.has(agent)) {
-        warnings.push(`WARN: .claude/model.local.json names unknown agent '${agent}' — no agent by that name is dispatched; run /sdlc:doctor to migrate this file`);
+        warnings.push(`WARN: .sdlc/model.local.json names unknown agent '${agent}' — no agent by that name is dispatched; run /sdlc:doctor to migrate this file`);
         continue;
       }
       agents[agent] = tier;
@@ -613,7 +613,7 @@ export function parseModelOverrides(raw, { validTiers = DEFAULT_TIERS, knownAgen
 /** The verbatim 1b-models block. */
 export function renderModelPrint(overrides) {
   if (!overrides || (overrides.default === undefined && Object.keys(overrides.agents ?? {}).length === 0)) return null;
-  const lines = ["🔧 Model tier overrides loaded from .claude/model.local.json:", `   default: ${overrides.default ?? "(none)"}`];
+  const lines = ["🔧 Model tier overrides loaded from .sdlc/model.local.json:", `   default: ${overrides.default ?? "(none)"}`];
   for (const [agent, tier] of Object.entries(overrides.agents ?? {})) lines.push(`   ${agent}: ${tier}`);
   return lines.join("\n");
 }

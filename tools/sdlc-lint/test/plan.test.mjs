@@ -123,8 +123,8 @@ function world({ localYaml = null, modelJson = null, recipe = null, roleExpertis
   });
 
   write(join(proj, "marker.txt"), "detect me\n");
-  if (localYaml) write(join(proj, ".claude", "sdlc.local.yaml"), localYaml);
-  if (modelJson) write(join(proj, ".claude", "model.local.json"), modelJson);
+  if (localYaml) write(join(proj, ".sdlc", "sdlc.local.yaml"), localYaml);
+  if (modelJson) write(join(proj, ".sdlc", "model.local.json"), modelJson);
 
   const g = (...a) => execFileSync("git", a, { cwd: proj, stdio: "ignore" });
   g("init", "-q", "-b", "main");
@@ -268,7 +268,7 @@ test("every warning reaches prints[], because prints[] is the orchestrator's onl
   const w = world({ localYaml: "post_pipeline_checks:\n\t- broken tab\n" });
   try {
     const { plan, prints, warnings } = resolvePlan({ cwd: w.proj, args: "", env: w.env });
-    const parseWarning = warnings.find((x) => x.includes("Failed to parse .claude/sdlc.local.yaml"));
+    const parseWarning = warnings.find((x) => x.includes("Failed to parse .sdlc/sdlc.local.yaml"));
     assert.ok(parseWarning, "the unparseable override file is reported");
     assert.ok(prints.includes(parseWarning), "and it is in the channel that actually reaches the user");
     assert.deepEqual(plan.profile.post_pipeline_checks, ["echo plugin-check"], "the run continues on plugin defaults");
@@ -522,5 +522,37 @@ test("the orchestrator's 0-large jq projection names only real plan keys", () =>
     }
     // The exclusion is the point of the projection: the blocks are read one agent at a time.
     assert.ok(!projected.includes("prompt_blocks"));
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+
+test("config left in the pre-rename location is reported, not read", () => {
+  // The rename to <project>/.sdlc/ ships with no fallback read, on purpose —
+  // an alias layer is the shape ADR-0021 §5 deleted after six defects. But a
+  // silent rename is its own defect: this cap would simply stop applying and
+  // the run would look normal. So the old location is NOTICED and named, and
+  // the value is still not read from it.
+  const w = world();
+  try {
+    write(join(w.proj, ".claude", "sdlc.local.yaml"), "cost_caps:\n  '*': 0.5\n");
+    const { plan, warnings, prints } = resolvePlan({ cwd: w.proj, args: "", env: w.env });
+
+    const hit = warnings.filter((x) => /still in the old location/.test(x));
+    assert.equal(hit.length, 1, `the stale file was not reported: ${JSON.stringify(warnings)}`);
+    assert.match(hit[0], /\.claude\/sdlc\.local\.yaml/);
+    assert.match(hit[0], /sdlc-doctor/);
+    assert.ok(prints.some((x) => /still in the old location/.test(x)), "prints[] is the orchestrator's only obligation");
+
+    assert.equal(plan.cost_cap, 20, "the override was read from a location nothing reads any more");
+    assert.equal(plan.cost_cap_source, "recipe");
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("a project with no legacy files says nothing about them", () => {
+  const w = world({ localYaml: "cost_caps:\n  '*': 2\n" });
+  try {
+    const { plan, warnings } = resolvePlan({ cwd: w.proj, args: "", env: w.env });
+    assert.equal(warnings.filter((x) => /old location/.test(x)).length, 0);
+    assert.equal(plan.cost_cap, 2, "the new location IS read");
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });

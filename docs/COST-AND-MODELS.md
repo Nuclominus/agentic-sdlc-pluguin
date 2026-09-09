@@ -107,7 +107,7 @@ above the cap while `cap_status` is `within` — size recipe caps against phase 
 
 **Every shipped recipe declares a cap** (a lint test enforces it). An absent cap does not mean
 "generous" — it makes the gate skip entirely, which is how the default pipeline ran ungated before
-these were added. Project-local recipes under `.claude/sdlc-workflows/` may still opt out.
+these were added. Project-local recipes under `.sdlc/sdlc-workflows/` may still opt out.
 
 | recipe | cap | recipe | cap |
 |---|---|---|---|
@@ -130,12 +130,12 @@ in a comment. Two deliberate choices worth knowing when you tune one:
 
 A cap is a **runaway stopper, not a budget**. Sized below a recipe's median run it becomes a
 tripwire that fires every time and trains people to click through it. If a workflow should cost
-less, constrain the work — fewer phases, cheaper tiers via `.claude/model.local.json` — and let the
+less, constrain the work — fewer phases, cheaper tiers via `.sdlc/model.local.json` — and let the
 cap follow the measurement.
 
 #### Changing a cap for one project
 
-Add a `cost_caps` block to `.claude/sdlc.local.yaml`:
+Add a `cost_caps` block to `.sdlc/sdlc.local.yaml`:
 
 ```yaml
 cost_caps:
@@ -152,7 +152,7 @@ HTML report labels an overridden cap as **(project override)** so it is never mi
 shipped default. A run announces the override on startup:
 
 ```
-🔧 Cost cap overridden by .claude/sdlc.local.yaml: $8.00 (was $16.50) — via project:android-feature
+🔧 Cost cap overridden by .sdlc/sdlc.local.yaml: $8.00 (was $16.50) — via project:android-feature
 ```
 
 An unusable value (string, negative, nested object) is dropped with a `WARN` and the recipe's own
@@ -160,7 +160,7 @@ cap applies — a malformed override never halts a run. An entry naming a recipe
 silently ignored, not an error.
 
 The older alternative still works and remains the right tool when you want to change *more* than the
-cap: a project-local recipe at `.claude/sdlc-workflows/<name>.yaml` shadows the plugin recipe of the
+cap: a project-local recipe at `.sdlc/sdlc-workflows/<name>.yaml` shadows the plugin recipe of the
 same name entirely (author one with `/sdlc:workflow-config`). Prefer `cost_caps` for a cap alone —
 shadowing means duplicating the phase list, `heal:` and `loop:` blocks, and your copy stops
 receiving upstream recipe updates.
@@ -183,6 +183,6 @@ tokens.
 
 **`/sdlc:aar` — After Action Review.** Reviews a completed run (token cost + how the agents
 cooperated) from its telemetry + session transcript, proposes improvements, and — only on your
-approval — appends curated lessons to `.claude/sdlc-lessons.md`. The orchestrator injects those
+approval — appends curated lessons to `.sdlc/sdlc-lessons.md`. The orchestrator injects those
 lessons into later runs' phase prompts (cache-safe, in the stable prefix), closing a lightweight
 learning loop.

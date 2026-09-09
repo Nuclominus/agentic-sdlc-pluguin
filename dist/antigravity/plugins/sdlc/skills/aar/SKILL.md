@@ -66,7 +66,7 @@ Then run the approval + apply loop defined in `apply.md`:
 
 - The user multi-selects which findings to apply.
 - For each approved finding, follow the tiered gate in `apply.md`.
-- Lessons the user approves are appended to `.claude/sdlc-lessons.md`.
+- Lessons the user approves are appended to `.sdlc/sdlc-lessons.md`.
 
 ## Contracts
 

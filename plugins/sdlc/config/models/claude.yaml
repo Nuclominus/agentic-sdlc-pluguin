@@ -10,7 +10,7 @@
 # exist at its runtime.
 #
 # `tag` is the short alias used in agent `.md` frontmatter (`model: <tag>`) and in
-# `.claude/model.local.json`. `model_id` is the real provider string, used both to invoke
+# `.sdlc/model.local.json`. `model_id` is the real provider string, used both to invoke
 # the model and for telemetry. `pricing` is USD per million tokens and is authoritative
 # for cost accounting — the pipeline reads it from here and never restates a rate
 # elsewhere. A model with no `pricing` yields `cost_usd: null`, never 0.

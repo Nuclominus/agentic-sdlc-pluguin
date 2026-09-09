@@ -49,7 +49,7 @@ The README is the front door; each topic has a focused page under [`docs/`](docs
 | 🎬 **End-to-end run** — a full Android pipeline, phase by phase | [`docs/WALKTHROUGH.md`](docs/WALKTHROUGH.md) |
 | 🧭 **Workflow recipes** — built-in recipes, control-flow shapes, auto-selection, custom & project-local recipes | [`docs/RECIPES.md`](docs/RECIPES.md) |
 | 💰 **Cost & models** — model-tier enforcement, `model`+`effort`, dry-run & caps, reports/rollup/AAR | [`docs/COST-AND-MODELS.md`](docs/COST-AND-MODELS.md) |
-| ⚙️ **Configuration** — `.claude/sdlc.local.yaml` overrides + Project Extension Manifest | [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) |
+| ⚙️ **Configuration** — `.sdlc/sdlc.local.yaml` overrides + Project Extension Manifest | [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) |
 | 📦 **Installation** — step-by-step install, optional deps, requirements | [`docs/INSTALLATION.md`](docs/INSTALLATION.md) |
 | 🤝 **Contributing** — authoring a foundation or framework plugin | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 
@@ -81,7 +81,7 @@ The full board — every track, status and landing PR — is generated from the 
 
 | Command                         | Purpose                                                            |
 | ------------------------------- | ------------------------------------------------------------------ |
-| `/sdlc:init`                    | Detect platform(s), scaffold `.claude/sdlc.local.yaml`, optionally seed `CLAUDE.md` |
+| `/sdlc:init`                    | Detect platform(s), scaffold `.sdlc/sdlc.local.yaml`, optionally seed `CLAUDE.md` |
 | `/sdlc:extension [--list]`      | Author the Project Extension Manifest step-by-step (per-agent Skill mappings)       |
 | `/sdlc:start "feature"`         | Run the pipeline (auto-selects the profile's workflow)             |
 | `/sdlc:batch "task1" "task2"`   | Run pipelines in parallel for multiple tasks (isolated worktrees)  |

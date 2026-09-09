@@ -24,7 +24,7 @@ current project, and recipes shipped across **all installed plugins** (the same 
 used for `manifest.yaml` and `runtime-dependencies.json`). Glob both:
 
 ```text
-<project>/.claude/sdlc-workflows/{WORKFLOW_NAME}.yaml   # project-local (highest precedence)
+<project>/.sdlc/sdlc-workflows/{WORKFLOW_NAME}.yaml   # project-local (highest precedence)
 {PLUGIN_CACHE_ROOT}/**/workflows/{WORKFLOW_NAME}.yaml   # all plugins (core + platform)
 ```
 
@@ -34,7 +34,7 @@ resolve it per `plugins/sdlc/PLUGIN-PATHS.md` (orchestrator Step 0) before globb
 The plugin glob covers core (`sdlc/workflows/`) and every plugin that ships a `workflows/` directory
 (e.g. `<platform>-plugin/workflows/<recipe>.yaml`). Resolution:
 
-- **Project-local recipe present** (`<project>/.claude/sdlc-workflows/{WORKFLOW_NAME}.yaml` exists) →
+- **Project-local recipe present** (`<project>/.sdlc/sdlc-workflows/{WORKFLOW_NAME}.yaml` exists) →
   **use it**, and it **shadows** any plugin recipe of the same name. This is intentional per-project
   overriding, **not** an ambiguity halt — the project wins.
 - **No project recipe, exactly one plugin match** → use the plugin recipe.
@@ -45,7 +45,7 @@ The plugin glob covers core (`sdlc/workflows/`) and every plugin that ships a `w
 ❌ Workflow '{WORKFLOW_NAME}' is ambiguous — defined in multiple plugins:
    {list each matching path}
    Rename one, or pass --workflow= with a unique name.
-   (A project-local <project>/.claude/sdlc-workflows/{WORKFLOW_NAME}.yaml would override both.)
+   (A project-local <project>/.sdlc/sdlc-workflows/{WORKFLOW_NAME}.yaml would override both.)
 ```
 
 - Workflow names should be unique across the marketplace. Core recipe names
@@ -59,9 +59,9 @@ If no file is found → **HALT**:
 
 ```text
 ❌ Workflow '{WORKFLOW_NAME}' not found.
-   Searched: <project>/.claude/sdlc-workflows/{WORKFLOW_NAME}.yaml
+   Searched: <project>/.sdlc/sdlc-workflows/{WORKFLOW_NAME}.yaml
              {PLUGIN_CACHE_ROOT}/**/workflows/{WORKFLOW_NAME}.yaml
-   Available: {list all *.yaml found via Glob of <project>/.claude/sdlc-workflows/*.yaml
+   Available: {list all *.yaml found via Glob of <project>/.sdlc/sdlc-workflows/*.yaml
               AND **/workflows/, excluding test-fixtures/ — annotate project-local ones as "(project)"}
    Omit --workflow=NAME to use the default workflow.
 ```

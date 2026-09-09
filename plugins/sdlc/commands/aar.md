@@ -14,5 +14,5 @@ The skill: resolves the run + session transcript, computes the deterministic
 metrics dashboard (`tools/aar/metrics.mjs`), dispatches a READ-ONLY analyst
 (`aar-analyst`, carrying the active stack's `role_expertise` block), presents the
 findings, writes a durable `docs/plans/{slug}/_aar.md`, and applies only what you
-approve — appending curated lessons to `.claude/sdlc-lessons.md`. Never automatic;
+approve — appending curated lessons to `.sdlc/sdlc-lessons.md`. Never automatic;
 no auto-apply.

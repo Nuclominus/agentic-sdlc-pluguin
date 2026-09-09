@@ -203,12 +203,20 @@ shape: a Claude-only mechanism presented as active on a host that has none of it
    a fixture with no third-party plugins installed. A synthesized replacement for a host facility
    must be checked against what the real one admitted, not only against what the new code needs.
 
-**Deliberately not changed:** `.claude/sdlc.local.yaml`, `.claude/model.local.json` and
+**Then changed, on the operator's call:** those files moved to `<project>/.sdlc/`
+([[decisions/ADR-0023-the-project-sdlc-directory-is-ours]]) — one host-neutral directory, no
+fallback read, migrated once by `/sdlc-doctor`, with the old location noticed and reported on every
+run so a cost cap left behind cannot silently stop capping. The reasoning below is why it is ONE
+directory rather than one per host, which was the original proposal:
+
+**Why not per-host:** `.claude/sdlc.local.yaml`, `.claude/model.local.json` and
 `.claude/sdlc-workflows/`. Those are the SDLC's own files parked in the host's directory, not the
 host's files, and their content is host-neutral — extensions, skill mappings, agent bindings, tier
 tags (ADR-0022 §6 keeps tier tags untranslated across hosts). A per-host copy would put the same fact
 in two places, which is the drift shape the registry split was corrected to avoid. Where they should
-live is a rename with a doctor-migration story, and that is a decision, not a side effect.
+live was a rename with a doctor-migration story, and it is now ADR-0023. Note the pair with the
+model-registry split, which went the other way: **split what differs per host, share what does
+not.** Prices differ per provider and were split; a cost cap does not and is shared.
 
 Worth naming as a pattern: **seven of the nine defects in this phase were a Claude-only mechanism
 reading as present on a foreign host, and none of them threw.** `emit --check`, `agy plugin

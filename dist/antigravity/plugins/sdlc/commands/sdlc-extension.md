@@ -1,12 +1,12 @@
 ---
-description: Author the Project Extension Manifest step-by-step — add per-agent Skill mappings to .claude/sdlc.local.yaml interactively. Validates skill/agent names; merges idempotently; never clobbers existing config.
+description: Author the Project Extension Manifest step-by-step — add per-agent Skill mappings to .sdlc/sdlc.local.yaml interactively. Validates skill/agent names; merges idempotently; never clobbers existing config.
 argument-hint: "[--list]"
 ---
 
 # /sdlc:extension
 
 Interactive helper to build the **Project Extension Manifest** — the `extensions.skills` block in
-`.claude/sdlc.local.yaml` that attaches Skills to agents **without editing any plugin**. The
+`.sdlc/sdlc.local.yaml` that attaches Skills to agents **without editing any plugin**. The
 orchestrator injects these into pipeline phase agents (Step 3b-1a) and on-demand agents self-read
 them; see the root README "Project Extension Manifest". This command only edits config — it never
 runs the pipeline.
@@ -14,7 +14,7 @@ runs the pipeline.
 ## What this command does
 
 1. **Repo root check.** `git rev-parse --show-toplevel` should match CWD; otherwise tell the user to
-   `cd` there. Note the target file: `<repo_root>/.claude/sdlc.local.yaml`. Create `.claude/` if absent.
+   `cd` there. Note the target file: `<repo_root>/.sdlc/sdlc.local.yaml`. Create `.claude/` if absent.
 
 2. **`--list` fast path.** If `$ARGUMENTS` contains `--list`: read the target file (if present), print
    the current `extensions.skills` rows as a table (`skill │ agents │ policy │ when`), and stop. If the
@@ -82,7 +82,7 @@ Added mapping:
   when:    before writing production code
   policy:  mandatory
 
-Wrote: .claude/sdlc.local.yaml  (extensions.skills: 1 row total)
+Wrote: .sdlc/sdlc.local.yaml  (extensions.skills: 1 row total)
 
 Current extensions.skills:
   skill                                     │ agents              │ policy      │ when
@@ -94,7 +94,7 @@ Next:
 
 ## Hard rules
 
-- **Non-destructive.** Merge into the existing `.claude/sdlc.local.yaml`; never overwrite or drop
+- **Non-destructive.** Merge into the existing `.sdlc/sdlc.local.yaml`; never overwrite or drop
   unrelated keys/comments. Same `skill`+`agents` ⇒ update in place, never duplicate.
 - **Generic only.** This writes the platform-neutral `extensions.skills` schema — no platform-specific
   knowledge. Any installed plugin's skills/agents are valid targets.

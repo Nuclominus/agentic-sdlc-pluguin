@@ -1,6 +1,6 @@
 # ⚙️ Configuration & Local Overrides
 
-Adapt the pipeline to a project **without editing any plugin**, via a `.claude/sdlc.local.yaml` at
+Adapt the pipeline to a project **without editing any plugin**, via a `.sdlc/sdlc.local.yaml` at
 the project root.
 
 > See also: [Workflow Recipes](RECIPES.md) for project-local workflow files, and
@@ -50,7 +50,7 @@ fully-qualified Skill ids (`<plugin>:<skill>`) to the agents that should invoke 
 - **Agent names are used exactly as written.** Nothing translates a renamed agent at runtime
   (ADR-0021), so a row naming an agent this marketplace no longer ships targets nothing. Every run
   reports such a row, and **`/sdlc:doctor`** finds them across both config files and rewrites them
-  in place once you approve. The same applies to `agents{}` keys in `.claude/model.local.json`.
+  in place once you approve. The same applies to `agents{}` keys in `.sdlc/model.local.json`.
 
 Run **`/sdlc:extension`** to author these mappings step-by-step (it discovers installed agents/skills,
 validates your picks, and merges idempotently), or **`/sdlc:extension --list`** to review the current

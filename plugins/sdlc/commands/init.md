@@ -1,5 +1,5 @@
 ---
-description: Initialize SDLC config for this project — detect the winning stack profile(s), scaffold .claude/sdlc.local.yaml, and optionally seed CLAUDE.md. Idempotent; never overwrites existing config.
+description: Initialize SDLC config for this project — detect the winning stack profile(s), scaffold .sdlc/sdlc.local.yaml, and optionally seed CLAUDE.md. Idempotent; never overwrites existing config.
 argument-hint: "[--seed-claude-md]"
 ---
 
@@ -13,14 +13,14 @@ One-time project setup. Detects the platform(s), writes a starter local-override
 
 2. **Detect stack profiles.** Reuse Steps 0 and 0b from `pipeline-orchestrator/SKILL.md`: resolve `{PLUGIN_CACHE_ROOT}` (per `plugins/sdlc/PLUGIN-PATHS.md`), `Glob {PLUGIN_CACHE_ROOT}/**/manifest.yaml`, split by `kind`, evaluate each `kind: foundation` profile's `detect` rules against the project, resolve the winner per aspect + the PRIMARY profile. Print them and the PRIMARY profile's declared default `workflow:` (if any).
 
-3. **Scaffold `.claude/sdlc.local.yaml` — IF ABSENT.** Never overwrite an existing file (print `exists — left untouched` and skip). When creating, write a commented starter template with the generic override fields and the detected default workflow noted:
+3. **Scaffold `.sdlc/sdlc.local.yaml` — IF ABSENT.** Never overwrite an existing file (print `exists — left untouched` and skip). When creating, write a commented starter template with the generic override fields and the detected default workflow noted:
 
    ```yaml
    # SDLC project overrides (generic — read by pipeline-orchestrator).
    # Uncomment and edit only what you need; delete the rest.
 
    # active_workflow: android-feature      # detected default for the PRIMARY profile; overrides the profile's declared workflow
-   # Project-local recipes: drop custom workflow YAMLs in .claude/sdlc-workflows/<name>.yaml
+   # Project-local recipes: drop custom workflow YAMLs in .sdlc/sdlc-workflows/<name>.yaml
    # (they shadow plugin recipes of the same name). Author them with /sdlc:workflow-config.
 
    # post_pipeline_checks:                 # REPLACES the profile's defaults entirely
@@ -63,7 +63,7 @@ Stack profiles:
   also installed: vanilla (0)
 
 Wrote:
-  ✅ .claude/sdlc.local.yaml  (starter template)
+  ✅ .sdlc/sdlc.local.yaml  (starter template)
   ⏭️  CLAUDE.md                (not requested — pass --seed-claude-md)
 
 Next:
@@ -72,16 +72,16 @@ Next:
   /sdlc:start "Add a settings screen with a dark-mode toggle"
 ```
 
-If `.claude/sdlc.local.yaml` already exists:
+If `.sdlc/sdlc.local.yaml` already exists:
 
 ```
 Wrote:
-  ⏭️  .claude/sdlc.local.yaml  (exists — left untouched)
+  ⏭️  .sdlc/sdlc.local.yaml  (exists — left untouched)
 ```
 
 ## Hard rules
 
-- **Idempotent.** Create-if-absent only. Never overwrite `.claude/sdlc.local.yaml`; never clobber `CLAUDE.md` content outside the managed block.
+- **Idempotent.** Create-if-absent only. Never overwrite `.sdlc/sdlc.local.yaml`; never clobber `CLAUDE.md` content outside the managed block.
 - **Generic only.** The scaffolded file uses the platform-neutral override fields — no platform-specific block. Platform specifics are detected at runtime by the platform agents.
 - **No pipeline run.** This command only scaffolds and reports; it does not invoke `/sdlc:start`.
 - **Reuse, don't reimplement.** Detection delegates to `tools/resolve/detect.mjs` (`resolveStack`),

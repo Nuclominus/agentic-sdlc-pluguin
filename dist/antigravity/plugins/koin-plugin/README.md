@@ -38,7 +38,7 @@ dependency: io.insert-koin        # covers koin-core, koin-android, koin-android
 The hosting **foundation** owns where and in what order to look (it declares `framework_detection`; the
 orchestrator executes the search) — **version catalog first** (`gradle/libs.versions.toml`), then module
 build files (`**/build.gradle*`, gitignore-aware) as a fallback. Override per project in
-`.claude/sdlc.local.yaml`:
+`.sdlc/sdlc.local.yaml`:
 
 ```yaml
 frameworks:

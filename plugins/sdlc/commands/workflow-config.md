@@ -1,12 +1,12 @@
 ---
-description: Author a PROJECT-LOCAL workflow recipe step-by-step — writes .claude/sdlc-workflows/<name>.yaml. Prompts for phases (plain / parallel / loop), optional match rules and cost caps. Validates against schemas/workflow.schema.json; idempotent; never clobbers unrelated files.
+description: Author a PROJECT-LOCAL workflow recipe step-by-step — writes .sdlc/sdlc-workflows/<name>.yaml. Prompts for phases (plain / parallel / loop), optional match rules and cost caps. Validates against schemas/workflow.schema.json; idempotent; never clobbers unrelated files.
 argument-hint: "[--list]"
 ---
 
 # /sdlc:workflow-config
 
 Interactive helper to author a **project-local workflow recipe** at
-`<repo_root>/.claude/sdlc-workflows/<name>.yaml` — a per-project pipeline definition that the
+`<repo_root>/.sdlc/sdlc-workflows/<name>.yaml` — a per-project pipeline definition that the
 orchestrator discovers with **highest precedence** (a project recipe **shadows** any plugin recipe
 of the same name; see `plugins/sdlc/workflows/RESOLVER.md` Step 1). This command only edits config —
 it never runs the pipeline.
@@ -14,16 +14,16 @@ it never runs the pipeline.
 ## What this command does
 
 1. **Repo root check.** `git rev-parse --show-toplevel` should match CWD; otherwise tell the user to
-   `cd` there. Target directory: `<repo_root>/.claude/sdlc-workflows/`. Create it if absent.
+   `cd` there. Target directory: `<repo_root>/.sdlc/sdlc-workflows/`. Create it if absent.
 
-2. **`--list` fast path.** If `$ARGUMENTS` contains `--list`: `Glob <repo_root>/.claude/sdlc-workflows/*.yaml`,
+2. **`--list` fast path.** If `$ARGUMENTS` contains `--list`: `Glob <repo_root>/.sdlc/sdlc-workflows/*.yaml`,
    read each, and print a table (`recipe │ phases │ shadows-plugin?`). Cross-reference each `name`
    against plugin recipes (`Glob {PLUGIN_CACHE_ROOT}/**/workflows/*.yaml`, the cache root resolved
    per `plugins/sdlc/PLUGIN-PATHS.md` — never a literal `~`) to flag which project
    recipes shadow a plugin recipe. If none exist, print `No project-local workflows configured.` and stop.
 
 3. **Discover valid choices** (so the user picks from real names, not free text):
-   - **Existing project recipes:** `Glob <repo_root>/.claude/sdlc-workflows/*.yaml` (for editing/shadow warnings).
+   - **Existing project recipes:** `Glob <repo_root>/.sdlc/sdlc-workflows/*.yaml` (for editing/shadow warnings).
    - **Plugin recipe names** (reserved / shadow detection): `Glob {PLUGIN_CACHE_ROOT}/**/workflows/*.yaml`
      → collect each file's `name`.
    - **Available phase names:** the palette is the **keys of `agents_per_phase` in the CORE manifest**
@@ -66,7 +66,7 @@ it never runs the pipeline.
    Show the assembled YAML and ask **write & finish / cancel**.
 
 10. **Write — idempotent, non-destructive.** On confirm, write
-    `<repo_root>/.claude/sdlc-workflows/<name>.yaml`. Editing an existing recipe updates it in place;
+    `<repo_root>/.sdlc/sdlc-workflows/<name>.yaml`. Editing an existing recipe updates it in place;
     never touch other files in the directory. Print the path and the next step.
 
 ## YAML shape written
@@ -102,7 +102,7 @@ caps:    max_total_cost_usd=0.60
 shadows: (no plugin recipe named 'my-hotfix')
 
 ✅ Validated against schemas/workflow.schema.json
-Wrote: .claude/sdlc-workflows/my-hotfix.yaml
+Wrote: .sdlc/sdlc-workflows/my-hotfix.yaml
 
 Next:
   /sdlc:start --workflow=my-hotfix "<feature>"    # or let match auto-select it
@@ -110,7 +110,7 @@ Next:
 
 ## Hard rules
 
-- **Project-local only.** This command writes ONLY under `<repo_root>/.claude/sdlc-workflows/`. It never
+- **Project-local only.** This command writes ONLY under `<repo_root>/.sdlc/sdlc-workflows/`. It never
   edits a plugin's `workflows/` directory.
 - **Validate before writing.** The assembled recipe MUST pass `schemas/workflow.schema.json`; re-prompt on
   any violation. Never write an invalid recipe.

@@ -464,7 +464,7 @@ The prompt MUST be assembled in this exact order so the stable prefix (everythin
 
 {role_expertise_block — the "Stack expertise for <role> (<stack>):" block, EFFECTIVE_PROFILE.prompt_blocks[agent].expertise pasted VERBATIM; OMITTED ENTIRELY when null — see 3b-1a}
 
-{sdlc_lessons_block — see 3b-1b; OMITTED ENTIRELY when .claude/sdlc-lessons.md is absent or empty}
+{sdlc_lessons_block — see 3b-1b; OMITTED ENTIRELY when .sdlc/sdlc-lessons.md is absent or empty}
 
 Convention skills to consider invoking: {convention_skills (sorted, deterministic)}
 
@@ -642,13 +642,13 @@ since: 2026-09-07
 
 **3b-1b. Build the `sdlc_lessons_block`** (AAR lessons injection).
 
-Once at session start, read `.claude/sdlc-lessons.md` if it exists.
+Once at session start, read `.sdlc/sdlc-lessons.md` if it exists.
 
 - If it is present and non-empty, the block is:
 
   ```
   Lessons learned (from prior AAR cycles, project-curated):
-  {verbatim contents of .claude/sdlc-lessons.md}
+  {verbatim contents of .sdlc/sdlc-lessons.md}
   ```
 
 - If the file is **absent or empty (whitespace-only)**, the block is the empty
@@ -657,7 +657,7 @@ Once at session start, read `.claude/sdlc-lessons.md` if it exists.
 
 This block lives in the **stable prefix** (not the per-call trailer): it is read
 once and is identical across every phase of the run, so it qualifies for prompt
-caching. It is invalidated only by an edit to `.claude/sdlc-lessons.md` (i.e. a
+caching. It is invalidated only by an edit to `.sdlc/sdlc-lessons.md` (i.e. a
 `/sdlc:aar` apply), which is acceptable. Hold the read result in
 `CONTEXT.sdlc_lessons_block` and reuse it for every phase — do NOT re-read per
 phase.
@@ -687,7 +687,7 @@ What this changes for you, concretely:
   `{SDLC_PLUGIN_ROOT}/agents/{agent_name}.md` if you need to name it. Do not print a tier
   (`opus`/`sonnet`/`haiku`); no tier is in play at run time on this host.
 - **3c passes no `model` argument.** See 3c.
-- **`CONTEXT.model_overrides`** — from `.claude/model.local.json` — has **no mechanism here**. The
+- **`CONTEXT.model_overrides`** — from `.sdlc/model.local.json` — has **no mechanism here**. The
   override was applied by the `enforce-agent-model.sh` hook, which this package does not ship: it
   depends on the `PreToolUse` `updatedInput` envelope, which this host does not document. If the
   resolve command reports overrides, print one line saying they are not enforced on this host and
@@ -1918,7 +1918,7 @@ Hard rules:
 - The stable prefix's `convention_skills` list MUST be sorted deterministically — never insertion-ordered.
 - The `role_expertise_block` and `skills_block` (3b-1a) are pasted VERBATIM from `EFFECTIVE_PROFILE.prompt_blocks[agent]` — never hand-rendered — and OMITTED entirely when `null`; never emit an empty header. They are invalidated only by edits to a manifest's `role_expertise`, to `sdlc.local.yaml`, or by install/uninstall of a referenced skill's plugin, which is acceptable.
 - The `sdlc_lessons_block` (3b-1b) is the VERBATIM contents of
-  `.claude/sdlc-lessons.md`, read ONCE at session start, byte-identical across
+  `.sdlc/sdlc-lessons.md`, read ONCE at session start, byte-identical across
   all phases, and OMITTED entirely (no header) when the file is absent or
   empty. Never splice it into the per-call trailer, and never re-read it per
   phase. It is invalidated only by an edit to that file — acceptable.

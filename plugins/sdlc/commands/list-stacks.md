@@ -37,7 +37,7 @@ Additive framework providers:
 
 Active profile for this project: android (from android-foundation/manifest.yaml)
 Active frameworks: retrofit
-Override with: /sdlc:start --stack=NAME "<feature>"  ·  toggle frameworks via .claude/sdlc.local.yaml
+Override with: /sdlc:start --stack=NAME "<feature>"  ·  toggle frameworks via .sdlc/sdlc.local.yaml
 ```
 
 If no profiles found except vanilla:

@@ -10,7 +10,7 @@
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { resolveRoots } from "./roots.mjs";
+import { resolveRoots, PROJECT_DIR } from "./roots.mjs";
 import { readInstalledPlugins, readEnabledPlugins, loadInstalledManifests, loadManifestsFromTree } from "./manifests.mjs";
 import { resolveStack } from "./detect.mjs";
 import { preflight } from "./deps.mjs";
@@ -130,6 +130,23 @@ function hostPluginRoots(roots) {
   consider(roots.sdlc_plugin_root);
   for (const dir of pluginDirsUnder(roots.plugin_search_paths ?? [])) consider(dir);
   return out;
+}
+
+/**
+ * The SDLC's project files still sitting in the pre-rename location.
+ *
+ * The rename to `<project>/.sdlc/` ships with NO fallback read, on purpose — an
+ * alias layer is the shape ADR-0021 §5 deleted. But a silent rename is its own
+ * defect: the cost cap, the skill mappings and the agent bindings would simply
+ * stop applying, and the run would look normal. So the old location is not read,
+ * it is NOTICED, and the run says so. Detection only; the move belongs to
+ * `/sdlc-doctor`, which asks first.
+ */
+const LEGACY_PROJECT_ENTRIES = ["sdlc.local.yaml", "model.local.json", "sdlc-workflows", "sdlc-lessons.md"];
+function legacyProjectFiles(cwd) {
+  return LEGACY_PROJECT_ENTRIES
+    .filter((name) => existsSync(join(cwd, ".claude", name)))
+    .map((name) => `.claude/${name}`);
 }
 
 const readJson = (f) => { try { return JSON.parse(readFileSync(f, "utf8")); } catch { return null; } };
@@ -273,12 +290,19 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
     ...(Array.isArray(vanilla?.on_demand_agents) ? vanilla.on_demand_agents : []),
   ]);
 
-  const localPath = join(cwd, ".claude", "sdlc.local.yaml");
+  const stale = legacyProjectFiles(cwd);
+  if (stale.length) {
+    warn(`WARN: ${stale.length} SDLC config file(s) still in the old location and NOT read: ${stale.join(", ")}.`
+      + ` They moved to ${PROJECT_DIR}/ — the marketplace no longer keeps its files in another tool's directory.`
+      + " Run /sdlc-doctor to move them (it asks first). Until then this run uses plugin defaults for anything they set.");
+  }
+
+  const localPath = join(cwd, PROJECT_DIR, "sdlc.local.yaml");
   let local = null;
   if (existsSync(localPath)) {
     local = readYaml(localPath);
     if (local?.__error) {
-      warn(`⚠️ Failed to parse .claude/sdlc.local.yaml: ${local.__error}. Continuing with plugin defaults.`);
+      warn(`⚠️ Failed to parse .sdlc/sdlc.local.yaml: ${local.__error}. Continuing with plugin defaults.`);
       local = null;
     }
   }
@@ -292,7 +316,7 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   const overridesPrint = renderOverridesPrint(overridden.applied);
   if (overridesPrint) prints.push(overridesPrint);
 
-  const modelJson = readJson(join(cwd, ".claude", "model.local.json"));
+  const modelJson = readJson(join(cwd, PROJECT_DIR, "model.local.json"));
   const parsedModels = parseModelOverrides(modelJson, { knownAgents });
   warnAll(parsedModels.warnings);
 
@@ -311,7 +335,7 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
 
   if (overridesInert) {
     const n = Object.keys(parsedModels.overrides.agents ?? {}).length;
-    warn(`WARN: .claude/model.local.json is INERT on host ${roots.host}`
+    warn(`WARN: .sdlc/model.local.json is INERT on host ${roots.host}`
       + ` — ${n} agent override(s)${parsedModels.overrides.default !== undefined ? " plus a default" : ""} ignored.`
       + " Each agent's model is baked into its file at package build time and the dispatch passes none,"
       + " so a per-project tier cannot take effect. Change the tier in the agent's frontmatter and re-emit.");
@@ -383,7 +407,7 @@ export function resolveExpertise({ cwd = process.cwd(), args = "", env = process
  * into both, in generation order. The orchestrator has exactly one obligation — echo `prints[]`
  * — so a warning that lived only in `warnings[]` would reach nobody: the caller sends that
  * array to stderr only in non-JSON mode, and the orchestrator always invokes with `--json`.
- * That is how "⚠️ Failed to parse .claude/sdlc.local.yaml" became silent. The duplicate key
+ * That is how "⚠️ Failed to parse .sdlc/sdlc.local.yaml" became silent. The duplicate key
  * survives for machine consumers that want the diagnostics without pattern-matching prose.
  */
 export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env, mode = "installed" } = {}) {

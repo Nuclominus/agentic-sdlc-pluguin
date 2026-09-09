@@ -14,6 +14,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
 import { parseYaml } from "./yaml.mjs";
+import { PROJECT_DIR } from "./roots.mjs";
 
 const NAME_RE = /^[a-z][a-z0-9-]*$/;
 const SEVERITIES = ["critical", "high", "medium", "low"];
@@ -43,7 +44,7 @@ export function discoverRecipes({ projectRoot, installs = new Map(), enabled = {
   };
 
   if (projectRoot) {
-    for (const f of yamlFiles(join(projectRoot, ".claude", "sdlc-workflows"))) add(f, "project");
+    for (const f of yamlFiles(join(projectRoot, PROJECT_DIR, "sdlc-workflows"))) add(f, "project");
   }
   for (const [key, info] of installs) {
     if (enabled[key] === false) continue;
@@ -263,7 +264,7 @@ export function locateRecipe(name, recipes) {
       halt: [`❌ Workflow '${name}' is ambiguous — defined in multiple plugins:`,
         ...plugins.map((r) => `   ${r.file}`),
         "   Rename one, or pass --workflow= with a unique name.",
-        `   (A project-local <project>/.claude/sdlc-workflows/${name}.yaml would override both.)`].join("\n"),
+        `   (A project-local <project>/.sdlc/sdlc-workflows/${name}.yaml would override both.)`].join("\n"),
     };
   }
   const available = recipes.map((r) => `${r.name}${r.origin === "project" ? " (project)" : ""}`).sort();

@@ -7,7 +7,7 @@ load_when: "Only when the optional Google `android` CLI is on PATH and a task ca
 
 > **The mandatory/recommended skill matrix moved out of this file (ADR-0021.)** Per-role skills are
 > now declared in `manifest.yaml` under `role_expertise.<role>.skills`; the resolver merges them with
-> the project's `.claude/sdlc.local.yaml` `extensions.skills` rows and the orchestrator pastes one
+> the project's `.sdlc/sdlc.local.yaml` `extensions.skills` rows and the orchestrator pastes one
 > deduped list into each phase prompt. An on-demand agent gets the same list from
 > `resolve/cli.mjs expertise --role <name>`. There is no self-read of a skills matrix any more, and
 > no per-agent "Project Extensions" self-read either — both were replaced by that one command
