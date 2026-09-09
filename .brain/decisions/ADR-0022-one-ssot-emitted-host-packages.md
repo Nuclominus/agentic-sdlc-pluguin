@@ -136,6 +136,22 @@ committed, and gated. Nothing translates at run time.**
   action auto-denied still reported `status: "SUCCESS"` with an empty `response` and a populated
   `denied_actions[]`. The existing rule — gate on `_telemetry.json` on disk, not on exit code
   ([[decisions/ADR-0015-the-machine-value-invariant]]) — now covers `status` too.
+- **The running package owns the recipes it ships.** Emitting a package makes the same plugin exist
+  at two paths — the checked-out `dist/` tree and whatever the host installed — and on a host with no
+  installed-plugins registry, discovery has to find plugins by scanning. Scanning by path cannot see
+  that two paths are one plugin: with the release installed and a branch checkout running, a run
+  halted on `Workflow 'default' is ambiguous`, naming one plugin twice. So host plugin roots are
+  deduped by declared plugin *identity*, own package first, and an installed copy of itself is
+  shadowed rather than merged. This is the same rule
+  [[decisions/ADR-0009-plugin-root-resolution]] applies to roots, extended to everything a package
+  ships, and the same failure as issue #70 — one run reading two copies of one tree.
+- **A host's own isolation knobs are not assumed to work either.** The verification plan called for
+  installing into a throwaway config directory; measured on agy 1.1.28, `GEMINI_CONFIG_DIR` is
+  honoured by neither install nor list, so that isolation does not exist and every install is global.
+  Where a package must read a host-declared directory, it reads the env-named one AND the default
+  rather than one instead of the other — one extra stat, correct whether or not the host ever honours
+  the variable. The resolver following a convention the host ignores is how a wrong answer gets to
+  look like a right one.
 - **A second maintenance surface exists**: `dist/` diffs on every agent or skill edit. Mitigated by
   `linguist-generated` in `.gitattributes`, by determinism (a conflict is resolved by re-running the
   emitter, never by hand — the rule `_moc-changes.md` already follows), and by `emit --check`.

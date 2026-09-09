@@ -14,7 +14,11 @@ Ship the pipeline on two more agentic CLIs from one authoring surface. `plugins/
 
 Both hosts were probed on a live CLI. Where the docs and the binary disagreed, the binary won.
 
-**Antigravity CLI (`agy` 1.1.27, probed 2026-09-08).**
+**Antigravity CLI (`agy` 1.1.27, probed 2026-09-08; re-verified on 1.1.28, 2026-09-09).**
+
+The re-verification moved nothing: `agy plugin validate` reports the same six lines, and `agy models`
+grew two older Flash generations (`gemini-3.7-flash-*`, `gemini-3.6-flash-*`) that the tier map does
+not use, so every id it emits still exists.
 
 | Question | Answer |
 |---|---|
@@ -28,6 +32,8 @@ Both hosts were probed on a live CLI. Where the docs and the binary disagreed, t
 | antigravity-cli#76 (stdout dropped on non-TTY) | Did **not** reproduce through a pipe with `--output-format json`. |
 | Is `status` trustworthy? | **No, in both directions.** A run that produced nothing and had an action auto-denied reported `status: "SUCCESS"` with an empty `response`; the full pipeline run, which completed and sealed, reported `status: "ERROR"` because it hit `--print-timeout` while composing its closing message (898 s against a 15 m limit). Gate on `_telemetry.json`, never on `status` or exit code. |
 | Print-mode timeout | Set it well past the pipeline's own wall clock: the sealed run took 539 s but `agy` stayed up 898 s finishing Step 6 and its final response. |
+| Is `GEMINI_CONFIG_DIR` honoured? | **Nowhere.** Pointed at an empty directory, `agy plugin install` still installed under `$HOME/.gemini/config/plugins` and `agy plugin list` still listed from there. So an install cannot be isolated to a throwaway config dir, and every install is global. |
+| Project instruction file | Both `GEMINI.md` and `AGENTS.md`, read hierarchically from the directory they sit in downward, deduplicated, no frontmatter support. Found in the binary's own bundled docs — zero tokens. `AGENTS.md` is therefore the seeding target: it is the one spelling that also works on Codex. |
 
 **Codex CLI** — not yet probed; the CLI is not installed locally, which is Phase 2's first
 prerequisite. From docs: subagents are TOML in `.codex/agents/`, dispatched via
@@ -80,6 +86,72 @@ other methods, 18 tests written by the qa phase, all passing.
   lookup path.
 - **`agy plugin install` merges rather than replaces** — after renaming files, uninstall first or the
   install keeps orphans the emitter would never produce.
+- **`/sdlc-init`'s `--seed-claude-md` is still Claude-shaped** on every emitted package: the flag name
+  and the target file are both `CLAUDE.md`. The host reads `AGENTS.md`, so seeding currently writes a
+  file nothing loads. Fixing it needs the overlay mechanism extended from `skills/*/SKILL.md` to
+  `commands/*.md`, which is why it is recorded here rather than patched in passing.
+- **The "12,000 characters per rules file" cap** this track has been quoting is **unverified** — it
+  came from documentation and is not findable in the binary. Nothing depends on it (our `rules/` ship
+  as plain files an agent reads by absolute path), but it should not be repeated as measured.
+
+## Phase 3 (Antigravity half) — met
+
+The package went from the core alone to **all nine plugins**, 80 files to 192. The emitter needed no
+new code, which is the repackager premise holding: a repackager does not care how many plugins it
+repackages. What the phase is actually made of is the descriptor's `plugins` list going away — an
+explicit list of all nine would be a second spelling of "every plugin" that a tenth could silently
+contradict, so absent now means every `plugins/*/` with a `manifest.yaml`, and the gate is `emit`
+failing loudly plus `emit --check` failing CI rather than a hand-maintained list.
+
+Verified with zero model tokens: `agy plugin validate` green on all nine trees, and against an
+Android fixture the resolver run out of the install picks the `android` profile (priority 300),
+attaches `retrofit` from the version catalog, resolves the seven-phase `android-feature` recipe, and
+renders every cross-plugin rule path absolute into `android-foundation` — so **ADR-0021's expertise
+mechanism survives the port intact**.
+
+**Widening the package is what found three resolver defects**, none of which errored; each produced a
+plausible wrong answer, which is the shape [[decisions/ADR-0015-the-machine-value-invariant]] is
+about.
+
+1. The config dir took the env value *instead of* the default, so a developer who exported
+   `GEMINI_CONFIG_DIR` got a resolver searching an empty directory while every sibling plugin sat in
+   the default one — the foundation not found, and an Android project quietly running vanilla. The
+   search is now a superset of both.
+2. Sibling discovery never included the package's **own** root. It found it only when the install
+   happened to sit under a search path — true of `agy plugin install`, false of running straight out
+   of a checked-out `dist/` tree, which is how this project tests unreleased work. There the package
+   shipped ten recipes and reported `Available: (none)`.
+3. Fixing (2) exposed the third: discovery deduped by file *path*, which cannot see that two paths
+   are one plugin. With the release installed and a branch checkout running, the run halted on
+   `Workflow 'default' is ambiguous`, naming one plugin twice. Roots are now deduped by declared
+   plugin identity, own package first — the code that is running owns the recipes it ships, and an
+   installed copy of itself is shadowed rather than merged. Issue #70's two-trees-in-one-run failure,
+   one layer out.
+
+A fourth, smaller one: `sources.config_dir` reported `GEMINI_CONFIG_DIR` for a path that came from
+`$HOME`. Provenance is the field a reader trusts when a path looks wrong.
+
+**One test was a false green.** "An emitted package finds its own recipes" was passing by reading the
+developer's real `~/.gemini` install rather than the tree under test — it asserted one thing and
+measured another, and went on passing straight through defect (2). Every child-process test here now
+redirects `$HOME`, and each new regression test was confirmed to fail with its fix reverted.
+
+**The package now ships its own `INSTALL.md`**, generated from the descriptor. Claude Code's
+marketplace manifest makes a nine-plugin tree installable in one line and Antigravity has no
+analogue, so what replaces it is prose — which, shipped beside a generated tree, has to be generated
+too or the first descriptor change makes it quietly wrong while `emit --check` stays green. It
+carries the drops table, because ADR-0022 §4's "state the loss, do not substitute for it" is not
+satisfied by a reason that lives only in a build log.
+
+**One declared loss:** `android-foundation`'s `SessionStart` advisory about the optional `android`
+CLI. This host has no `SessionStart`, and ADR-0022 §4 already settled what to do about a missing
+event — state the gap, do not build a substitute, which is the compat shim the ADR exists to avoid.
+Building one on `PreInvocation` would have been exactly that. The advisory is not lost anyway:
+`/sdlc-doctor` already probes `android --version` on every host, so the check moves from automatic to
+on-demand.
+
+Still owed for Phase 3: a live Android run (the resolution is proven, the execution is not), the
+headless smoke via `agy -p --output-format json`, and the `AGENTS.md` seeding above.
 
 ## The dispatch risk — settled for Antigravity
 
@@ -123,6 +195,6 @@ paths handed to a phase must be absolute on this host.**
 ## Not in Phase 1
 
 `usage/*` real backends, `/sdlc:report`, `/sdlc:aar`, `/sdlc:batch`, `android-foundation` and the
-seven framework plugins, `SessionStart` hooks (the event does not exist on Antigravity), the two
-external marketplace entries, and emitting `rules/` as host rules — they stay plain files an agent
-reads by absolute path, which sidesteps the 12,000-char rules cap entirely.
+seven framework plugins (all three delivered in Phase 3), `SessionStart` hooks (the event does not
+exist on Antigravity), the two external marketplace entries, and emitting `rules/` as host rules —
+they stay plain files an agent reads by absolute path, so no host rules cap applies to them.
