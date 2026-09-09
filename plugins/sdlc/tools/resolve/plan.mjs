@@ -271,8 +271,29 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   if (overridesPrint) prints.push(overridesPrint);
 
   const modelJson = readJson(join(cwd, ".claude", "model.local.json"));
-  const models = parseModelOverrides(modelJson, { knownAgents });
-  warnAll(models.warnings);
+  const parsedModels = parseModelOverrides(modelJson, { knownAgents });
+  warnAll(parsedModels.warnings);
+
+  // A host that carries no model on the dispatch call cannot honour these. Each
+  // agent file holds the model baked in at build time, and there is no hook to
+  // rewrite the call either — enforce-agent-model.sh does not port. So the
+  // override is INERT, and the honest thing is to say so rather than to preview
+  // a tier the run will not dispatch: this file said `business-analyst: opus`
+  // while the agent file said `gemini-3.1-pro-high`, which is the same class of
+  // lie as pricing an unpriced run at $0.00. ADR-0022 §4 chose "declare the
+  // gap" over "build a substitute mechanism" precisely here — dropping the
+  // overrides silently would be the other half of the same mistake.
+  const overridesInert = roots.model_arg === false
+    && (parsedModels.overrides?.default !== undefined || Object.keys(parsedModels.overrides?.agents ?? {}).length > 0);
+  const models = overridesInert ? { ...parsedModels, overrides: {} } : parsedModels;
+
+  if (overridesInert) {
+    const n = Object.keys(parsedModels.overrides.agents ?? {}).length;
+    warn(`WARN: .claude/model.local.json is INERT on host ${roots.host}`
+      + ` — ${n} agent override(s)${parsedModels.overrides.default !== undefined ? " plus a default" : ""} ignored.`
+      + " Each agent's model is baked into its file at package build time and the dispatch passes none,"
+      + " so a per-project tier cannot take effect. Change the tier in the agent's frontmatter and re-emit.");
+  }
   const modelPrint = renderModelPrint(models.overrides);
   if (modelPrint) prints.push(modelPrint);
 

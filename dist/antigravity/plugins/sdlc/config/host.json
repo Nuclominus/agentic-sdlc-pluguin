@@ -2,6 +2,7 @@
   "_comment": "Written by `sdlc-lint emit`. Declares which host this package was built for; tools/resolve/host.mjs reads it. Do not hand-edit — regenerate.",
   "host": "antigravity",
   "telemetry_mode": "run-envelope",
+  "model_arg": false,
   "host_cli_version": "1.1.28",
   "config_dir_env": "GEMINI_CONFIG_DIR",
   "config_dir_default": ".gemini",

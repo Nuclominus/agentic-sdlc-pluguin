@@ -150,6 +150,46 @@ Building one on `PreInvocation` would have been exactly that. The advisory is no
 `/sdlc-doctor` already probes `android --version` on every host, so the check moves from automatic to
 on-demand.
 
+**Three more defects came out of running `--dry-run` against a real Android project**, all the same
+shape: a Claude-only mechanism presented as active on a host that has none of it.
+
+4. **The dependency preflight was blind.** `installed_plugins.json` is written only by Claude Code
+   and FOUR consumers read plugins out of it; Phase 1 gave two of them an `extraRoots` seam and
+   missed the other two. So the preflight reported "no external dependencies declared" while
+   `android-foundation` declared two — a `policy: block` dependency would not have been caught at
+   all, and seven mandatory skills were never reported as downgraded. Fixed by synthesizing the
+   registry once where it is read, rather than threading a fifth `extraRoots` parameter: on a host
+   with no registry, the package search **is** the registry.
+5. **Every agent previewed as `sonnet`** — `resolveTier`'s hardcoded fallback, reached because
+   frontmatter tiers were read through that same blind map. The dry run now names the models the
+   Phase 1 live run actually dispatched, which is also independent corroboration of the model map.
+6. **An unpriced run rendered a cap verdict.** A row with no estimation baseline priced to `null`,
+   contributed 0 to the total, and the preview printed `~$0.00` under `Cap: $19.75 → WITHIN`. The
+   headless line was worse, because CI gates on it: `estimated_cost_usd: 0` with
+   `cap_estimate: "within"` passes an unpriced run as inside budget. This is
+   [[decisions/ADR-0012-unpriced-runs-must-not-render-a-cap-verdict]] applied to the *pre-run*
+   estimate, which had never been checked there — the plan flagged it as a residual and it was real.
+   The useful part is the asymmetry: with any row unpriced the total is a lower bound, so `WITHIN` is
+   unsupportable while `EXCEEDS` still holds. A partial estimate keeps the verdict that can be
+   justified and labels its number as a floor.
+
+7. **`.claude/model.local.json` was previewed as active while being completely inert.** Found in the
+   operator's own project, which carries ten tier overrides. On this host the dispatch passes no
+   model (the 3c overlay says so explicitly) and each agent file holds its model baked in at build
+   time, and `enforce-agent-model.sh` — the mechanism that would rewrite the call — does not port.
+   Yet the preview printed "Model tier overrides loaded" and `business-analyst (opus)` where
+   `gemini-3.1-pro-high` would run. Neither applying the override (impossible) nor dropping it
+   silently (hides a file the user wrote) is right, so the host declaration now carries `model_arg`
+   and the resolver reports the file inert on every run. ADR-0022 §4 predicted this gap and said to
+   declare it; §4's wording has been corrected, because it promised doctor would do the reporting and
+   what shipped reports it at the moment it would otherwise mislead.
+
+Worth naming as a pattern: **five of the seven defects in this phase were a Claude-only mechanism
+reading as present on a foreign host, and none of them threw.** `emit --check`, `agy plugin
+validate`, 720 unit tests and a green `sdlc-lint all` caught none of them. Every one was found by
+running the resolver against a real project and reading the output — which is the cheapest test in
+this track and had not been part of it.
+
 Still owed for Phase 3: a live Android run (the resolution is proven, the execution is not), the
 headless smoke via `agy -p --output-format json`, and the `AGENTS.md` seeding above.
 

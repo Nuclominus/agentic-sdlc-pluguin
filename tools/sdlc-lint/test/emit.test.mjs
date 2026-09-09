@@ -430,6 +430,61 @@ test("the emitted package keeps the plugin manifest byte-identical", () => {
   assert.equal(out, src);
 });
 
+// -------------------------------------- a baked model makes overrides inert
+
+test("a project tier override is reported inert, not previewed as active", () => {
+  // The defect a real project surfaced: `.claude/model.local.json` said
+  // `business-analyst: opus` and the dry run printed
+  // "Model tier overrides loaded" plus `(opus)` — while the emitted agent file
+  // said `gemini-3.1-pro-high` and the dispatch passes no model at all. The
+  // preview named a model the run would not use.
+  //
+  // Both halves are asserted, because either one alone is a different bug:
+  // dropping the override silently would hide a file the user wrote and expects
+  // to matter, and honouring it is impossible. ADR-0022 §4 — declare the gap,
+  // never substitute a mechanism for it.
+  const home = mkdtempSync(join(tmpdir(), "sdlc-inert-home-"));
+  const project = mkdtempSync(join(tmpdir(), "sdlc-inert-"));
+  try {
+    writeFileSync(join(project, "package.json"), '{"name":"x","version":"1.0.0"}\n');
+    mkdirSync(join(project, ".claude"), { recursive: true });
+    writeFileSync(join(project, ".claude", "model.local.json"),
+      JSON.stringify({ default: "opus", agents: { "document-writer": "haiku" } }));
+
+    const cli = join(REPO, "dist", "antigravity", "plugins", "sdlc", "tools", "resolve", "cli.mjs");
+    const env = { ...process.env, HOME: home };
+    delete env.GEMINI_CONFIG_DIR;
+    const r = JSON.parse(execFileSync(process.execPath, [cli, "plan", "--json", "add a thing"], {
+      cwd: project, encoding: "utf8", env,
+    }));
+    assert.ok(r.ok, `resolver failed: ${r.halt ?? r.error}`);
+
+    const warned = r.warnings.filter((w) => /model\.local\.json is INERT/.test(w));
+    assert.equal(warned.length, 1, `the inert override was not reported: ${JSON.stringify(r.warnings)}`);
+    assert.match(warned[0], /host antigravity/);
+
+    const all = r.prints.join("\n");
+    assert.ok(!/Model tier overrides loaded/.test(all),
+      "an override that cannot take effect must not be announced as loaded");
+    // The emitted agent files carry gemini ids; no Claude tier may appear as a
+    // model anywhere in the preview.
+    assert.ok(!/\((opus|sonnet|haiku|fable)\)/.test(all),
+      `a Claude tier name was previewed as the dispatched model:\n${all}`);
+  } finally {
+    for (const d of [home, project]) rmSync(d, { recursive: true, force: true });
+  }
+});
+
+test("the host declaration carries whether a dispatch can name a model", () => {
+  const decl = JSON.parse(readFileSync(
+    join(REPO, "dist", "antigravity", "plugins", "sdlc", "config", "host.json"), "utf8"));
+  assert.equal(decl.model_arg, false);
+  // Absence must read as "capable": that is what every package built before this
+  // field existed was built for, and a missing key must not silently disable a
+  // working mechanism.
+  assert.equal(ANTIGRAVITY.dispatch.model_arg, false);
+});
+
 // ------------------------------------------------------------- install doc
 
 test("the install doc names every plugin the package carries", () => {

@@ -230,6 +230,11 @@ export function emitPlugin(root, pluginName, host) {
         _comment: "Written by `sdlc-lint emit`. Declares which host this package was built for; tools/resolve/host.mjs reads it. Do not hand-edit — regenerate.",
         host: host.host,
         telemetry_mode: host.telemetry?.mode ?? "none",
+        // Whether a dispatch can carry a model at all. False means each agent
+        // file's model was baked at build time, so a project's tier override has
+        // no mechanism to take effect and must be reported inert rather than
+        // previewed as active (ADR-0022 §4).
+        model_arg: host.dispatch?.model_arg !== false,
         host_cli_version: host.verified_on?.cli_version ?? null,
         config_dir_env: host.discovery?.config_dir_env ?? null,
         config_dir_default: host.discovery?.config_dir_default ?? null,

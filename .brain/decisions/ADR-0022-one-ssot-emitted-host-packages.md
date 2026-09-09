@@ -64,8 +64,19 @@ committed, and gated. Nothing translates at run time.**
    neither new host documents, and matches the tool name `Agent`, which neither has. Emitting the
    resolved model id into the agent file is enforcement by construction. The cost is stated, not
    hidden: `.claude/model.local.json` per-project overrides have no mechanism on these hosts, and
-   that is a declared gap reported by doctor — **not** a substitute mechanism, which would be the
-   compat shim this ADR exists to avoid.
+   that is a declared gap — **not** a substitute mechanism, which would be the compat shim this ADR
+   exists to avoid.
+
+   **How it is declared, corrected after implementation.** This decision first said "reported by
+   doctor". What shipped is better and the wording is fixed to match: the host declaration carries
+   `model_arg`, and the resolver reports the override inert on every run and every `--dry-run`, at
+   the moment it would otherwise mislead. Doctor is a command someone has to think to run.
+
+   Leaving the override *applied* was never an option, but neither was dropping it silently, and the
+   first implementation did neither cleanly — it printed "Model tier overrides loaded" and previewed
+   `business-analyst (opus)` while the agent file said `gemini-3.1-pro-high` and the dispatch passed
+   no model at all. A preview naming a model the run will not use is the same class of defect as
+   pricing an unpriced run at `$0.00`: not a missing feature, a false statement about what happened.
 
 5. **`dist/` is committed.** None of the three hosts has an install-time build step; each installs
    from a checked-out tree, including a feature branch or a worktree — which is exactly how this

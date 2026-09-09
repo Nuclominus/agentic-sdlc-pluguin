@@ -141,6 +141,11 @@ export function resolveRoots(env = process.env, cwd = process.cwd()) {
       plugin_search_paths: searchPaths,
       sdlc_plugin_root: ownPluginRoot(),
       host: declared.host,
+      // False when the model was baked into each agent file at build time, so a
+      // dispatch carries no model and a per-project tier override cannot take
+      // effect. Absent in older packages -> treat as capable, since that is the
+      // Claude Code behaviour every such package was built for.
+      model_arg: declared.model_arg !== false,
       sources: {
         // Name the variable only when it actually supplied the value. Reporting
         // `GEMINI_CONFIG_DIR` for a path that came from $HOME/.gemini is a
@@ -163,6 +168,9 @@ export function resolveRoots(env = process.env, cwd = process.cwd()) {
     plugin_search_paths: [cacheRoot],
     sdlc_plugin_root: sdlc.value,
     host: "claude",
+    // Claude Code passes the tier at the call site and enforce-agent-model.sh
+    // holds it there, so overrides are live.
+    model_arg: true,
     sources: { config_dir: config.source, sdlc_plugin_root: sdlc.source },
     sdlc_version: sdlc.version ?? null,
     sdlc_ambiguous: sdlc.ambiguous === true,

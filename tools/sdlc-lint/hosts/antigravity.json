@@ -60,6 +60,8 @@
     "_comment": "Observed on a live two-subagent run (conversation 9a5ccef4, 81s). This is the shape the orchestrator's 3c overlay must speak.",
     "tool": "invoke_subagent",
     "parallel": true,
+    "model_arg": false,
+    "_model_arg_comment": "The dispatch call carries NO model argument: each emitted agent file already holds its resolved model, baked from tier+effort at build time (see models.key and drop_hooks/enforce-agent-model.sh). Rides into the package's config/host.json, because the consequence is not cosmetic — a project's .claude/model.local.json has no mechanism to take effect here, and a preview that showed those tiers anyway would name a model the run will not dispatch. ADR-0022 \u00a74: state the gap, never substitute for it.",
     "retrieval_tool": null,
     "retrieval_model": "reactive-push",
     "retrieval_note": "There is no wait/retrieve call. A finished subagent pushes its message into the parent's context and execution resumes on its own — closer to Claude Code's inline Agent result than to Codex's spawn_agent + wait_agent. An overlay that adds a retrieval step here would be waiting for something that already arrived.",
