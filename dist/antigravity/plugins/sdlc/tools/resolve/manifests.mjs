@@ -82,12 +82,21 @@ export function loadManifestsFromTree(root = process.cwd()) {
  * plainly active in every run — appear only in the user settings. Project settings ADD to
  * the map; they do not replace it. Only an explicit `false` disables.
  */
-export function readEnabledPlugins({ configDir, projectRoot } = {}) {
+export function readEnabledPlugins({ configDir, projectRoot, projectSettingsFiles = null } = {}) {
   const merged = {};
+  // `projectSettingsFiles` is the host's own answer, resolved in roots.mjs. The
+  // literal `.claude/settings.json` below is the fallback for a caller that has
+  // no roots to hand -- it is Claude Code's file, and on another CLI reading it
+  // meant a plugin the developer disabled in Claude Code was silently dropped
+  // from detection there too, in a project that may not use Claude Code at all.
+  // A host that keeps no project settings declares an empty list, and an empty
+  // list is an answer: read nothing.
+  const projectSources = projectSettingsFiles ?? (projectRoot
+    ? [join(projectRoot, ".claude", "settings.json"), join(projectRoot, ".claude", "settings.local.json")]
+    : []);
   const sources = [
     join(configDir ?? defaultConfigDir(), "settings.json"),
-    projectRoot ? join(projectRoot, ".claude", "settings.json") : null,
-    projectRoot ? join(projectRoot, ".claude", "settings.local.json") : null,
+    ...projectSources,
   ].filter(Boolean);
   for (const file of sources) {
     const j = readJson(file);

@@ -93,6 +93,10 @@
     "config_dir_env": "GEMINI_CONFIG_DIR",
     "config_dir_default": ".gemini",
     "workspace_plugin_subdirs": [".agents/plugins"],
+    "_workspace_skill_comment": "Where THIS host loads project-local skills from. Taken from the binary's own bundled docs: `<workspace>/.agents/skills/<name>/SKILL.md` or `_agents/skills/<name>/SKILL.md`. It is emphatically NOT `<project>/.claude/skills`, which the shared resolver had hardcoded: on this host that directory counts skills the CLI will never load (so a mandated skill reads as satisfied when it is not) while missing the ones it does load.",
+    "workspace_skill_subdirs": [".agents/skills", "_agents/skills"],
+    "_project_settings_comment": "Which PROJECT files carry the enabled/disabled plugin map. Deliberately EMPTY here. The shared resolver read <project>/.claude/settings.json, which is Claude Code's own file: a plugin the developer disabled in Claude Code was then silently dropped from detection on Antigravity, in a project that may not even use Claude Code. This host records enablement in its own config, not in a project file, so the honest answer is none rather than someone else's.",
+    "project_settings_files": [],
     "plugin_search_subdirs": ["config/plugins", "antigravity-cli/plugins"]
   },
 

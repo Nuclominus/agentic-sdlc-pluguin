@@ -240,6 +240,13 @@ export function emitPlugin(root, pluginName, host) {
         config_dir_default: host.discovery?.config_dir_default ?? null,
         workspace_plugin_subdirs: host.discovery?.workspace_plugin_subdirs ?? [],
         plugin_search_subdirs: host.discovery?.plugin_search_subdirs ?? [],
+        // Project-local locations. These are the HOST's directories, not ours:
+        // reading `<project>/.claude/**` on another CLI counts a directory that
+        // CLI never loads and misses the one it does. An explicitly empty list
+        // is an answer ("this host keeps no such project file"), which is why
+        // these are emitted even when empty rather than omitted.
+        workspace_skill_subdirs: host.discovery?.workspace_skill_subdirs ?? [],
+        project_settings_files: host.discovery?.project_settings_files ?? [],
       }, null, 2) + "\n",
     });
   }

@@ -56,7 +56,7 @@ const pluginNameOf = (key) => String(key).split("@")[0];
  * `installs` and `enabled` come from ./manifests.mjs, so a disabled plugin contributes
  * nothing and a stale cached version is never consulted.
  */
-export function enumerateSkills({ configDir, projectRoot, installs = new Map(), enabled = {} } = {}) {
+export function enumerateSkills({ configDir, projectRoot, installs = new Map(), enabled = {}, workspaceSkillDirs = null } = {}) {
   const skills = new Set();
   const roots = [];
 
@@ -69,9 +69,16 @@ export function enumerateSkills({ configDir, projectRoot, installs = new Map(), 
     for (const s of found) skills.add(`${pluginNameOf(key)}:${s}`);
   }
 
+  // Project-local skill directories are the HOST's, declared in roots.mjs. The
+  // literal `.claude/skills` is the fallback for a caller with no roots to hand.
+  // Antigravity loads them from `<workspace>/.agents/skills`, so scanning
+  // `.claude/skills` there counted skills that CLI will never load -- a mandated
+  // skill reading as satisfied when it is not -- while missing the ones it does.
+  const projectSkillDirs = workspaceSkillDirs
+    ?? (projectRoot ? [join(projectRoot, ".claude", "skills")] : []);
   for (const [dir, kind] of [
     [configDir ? join(configDir, "skills") : null, "user"],
-    [projectRoot ? join(projectRoot, ".claude", "skills") : null, "project"],
+    ...projectSkillDirs.map((d) => [d, "project"]),
   ]) {
     if (!dir) continue;
     const found = skillDirs(dir);
@@ -262,8 +269,8 @@ export function writeStamp(configDir, status, { aborted = false, now, versions =
 }
 
 /** The whole step. `skills` short-circuits the enumeration with an authoritative list. */
-export function preflight({ configDir, projectRoot, installs, enabled, skills = null, headless = false, force = false } = {}) {
-  const available = skills ? skillsFromList(skills) : enumerateSkills({ configDir, projectRoot, installs, enabled });
+export function preflight({ configDir, projectRoot, installs, enabled, skills = null, headless = false, force = false, workspaceSkillDirs = null } = {}) {
+  const available = skills ? skillsFromList(skills) : enumerateSkills({ configDir, projectRoot, installs, enabled, workspaceSkillDirs });
   const { dependencies, sources } = collectDependencies({ installs, enabled });
   const versions = Object.fromEntries(dependencies.map((d) => [d.name, d.version ?? "unknown"]));
 

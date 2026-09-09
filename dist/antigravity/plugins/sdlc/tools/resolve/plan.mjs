@@ -23,7 +23,22 @@ import { discoverRecipes, resolveWorkflowName, locateRecipe, validateWorkflow, n
 import { resolveCostCap, renderCapOverridePrint, expandRows, estimate, renderDryRun, renderHeadlessDryRun } from "./caps.mjs";
 import { parseYaml } from "./yaml.mjs";
 
-/** Immediate children of the given roots that carry a manifest.yaml. */
+/**
+ * Immediate children of the given roots that are plugins.
+ *
+ * "Is a plugin" and "is an SDLC stack plugin" are different questions, and
+ * collapsing them cost a real answer. `manifest.yaml` alone was the test, which
+ * is the STACK test — so `superpowers`, installed at
+ * `~/.gemini/config/plugins/superpowers` with twelve skills and a `plugin.json`
+ * but no `manifest.yaml`, was invisible, and the preflight reported every one of
+ * its mandated skills missing while they sat on disk. On Claude Code
+ * `installed_plugins.json` lists every plugin regardless of kind, so a
+ * synthesized registry that admits fewer is not a substitute for it.
+ *
+ * Downstream consumers still apply their own filter — `loadInstalledManifests`
+ * skips a directory with no manifest, recipe discovery finds no `workflows/` —
+ * so widening here loses nothing and restores skill enumeration.
+ */
 function pluginDirsUnder(searchPaths) {
   const out = [];
   for (const base of searchPaths) {
@@ -32,7 +47,10 @@ function pluginDirsUnder(searchPaths) {
     for (const e of entries) {
       if (!e.isDirectory()) continue;
       const dir = join(base, e.name);
-      if (existsSync(join(dir, "manifest.yaml"))) out.push(dir);
+      const isPlugin = existsSync(join(dir, "manifest.yaml"))
+        || existsSync(join(dir, "plugin.json"))
+        || existsSync(join(dir, ".claude-plugin", "plugin.json"));
+      if (isPlugin) out.push(dir);
     }
   }
   return out;
@@ -52,22 +70,6 @@ function pluginIdentity(dir) {
   return basename(dir);
 }
 
-/**
- * The plugin roots a non-Claude host should read, own package first, one entry
- * per plugin IDENTITY rather than per path.
- *
- * Both halves are load-bearing. Own-package-first: sibling scanning finds the
- * running package only when its install happens to sit under a search path,
- * which is true of `agy plugin install` and false of running straight out of a
- * checked-out dist/ tree — where the package shipped ten recipes and then
- * reported `Available: (none)`. Dedupe by identity: with the release installed
- * AND a branch checkout running, the same plugin appeared at two paths and the
- * run halted on `Workflow 'default' is ambiguous`, naming one plugin twice. That
- * is the documented way this project tests an unreleased branch against a real
- * project, so it is not an edge case. The code that is running owns the recipes
- * it ships; an installed copy of the same plugin is shadowed, never merged —
- * mixing two copies of one plugin tree is issue #70's failure, one layer out.
- */
 /**
  * The installed-plugin registry, synthesized, for a host that keeps none.
  *
@@ -98,6 +100,22 @@ function installsFromRoots(hostRoots) {
   return out;
 }
 
+/**
+ * The plugin roots a non-Claude host should read, own package first, one entry
+ * per plugin IDENTITY rather than per path.
+ *
+ * Both halves are load-bearing. Own-package-first: sibling scanning finds the
+ * running package only when its install happens to sit under a search path,
+ * which is true of `agy plugin install` and false of running straight out of a
+ * checked-out dist/ tree — where the package shipped ten recipes and then
+ * reported `Available: (none)`. Dedupe by identity: with the release installed
+ * AND a branch checkout running, the same plugin appeared at two paths and the
+ * run halted on `Workflow 'default' is ambiguous`, naming one plugin twice. That
+ * is the documented way this project tests an unreleased branch against a real
+ * project, so it is not an edge case. The code that is running owns the recipes
+ * it ships; an installed copy of the same plugin is shadowed, never merged —
+ * mixing two copies of one plugin tree is issue #70's failure, one layer out.
+ */
 function hostPluginRoots(roots) {
   if (roots.host === "claude") return [];
   const out = [];
@@ -205,7 +223,7 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   // Fill the registry a non-Claude host never wrote. Never overwrite: a real
   // entry is the host's own answer and outranks anything inferred from a scan.
   for (const [key, info] of installsFromRoots(hostRoots)) if (!installs.has(key)) installs.set(key, info);
-  const enabled = readEnabledPlugins({ configDir, projectRoot: cwd });
+  const enabled = readEnabledPlugins({ configDir, projectRoot: cwd, projectSettingsFiles: roots.project_settings_files ?? null });
   for (const c of conflicts) warn(`WARN: ${c.key} is installed at several paths; using the ${c.scope} copy (${c.chosen})`);
 
   const manifests = mode === "tree"
@@ -215,7 +233,11 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   for (const e of manifests.errors ?? []) warn(`WARN: unreadable manifest ${e.file}: ${e.error}`);
 
   // ---- Step 0a: dependency preflight
-  const deps = preflight({ configDir, projectRoot: cwd, installs, enabled, headless, force: flag(args, "--force-preflight"), skills: opt(args, "--skills") });
+  const deps = preflight({
+    configDir, projectRoot: cwd, installs, enabled, headless,
+    force: flag(args, "--force-preflight"), skills: opt(args, "--skills"),
+    workspaceSkillDirs: roots.workspace_skill_dirs ?? null,
+  });
   prints.push(...deps.prints);
 
   // ---- Step 0b: detection (`--stack=NAME` skips it, per 0b-2)

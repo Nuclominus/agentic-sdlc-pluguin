@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, resolve, join } from "node:path";
 import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -428,6 +428,97 @@ test("the emitted package keeps the plugin manifest byte-identical", () => {
   const src = readFileSync(join(REPO, "plugins", "sdlc", ".claude-plugin", "plugin.json"), "utf8");
   const out = readFileSync(join(REPO, "dist", "antigravity", "plugins", "sdlc", "plugin.json"), "utf8");
   assert.equal(out, src);
+});
+
+// ------------------------------- project-local paths belong to the host
+
+test("project skills come from the host's directory, not Claude Code's", async () => {
+  // `<project>/.claude/skills` was hardcoded. Antigravity loads project skills
+  // from `<workspace>/.agents/skills` (its own bundled docs), so on that host the
+  // hardcoded path counted skills the CLI will never load — a mandated skill
+  // reading as satisfied when it is not — while missing every one it does load.
+  // Both directions are asserted, because only checking that the real one is
+  // found would pass even if the ghost were counted too.
+  const project = mkdtempSync(join(tmpdir(), "sdlc-skills-"));
+  const home = mkdtempSync(join(tmpdir(), "sdlc-skills-home-"));
+  try {
+    for (const [dir, name] of [[".claude/skills", "ghost-skill"], [".agents/skills", "real-skill"]]) {
+      mkdirSync(join(project, ...dir.split("/"), name), { recursive: true });
+      writeFileSync(join(project, ...dir.split("/"), name, "SKILL.md"), `---\nname: ${name}\n---\nx\n`);
+    }
+
+    const pkg = join(REPO, "dist", "antigravity", "plugins", "sdlc", "tools", "resolve");
+    const { resolveRoots } = await import(pathToFileURL(join(pkg, "roots.mjs")).href);
+    const { enumerateSkills } = await import(pathToFileURL(join(pkg, "deps.mjs")).href);
+
+    const roots = resolveRoots({ ...process.env, HOME: home }, project);
+    assert.equal(roots.host, "antigravity");
+    assert.deepEqual(roots.project_settings_files, [],
+      "this host keeps no project settings file; reading Claude Code's would apply another CLI's enablement");
+
+    const r = enumerateSkills({
+      configDir: roots.config_dir, projectRoot: project,
+      workspaceSkillDirs: roots.workspace_skill_dirs,
+    });
+    assert.ok([...r.skills].some((s) => s.includes("real-skill")), "the host's own skill directory was not scanned");
+    assert.ok(![...r.skills].some((s) => s.includes("ghost-skill")),
+      "counted a skill from .claude/skills, which this host never loads");
+  } finally {
+    for (const d of [project, home]) rmSync(d, { recursive: true, force: true });
+  }
+});
+
+test("Claude Code still reads its own project paths", async () => {
+  const pkg = join(REPO, "plugins", "sdlc", "tools", "resolve");
+  const { resolveRoots } = await import(pathToFileURL(join(pkg, "roots.mjs")).href);
+  const roots = resolveRoots({ HOME: "/home/u" }, "/w/proj");
+  assert.equal(roots.host, "claude");
+  assert.deepEqual(roots.workspace_skill_dirs, [join("/w/proj", ".claude", "skills")]);
+  assert.deepEqual(roots.project_settings_files, [
+    join("/w/proj", ".claude", "settings.json"),
+    join("/w/proj", ".claude", "settings.local.json"),
+  ]);
+  assert.equal(roots.model_arg, true, "overrides are live where the dispatch carries a model");
+});
+
+test("a third-party plugin with no manifest still contributes its skills", () => {
+  // `superpowers` installs at ~/.gemini/config/plugins/superpowers with twelve
+  // skills, a plugin.json and NO manifest.yaml — it is not an SDLC stack plugin.
+  // The synthesized registry filtered on manifest.yaml, which is the STACK test,
+  // so every skill it mandates was reported missing while sitting on disk. On
+  // Claude Code installed_plugins.json lists plugins of every kind, so a
+  // narrower substitute is not a substitute.
+  const home = mkdtempSync(join(tmpdir(), "sdlc-3p-home-"));
+  const project = mkdtempSync(join(tmpdir(), "sdlc-3p-"));
+  try {
+    const dep = join(home, ".gemini", "config", "plugins", "probe-dep");
+    mkdirSync(join(dep, "skills", "probe-skill"), { recursive: true });
+    writeFileSync(join(dep, "plugin.json"), '{"name":"probe-dep","version":"1.0.0"}\n');
+    writeFileSync(join(dep, "skills", "probe-skill", "SKILL.md"), "---\nname: probe-skill\n---\nx\n");
+    writeFileSync(join(project, "package.json"), '{"name":"x","version":"1.0.0"}\n');
+
+    // A foundation that DEPENDS on that skill, so the preflight has to resolve it.
+    const found = join(home, ".gemini", "config", "plugins", "probe-foundation");
+    mkdirSync(found, { recursive: true });
+    writeFileSync(join(found, "manifest.yaml"),
+      "kind: foundation\nstack: probe\npriority: 500\naspects: [probe]\ndetect:\n  all:\n    - file_exists: .probe-marker\n");
+    writeFileSync(join(found, "runtime-dependencies.json"), JSON.stringify({
+      dependencies: [{ name: "probe-dep", policy: "warn", skills_used: ["probe-skill"] }],
+    }));
+    writeFileSync(join(project, ".probe-marker"), "");
+
+    const cli = join(REPO, "dist", "antigravity", "plugins", "sdlc", "tools", "resolve", "cli.mjs");
+    const env = { ...process.env, HOME: home };
+    delete env.GEMINI_CONFIG_DIR;
+    const r = JSON.parse(execFileSync(process.execPath, [cli, "plan", "--json", "add a thing"], {
+      cwd: project, encoding: "utf8", env,
+    }));
+    assert.ok(r.ok, `resolver failed: ${r.halt ?? r.error}`);
+    assert.equal(r.plan.deps_preflight["probe-dep"]?.status, "available",
+      `a plugin with no manifest.yaml was invisible, so its skill read as missing: ${JSON.stringify(r.plan.deps_preflight)}`);
+  } finally {
+    for (const d of [home, project]) rmSync(d, { recursive: true, force: true });
+  }
 });
 
 // -------------------------------------- a baked model makes overrides inert

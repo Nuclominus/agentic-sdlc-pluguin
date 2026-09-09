@@ -12,5 +12,10 @@
   "plugin_search_subdirs": [
     "config/plugins",
     "antigravity-cli/plugins"
-  ]
+  ],
+  "workspace_skill_subdirs": [
+    ".agents/skills",
+    "_agents/skills"
+  ],
+  "project_settings_files": []
 }

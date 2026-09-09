@@ -146,6 +146,12 @@ export function resolveRoots(env = process.env, cwd = process.cwd()) {
       // effect. Absent in older packages -> treat as capable, since that is the
       // Claude Code behaviour every such package was built for.
       model_arg: declared.model_arg !== false,
+      // The HOST's project-local directories, declared rather than assumed. An
+      // empty list is a real answer, so `?? []` is only for a package emitted
+      // before these existed — hence the `??` on the whole key, not on a
+      // per-element default.
+      workspace_skill_dirs: (declared.workspace_skill_subdirs ?? []).map((s) => join(cwd, s)),
+      project_settings_files: (declared.project_settings_files ?? []).map((s) => join(cwd, s)),
       sources: {
         // Name the variable only when it actually supplied the value. Reporting
         // `GEMINI_CONFIG_DIR` for a path that came from $HOME/.gemini is a
@@ -171,6 +177,11 @@ export function resolveRoots(env = process.env, cwd = process.cwd()) {
     // Claude Code passes the tier at the call site and enforce-agent-model.sh
     // holds it there, so overrides are live.
     model_arg: true,
+    // Claude Code's own project-local locations, unchanged. Named here rather
+    // than hardcoded downstream so every host answers the same question in the
+    // same place.
+    workspace_skill_dirs: [join(cwd, ".claude", "skills")],
+    project_settings_files: [join(cwd, ".claude", "settings.json"), join(cwd, ".claude", "settings.local.json")],
     sources: { config_dir: config.source, sdlc_plugin_root: sdlc.source },
     sdlc_version: sdlc.version ?? null,
     sdlc_ambiguous: sdlc.ambiguous === true,
