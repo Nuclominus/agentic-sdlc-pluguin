@@ -68,6 +68,36 @@ function pluginIdentity(dir) {
  * it ships; an installed copy of the same plugin is shadowed, never merged —
  * mixing two copies of one plugin tree is issue #70's failure, one layer out.
  */
+/**
+ * The installed-plugin registry, synthesized, for a host that keeps none.
+ *
+ * `installed_plugins.json` is written only by Claude Code, and FOUR consumers read
+ * plugins out of it: manifest loading, recipe discovery, the dependency preflight,
+ * and agent `model:` frontmatter. The first two were given an `extraRoots` seam;
+ * the other two were not, and both failed silently rather than loudly —
+ * `android-foundation` declares two runtime dependencies and the preflight said
+ * "no external dependencies declared", so a `policy: block` dependency would not
+ * have been caught at all; and every agent fell through to the hardcoded `sonnet`
+ * default, so the dry run named a tier the run would not dispatch.
+ *
+ * Threading a fifth `extraRoots` parameter would have kept that going. On a host
+ * with no registry, the package search IS the registry, so it is built once here
+ * and every consumer downstream is unchanged. Registry entries always win: this
+ * only fills a gap, it never overrides an answer the host actually gave.
+ */
+function installsFromRoots(hostRoots) {
+  const out = new Map();
+  for (const dir of hostRoots) {
+    const key = pluginIdentity(dir);
+    if (out.has(key)) continue;
+    const version = readJson(join(dir, "plugin.json"))?.version
+      ?? readJson(join(dir, ".claude-plugin", "plugin.json"))?.version
+      ?? null;
+    out.set(key, { installPath: dir, version, scope: "host" });
+  }
+  return out;
+}
+
 function hostPluginRoots(roots) {
   if (roots.host === "claude") return [];
   const out = [];
@@ -172,6 +202,9 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
 
   // ---- Step 0b inputs: what is installed and enabled
   const { installs, conflicts } = readInstalledPlugins({ configDir });
+  // Fill the registry a non-Claude host never wrote. Never overwrite: a real
+  // entry is the host's own answer and outranks anything inferred from a scan.
+  for (const [key, info] of installsFromRoots(hostRoots)) if (!installs.has(key)) installs.set(key, info);
   const enabled = readEnabledPlugins({ configDir, projectRoot: cwd });
   for (const c of conflicts) warn(`WARN: ${c.key} is installed at several paths; using the ${c.scope} copy (${c.chosen})`);
 

@@ -169,24 +169,52 @@ export function estimate(rows, registry, { healEnabled = false } = {}) {
 
   const gatedRestore = priced.reduce((s, r) => s + (r.gate && !r.resumed ? (r.est ?? 0) : 0), 0);
 
+  const dispatched = priced.filter((r) => !r.resumed);
+  const unpriced = priced.filter((r) => r.unpriced).length;
+
   return {
     rows: priced,
     base_total: baseTotal,
     expected_total: baseTotal + loopExpected + healExpected,
     worst_total: baseTotal + loopWorst + healWorst + gatedRestore,
-    unpriced: priced.filter((r) => r.unpriced).length,
+    unpriced,
+    // A total summed over rows that priced to null is a LOWER BOUND, not an
+    // estimate. Both facts travel with it so no renderer has to re-derive them.
+    priced_rows: dispatched.length - unpriced,
+    fully_priced: unpriced === 0,
   };
 }
 
-/** The `WITHIN` / `EXCEEDS` verdict, computed from expected_total only. */
-export function capVerdict(expectedTotal, cap) {
-  if (cap == null) return { verdict: "WITHIN", cap_estimate: "within", over: 0 };
-  return expectedTotal <= cap
-    ? { verdict: "WITHIN", cap_estimate: "within", over: 0 }
-    : { verdict: `⚠️ EXCEEDS by $${(expectedTotal - cap).toFixed(2)}`, cap_estimate: "exceeds", over: expectedTotal - cap };
+/**
+ * The `WITHIN` / `EXCEEDS` verdict, computed from expected_total only.
+ *
+ * `unpriced` is not decoration. A row whose tier has no pricing baseline
+ * contributes 0 to the total, so an unpriced run summed to exactly $0.00 and
+ * rendered `WITHIN` — a cap verdict on a run nothing had priced, which is the
+ * thing [[ADR-0012]] exists to forbid. The headless line was worse: CI reads
+ * `cap_estimate`, and it said `"within"`.
+ *
+ * The asymmetry is the useful part. With any row unpriced the total is a lower
+ * bound, so `WITHIN` is unsupportable — but `EXCEEDS` still holds, because a
+ * lower bound already over the cap means the real number is too. So a partial
+ * estimate keeps the verdict that can be justified and loses the one that
+ * cannot, rather than going silent about both.
+ */
+export function capVerdict(expectedTotal, cap, { unpriced = 0, priced = null } = {}) {
+  const over = cap == null ? 0 : expectedTotal - cap;
+  if (cap != null && over > 0) {
+    return { verdict: `⚠️ EXCEEDS by $${over.toFixed(2)}`, cap_estimate: "exceeds", over };
+  }
+  if (unpriced > 0) {
+    const scope = priced === 0 ? "no phase is priced on this host" : `${unpriced} phase(s) unpriced`;
+    return { verdict: `unverified — ${scope}`, cap_estimate: "unverified", over: 0 };
+  }
+  return { verdict: "WITHIN", cap_estimate: "within", over: 0 };
 }
 
 const money = (n) => `$${(n ?? 0).toFixed(2)}`;
+/** A cost that may not exist. `$0.00` and "unknown" are different claims. */
+const moneyOrDash = (n, known) => (known ? money(n) : "$—");
 
 /** 1d-2 — the human dry-run block. Segments concatenate; only `‖ parallel` is exclusive. */
 export function renderDryRun({ estimate: est, slots, stack, workflow, autoselected, skipRules = [], cap, healEnabled, healBlocks = 0 }) {
@@ -206,14 +234,21 @@ export function renderDryRun({ estimate: est, slots, stack, workflow, autoselect
       r.heal && healEnabled ? `  🔧 heals ≤${r.heal.max_attempts}×` : "",
       r.gate ? "  (gated)" : "",
     ].join("");
-    lines.push(`   ${i + 1}. ${r.phase}${r.aspect ? ` — ${r.aspect}` : ""}    → ${r.agent} (${r.tier})   ~${money(r.est)}${flags}`);
+    lines.push(`   ${i + 1}. ${r.phase}${r.aspect ? ` — ${r.aspect}` : ""}    → ${r.agent} (${r.tier})   ~${moneyOrDash(r.est, !r.unpriced)}${flags}`);
   });
   lines.push(`Skip-rules applied: ${skipRules.length ? skipRules.map((s) => s.rule).join(", ") : "none"}`);
   if (healBlocks > 0 && !healEnabled) {
     lines.push(`⚙ Healing inactive on this stack — ${healBlocks} guarded phase(s) carry a heal: block, but the active profile supplies no heal_checks. Set heal_checks in .claude/sdlc.local.yaml to enable it.`);
   }
-  lines.push(`Estimated cost: ~${money(est.expected_total)}  (worst-case ${money(est.worst_total)})`);
-  const v = capVerdict(est.expected_total, cap);
+  const anyPriced = est.priced_rows > 0;
+  lines.push(est.fully_priced
+    ? `Estimated cost: ~${money(est.expected_total)}  (worst-case ${money(est.worst_total)})`
+    : anyPriced
+      // Partial: the number is real but incomplete, so it is labelled as a floor
+      // rather than dressed up as an estimate.
+      ? `Estimated cost: ≥ ${money(est.expected_total)}  (worst-case ≥ ${money(est.worst_total)}) — ${est.unpriced} phase(s) unpriced`
+      : "Estimated cost: unavailable — this host's registry carries no estimation baselines");
+  const v = capVerdict(est.expected_total, cap, { unpriced: est.unpriced, priced: est.priced_rows });
   lines.push(`Cap: ${cap == null ? "none" : money(cap)}  → ${v.verdict}`);
   return lines.join("\n");
 }
@@ -226,15 +261,20 @@ export function renderDryRun({ estimate: est, slots, stack, workflow, autoselect
  * key carrying two vocabularies would force every CI consumer to disambiguate them.
  */
 export function renderHeadlessDryRun({ estimate: est, slots, workflow, cap, resumed = false, reenterAt = null }) {
-  const v = capVerdict(est.expected_total, cap);
+  const v = capVerdict(est.expected_total, cap, { unpriced: est.unpriced, priced: est.priced_rows });
+  // `null`, never `0`. A machine consumer cannot tell a genuinely free run from
+  // one nothing could price, and this line is what CI gates on — the same rule
+  // usage.mjs and caps.mjs already follow for actuals (ADR-0012).
+  const anyPriced = est.priced_rows > 0;
   const payload = {
     dry_run: true,
     workflow,
     phases: slots,
-    estimated_cost_usd: Number(est.expected_total.toFixed(2)),
-    worst_case_usd: Number(est.worst_total.toFixed(2)),
+    estimated_cost_usd: anyPriced ? Number(est.expected_total.toFixed(2)) : null,
+    worst_case_usd: anyPriced ? Number(est.worst_total.toFixed(2)) : null,
     cap_usd: cap ?? null,
     cap_estimate: v.cap_estimate,
+    ...(est.unpriced ? { unpriced_phases: est.unpriced, estimate_is_lower_bound: anyPriced } : {}),
     ...(resumed ? { resumed: true, reenter_at: reenterAt } : {}),
   };
   return JSON.stringify(payload);
