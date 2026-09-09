@@ -9,7 +9,7 @@
 // Every step's own module does its own reading. This function owns the order and the assembly.
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { resolveRoots } from "./roots.mjs";
 import { readInstalledPlugins, readEnabledPlugins, loadInstalledManifests, loadManifestsFromTree } from "./manifests.mjs";
 import { resolveStack } from "./detect.mjs";
@@ -35,6 +35,52 @@ function pluginDirsUnder(searchPaths) {
       if (existsSync(join(dir, "manifest.yaml"))) out.push(dir);
     }
   }
+  return out;
+}
+
+/**
+ * WHICH plugin a directory is, independent of where it sits. The emitted
+ * manifest is at the plugin root; the authored one is under .claude-plugin/.
+ * Directory name is the last resort — an install can be renamed, a declared
+ * name cannot.
+ */
+function pluginIdentity(dir) {
+  for (const f of [join(dir, "plugin.json"), join(dir, ".claude-plugin", "plugin.json")]) {
+    const name = readJson(f)?.name;
+    if (name) return name;
+  }
+  return basename(dir);
+}
+
+/**
+ * The plugin roots a non-Claude host should read, own package first, one entry
+ * per plugin IDENTITY rather than per path.
+ *
+ * Both halves are load-bearing. Own-package-first: sibling scanning finds the
+ * running package only when its install happens to sit under a search path,
+ * which is true of `agy plugin install` and false of running straight out of a
+ * checked-out dist/ tree — where the package shipped ten recipes and then
+ * reported `Available: (none)`. Dedupe by identity: with the release installed
+ * AND a branch checkout running, the same plugin appeared at two paths and the
+ * run halted on `Workflow 'default' is ambiguous`, naming one plugin twice. That
+ * is the documented way this project tests an unreleased branch against a real
+ * project, so it is not an edge case. The code that is running owns the recipes
+ * it ships; an installed copy of the same plugin is shadowed, never merged —
+ * mixing two copies of one plugin tree is issue #70's failure, one layer out.
+ */
+function hostPluginRoots(roots) {
+  if (roots.host === "claude") return [];
+  const out = [];
+  const seen = new Set();
+  const consider = (dir) => {
+    if (!dir) return;
+    const id = pluginIdentity(dir);
+    if (seen.has(id)) return;
+    seen.add(id);
+    out.push(dir);
+  };
+  consider(roots.sdlc_plugin_root);
+  for (const dir of pluginDirsUnder(roots.plugin_search_paths ?? [])) consider(dir);
   return out;
 }
 
@@ -122,7 +168,7 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   // On a host with no installed_plugins.json registry, discovery is the search
   // paths the running package declares: every immediate child of them that
   // carries a manifest.yaml. Empty on Claude Code, where the registry answers.
-  const hostRoots = roots.host === "claude" ? [] : pluginDirsUnder(roots.plugin_search_paths ?? []);
+  const hostRoots = hostPluginRoots(roots);
 
   // ---- Step 0b inputs: what is installed and enabled
   const { installs, conflicts } = readInstalledPlugins({ configDir });

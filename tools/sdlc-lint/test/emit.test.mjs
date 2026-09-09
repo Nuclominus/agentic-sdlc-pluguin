@@ -375,14 +375,32 @@ test("an emitted package finds its own recipes", () => {
   // Discovery runs off installed_plugins.json, which only Claude Code writes. A
   // package that ships workflows and then reports `Available: (none)` is worse
   // than one that ships none.
+  //
+  // $HOME is redirected on purpose. Without that, this test passed by reading
+  // the developer's own ~/.gemini install rather than the tree under test — it
+  // asserted "the package finds its recipes" while measuring something else
+  // entirely, and went on passing after sibling discovery was added but SELF
+  // discovery was left out. An isolated HOME is what makes the assertion mean
+  // what its name says, on a clean CI runner as much as here.
+  const home = mkdtempSync(join(tmpdir(), "sdlc-recipes-home-"));
   const project = mkdtempSync(join(tmpdir(), "sdlc-recipes-"));
-  writeFileSync(join(project, "package.json"), '{"name":"x","version":"1.0.0"}\n');
-  const cli = join(REPO, "dist", "antigravity", "plugins", "sdlc", "tools", "resolve", "cli.mjs");
-  const r = JSON.parse(execFileSync(process.execPath, [cli, "plan", "--json", "add a thing"], { cwd: project, encoding: "utf8" }));
-  assert.ok(r.ok, `resolver failed: ${r.halt ?? r.error}`);
-  assert.equal(r.plan.workflow.name, "default");
-  assert.ok(r.plan.workflow.resolved_phases.length >= 5);
-  rmSync(project, { recursive: true, force: true });
+  try {
+    writeFileSync(join(project, "package.json"), '{"name":"x","version":"1.0.0"}\n');
+    const cli = join(REPO, "dist", "antigravity", "plugins", "sdlc", "tools", "resolve", "cli.mjs");
+    const env = { ...process.env, HOME: home };
+    delete env.GEMINI_CONFIG_DIR;
+    const r = JSON.parse(execFileSync(process.execPath, [cli, "plan", "--json", "add a thing"], {
+      cwd: project, encoding: "utf8", env,
+    }));
+    assert.ok(r.ok, `resolver failed: ${r.halt ?? r.error}`);
+    assert.equal(r.plan.workflow.name, "default");
+    assert.ok(r.plan.workflow.resolved_phases.length >= 5);
+    assert.equal(r.plan.workflow.origin, "plugin");
+    assert.ok(r.plan.workflow.file.includes(join("dist", "antigravity")),
+      `the recipe came from outside the package under test: ${r.plan.workflow.file}`);
+  } finally {
+    for (const d of [home, project]) rmSync(d, { recursive: true, force: true });
+  }
 });
 
 // ---------------------------------------------------------------- check
@@ -410,4 +428,123 @@ test("the emitted package keeps the plugin manifest byte-identical", () => {
   const src = readFileSync(join(REPO, "plugins", "sdlc", ".claude-plugin", "plugin.json"), "utf8");
   const out = readFileSync(join(REPO, "dist", "antigravity", "plugins", "sdlc", "plugin.json"), "utf8");
   assert.equal(out, src);
+});
+
+// ------------------------------------------- config-dir search is a superset
+
+test("a declared host searches the env-named config dir AND the default", () => {
+  // Measured on agy 1.1.28: `agy plugin install` ignores GEMINI_CONFIG_DIR and
+  // always installs under $HOME/.gemini; `agy plugin list` ignores it too. The
+  // resolver used to take the env value INSTEAD of the default, so a developer
+  // who exported that variable got a search path pointing at an empty directory
+  // while every sibling plugin sat in the default one. Nothing errored — the
+  // foundation simply was not found and an Android project quietly ran the
+  // vanilla profile. A wrong answer wearing the shape of a right one, which is
+  // what ADR-0015 is about, so the search is a superset and this holds it there.
+  const home = mkdtempSync(join(tmpdir(), "sdlc-home-"));
+  const emptyCfg = mkdtempSync(join(tmpdir(), "sdlc-emptycfg-"));
+  const project = mkdtempSync(join(tmpdir(), "sdlc-cfgdir-"));
+  try {
+    // A foundation sitting where the host actually puts it.
+    const found = join(home, ".gemini", "config", "plugins", "probe-foundation");
+    mkdirSync(found, { recursive: true });
+    writeFileSync(join(found, "manifest.yaml"), [
+      "kind: foundation",
+      "stack: probe",
+      "priority: 500",
+      "aspects: [probe]",
+      "detect:",
+      "  all:",
+      "    - file_exists: .probe-marker",
+      "",
+    ].join("\n"));
+    writeFileSync(join(project, ".probe-marker"), "");
+    writeFileSync(join(project, "package.json"), '{"name":"x","version":"1.0.0"}\n');
+
+    const cli = join(REPO, "dist", "antigravity", "plugins", "sdlc", "tools", "resolve", "cli.mjs");
+    const r = JSON.parse(execFileSync(process.execPath, [cli, "plan", "--json", "add a thing"], {
+      cwd: project,
+      encoding: "utf8",
+      env: { ...process.env, HOME: home, GEMINI_CONFIG_DIR: emptyCfg },
+    }));
+
+    assert.ok(r.ok, `resolver failed: ${r.halt ?? r.error}`);
+    assert.equal(r.plan.stack.primary_profile, "probe",
+      "the foundation is in the DEFAULT config dir; taking the env value instead of it loses the profile");
+
+    const paths = r.plan.roots.plugin_search_paths;
+    assert.ok(paths.some((p) => p.startsWith(emptyCfg)), "the env-named dir must still be searched");
+    assert.ok(paths.some((p) => p.startsWith(join(home, ".gemini"))), "the default dir must still be searched");
+
+    // Provenance names the variable only when the variable supplied the value.
+    assert.equal(r.plan.roots.sources.config_dir, "GEMINI_CONFIG_DIR");
+    assert.equal(r.plan.roots.config_dir, emptyCfg);
+  } finally {
+    for (const d of [home, emptyCfg, project]) rmSync(d, { recursive: true, force: true });
+  }
+});
+
+test("the running package shadows an installed copy of itself", () => {
+  // With the release installed AND a branch checkout running — the documented
+  // way this project tests unreleased work against a real project — the same
+  // plugin was reachable at two paths, and the run halted on
+  // `Workflow 'default' is ambiguous`, listing one plugin twice. Discovery
+  // deduped by file path, which cannot see that two paths are one plugin.
+  //
+  // The installed copy here is deliberately NOT a stub: it carries a recipe of
+  // the same name, so merging the two would reproduce the ambiguity, and the
+  // code that is running has to be the code whose recipes count. Mixing two
+  // copies of one plugin tree is issue #70's failure a layer out.
+  const home = mkdtempSync(join(tmpdir(), "sdlc-shadow-home-"));
+  const project = mkdtempSync(join(tmpdir(), "sdlc-shadow-"));
+  try {
+    const installed = join(home, ".gemini", "config", "plugins", "sdlc");
+    mkdirSync(join(installed, "workflows"), { recursive: true });
+    writeFileSync(join(installed, "plugin.json"), '{"name":"sdlc","version":"0.0.1"}\n');
+    writeFileSync(join(installed, "manifest.yaml"), "kind: core\n");
+    writeFileSync(join(installed, "workflows", "default.yaml"), [
+      "name: default",
+      "description: an older copy that must not win",
+      "phases:",
+      "  - name: business_analysis",
+      "  - name: development",
+      "",
+    ].join("\n"));
+    writeFileSync(join(project, "package.json"), '{"name":"x","version":"1.0.0"}\n');
+
+    const cli = join(REPO, "dist", "antigravity", "plugins", "sdlc", "tools", "resolve", "cli.mjs");
+    const env = { ...process.env, HOME: home };
+    delete env.GEMINI_CONFIG_DIR;
+    const r = JSON.parse(execFileSync(process.execPath, [cli, "plan", "--json", "add a thing"], {
+      cwd: project, encoding: "utf8", env,
+    }));
+
+    assert.ok(r.ok, `resolver failed: ${r.halt ?? r.error}`);
+    assert.ok(r.plan.workflow.file.includes(join("dist", "antigravity")),
+      `the installed copy won over the running package: ${r.plan.workflow.file}`);
+    assert.ok(r.plan.workflow.resolved_phases.length > 2,
+      "resolved the two-phase decoy from the installed copy");
+  } finally {
+    for (const d of [home, project]) rmSync(d, { recursive: true, force: true });
+  }
+});
+
+test("with no env override the config dir reports the default, not the variable name", () => {
+  const home = mkdtempSync(join(tmpdir(), "sdlc-home2-"));
+  const project = mkdtempSync(join(tmpdir(), "sdlc-cfgdir2-"));
+  try {
+    writeFileSync(join(project, "package.json"), '{"name":"x","version":"1.0.0"}\n');
+    const cli = join(REPO, "dist", "antigravity", "plugins", "sdlc", "tools", "resolve", "cli.mjs");
+    const env = { ...process.env, HOME: home };
+    delete env.GEMINI_CONFIG_DIR;
+    const r = JSON.parse(execFileSync(process.execPath, [cli, "plan", "--json", "add a thing"], {
+      cwd: project, encoding: "utf8", env,
+    }));
+    assert.ok(r.ok, `resolver failed: ${r.halt ?? r.error}`);
+    assert.equal(r.plan.roots.config_dir, join(home, ".gemini"));
+    assert.equal(r.plan.roots.sources.config_dir, "$HOME/.gemini",
+      "claiming GEMINI_CONFIG_DIR for a path that came from $HOME is a false provenance claim");
+  } finally {
+    for (const d of [home, project]) rmSync(d, { recursive: true, force: true });
+  }
 });

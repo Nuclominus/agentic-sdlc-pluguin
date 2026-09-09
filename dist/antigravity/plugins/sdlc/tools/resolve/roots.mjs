@@ -119,11 +119,21 @@ function safeDirs(dir) {
 export function resolveRoots(env = process.env, cwd = process.cwd()) {
   const declared = readDeclaredHost();
   if (declared) {
-    const configDir = (declared.config_dir_env && env[declared.config_dir_env])
-      || join(env.HOME || "", declared.config_dir_default || "");
+    // Both the env-named config dir AND the default, not one OR the other.
+    // Measured on agy 1.1.28: `agy plugin install` ignores GEMINI_CONFIG_DIR
+    // entirely and always installs under $HOME/.gemini, and `agy plugin list`
+    // ignores it too. So a user who exports it would, under an `||`, get a
+    // resolver searching an empty directory while every sibling plugin sat in
+    // the default one -- android-foundation would not be found and an Android
+    // project would silently fall back to the vanilla profile. A superset costs
+    // one extra stat and is correct whether or not the host ever honours it.
+    const envDir = declared.config_dir_env ? env[declared.config_dir_env] : null;
+    const defaultDir = join(env.HOME || "", declared.config_dir_default || "");
+    const configDirs = [...new Set([envDir, defaultDir].filter(Boolean))];
+    const configDir = configDirs[0] ?? "";
     const searchPaths = [
       ...(declared.workspace_plugin_subdirs ?? []).map((s) => join(cwd, s)),
-      ...(declared.plugin_search_subdirs ?? []).map((s) => join(configDir, s)),
+      ...configDirs.flatMap((d) => (declared.plugin_search_subdirs ?? []).map((s) => join(d, s))),
     ];
     return {
       config_dir: configDir,
@@ -131,7 +141,14 @@ export function resolveRoots(env = process.env, cwd = process.cwd()) {
       plugin_search_paths: searchPaths,
       sdlc_plugin_root: ownPluginRoot(),
       host: declared.host,
-      sources: { config_dir: declared.config_dir_env ?? "host declaration", sdlc_plugin_root: "own-package (declared host)" },
+      sources: {
+        // Name the variable only when it actually supplied the value. Reporting
+        // `GEMINI_CONFIG_DIR` for a path that came from $HOME/.gemini is a
+        // provenance claim that is simply false, and provenance is the field a
+        // reader trusts when a path looks wrong.
+        config_dir: envDir ? declared.config_dir_env : `$HOME/${declared.config_dir_default}`,
+        sdlc_plugin_root: "own-package (declared host)",
+      },
       sdlc_version: null,
       sdlc_ambiguous: false,
     };
