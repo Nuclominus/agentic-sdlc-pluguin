@@ -430,6 +430,44 @@ test("the emitted package keeps the plugin manifest byte-identical", () => {
   assert.equal(out, src);
 });
 
+// ------------------------------------------------------------- install doc
+
+test("the install doc names every plugin the package carries", () => {
+  const r = emitAll(REPO, ANTIGRAVITY);
+  const doc = r.outputs.get("dist/antigravity/INSTALL.md")?.content;
+  assert.ok(doc, "no INSTALL.md was emitted");
+  for (const p of r.plugins) {
+    assert.ok(doc.includes(`dist/antigravity/plugins/${p}`), `INSTALL.md omits ${p}`);
+  }
+});
+
+test("every drop reaches the install doc, with its reason", () => {
+  // A capability lost at emit time is stated, not substituted (ADR-0022 §4) —
+  // and a reason that lives only in a build log is not stated to the person
+  // installing the package. This is what makes the drops list reach a reader.
+  const r = emitAll(REPO, ANTIGRAVITY);
+  const doc = r.outputs.get("dist/antigravity/INSTALL.md").content;
+  assert.ok(r.drops.length > 0, "the fixture is meaningless with no drops");
+  for (const d of r.drops) {
+    assert.ok(doc.includes(d.path), `INSTALL.md omits the drop ${d.path}`);
+    const head = String(d.reason).replace(/\s+/g, " ").slice(0, 40);
+    assert.ok(doc.includes(head), `INSTALL.md omits the reason for ${d.path}`);
+  }
+});
+
+test("a dropped hook event names the script that stops running", () => {
+  // "The host does not fire SessionStart" says which event vanished, not which
+  // capability. The reader of the drops table is deciding whether they can live
+  // without it, so the answer has to be in the row.
+  const hooks = JSON.stringify({
+    hooks: { SessionStart: [{ hooks: [{ command: 'bash "${CLAUDE_PLUGIN_ROOT}/hooks/android-cli-check.sh"' }] }] },
+  });
+  const r = rewriteHooks(hooks, ANTIGRAVITY);
+  assert.ok(r.ok);
+  assert.equal(r.dropped.length, 1);
+  assert.match(r.dropped[0].reason, /android-cli-check\.sh never runs/);
+});
+
 // ------------------------------------------- config-dir search is a superset
 
 test("a declared host searches the env-named config dir AND the default", () => {

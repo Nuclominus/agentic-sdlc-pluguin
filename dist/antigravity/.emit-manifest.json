@@ -14,6 +14,6 @@
     "sdlc",
     "workmanager-plugin"
   ],
-  "files": 191,
+  "files": 192,
   "regenerate": "node tools/sdlc-lint/cli.mjs emit --host antigravity"
 }
