@@ -1,0 +1,33 @@
+# Retrofit / OkHttp — SDLC manifest (kind: framework, additive).
+# Machine-read source the orchestrator consumes. Human docs live in README.md.
+
+kind: framework
+stack: retrofit
+priority: 150                       # documentational for frameworks — they never win an aspect
+enriches_aspect: network           # functional category; a foundation hosting `network` resolves me
+dependency: com.squareup.retrofit2 # the foundation declares WHERE to look; the orchestrator executes
+
+convention_skills:
+  - retrofit-plugin:retrofit-conventions
+
+extra_phases: []
+pre_phase_commands: []
+
+phase_injections:
+  development: |
+    Retrofit/OkHttp is present. Service interfaces expose `suspend` functions for one-shot calls and
+    `Flow` for streams — never blocking `Call<T>.execute()`. Centralize a single OkHttpClient (timeouts,
+    auth interceptor, and a logging interceptor gated on BuildConfig.DEBUG only). Pin a single converter
+    (kotlinx-serialization preferred per house style). Map HTTP/transport errors (HttpException, IOException)
+    to domain Results at the repository boundary — never leak Response/HttpException above the data layer.
+    See the retrofit-plugin:retrofit-conventions skill; layer principles stay with the hosting
+    foundation's data-layer conventions (do not restate them).
+  security: |
+    Retrofit/OkHttp (MASVS-NETWORK): all base URLs MUST be HTTPS — no cleartext traffic; configure
+    certificate or public-key pinning where the threat model requires it. The logging interceptor must be
+    DEBUG-gated and must never log Authorization headers, cookies, or request/response bodies in release.
+    Apply the R8/ProGuard keep rules in retrofit-plugin/rules/snippets/retrofit-proguard.md when the
+    project ships R8.
+
+# none — networking has no standalone Gradle gate beyond the foundation's compile/test/lint
+post_pipeline_checks: []

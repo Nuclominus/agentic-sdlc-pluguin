@@ -1,11 +1,19 @@
 {
   "emitter_version": 1,
   "host": "antigravity",
-  "host_descriptor_sha": "6643ac8614eb298994bfddea808e6f4931632ebabbf66e7cd40354f77354593a",
+  "host_descriptor_sha": "c3aec078170a6a415abdfcc33c7f86c0e88c0d2e773b258e1109072449153fd7",
   "host_cli_version": "1.1.28",
   "plugins": [
-    "sdlc"
+    "android-foundation",
+    "dagger-plugin",
+    "datastore-proto-plugin",
+    "koin-plugin",
+    "ktor-plugin",
+    "retrofit-plugin",
+    "room-plugin",
+    "sdlc",
+    "workmanager-plugin"
   ],
-  "files": 80,
+  "files": 191,
   "regenerate": "node tools/sdlc-lint/cli.mjs emit --host antigravity"
 }

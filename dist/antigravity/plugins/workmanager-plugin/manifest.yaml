@@ -1,0 +1,42 @@
+# WorkManager — SDLC manifest (kind: framework, additive).
+# Machine-read source the orchestrator consumes. Human docs live in README.md.
+
+kind: framework
+stack: workmanager
+priority: 150                       # documentational for frameworks — they never win an aspect
+enriches_aspect: background         # functional category; a foundation hosting `background` resolves me
+dependency: androidx.work           # covers work-runtime(-ktx)/work-testing; the foundation declares WHERE to look
+
+convention_skills:
+  - workmanager-plugin:workmanager-conventions
+
+extra_phases: []
+pre_phase_commands: []
+
+phase_injections:
+  development: |
+    WorkManager is present. Model deferrable, guaranteed background work as Workers — prefer
+    `CoroutineWorker` (suspend `doWork()`) over the threaded `Worker`; never block or spawn your own
+    threads inside a worker. Enqueue **unique** work (`enqueueUniqueWork` / `enqueueUniquePeriodicWork`
+    with an explicit `ExistingWorkPolicy`/`ExistingPeriodicWorkPolicy`) to avoid duplicate chains; give
+    every request meaningful `Constraints` (network/charging/battery) and a `setBackoffCriteria` policy.
+    Keep `doWork()` **idempotent** — it can re-run — and return `Result.retry()` for transient failures,
+    `Result.failure()` for permanent ones, `Result.success()` only when done. Pass only small,
+    non-sensitive identifiers via `inputData` (it is persisted in WorkManager's DB and size-limited);
+    load the real data inside the worker. Inject dependencies through a `WorkerFactory` (the DI aspect's
+    factory when a DI framework is present) — never construct repositories inside a worker. Observe state
+    with the `WorkInfo` `Flow` APIs from the ViewModel; never block on `getWorkInfos*().get()`.
+    Layer/DI/concurrency principles stay with the hosting foundation's conventions (do not restate them).
+    See the workmanager-plugin:workmanager-conventions skill.
+  security: |
+    WorkManager (MASVS-STORAGE / MASVS-PLATFORM): `inputData` and worker tags are persisted UNENCRYPTED
+    in WorkManager's internal database — never put secrets, tokens, or PII there; pass an opaque id and
+    load sensitive material inside the worker from secure storage. Expedited/foreground workers that post
+    a notification must not leak PII in the notification, and on Android 14+ must declare the correct
+    `foregroundServiceType`. Do not add `RECEIVE_BOOT_COMPLETED`, wake-lock, or exported components unless
+    the work genuinely requires them. Apply the R8/ProGuard keep rules in
+    workmanager-plugin/rules/snippets/workmanager-proguard.md when the project ships R8 and relies on the
+    default WorkerFactory (reflective Worker instantiation).
+
+# none — background work has no standalone Gradle gate beyond the foundation's compile/test/lint
+post_pipeline_checks: []

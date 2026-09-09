@@ -16,8 +16,7 @@
     "flat_agent_files": true
   },
 
-  "plugins": ["sdlc"],
-  "_plugins_comment": "Which plugins this host's package carries. Phase 1 is the core alone — the vanilla profile exercises the whole pipeline, and android-foundation plus the seven framework plugins add 14 skills and 8 hook files of schedule without reducing any risk. Widened in Phase 3.",
+  "_plugins_comment": "No `plugins` list: absent means EVERY plugin in the marketplace (any plugins/*/ carrying a manifest.yaml). Phase 1 shipped `[\"sdlc\"]` deliberately — the core alone exercises the whole pipeline on the vanilla profile, so the foundations were schedule rather than risk. Phase 3 widened it, and an explicit list of all nine would have been a second spelling of \"every plugin\" that a tenth plugin could silently contradict. A new plugin therefore ships here automatically, and the gate is not this field: `emit` fails loudly if the plugin cannot be rendered, and `emit --check` fails CI if dist/ was not regenerated. Re-introduce this key only for a real exclusion, on the host that needs it.",
 
   "package": {
     "_comment": "The whole structural transform is two moves. Antigravity looks for plugin.json and hooks.json at the PLUGIN ROOT; Claude Code keeps them at .claude-plugin/plugin.json and hooks/hooks.json. `agy plugin validate <dir>` fails with `missing plugin.json` until the first move, and reports `hooks: skipped (not found)` until the second.",
@@ -88,6 +87,7 @@
 
   "discovery": {
     "_comment": "Written into the emitted package's config/host.json so the shipped resolver can find sibling plugins without guessing. Without it, `cli.mjs` run out of an Antigravity install resolved its own root to a Claude Code cache copy — the same cross-tree mixing as issue #70. Workspace paths come first: a project-local plugin should win over a globally installed one.",
+    "_config_dir_env_comment": "MEASURED ON 1.1.28: `agy` honours this variable NOWHERE. With GEMINI_CONFIG_DIR pointed at an empty directory, `agy plugin install` still installed under $HOME/.gemini/config/plugins and `agy plugin list` still listed the plugins there. It is kept in this descriptor because the resolver searches the env-named directory AND the default (a superset, see roots.mjs) rather than one instead of the other, so it costs one stat and starts working for free if a later CLI honours it. Two consequences: a throwaway-config CI job cannot isolate an `agy plugin install`, and the install is global — the merge caveat below applies to the developer's real config dir.",
     "config_dir_env": "GEMINI_CONFIG_DIR",
     "config_dir_default": ".gemini",
     "workspace_plugin_subdirs": [".agents/plugins"],
