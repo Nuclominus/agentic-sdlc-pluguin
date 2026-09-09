@@ -11,6 +11,7 @@ import { resolveModel, modelPairs, TIERS } from "../lib/emit/models.mjs";
 import { checkHost } from "../lib/emit/check.mjs";
 import { sectionRange, applyOverlays, overlaysFor } from "../lib/emit/overlay.mjs";
 import { frontmatter, parseTools } from "../lib/agent-tools.mjs";
+import { loadRegistry, lookupPricing } from "../../../plugins/sdlc/tools/usage/usage.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const ANTIGRAVITY = loadHost(REPO, "antigravity");
@@ -64,6 +65,16 @@ test("the model map is a golden table — a silent edit shows up here", () => {
     ["sonnet/low", "gemini-3.8-flash-low"],
     ["sonnet/medium", "gemini-3.8-flash-medium"],
   ]);
+});
+
+test("every model the host map can emit is known to the registry", () => {
+  // Ties hosts/<host>.json to config/models.json. Without this the emitter can
+  // dispatch a model string telemetry cannot price, and the failure shows up as
+  // a silently unpriced phase rather than as a broken build.
+  const registry = loadRegistry(join(REPO, "plugins", "sdlc", "config", "models.json"));
+  for (const [pair, id] of modelPairs(ANTIGRAVITY)) {
+    assert.ok(lookupPricing(id, registry), `${pair} emits \`${id}\`, which config/models.json does not price`);
+  }
 });
 
 // ---------------------------------------------------------------- agents

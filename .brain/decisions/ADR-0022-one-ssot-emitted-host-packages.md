@@ -78,10 +78,20 @@ committed, and gated. Nothing translates at run time.**
    that a paragraph which fails to land raises no error, it just stops existing). `emit` writes;
    only `--check` runs in CI, because regenerating in CI would let a bad transform land unseen.
 
-6. **Tier tags are never translated.** `opus|sonnet|haiku|fable` stay tier *names* in every host
-   registry, resolving to different model ids per host. The tag in the frontmatter, the tag in
-   `model.local.json` and the key in the map are one string by construction — the same rule
-   ADR-0021 applied to agent names.
+6. **Tier tags are never translated.** `opus|sonnet|haiku|fable` stay tier *names*, resolving to
+   different model ids per host. The tag in the frontmatter, the tag in `model.local.json` and the
+   key in the map are one string by construction — the same rule ADR-0021 applied to agent names.
+
+7. **One registry for every provider, not one registry per host.** The first draft of this ADR said
+   `config/models.json` would be regenerated per host. It is not, and the reason is that the
+   tier→id mapping and the id→price mapping are different questions. The tier→id map is host
+   knowledge and lives in `tools/sdlc-lint/hosts/<host>.json`, keyed on tier+effort where the host
+   needs it. Pricing is provider knowledge and stays in the one registry that is already the SSOT
+   for it, now carrying the `gemini-*` families beside the Claude ones as reference/pin-only
+   entries — the same slot the dated Claude pins already used. The emitter copies the registry
+   verbatim. A per-host registry would have split one price list into N, which is how price lists
+   drift. `sdlc-lint emit` asserts the seam: every model the host map can emit must be priced by the
+   registry, so a host mapping cannot outrun it.
 
 ## Consequences
 
