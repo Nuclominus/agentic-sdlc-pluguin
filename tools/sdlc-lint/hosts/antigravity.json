@@ -3,9 +3,10 @@
   "cli": "agy",
   "_comment": "Host descriptor for Antigravity CLI. Every entry under `native`, `package`, `models` and `telemetry` was observed on a live CLI, not read from docs — the docs disagree with the binary in two places (see `native`). Re-verify and bump `verified_on` when the CLI minor moves.",
   "verified_on": {
-    "cli_version": "1.1.27",
-    "date": "2026-09-08",
-    "method": "agy plugin validate + agy plugin install + agy models, against a probe tree built from unmodified plugins/sdlc"
+    "cli_version": "1.1.28",
+    "date": "2026-09-09",
+    "method": "agy plugin validate + agy plugin install + agy models, against a probe tree built from unmodified plugins/sdlc",
+    "_recheck_comment": "First re-verification after a CLI bump (1.1.27 -> 1.1.28). `agy plugin validate dist/antigravity/plugins/sdlc` reports the same six lines (3 skills, 12 agents, 11 commands converted to skills, 1 hook, mcpServers skipped), so `native` still holds. `agy models` grew two older Flash generations (gemini-3.7-flash-*, gemini-3.6-flash-*); every id `models.map` emits still exists, so the map is unchanged. Nothing in this descriptor moved — recorded so the next reader knows the version was checked, not assumed."
   },
 
   "native": {
