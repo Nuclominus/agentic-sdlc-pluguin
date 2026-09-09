@@ -26,7 +26,8 @@ Both hosts were probed on a live CLI. Where the docs and the binary disagreed, t
 | Structural gate without a model call | `agy plugin validate <dir>` — zero tokens, CI-able. |
 | Headless usage data | `agy -p --output-format json` returns `usage{input_tokens, output_tokens, thinking_tokens, cache_read_tokens, total_tokens}` plus `conversation_id` and `denied_actions[]`. |
 | antigravity-cli#76 (stdout dropped on non-TTY) | Did **not** reproduce through a pipe with `--output-format json`. |
-| Is `status` trustworthy? | **No.** A run that produced nothing and had an action auto-denied still reported `status: "SUCCESS"` with an empty `response`. Gate on `_telemetry.json`. |
+| Is `status` trustworthy? | **No, in both directions.** A run that produced nothing and had an action auto-denied reported `status: "SUCCESS"` with an empty `response`; the full pipeline run, which completed and sealed, reported `status: "ERROR"` because it hit `--print-timeout` while composing its closing message (898 s against a 15 m limit). Gate on `_telemetry.json`, never on `status` or exit code. |
+| Print-mode timeout | Set it well past the pipeline's own wall clock: the sealed run took 539 s but `agy` stayed up 898 s finishing Step 6 and its final response. |
 
 **Codex CLI** — not yet probed; the CLI is not installed locally, which is Phase 2's first
 prerequisite. From docs: subagents are TOML in `.codex/agents/`, dispatched via
@@ -37,12 +38,48 @@ field (openai/codex#28491), so agent TOMLs ship as plain files plus an install s
 
 ## State
 
-- **Phase 1 (Antigravity core, vanilla only) — emitter landed.** `sdlc-lint emit [--host <id>|all]`
-  and `emit --check`, wired into `all`. `dist/antigravity/` committed: 78 files, 2 declared drops.
-  `agy plugin validate` green on the emitted tree; drift and orphan detection both verified against
-  a deliberate hand edit.
-- **Open in Phase 1:** the live `/sdlc-start` run on a plain-Node fixture. Blocked on the dispatch
-  spike below.
+**Phase 1 is met.** A full vanilla pipeline ran end to end on `agy` 1.1.27 against a plain-Node
+fixture (2026-09-09, slug `add-a-healthz-endpoint-that-returns-200`, 539 s sealed wall clock):
+
+| Phase | Agent | Model as dispatched | Result |
+|---|---|---|---|
+| business_analysis | business-analyst | `gemini-3.1-pro-high` | completed, 1729-char summary |
+| development | developer | `gemini-3.8-flash-medium` | completed (two-pass: plan + implement) |
+| qa | qa-engineer | `gemini-3.8-flash-medium` | completed, 1 iteration |
+| security | security-analyst | `gemini-3.1-pro-high` | completed, no Critical/High |
+| remediation | — | — | **skipped by the gate**, as designed |
+| documentation | document-writer | `gemini-3.8-flash-low` | completed |
+
+What that proves beyond "it ran": the 1900-line orchestrator loaded and was followed on a foreign
+host; Step 0 resolved in one command; `invoke_subagent` dispatch worked for every phase; compact
+summaries came back and stayed inside the 3000-char budget (max 1729); every deliverable and
+checkpoint landed at the right path; the conditional `gate: {after, min_severity}` evaluated and
+skipped `remediation`; the run sealed itself (`sealed_by: "orchestrator"`); and Step 6's journal
+entry rendered `$—`. The work product is real — `/healthz` implemented for GET/HEAD with 405 on
+other methods, 18 tests written by the qa phase, all passing.
+
+**The degradation contract behaved exactly as designed, with no new states.** Every phase carries
+`cost_usd: null` (never 0) and `cap_gate_blind: true`; `cost_basis` is null; `report.html` renders
+`unverified — run unpriced` and names all five blind phases.
+
+- Emitter: `sdlc-lint emit [--host <id>|all]` + `emit --check`, wired into `all`. `dist/antigravity/`
+  committed (80 files, 2 declared drops). Drift and orphan detection verified against a deliberate
+  hand edit.
+- Overlays: `3c`, `3c-crash`, `3b-3`, `3d-1`. The emitted body contains no `Agent` tool reference and
+  no `subagent_type`.
+
+## Follow-ups this run surfaced
+
+- **`aar/metrics.mjs:88` reads `cap_status` without the `capVerified` guard** that
+  `report/report.mjs:324` applies. On an unpriced run `_telemetry.json` records
+  `cap_status: "within"` — an honest record of what enforcement *did* (it counted every null phase
+  as $0), but a consumer that reads it without checking `cost_basis` presents a verdict as fact.
+  The report is correct; AAR and rollup are not guarded. Phase 4, where cap verdicts come back.
+- **Project-local recipes still live at `.claude/sdlc-workflows/`** on every host. Renaming that per
+  host needs a doctor-migration story, so it was deliberately left alone rather than given a second
+  lookup path.
+- **`agy plugin install` merges rather than replaces** — after renaming files, uninstall first or the
+  install keeps orphans the emitter would never produce.
 
 ## The dispatch risk — settled for Antigravity
 
