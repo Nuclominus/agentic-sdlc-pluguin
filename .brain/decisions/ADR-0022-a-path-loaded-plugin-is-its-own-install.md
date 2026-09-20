@@ -55,13 +55,29 @@ other install.**
    `manifests.mjs` is applied once, in `resolveProfile`. Manifest loading, recipe discovery
    (`workflow.mjs`), dependency aggregation and skill enumeration (`deps.mjs`) all iterate
    `installs` and need no knowledge of path loads at all. One concept, four fixes.
-4. **A path load REPLACES the registered copy of the same plugin, keeping its key.** Two roots of
-   one plugin would both be read, and two `vanilla` foundations of equal priority make stack
-   detection a coin toss decided by iteration order — the same class of nondeterminism ADR-0009
-   was written to remove. The tree being edited wins, because it is the code that is running.
-   Keeping the *registered key* is what makes the replacement safe: an `enabledPlugins` entry that
-   disables the plugin keeps disabling it, and every `declared_by` / `plugin:skill` label stays the
-   name it was. The displaced path is reported as a `WARN`, never dropped silently.
+4. **A path load REPLACES every registered copy of the same plugin, keeping the first one's key.**
+   Two roots of one plugin would both be read, and two `vanilla` foundations of equal priority make
+   stack detection a coin toss decided by iteration order — the same class of nondeterminism
+   ADR-0009 was written to remove. *Every* copy, not just the first: one plugin installed from two
+   marketplaces is two keys, and replacing one while the other still points at its own tree
+   reproduces the tie. Keeping the first one's *registered key* is what makes the replacement safe:
+   every `declared_by` / `plugin:skill` label stays the name it was, and a version the checkout does
+   not declare stays the version the registry knew. Displaced paths are reported as `WARN`s, never
+   dropped silently.
+5. **Identity for replacement must be DECLARED, never guessed.** A root's name comes from
+   `.claude-plugin/plugin.json`. A root without one still resolves — as a plugin of its own, under
+   `<dirname>@path`, never as a replacement for somebody else's entry. The directory-name fallback
+   would otherwise let a checkout in a directory called `superpowers` take over `superpowers@obra`,
+   and the dependency preflight would look for that plugin's skills in the wrong tree and report
+   them missing.
+6. **A path load is enabled by the act of being loaded.** `enabledPlugins` governs the *registered*
+   install, and the replacement inherits the registered key — so a `false` there followed the key
+   onto the checkout and vetoed it. Disabling the installed copy before running the checkout with
+   `--plugin-dir` is the natural setup, so this is not a corner case: it restored the exact halt
+   this ADR exists to remove. The harness was pointed at the directory explicitly; nothing in a
+   settings file outranks that. `withPathLoadedEnabled` states the rule once, because **four**
+   consumers apply the veto — and fixing only the manifest layer left recipes and the dependency
+   declaration still vetoed, which halts the run just as dead.
 
 ## Consequences
 
@@ -75,7 +91,16 @@ other install.**
   told so. That is the intent; the `WARN` exists so it is never a surprise.
 - Identity comes from `.claude-plugin/plugin.json`, the same file the harness reads. A root without
   one falls back to its directory name rather than being dropped — a fixture or a partial checkout
-  is not a reason to ignore a manifest that is plainly there.
+  is not a reason to ignore a manifest that is plainly there — but that guessed name can only name
+  a NEW entry, never claim an existing one.
+- **There is no longer a way to disable a path-loaded plugin from settings.** Unloading it means
+  not pointing the harness at it. That is the correct trade — the alternative is a flag that
+  silently restores the original bug — but it is a real loss of a knob, stated here so the next
+  person does not rediscover it as a surprise.
+- Decisions 4, 5 and 6 all came out of the review of the implementing PR rather than the design.
+  Each is a case where the first implementation did the locally reasonable thing (`find` the match,
+  trust the directory name, honour the veto) and broke the property the ADR was written to
+  establish. Worth remembering as the shape this class of fix fails in.
 - The blind spot ADR-0009 left in `PLUGIN-PATHS.md` is now stated there rather than implied: the
   running plugin is a member of the discovery set, not only the subject of self-referential reads.
 

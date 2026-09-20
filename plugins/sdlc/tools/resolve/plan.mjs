@@ -11,7 +11,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { resolveRoots, pathLoadedRoots } from "./roots.mjs";
-import { readInstalledPlugins, readEnabledPlugins, loadInstalledManifests, loadManifestsFromTree, mergePathLoaded } from "./manifests.mjs";
+import { readInstalledPlugins, readEnabledPlugins, loadInstalledManifests, loadManifestsFromTree, mergePathLoaded, withPathLoadedEnabled } from "./manifests.mjs";
 import { resolveStack } from "./detect.mjs";
 import { preflight } from "./deps.mjs";
 import { computeDiffSignals, applySkipRules, renderSkipPrint } from "./skiprules.mjs";
@@ -113,10 +113,10 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   const extraRoots = pathLoadedRoots(env);
   const { installs: registered, conflicts } = readInstalledPlugins({ configDir });
   const installs = mergePathLoaded(registered, extraRoots);
-  const enabled = readEnabledPlugins({ configDir, projectRoot: cwd });
+  const enabled = withPathLoadedEnabled(readEnabledPlugins({ configDir, projectRoot: cwd }), installs);
   for (const c of conflicts) warn(`WARN: ${c.key} is installed at several paths; using the ${c.scope} copy (${c.chosen})`);
   for (const [key, info] of installs) {
-    if (info.shadows) warn(`WARN: ${key} is loaded from a path (${info.installPath}); the installed copy at ${info.shadows} is not used`);
+    for (const p of info.shadows ?? []) warn(`WARN: ${key} is loaded from a path (${info.installPath}); the installed copy at ${p} is not used`);
   }
 
   const manifests = mode === "tree" ? loadManifestsFromTree(cwd) : loadInstalledManifests({ configDir, projectRoot: cwd, extraRoots });

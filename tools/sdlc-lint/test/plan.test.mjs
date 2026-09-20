@@ -564,3 +564,34 @@ test("an explicit --stack=vanilla resolves under a path load", () => {
     assert.equal(plan.stack.forced, true);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+// Review of #166, finding 1 — and the half of it that the manifest layer alone does not cover.
+//
+// Disabling the installed copy in settings.json before running the checkout is the natural setup,
+// and the replacement inherits the registered key, so the `false` followed it. Fixing only
+// loadInstalledManifests still left discoverRecipes and the dependency preflight vetoing, which
+// halts the run just as dead: "Workflow 'default' not found. Available: (none)", the original bug.
+test("an enabledPlugins veto does not disable a path load — recipes and deps included", () => {
+  const SDLC = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "plugins", "sdlc");
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-pathload-"));
+  try {
+    const cfg = join(dir, "cfg");
+    const cached = join(cfg, "plugins", "cache", "agentic-sdlc", "sdlc", "2.4.0");
+    write(join(cached, "manifest.yaml"), "kind: foundation\nstack: vanilla\npriority: 0\ndetect:\n  any: [\"*\"]\n");
+    write(join(cfg, "settings.json"), { enabledPlugins: { "sdlc@agentic-sdlc": false } });
+    write(join(cfg, "plugins", "installed_plugins.json"), {
+      version: 2,
+      plugins: { "sdlc@agentic-sdlc": [{ scope: "user", installPath: cached, version: "2.4.0" }] },
+    });
+
+    const proj = join(dir, "project");
+    mkdirSync(proj, { recursive: true });
+    const env = { HOME: dir, CLAUDE_CONFIG_DIR: cfg, CLAUDE_PLUGIN_ROOT: SDLC };
+    const { plan, halt, warnings } = resolvePlan({ cwd: proj, args: '"Add dark mode" --dry-run', env });
+
+    assert.equal(halt, null);
+    assert.equal(plan.workflow.name, "default", "the recipe lives in the path-loaded tree, past the veto");
+    assert.deepEqual(Object.keys(plan.deps_preflight), ["superpowers"]);
+    assert.ok(warnings.some((w) => w.includes("is loaded from a path")), "and the displaced copy is named");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
