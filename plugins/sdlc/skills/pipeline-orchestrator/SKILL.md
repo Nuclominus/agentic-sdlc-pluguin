@@ -10,10 +10,22 @@ description: |
   - User invokes /sdlc:start "<feature>"
   - User asks to "run the SDLC pipeline" or "go through the full pipeline"
   - You need to coordinate specialist agents to deliver a complete feature
+  - User asks what the pipeline WOULD do for a named change — a dry run, a preview, the phase
+    list, a cost estimate or a cost-cap verdict, with or without the `--dry-run` flag. The answer
+    is the resolver's, never yours: run Step 0 with `--dry-run` and echo it.
+
+  Trigger words — EN: run the SDLC pipeline, full pipeline, dry run, preview the pipeline, what
+  would the pipeline do, which phases would run, how much would it cost, cost estimate, cost cap,
+  would it fit under the cap, budget check, don't run it — just show me, plan only, estimate only.
+  Trigger words — UA: запусти SDLC пайплайн, повний пайплайн, суха прогонка, попередній перегляд,
+  що зробить пайплайн, які фази будуть, скільки це коштуватиме, оцінка вартості, ліміт вартості,
+  чи вкладеться в ліміт, перевірка бюджету, не запускай — просто покажи, тільки план, тільки оцінка.
 
   Do NOT use for:
   - Trivial single-file edits (just edit directly)
   - Read-only questions about the codebase
+  - Explaining how the pipeline, a recipe or an agent works in general — there is no change to
+    resolve a plan for, so there is no preview to print
   - Casual conversation
 ---
 
@@ -43,7 +55,7 @@ Language detection heuristic: if the majority of word characters in `$ARGUMENTS`
 
 The detected language is delivered to each phase agent via the per-call CONTEXT trailer in Step 3b-1 (key: `narrative_language`), NOT as a free-form text suffix on each prompt. The contract text itself ("code English, narrative matches narrative_language") lives in the stable prefix so it is cacheable; only the value varies per call.
 
-This single rule replaces the per-agent bilingual trigger keywords that were used in earlier prototypes — the orchestrator's routing is deterministic (driven by `agents_per_phase` from the active stack profile), so trigger keywords add no value and only consume context.
+This single rule replaces the per-agent bilingual trigger keywords that were used in earlier prototypes — the orchestrator's routing is deterministic (driven by `agents_per_phase` from the active stack profile), so trigger keywords add no value *inside* the run and only consume context. The bilingual list in this skill's own frontmatter is a different thing and stays: that one decides whether the skill is selected at all, which nothing downstream can make deterministic.
 
 ---
 
@@ -71,6 +83,19 @@ node "${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs" plan --json "$ARGUMENTS"
 `$ARGUMENTS` is quoted because it is the user's free text: unquoted, a description containing
 `` ` ``, `$(…)`, `;` or `&&` would execute rather than describe, and a multi-word `--skills "<csv>"`
 would word-split. The command only regex-scans it for flags, so quoting costs nothing.
+
+A request for a **preview** — "dry run", "what would it do", "which phases", "how much would it
+cost", "would it fit under the cap", "don't run it" — appends `--dry-run` to the arguments if the
+user did not type the flag. The natural-language and slash-command forms then resolve identically,
+and Step 1d-2 stops the run after the preview.
+
+This matters more than it looks. A preview request that reaches `plan` without the flag does not
+produce a preview — it starts the pipeline. And a preview request that never reaches `plan` at all
+gets answered from the model's own reading of the recipe: the run that opened issue #165 replied
+with a confident 8-phase pipeline including a `test` phase, where `default.yaml` has 6 phases and
+no such phase. Plausible, wrong, and indistinguishable from a real preview to a reader who does not
+know the recipe. The phases, the estimate and the cap verdict are machine values
+(`MACHINE-VALUES.md`); recalling them is not an available option.
 
 Then do exactly three things:
 
