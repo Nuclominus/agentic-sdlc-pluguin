@@ -14,12 +14,18 @@ description: |
     list, a cost estimate or a cost-cap verdict, with or without the `--dry-run` flag. The answer
     is the resolver's, never yours: run Step 0 with `--dry-run` and echo it.
 
-  Trigger words — EN: run the SDLC pipeline, full pipeline, dry run, preview the pipeline, what
-  would the pipeline do, which phases would run, how much would it cost, cost estimate, cost cap,
-  would it fit under the cap, budget check, don't run it — just show me, plan only, estimate only.
-  Trigger words — UA: запусти SDLC пайплайн, повний пайплайн, суха прогонка, попередній перегляд,
-  що зробить пайплайн, які фази будуть, скільки це коштуватиме, оцінка вартості, ліміт вартості,
-  чи вкладеться в ліміт, перевірка бюджету, не запускай — просто покажи, тільки план, тільки оцінка.
+  Every preview trigger below needs a CHANGE named in the request. Without one there is no plan to
+  resolve, and the phrases on their own ("how much would it cost", "which phases") belong to
+  whatever else the user was discussing.
+
+  Trigger words — EN: run the SDLC pipeline, full pipeline, SDLC dry run, preview the pipeline,
+  what would the pipeline do for <change>, which phases would run for <change>, how much would the
+  pipeline cost for <change>, pipeline cost estimate, would <change> fit under the cost cap, don't
+  run it — just show me the phases and the estimate.
+  Trigger words — UA: запусти SDLC пайплайн, повний пайплайн, суха прогонка SDLC, попередній
+  перегляд пайплайна, що зробить пайплайн для <зміни>, які фази будуть для <зміни>, скільки
+  коштуватиме пайплайн для <зміни>, оцінка вартості пайплайна, чи вкладеться <зміна> в ліміт
+  вартості, не запускай — просто покажи фази та оцінку.
 
   Do NOT use for:
   - Trivial single-file edits (just edit directly)
@@ -38,6 +44,14 @@ You are the SDLC Pipeline Orchestrator. You coordinate specialist agents to deli
 ## Inputs
 
 - `$ARGUMENTS` — feature description from `/sdlc:start`. May contain `--stack=NAME` override.
+  When this skill is selected from a natural-language request instead of the slash command,
+  `$ARGUMENTS` is **the change the user described, in their own words**, reconstructed into the
+  same one-line brief the slash form would have carried, plus any flag the preview rule below
+  adds. Everything downstream — `task_slug`, `_brief.md`, language detection, the skip-rule
+  `arguments_pattern` — reads `$ARGUMENTS` and cannot tell the two entry paths apart, which is
+  the point. **If the request names no change to resolve a plan for, there is no `$ARGUMENTS`:
+  ask what the change is and stop.** Resolving an empty brief prints a phase list, an estimate
+  and a cap verdict computed from nothing.
 - Current project working directory.
 - Installed plugins under `{PLUGIN_CACHE_ROOT}/**` — resolved in Step 0, never a literal `~`.
 
@@ -85,17 +99,21 @@ node "${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs" plan --json "$ARGUMENTS"
 would word-split. The command only regex-scans it for flags, so quoting costs nothing.
 
 A request for a **preview** — "dry run", "what would it do", "which phases", "how much would it
-cost", "would it fit under the cap", "don't run it" — appends `--dry-run` to the arguments if the
-user did not type the flag. The natural-language and slash-command forms then resolve identically,
-and Step 1d-2 stops the run after the preview.
+cost", "would it fit under the cap", "don't run it" — appends `--dry-run` **into `$ARGUMENTS`**, if
+the user did not type it, before the command above runs. Into `$ARGUMENTS`, not as a separate argv
+token: Step 1d-2's stop gate is keyed on `$ARGUMENTS` containing the flag, and the resolver accepts
+it either way. A flag that only reaches the resolver prints the preview and leaves the gate's
+condition false — preview announced, agents dispatched anyway. The natural-language and slash
+forms then resolve identically, down to the string the run is derived from.
 
 This matters more than it looks. A preview request that reaches `plan` without the flag does not
 produce a preview — it starts the pipeline. And a preview request that never reaches `plan` at all
 gets answered from the model's own reading of the recipe: the run that opened issue #165 replied
-with a confident 8-phase pipeline including a `test` phase, where `default.yaml` has 6 phases and
-no such phase. Plausible, wrong, and indistinguishable from a real preview to a reader who does not
-know the recipe. The phases, the estimate and the cap verdict are machine values
-(`MACHINE-VALUES.md`); recalling them is not an available option.
+with a confident eight-phase pipeline including a `test` phase, which `default.yaml` does not
+have. Plausible, wrong, and indistinguishable from a real preview to a reader who does not know the
+recipe. The phase list, the estimate and the cap verdict are machine values (`MACHINE-VALUES.md`);
+recalling any of them — including from this document, which deliberately states none — is not an
+available option.
 
 Then do exactly three things:
 
