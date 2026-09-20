@@ -21,8 +21,12 @@ stripping it here would silently disable the override.
 
 If `$ARGUMENTS` contains `--resume` or `--resume=<slug>`: set `resume` mode. For `--resume=<slug>`
 remember `<slug>` as `resume_slug`; for bare `--resume` the slug is derived from the description
-exactly as in the skill's Step 2. Strip the flag from the description. Pass `resume` / `resume_slug`
-to the skill in Step 2.
+exactly as in the skill's Step 2. Pass `resume` / `resume_slug` to the skill in Step 2, and — as
+with `--stack=NAME` above — **leave the flag in the description**: the resolve command parses it
+itself (`tools/resolve/plan.mjs`, `resolveResume`) to price a `--dry-run` preview against the
+checkpoints already on disk. Stripping it here silently restored the full-run preview, which is
+issue #168 arriving by a second route. Slug derivation ignores flags, exactly as it already must
+for `--stack=NAME` and `--dry-run`.
 
 Print verbatim:
 ```
@@ -33,7 +37,7 @@ Print verbatim:
 
 ### Step 2 — Invoke the pipeline-orchestrator skill
 
-Use the Skill tool to load and execute the `pipeline-orchestrator` skill. Pass `$ARGUMENTS` through unchanged apart from `--resume`. **Do not improvise or inline the orchestration logic — delegate to the skill.**
+Use the Skill tool to load and execute the `pipeline-orchestrator` skill. Pass `$ARGUMENTS` through **unchanged** — every flag included, for the reason Step 1 gives for `--stack=NAME` and `--resume`: the resolve command is the thing that parses them. **Do not improvise or inline the orchestration logic — delegate to the skill.**
 
 The skill enforces its own MUST-print protocol for stack detection (`🎯 Active stack profiles:`), phase boundaries (`▶ Phase N/M: ...`), and the final summary. If you find yourself not printing these — stop, re-read the skill, and start over.
 
@@ -112,7 +116,13 @@ from the first unfinished phase instead of re-running everything:
 The orchestrator reads `docs/plans/{slug}/.checkpoint/` — phases with a `completed`/`skipped`
 checkpoint are skipped (their cost is preserved in the final telemetry); the pipeline re-enters at
 the first unfinished phase. Combine with `--dry-run` to preview what would be skipped without
-dispatching anything.
+dispatching anything: completed units render as `⏩ … $0.00`, and the estimate and cap verdict cover
+only the phases that would still be dispatched — the cost to *finish*, not to redo.
+
+For that preview the slug has to be found before the run starts, and a bare `--resume` reconstructs
+it from the description. If it reconstructs a slug that does not match the workspace on disk, the
+preview says so (`WARN: --resume: no checkpoints at docs/plans/<slug>/.checkpoint`) and prices a full
+run rather than pretending; pass `--resume=<slug>` to be exact.
 
 **Non-goal:** `--resume` does NOT restore repository state. It trusts the workspace and the code on
 disk; if git moved under the completed phases, that is the operator's responsibility.
