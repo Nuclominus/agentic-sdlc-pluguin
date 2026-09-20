@@ -5,6 +5,9 @@ docs/plans/_*.log
 node_modules/
 docs/plans/**/.checkpoint/
 
+# Eval run output: one report.html + aggregate-result.json per run, regenerated on every invocation.
+plugins/*/evals/results/
+
 # Benchmark run archives are large binaries; the JSON results beside them are the evidence and stay tracked.
 bench/archive/*.tar.gz
 bench/archive-headless/*.tar.gz
