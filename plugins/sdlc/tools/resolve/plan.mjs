@@ -21,6 +21,7 @@ import {
 } from "./profile.mjs";
 import { discoverRecipes, resolveWorkflowName, locateRecipe, validateWorkflow, normalizePhases, validateAcyclic, buildResolvedPhases, renderWorkflowPrint } from "./workflow.mjs";
 import { resolveCostCap, renderCapOverridePrint, expandRows, estimate, renderDryRun, renderHeadlessDryRun } from "./caps.mjs";
+import { loadCheckpoints, doneUnitIds } from "../run/reentry.mjs";
 import { parseYaml } from "./yaml.mjs";
 
 const readJson = (f) => { try { return JSON.parse(readFileSync(f, "utf8")); } catch { return null; } };
@@ -40,6 +41,74 @@ function frontmatterTiers(installs, enabled) {
     }
   }
   return tiers;
+}
+
+/** Step 2's slug rule, in code: lowercase, alphanumerics + dashes, max 40 chars. */
+const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40).replace(/-+$/, "");
+
+/**
+ * Flags whose value is a SEPARATE token (`--mode tree`), as `cli.mjs`'s `tokenOpt` reads them.
+ * Their value is not part of the description and must not reach the slug — `--mode tree "Add dark
+ * mode"` otherwise derives `tree-add-dark-mode`, which matches no workspace.
+ */
+const TOKEN_VALUE_FLAGS = ["--mode", "--role", "--skills", "--base-ref", "--workflow"];
+
+/** `$ARGUMENTS` with every flag, flag value and quote stripped — the description Step 2 slugifies. */
+const briefOf = (args) => {
+  let out = String(args);
+  for (const f of TOKEN_VALUE_FLAGS) out = out.replace(new RegExp(`(^|\\s)${f}\\s+\\S+`, "g"), " ");
+  return out.replace(/--[a-z][a-z0-9-]*(=[^\s]*)?/g, " ").replace(/["'`]/g, " ").replace(/\s+/g, " ").trim();
+};
+
+/** A slug is a directory name under docs/plans/ — never a path, never a traversal. */
+const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
+
+/**
+ * Which units a `--resume` would skip, so the preview can price them at $0 (issue #168).
+ *
+ * `commands/start.md` promises "Combine with `--dry-run` to preview what would be skipped", and
+ * the rendering for it has always been there — `⏩` rows, zeroed estimates, resumed rows excluded
+ * from the loop/heal/gate arithmetic. Nothing ever passed `resumedDone`, so every one of those
+ * branches was unreachable and the preview priced a finished run as if it were about to start. On
+ * a run resumed near the end that is not a rounding error: the verdict can read EXCEEDS against a
+ * remaining cost of nearly zero.
+ *
+ * "Done" is NOT redefined here. `loadCheckpoints` + `doneUnitIds` come from tools/run/reentry.mjs,
+ * the same module `--resume` and the H6 seal gate consult; `resolveWorkspace` is the wrong entry
+ * point only because it demands the `_run.json` that a run which has not started has not written.
+ *
+ * The slug is the soft spot, and it is reported rather than guessed around. Step 2 generates it
+ * from `$ARGUMENTS` in prose, so a model's slug and this function's can differ. `--resume=<slug>`
+ * is exact; a bare `--resume` is a reconstruction, and when it finds no checkpoint directory the
+ * preview says so instead of quietly showing a full run.
+ */
+export function resolveResume({ cwd = process.cwd(), args = "" } = {}) {
+  // `(?=\s|$)` rather than a consuming `(\s|$)`: with the latter a trailing `--resume=` cannot
+  // match at all, so an empty slug read as "no resume at all" — no preview, and no warning either.
+  // A silent no-op is the one outcome this function exists to prevent.
+  const m = /(^|\s)--resume(=(\S*))?(?=\s|$)/.exec(String(args));
+  if (!m) return { requested: false, slug: null, done: new Set(), warnings: [] };
+  const warnings = [];
+  const explicit = m[2] !== undefined;
+  const slug = explicit ? m[3] : slugify(briefOf(args));
+  if (!slug) {
+    warnings.push(explicit
+      ? "WARN: --resume=: empty slug — previewing a full run"
+      : "WARN: --resume: no slug given and none derivable from the description — previewing a full run");
+    return { requested: true, slug: null, done: new Set(), warnings };
+  }
+  if (!SLUG_RE.test(slug)) {
+    warnings.push(`WARN: --resume=${slug}: not a run slug (a directory name under docs/plans/) — previewing a full run`);
+    return { requested: true, slug: null, done: new Set(), warnings };
+  }
+  const checkpointDir = join(cwd, "docs", "plans", slug, ".checkpoint");
+  if (!existsSync(checkpointDir)) {
+    warnings.push(`WARN: --resume: no checkpoints at docs/plans/${slug}/.checkpoint — previewing a full run${explicit ? "" : " (slug derived from the description; pass --resume=<slug> if it differs)"}`);
+    return { requested: true, slug, done: new Set(), warnings };
+  }
+  const { units, warnings: cw } = loadCheckpoints(checkpointDir);
+  for (const w of cw) warnings.push(`WARN: --resume: ${w}`);
+  return { requested: true, slug, done: doneUnitIds(units), warnings };
 }
 
 const flag = (args, name) => new RegExp(`(^|\\s)${name}(\\s|=|$)`).test(String(args));
@@ -404,24 +473,32 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
   // ---- Step 1d-1: the dry-run preview is a rendering of the plan, not a second resolution.
   if (flag(args, "--dry-run")) {
     const tiers = frontmatterTiers(installs, enabled);
-    const rows = expandRows(built.phases, { agentsPerPhase: effective.agents_per_phase, modelOverrides: models.overrides, frontmatterTiers: tiers });
+    const resume = resolveResume({ cwd, args });
+    warnAll(resume.warnings);
+    const rows = expandRows(built.phases, { agentsPerPhase: effective.agents_per_phase, modelOverrides: models.overrides, frontmatterTiers: tiers, resumedDone: resume.done });
     const registry = readJson(join(roots.sdlc_plugin_root ?? "", "config", "models.json"));
     if (!registry) {
       warn("WARN: model registry not found — dry-run cost preview unavailable");
     } else {
       const healEnabled = (effective.heal_checks ?? []).length > 0;
       const est = estimate(rows, registry, { healEnabled });
+      // `resumed` reports what the estimate ACTUALLY accounts for, not that the flag was typed. A
+      // --resume whose slug found nothing prices a full run; emitting `resumed: true` beside a
+      // full-run figure would have a CI consumer read one as the other.
+      const anyResumed = est.rows.some((r) => r.resumed);
+      const reenterAt = anyResumed ? (est.rows.find((r) => !r.resumed)?.phase ?? null) : null;
       plan.dry_run = {
-        rows: est.rows.map((r) => ({ phase: r.phase, aspect: r.aspect ?? null, agent: r.agent, tier: r.tier, est: r.est })),
+        rows: est.rows.map((r) => ({ phase: r.phase, aspect: r.aspect ?? null, agent: r.agent, tier: r.tier, est: r.est, resumed: r.resumed === true })),
         expected_total: est.expected_total,
         worst_total: est.worst_total,
+        ...(anyResumed ? { resumed: true, resume_slug: resume.slug, reenter_at: reenterAt } : {}),
       };
       prints.push(headless
-        ? renderHeadlessDryRun({ estimate: est, slots: built.phases.length, workflow: resolvedName.name, cap: cap.cost_cap })
+        ? renderHeadlessDryRun({ estimate: est, slots: built.phases.length, workflow: resolvedName.name, cap: cap.cost_cap, resumed: anyResumed, reenterAt })
         : renderDryRun({
           estimate: est, slots: built.phases.length, stack: stack.foundation, workflow: resolvedName.name,
           autoselected: resolvedName.autoselected, skipRules: skip.applied, cap: cap.cost_cap,
-          healEnabled, healBlocks: rows.filter((r) => r.heal).length,
+          healEnabled, healBlocks: rows.filter((r) => r.heal).length, resume,
         }));
     }
   }
