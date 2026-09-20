@@ -517,3 +517,81 @@ test("the orchestrator's 0-large jq projection names only real plan keys", () =>
     assert.ok(!projected.includes("prompt_blocks"));
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
+
+// Issue #164, end to end and against the REAL plugin — the repro from the report, reduced to a
+// test. An empty config dir plus `CLAUDE_PLUGIN_ROOT=<checkout>/plugins/sdlc` is what
+// `--plugin-dir`, `claude plugin eval` and every development checkout look like from in here.
+// Before the fix this halted at "Workflow 'default' not found. Available: (none)" while
+// default.yaml sat next to the code printing the halt.
+test("a path-loaded plugin resolves its own manifest, recipes and dependencies", () => {
+  const SDLC = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "plugins", "sdlc");
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-pathload-"));
+  try {
+    const proj = join(dir, "project");
+    write(join(proj, "src.txt"), "seed\n");
+    const g = (...a) => execFileSync("git", a, { cwd: proj, stdio: "ignore" });
+    g("init", "-q", "-b", "main");
+    g("config", "user.email", "t@example.com");
+    g("config", "user.name", "t");
+    g("add", "-A"); g("commit", "-qm", "seed");
+    g("update-ref", "refs/remotes/origin/main", "HEAD");
+
+    // No installed_plugins.json, no cache: the registry every discovery keys off is empty.
+    const env = { HOME: dir, CLAUDE_CONFIG_DIR: join(dir, "cfg"), CLAUDE_PLUGIN_ROOT: SDLC };
+    const { plan, halt } = resolvePlan({ cwd: proj, args: '"Add dark mode" --dry-run', env });
+
+    assert.equal(halt, null, "the plugin that ships `vanilla` and default.yaml must not report neither");
+    assert.equal(plan.stack.primary_profile, "vanilla");
+    assert.equal(plan.workflow.name, "default");
+    assert.ok(plan.workflow.resolved_phases.length > 0);
+    assert.deepEqual(Object.keys(plan.deps_preflight), ["superpowers"],
+      "runtime-dependencies.json is read through the same registry, so it went missing with the rest");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("an explicit --stack=vanilla resolves under a path load", () => {
+  // The other face of the same defect: "no installed foundation declares that stack" for a stack
+  // that ships in the plugin doing the reporting.
+  const SDLC = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "plugins", "sdlc");
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-pathload-"));
+  try {
+    const proj = join(dir, "project");
+    mkdirSync(proj, { recursive: true });
+    const env = { HOME: dir, CLAUDE_CONFIG_DIR: join(dir, "cfg"), CLAUDE_PLUGIN_ROOT: SDLC };
+    const { plan, halt } = resolvePlan({ cwd: proj, args: '"Add dark mode" --stack=vanilla --dry-run', env });
+    assert.equal(halt, null);
+    assert.equal(plan.stack.primary_profile, "vanilla");
+    assert.equal(plan.stack.forced, true);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// Review of #166, finding 1 — and the half of it that the manifest layer alone does not cover.
+//
+// Disabling the installed copy in settings.json before running the checkout is the natural setup,
+// and the replacement inherits the registered key, so the `false` followed it. Fixing only
+// loadInstalledManifests still left discoverRecipes and the dependency preflight vetoing, which
+// halts the run just as dead: "Workflow 'default' not found. Available: (none)", the original bug.
+test("an enabledPlugins veto does not disable a path load — recipes and deps included", () => {
+  const SDLC = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "plugins", "sdlc");
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-pathload-"));
+  try {
+    const cfg = join(dir, "cfg");
+    const cached = join(cfg, "plugins", "cache", "agentic-sdlc", "sdlc", "2.4.0");
+    write(join(cached, "manifest.yaml"), "kind: foundation\nstack: vanilla\npriority: 0\ndetect:\n  any: [\"*\"]\n");
+    write(join(cfg, "settings.json"), { enabledPlugins: { "sdlc@agentic-sdlc": false } });
+    write(join(cfg, "plugins", "installed_plugins.json"), {
+      version: 2,
+      plugins: { "sdlc@agentic-sdlc": [{ scope: "user", installPath: cached, version: "2.4.0" }] },
+    });
+
+    const proj = join(dir, "project");
+    mkdirSync(proj, { recursive: true });
+    const env = { HOME: dir, CLAUDE_CONFIG_DIR: cfg, CLAUDE_PLUGIN_ROOT: SDLC };
+    const { plan, halt, warnings } = resolvePlan({ cwd: proj, args: '"Add dark mode" --dry-run', env });
+
+    assert.equal(halt, null);
+    assert.equal(plan.workflow.name, "default", "the recipe lives in the path-loaded tree, past the veto");
+    assert.deepEqual(Object.keys(plan.deps_preflight), ["superpowers"]);
+    assert.ok(warnings.some((w) => w.includes("is loaded from a path")), "and the displaced copy is named");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

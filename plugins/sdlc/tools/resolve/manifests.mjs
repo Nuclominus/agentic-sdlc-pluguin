@@ -20,7 +20,7 @@
 // not have to be resolved by heuristic — it never has to arise.
 
 import { existsSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { iterFiles } from "./fsglob.mjs";
 import { resolveConfigDir } from "./roots.mjs";
 import { parseYaml } from "./yaml.mjs";
@@ -125,6 +125,83 @@ export function readInstalledPlugins({ configDir } = {}) {
   return { installs: out, conflicts, file, present: true };
 }
 
+/** The plugin half of an `installed_plugins.json` key — `sdlc@agentic-sdlc` -> `sdlc`. */
+export const pluginNameOf = (key) => String(key).split("@")[0];
+
+/**
+ * A path-loaded root's identity, and whether it is DECLARED or merely guessed.
+ *
+ * `.claude-plugin/plugin.json` is what the harness itself reads, so it is what decides whether
+ * this root and a registered entry are the same plugin. A root without one still resolves — a
+ * fixture or a partial checkout is not a reason to drop a manifest that is plainly there — but
+ * it resolves as a plugin of its own, never as a replacement for somebody else's: `basename` is
+ * a directory name, and a checkout that happens to sit in a directory called `superpowers` must
+ * not be able to take over the registered `superpowers@obra`, whose `skills/` the dependency
+ * preflight would then look for in the wrong tree.
+ */
+function identifyRoot(root) {
+  const j = readJson(join(root, ".claude-plugin", "plugin.json"));
+  return { name: j?.name || basename(root), version: j?.version ?? null, declared: Boolean(j?.name) };
+}
+
+/**
+ * Fold path-loaded roots into an installs map, so that every consumer that iterates `installs`
+ * — manifests here, `workflows/` in ./workflow.mjs, `runtime-dependencies.json` and `skills/`
+ * in ./deps.mjs — sees a development checkout without being taught about one (issue #164).
+ *
+ * A path-loaded copy REPLACES every registered entry of the same plugin rather than joining
+ * them. Two roots of one plugin would otherwise both be read, and two `vanilla` foundations of
+ * equal priority make stack detection a coin toss decided by iteration order. EVERY entry, not
+ * just the first: one plugin installed from two marketplaces is two keys, and replacing one
+ * while leaving the other pointing at its own copy reproduces the tie this exists to prevent.
+ * The survivors' paths are reported in `shadows` so the caller can say what it is not using.
+ *
+ * The first match keeps its registered KEY, which is what makes the replacement safe: every
+ * `declared_by` and `plugin:skill` label stays the name it was, and a version the root does not
+ * declare stays the version the registry knew rather than becoming `null`.
+ */
+export function mergePathLoaded(installs, roots = []) {
+  const out = new Map(installs);
+  for (const root of roots) {
+    if (!existsSync(join(root, "manifest.yaml"))) continue;
+    if ([...out.values()].some((info) => resolve(info.installPath) === resolve(root))) continue;
+    const { name, version, declared } = identifyRoot(root);
+    const matches = declared ? [...out].filter(([key]) => pluginNameOf(key) === name) : [];
+    if (matches.length === 0) {
+      out.set(`${name}@path`, { installPath: root, version, scope: "path" });
+      continue;
+    }
+    const [[key, info], ...also] = matches;
+    out.set(key, {
+      ...info, installPath: root, version: version ?? info.version, scope: "path",
+      shadows: [info.installPath, ...also.map(([, i]) => i.installPath)],
+    });
+    for (const [dup] of also) out.delete(dup);
+  }
+  return out;
+}
+
+/**
+ * A path-loaded plugin is enabled by the act of being loaded.
+ *
+ * `enabledPlugins` governs the REGISTERED install, and the replacement above inherits the
+ * registered key — so a `false` there followed the key onto the checkout and vetoed it. That is
+ * not a corner case: disabling the installed copy in `settings.json` before running the checkout
+ * with `--plugin-dir` is the natural thing to do, and it restored the exact #164 halt this fix
+ * exists to remove. The harness was pointed at this directory explicitly; nothing in a settings
+ * file outranks that.
+ *
+ * Stated once, here, because FOUR consumers apply the veto — manifests below, `discoverRecipes`
+ * in ./workflow.mjs, `collectDependencies` and `enumerateSkills` in ./deps.mjs. Fixing only the
+ * manifest layer left the other three vetoing the recipes and the dependency declaration, which
+ * halts the run just as dead.
+ */
+export function withPathLoadedEnabled(enabled, installs) {
+  const out = { ...enabled };
+  for (const [key, info] of installs) if (info.scope === "path") out[key] = true;
+  return out;
+}
+
 /**
  * Mode `installed` — the manifests of the plugins this consumer has enabled.
  *
@@ -135,16 +212,18 @@ export function readInstalledPlugins({ configDir } = {}) {
  * visible, not silently used and not silently dropped.
  *
  * `extraRoots` covers the development case the backlog also names: a plugin loaded from a
- * local path is in no cache and no installed_plugins.json, and must still work.
+ * local path is in no cache and no installed_plugins.json, and must still work. They arrive
+ * through `mergePathLoaded`, which is also what keeps a path load from doubling a plugin the
+ * cache already carries.
  */
 export function loadInstalledManifests({ configDir, projectRoot, extraRoots = [] } = {}) {
   const cfg = configDir ?? defaultConfigDir();
-  const enabled = readEnabledPlugins({ configDir: cfg, projectRoot });
-  const { installs, conflicts, file: installsFile, present } = readInstalledPlugins({ configDir: cfg });
+  const { installs: registered, conflicts, file: installsFile, present } = readInstalledPlugins({ configDir: cfg });
+  const installs = mergePathLoaded(registered, extraRoots);
+  const enabled = withPathLoadedEnabled(readEnabledPlugins({ configDir: cfg, projectRoot }), installs);
 
   const records = [];
   const skipped = [];
-  const seen = new Set();
 
   for (const [key, info] of installs) {
     const manifest = join(info.installPath, "manifest.yaml");
@@ -153,17 +232,8 @@ export function loadInstalledManifests({ configDir, projectRoot, extraRoots = []
       continue;
     }
     if (!existsSync(manifest)) continue;          // not an SDLC plugin; carries no manifest
-    seen.add(resolve(manifest));
-    records.push({ ...readManifest(manifest), key, version: info.version, scope: info.scope, source: "installed" });
-  }
-
-  // Development checkouts: a plugin loaded from a path is in no registry. Included last so an
-  // installed copy of the same plugin never shadows the tree the developer is editing.
-  for (const root of extraRoots) {
-    const manifest = join(root, "manifest.yaml");
-    if (!existsSync(manifest) || seen.has(resolve(manifest))) continue;
-    seen.add(resolve(manifest));
-    records.push({ ...readManifest(manifest), key: null, version: null, scope: "path", source: "path" });
+    const source = info.scope === "path" ? "path" : "installed";
+    records.push({ ...readManifest(manifest), key, version: info.version, scope: info.scope, source });
   }
 
   const classified = classify(records);

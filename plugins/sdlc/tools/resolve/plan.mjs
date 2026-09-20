@@ -10,8 +10,8 @@
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { resolveRoots } from "./roots.mjs";
-import { readInstalledPlugins, readEnabledPlugins, loadInstalledManifests, loadManifestsFromTree } from "./manifests.mjs";
+import { resolveRoots, pathLoadedRoots } from "./roots.mjs";
+import { readInstalledPlugins, readEnabledPlugins, loadInstalledManifests, loadManifestsFromTree, mergePathLoaded, withPathLoadedEnabled } from "./manifests.mjs";
 import { resolveStack } from "./detect.mjs";
 import { preflight } from "./deps.mjs";
 import { computeDiffSignals, applySkipRules, renderSkipPrint } from "./skiprules.mjs";
@@ -105,11 +105,21 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   const configDir = roots.config_dir;
 
   // ---- Step 0b inputs: what is installed and enabled
-  const { installs, conflicts } = readInstalledPlugins({ configDir });
-  const enabled = readEnabledPlugins({ configDir, projectRoot: cwd });
+  //
+  // `extraRoots` is the path-load case (issue #164): under `--plugin-dir`, `plugin eval` or any
+  // development checkout this plugin is in no registry, and every discovery below keys off the
+  // registry. Merging the root INTO `installs` is what fixes manifests, recipes, dependencies and
+  // the skill enumeration at once, rather than four times over — see ./manifests.mjs.
+  const extraRoots = pathLoadedRoots(env);
+  const { installs: registered, conflicts } = readInstalledPlugins({ configDir });
+  const installs = mergePathLoaded(registered, extraRoots);
+  const enabled = withPathLoadedEnabled(readEnabledPlugins({ configDir, projectRoot: cwd }), installs);
   for (const c of conflicts) warn(`WARN: ${c.key} is installed at several paths; using the ${c.scope} copy (${c.chosen})`);
+  for (const [key, info] of installs) {
+    for (const p of info.shadows ?? []) warn(`WARN: ${key} is loaded from a path (${info.installPath}); the installed copy at ${p} is not used`);
+  }
 
-  const manifests = mode === "tree" ? loadManifestsFromTree(cwd) : loadInstalledManifests({ configDir, projectRoot: cwd });
+  const manifests = mode === "tree" ? loadManifestsFromTree(cwd) : loadInstalledManifests({ configDir, projectRoot: cwd, extraRoots });
   for (const s of manifests.skipped ?? []) warn(`WARN: ${s.key} ships a manifest but is disabled — not considered for detection`);
   for (const e of manifests.errors ?? []) warn(`WARN: unreadable manifest ${e.file}: ${e.error}`);
 

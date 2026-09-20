@@ -17,7 +17,7 @@
 //   session/user state (stamps, transcripts)    -> CONFIG_DIR
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 const CACHE_MARKER = "/plugins/cache/";
 
@@ -109,4 +109,32 @@ export function resolveRoots(env = process.env) {
 /** Where the module itself lives — the development-checkout escape hatch. */
 export function ownPluginRoot() {
   return dirname(dirname(dirname(new URL(import.meta.url).pathname)));
+}
+
+/**
+ * The roots of plugins loaded from a PATH rather than from the cache — normally just this one.
+ *
+ * `claude --plugin-dir plugins/sdlc`, `claude plugin eval plugins/sdlc` and every development
+ * checkout load the plugin from a directory that is in no cache and in no
+ * `installed_plugins.json`. Cross-plugin discovery keys off that registry, so under a path load
+ * the plugin cannot find its OWN manifest, `workflows/` or `runtime-dependencies.json` — the run
+ * halts at Step 0 with "Workflow 'default' not found. Available: (none)" while the recipe sits
+ * next to the code printing the halt (issue #164).
+ *
+ * The signal is `CLAUDE_PLUGIN_ROOT` and nothing else. A root inside `/plugins/cache/` is
+ * dropped: that copy IS registered, and ordinary installed discovery already covers it with the
+ * right key, version and scope.
+ *
+ * `ownPluginRoot()` is deliberately NOT a fallback here, although it names the same directory
+ * under a real path load. It names it under every OTHER caller too — a test fixture, a lint
+ * pass, any tool that imports this module out of the checkout — and the module would then
+ * announce the checkout as an installed plugin to a consumer that never loaded it. A harness
+ * that runs this code at all exports `CLAUDE_PLUGIN_ROOT`, because the skill's own Bash calls
+ * interpolate it into the path they execute; absent it, no plugin was loaded to speak for.
+ */
+export function pathLoadedRoots(env = process.env) {
+  const candidate = env.CLAUDE_PLUGIN_ROOT;
+  if (!candidate || candidate.includes(CACHE_MARKER)) return [];
+  const root = resolve(candidate);
+  return existsSync(join(root, "manifest.yaml")) ? [root] : [];
 }
