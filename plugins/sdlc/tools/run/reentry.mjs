@@ -37,6 +37,20 @@ export function loadCheckpoints(checkpointDir) {
 const DONE = new Set(["completed", "skipped"]);
 const isDone = (u) => u != null && DONE.has(u.status);
 
+/**
+ * The ids whose checkpoint is terminal — "done" as one definition, in one place.
+ *
+ * `--resume` skipping a unit and the dry-run preview pricing it at $0.00 are the same question,
+ * and answering it twice is how the two drift. Exported for `tools/resolve/plan.mjs`, which needs
+ * the set without the resolved DAG that `resolveWorkspace` requires: at preview time the DAG is
+ * the plan being previewed, not a `_run.json` written by a run that has not started.
+ */
+export function doneUnitIds(units) {
+  const out = new Set();
+  for (const [id, u] of units) if (isDone(u)) out.add(id);
+  return out;
+}
+
 // Is one resolved (plain) phase fully done? aspect-aware → every aspect done.
 // An empty aspect list resolves to NOT done (a phase with no dispatched aspects
 // hasn't run) — never treat a vacuous `[].every()` as complete.

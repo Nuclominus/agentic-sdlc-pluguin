@@ -112,7 +112,13 @@ from the first unfinished phase instead of re-running everything:
 The orchestrator reads `docs/plans/{slug}/.checkpoint/` — phases with a `completed`/`skipped`
 checkpoint are skipped (their cost is preserved in the final telemetry); the pipeline re-enters at
 the first unfinished phase. Combine with `--dry-run` to preview what would be skipped without
-dispatching anything.
+dispatching anything: completed units render as `⏩ … $0.00`, and the estimate and cap verdict cover
+only the phases that would still be dispatched — the cost to *finish*, not to redo.
+
+For that preview the slug has to be found before the run starts, and a bare `--resume` reconstructs
+it from the description. If it reconstructs a slug that does not match the workspace on disk, the
+preview says so (`WARN: --resume: no checkpoints at docs/plans/<slug>/.checkpoint`) and prices a full
+run rather than pretending; pass `--resume=<slug>` to be exact.
 
 **Non-goal:** `--resume` does NOT restore repository state. It trusts the workspace and the code on
 disk; if git moved under the completed phases, that is the operator's responsibility.

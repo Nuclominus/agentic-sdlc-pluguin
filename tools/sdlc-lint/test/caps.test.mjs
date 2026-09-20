@@ -142,6 +142,29 @@ test("resumed rows contribute $0 and are excluded from the totals", () => {
   assert.equal(est.base_total, est.rows[1].est, "the estimate is the cost to FINISH, not to redo");
 });
 
+// Issue #168 — resumedDone was never passed, so these branches were unreachable from the CLI and
+// the accepted spelling of a unit id was never exercised against the one written to disk.
+test("a resumed unit is recognised by its ON-DISK id, not only by this module's key", () => {
+  // tools/run/reentry.mjs keys units by checkpoint filename: `development-android`. expandRows
+  // keyed them `development:android`. Passing the set straight through therefore matched nothing,
+  // and a matched-nothing set is invisible: every phase simply prices as if it had never run.
+  const phases = [{ name: "development" }, { name: "documentation" }];
+  const rows = expandRows(phases, { agentsPerPhase: AGENTS, resumedDone: new Set(["development-android"]) });
+  assert.equal(rows[0].resumed, true);
+  assert.equal(rows[1].resumed, false);
+});
+
+test("a bare phase id resumes every aspect of that phase", () => {
+  const rows = expandRows([{ name: "development" }], { agentsPerPhase: AGENTS, resumedDone: new Set(["development"]) });
+  assert.ok(rows.length > 0);
+  assert.ok(rows.every((r) => r.resumed), "an aspect-agnostic checkpoint covers the phase");
+});
+
+test("an unrelated id resumes nothing", () => {
+  const rows = expandRows([{ name: "development" }], { agentsPerPhase: AGENTS, resumedDone: new Set(["development-ios", "qa"]) });
+  assert.ok(rows.every((r) => !r.resumed));
+});
+
 test("the cap verdict is computed from expected_total, and no cap is always WITHIN", () => {
   assert.equal(capVerdict(10, null).cap_estimate, "within");
   assert.equal(capVerdict(4, 8).cap_estimate, "within");

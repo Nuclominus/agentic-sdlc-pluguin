@@ -90,8 +90,14 @@ export function expandRows(phases, { agentsPerPhase = {}, aspects = [], modelOve
   const rows = [];
   const push = (phase, agent, extra = {}) => {
     const tier = resolveTier(agent, { modelOverrides, frontmatterTiers });
-    const key = extra.aspect ? `${phase}:${extra.aspect}` : phase;
-    rows.push({ phase, agent, tier, resumed: resumedDone.has(key) || resumedDone.has(phase), ...extra });
+    // Two spellings of one unit: `phase:aspect` is this module's own key, `phase-aspect` is the
+    // on-disk checkpoint id (tools/run/reentry.mjs, and the `{phase}-{aspect}` the orchestrator's
+    // resume contract names). Accept both, so a caller can hand over the set `loadCheckpoints`
+    // produced without transliterating ids — a transliteration step is a place to be wrong, and
+    // silently: an unrecognised id just prices the phase as if it had never run.
+    const resumed = resumedDone.has(phase)
+      || (extra.aspect != null && (resumedDone.has(`${phase}:${extra.aspect}`) || resumedDone.has(`${phase}-${extra.aspect}`)));
+    rows.push({ phase, agent, tier, resumed, ...extra });
   };
 
   const aspectsOf = (mapping) =>
@@ -189,12 +195,18 @@ export function capVerdict(expectedTotal, cap) {
 const money = (n) => `$${(n ?? 0).toFixed(2)}`;
 
 /** 1d-2 — the human dry-run block. Segments concatenate; only `‖ parallel` is exclusive. */
-export function renderDryRun({ estimate: est, slots, stack, workflow, autoselected, skipRules = [], cap, healEnabled, healBlocks = 0 }) {
+export function renderDryRun({ estimate: est, slots, stack, workflow, autoselected, skipRules = [], cap, healEnabled, healBlocks = 0, resume = null }) {
   const lines = [
     "🔎 DRY RUN — no agents dispatched, no code written.",
     `Stack: ${stack} | Workflow: ${workflow}${autoselected ? " (auto-selected)" : ""}`,
-    `Phases (${slots}):`,
   ];
+  if (resume?.requested) {
+    const done = est.rows.filter((r) => r.resumed).length;
+    const next = est.rows.find((r) => !r.resumed);
+    lines.push(`⏭ Resume: ${resume.slug ?? "(slug unresolved)"}  — ${done} of ${est.rows.length} unit(s) already complete`);
+    lines.push(`   Re-entering at: ${next ? next.phase : "nothing left to run"}`);
+  }
+  lines.push(`Phases (${slots}):`);
   est.rows.forEach((r, i) => {
     if (r.resumed) {
       lines.push(`   ${i + 1}. ⏩ ${r.phase}${r.aspect ? ` — ${r.aspect}` : ""}   → skipped (resumed from checkpoint)   $0.00`);

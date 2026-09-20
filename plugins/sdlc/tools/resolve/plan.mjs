@@ -21,6 +21,7 @@ import {
 } from "./profile.mjs";
 import { discoverRecipes, resolveWorkflowName, locateRecipe, validateWorkflow, normalizePhases, validateAcyclic, buildResolvedPhases, renderWorkflowPrint } from "./workflow.mjs";
 import { resolveCostCap, renderCapOverridePrint, expandRows, estimate, renderDryRun, renderHeadlessDryRun } from "./caps.mjs";
+import { loadCheckpoints, doneUnitIds } from "../run/reentry.mjs";
 import { parseYaml } from "./yaml.mjs";
 
 const readJson = (f) => { try { return JSON.parse(readFileSync(f, "utf8")); } catch { return null; } };
@@ -40,6 +41,50 @@ function frontmatterTiers(installs, enabled) {
     }
   }
   return tiers;
+}
+
+/** Step 2's slug rule, in code: lowercase, alphanumerics + dashes, max 40 chars. */
+const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40).replace(/-+$/, "");
+
+/** `$ARGUMENTS` with every flag and quote stripped — the description Step 2 slugifies. */
+const briefOf = (args) => String(args).replace(/--[a-z][a-z0-9-]*(=[^\s]+)?/g, " ").replace(/["'`]/g, " ").replace(/\s+/g, " ").trim();
+
+/**
+ * Which units a `--resume` would skip, so the preview can price them at $0 (issue #168).
+ *
+ * `commands/start.md` promises "Combine with `--dry-run` to preview what would be skipped", and
+ * the rendering for it has always been there — `⏩` rows, zeroed estimates, resumed rows excluded
+ * from the loop/heal/gate arithmetic. Nothing ever passed `resumedDone`, so every one of those
+ * branches was unreachable and the preview priced a finished run as if it were about to start. On
+ * a run resumed near the end that is not a rounding error: the verdict can read EXCEEDS against a
+ * remaining cost of nearly zero.
+ *
+ * "Done" is NOT redefined here. `loadCheckpoints` + `doneUnitIds` come from tools/run/reentry.mjs,
+ * the same module `--resume` and the H6 seal gate consult; `resolveWorkspace` is the wrong entry
+ * point only because it demands the `_run.json` that a run which has not started has not written.
+ *
+ * The slug is the soft spot, and it is reported rather than guessed around. Step 2 generates it
+ * from `$ARGUMENTS` in prose, so a model's slug and this function's can differ. `--resume=<slug>`
+ * is exact; a bare `--resume` is a reconstruction, and when it finds no checkpoint directory the
+ * preview says so instead of quietly showing a full run.
+ */
+export function resolveResume({ cwd = process.cwd(), args = "" } = {}) {
+  const m = /(^|\s)--resume(=([^\s]+))?(\s|$)/.exec(String(args));
+  if (!m) return { requested: false, slug: null, done: new Set(), warnings: [] };
+  const warnings = [];
+  const slug = m[3] ?? slugify(briefOf(args));
+  if (!slug) {
+    warnings.push("WARN: --resume: no slug given and none derivable from the description — previewing a full run");
+    return { requested: true, slug: null, done: new Set(), warnings };
+  }
+  const checkpointDir = join(cwd, "docs", "plans", slug, ".checkpoint");
+  if (!existsSync(checkpointDir)) {
+    warnings.push(`WARN: --resume: no checkpoints at docs/plans/${slug}/.checkpoint — previewing a full run${m[3] ? "" : " (slug derived from the description; pass --resume=<slug> if it differs)"}`);
+    return { requested: true, slug, done: new Set(), warnings };
+  }
+  const { units, warnings: cw } = loadCheckpoints(checkpointDir);
+  for (const w of cw) warnings.push(`WARN: --resume: ${w}`);
+  return { requested: true, slug, done: doneUnitIds(units), warnings };
 }
 
 const flag = (args, name) => new RegExp(`(^|\\s)${name}(\\s|=|$)`).test(String(args));
@@ -404,24 +449,28 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
   // ---- Step 1d-1: the dry-run preview is a rendering of the plan, not a second resolution.
   if (flag(args, "--dry-run")) {
     const tiers = frontmatterTiers(installs, enabled);
-    const rows = expandRows(built.phases, { agentsPerPhase: effective.agents_per_phase, modelOverrides: models.overrides, frontmatterTiers: tiers });
+    const resume = resolveResume({ cwd, args });
+    warnAll(resume.warnings);
+    const rows = expandRows(built.phases, { agentsPerPhase: effective.agents_per_phase, modelOverrides: models.overrides, frontmatterTiers: tiers, resumedDone: resume.done });
     const registry = readJson(join(roots.sdlc_plugin_root ?? "", "config", "models.json"));
     if (!registry) {
       warn("WARN: model registry not found — dry-run cost preview unavailable");
     } else {
       const healEnabled = (effective.heal_checks ?? []).length > 0;
       const est = estimate(rows, registry, { healEnabled });
+      const reenterAt = est.rows.find((r) => !r.resumed)?.phase ?? null;
       plan.dry_run = {
-        rows: est.rows.map((r) => ({ phase: r.phase, aspect: r.aspect ?? null, agent: r.agent, tier: r.tier, est: r.est })),
+        rows: est.rows.map((r) => ({ phase: r.phase, aspect: r.aspect ?? null, agent: r.agent, tier: r.tier, est: r.est, resumed: r.resumed === true })),
         expected_total: est.expected_total,
         worst_total: est.worst_total,
+        ...(resume.requested ? { resumed: true, resume_slug: resume.slug, reenter_at: reenterAt } : {}),
       };
       prints.push(headless
-        ? renderHeadlessDryRun({ estimate: est, slots: built.phases.length, workflow: resolvedName.name, cap: cap.cost_cap })
+        ? renderHeadlessDryRun({ estimate: est, slots: built.phases.length, workflow: resolvedName.name, cap: cap.cost_cap, resumed: resume.requested, reenterAt })
         : renderDryRun({
           estimate: est, slots: built.phases.length, stack: stack.foundation, workflow: resolvedName.name,
           autoselected: resolvedName.autoselected, skipRules: skip.applied, cap: cap.cost_cap,
-          healEnabled, healBlocks: rows.filter((r) => r.heal).length,
+          healEnabled, healBlocks: rows.filter((r) => r.heal).length, resume,
         }));
     }
   }

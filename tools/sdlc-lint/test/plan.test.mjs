@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolvePlan, resolveExpertise } from "../../../plugins/sdlc/tools/resolve/plan.mjs";
+import { resolvePlan, resolveExpertise, resolveResume } from "../../../plugins/sdlc/tools/resolve/plan.mjs";
 
 function write(file, content) {
   mkdirSync(join(file, ".."), { recursive: true });
@@ -594,4 +594,101 @@ test("an enabledPlugins veto does not disable a path load — recipes and deps i
     assert.deepEqual(Object.keys(plan.deps_preflight), ["superpowers"]);
     assert.ok(warnings.some((w) => w.includes("is loaded from a path")), "and the displaced copy is named");
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// Issue #168 — `commands/start.md` promises "Combine with --dry-run to preview what would be
+// skipped without dispatching anything". It previewed a full run instead: caps.mjs had every
+// resumed branch (⏩ rows, $0 pricing, exclusion from the loop/heal/gate arithmetic) and plan.mjs
+// never passed `resumedDone`, so none of it was reachable from the CLI.
+
+/** A resumable run: a real workspace under docs/plans/<slug>/.checkpoint with the given statuses. */
+function withCheckpoints(slug, statuses) {
+  const SDLC = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "plugins", "sdlc");
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-resume-"));
+  const proj = join(dir, "project");
+  const cp = join(proj, "docs", "plans", slug, ".checkpoint");
+  mkdirSync(cp, { recursive: true });
+  for (const [unit, status] of Object.entries(statuses)) write(join(cp, `${unit}.json`), { status });
+  const g = (...a) => execFileSync("git", a, { cwd: proj, stdio: "ignore" });
+  g("init", "-q", "-b", "main");
+  g("config", "user.email", "t@example.com");
+  g("config", "user.name", "t");
+  write(join(proj, "f.txt"), "seed\n");
+  g("add", "-A"); g("commit", "-qm", "seed");
+  g("update-ref", "refs/remotes/origin/main", "HEAD");
+  return { dir, proj, cp, env: { HOME: dir, CLAUDE_CONFIG_DIR: join(dir, "cfg"), CLAUDE_PLUGIN_ROOT: SDLC } };
+}
+
+test("--resume --dry-run prices only the phases that would actually be dispatched", () => {
+  const w = withCheckpoints("add-dark-mode", {
+    business_analysis: "completed", development: "completed", qa: "completed", security: "skipped",
+  });
+  try {
+    const args = '"Add dark mode" --resume --dry-run --no-skip-rules';
+    const { plan, halt } = resolvePlan({ cwd: w.proj, args, env: w.env });
+    assert.equal(halt, null);
+
+    const resumed = plan.dry_run.rows.filter((r) => r.resumed);
+    assert.deepEqual(resumed.map((r) => r.phase), ["business_analysis", "development", "qa", "security"],
+      "a `skipped` checkpoint is as terminal as a `completed` one");
+    assert.ok(resumed.every((r) => r.est === 0), "a resumed row costs nothing to redo");
+    assert.equal(plan.dry_run.reenter_at, "remediation");
+    assert.equal(plan.dry_run.resume_slug, "add-dark-mode");
+
+    // The number that matters: the estimate is the cost to FINISH.
+    const full = resolvePlan({ cwd: w.proj, args: '"Add dark mode" --dry-run --no-skip-rules', env: w.env });
+    assert.ok(plan.dry_run.expected_total < full.plan.dry_run.expected_total / 4,
+      `resumed ${plan.dry_run.expected_total} must be far below the full ${full.plan.dry_run.expected_total}`);
+    assert.equal(full.plan.dry_run.resumed, undefined, "a run that is not resuming grows no resume keys");
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("the human preview marks resumed phases and names the re-entry point", () => {
+  const w = withCheckpoints("add-dark-mode", { business_analysis: "completed" });
+  try {
+    const { prints } = resolvePlan({ cwd: w.proj, args: '"Add dark mode" --resume --dry-run --no-skip-rules', env: w.env });
+    const preview = prints.join("\n");
+    assert.match(preview, /⏭ Resume: add-dark-mode/);
+    assert.match(preview, /Re-entering at: development/);
+    assert.match(preview, /⏩ business_analysis {3}→ skipped \(resumed from checkpoint\) {3}\$0\.00/);
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("the headless dry-run line carries resumed and reenter_at", () => {
+  const w = withCheckpoints("add-dark-mode", { business_analysis: "completed", development: "completed" });
+  try {
+    const env = { ...w.env, SDLC_NONINTERACTIVE: "true" };
+    const { prints } = resolvePlan({ cwd: w.proj, args: '"Add dark mode" --resume --dry-run --no-skip-rules', env });
+    const line = JSON.parse(prints[prints.length - 1]);
+    assert.equal(line.resumed, true);
+    assert.equal(line.reenter_at, "qa");
+    assert.equal(line.dry_run, true);
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("a --resume whose workspace does not exist says so instead of showing a full run as a resume", () => {
+  // Step 2 generates the slug from $ARGUMENTS in prose, so a model's slug and this function's can
+  // differ. Silently previewing a full run is the failure this issue is about; a WARN is not.
+  const w = withCheckpoints("add-dark-mode", { business_analysis: "completed" });
+  try {
+    const { plan, warnings } = resolvePlan({ cwd: w.proj, args: '"Something else entirely" --resume --dry-run --no-skip-rules', env: w.env });
+    assert.ok(warnings.some((x) => /--resume: no checkpoints at docs\/plans\/something-else-entirely/.test(x)));
+    assert.ok(plan.dry_run.rows.every((r) => !r.resumed));
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("--resume=<slug> is exact and beats the derived slug", () => {
+  const w = withCheckpoints("explicit-slug", { business_analysis: "completed" });
+  try {
+    const { plan } = resolvePlan({ cwd: w.proj, args: '"Totally different words" --resume=explicit-slug --dry-run --no-skip-rules', env: w.env });
+    assert.equal(plan.dry_run.resume_slug, "explicit-slug");
+    assert.equal(plan.dry_run.rows[0].resumed, true);
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("resolveResume is inert without --resume, and slugifies by Step 2's rule", () => {
+  assert.equal(resolveResume({ args: '"Add dark mode" --dry-run' }).requested, false);
+  const r = resolveResume({ cwd: "/nonexistent", args: '"Add Dark Mode, now!" --resume --dry-run' });
+  assert.equal(r.slug, "add-dark-mode-now");
+  assert.equal(r.done.size, 0);
 });
