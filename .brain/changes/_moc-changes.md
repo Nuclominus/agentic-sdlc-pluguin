@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-09-20 | #183 | `docs` | — | [[changes/2026-09-20-PR-183-adr-0025-a-branch-switch-is-a-file-operation]] |
 | 2026-09-20 | #181 | `fix` | — | [[changes/2026-09-20-PR-181-warn-when-prose-names-a-recipe-that-is-not-installed-180]] |
 | 2026-09-20 | #178 | `fix` | — | [[changes/2026-09-20-PR-178-resolve-a-workflow-recipe-named-in-the-request-176]] |
 | 2026-09-20 | #174 | `fix` | — | [[changes/2026-09-20-PR-174-the-self-root-answers-when-the-host-exports-nothing]] |
