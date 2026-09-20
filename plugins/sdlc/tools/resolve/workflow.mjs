@@ -222,17 +222,115 @@ export function autoSelect(recipes, signals, args = "") {
   };
 }
 
-/** Step 1 — the five-tier name precedence. */
+/** The recipe names this consumer could name. Annotated for humans, deduped for machines. */
+export function availableNames(recipes, { annotate = false } = {}) {
+  const names = recipes.map((r) => `${r.name}${annotate && r.origin === "project" ? " (project)" : ""}`);
+  return (annotate ? names : [...new Set(names)]).sort();
+}
+
+// ---------------------------------------------------------------- tier 1b
+
+const CUE = "(?:workflow|recipe|pipeline)s?";
+// A token in the shape of a recipe name, sitting where a recipe name sits. `sdlc` is skipped
+// over ("the docs-only SDLC workflow") rather than read as the name.
+const BEFORE_CUE = new RegExp(`\\b([A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*)\\s+(?:sdlc\\s+)?${CUE}\\b`, "gi");
+const AFTER_CUE = new RegExp(`\\b${CUE}\\s*[:=]?\\s+([A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*)\\b`, "gi");
+const KEBAB = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+// Words that stand next to "workflow" in ordinary English. A recipe is never called one of these,
+// so dropping them costs nothing and keeps the unknown-name report from crying wolf.
+const NOISE = new Set([
+  "a", "an", "the", "this", "that", "these", "those", "its", "it", "our", "your", "my", "their",
+  "one", "some", "any", "each", "every", "no", "not", "full", "whole", "entire", "same", "other",
+  "another", "new", "old", "current", "existing", "normal", "standard", "usual", "best", "right",
+  "correct", "main", "and", "or", "of", "for", "in", "on", "to", "with", "without", "as", "by",
+  "at", "from", "would", "will", "should", "could", "can", "does", "do", "did", "is", "are",
+  "was", "were", "be", "run", "running", "use", "using", "used", "sdlc", "ci", "cd", "build",
+  "release", "deploy", "deployment", "data", "git", "github", "gitlab", "if", "then", "than",
+  "when", "what", "which", "how", "much", "cost", "phase", "phases", "name", "names", "above",
+  "below", "said", "given", "only", "just", "like", "step", "steps", "whose", "here", "there",
+]);
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Every kebab-shaped token the text offers up as a recipe name. */
+function candidateNames(text) {
+  const out = [];
+  for (const re of [BEFORE_CUE, AFTER_CUE]) {
+    re.lastIndex = 0;
+    for (const m of text.matchAll(re)) {
+      const token = m[1];
+      if (KEBAB.test(token) && !NOISE.has(token) && !out.includes(token)) out.push(token);
+    }
+  }
+  return out;
+}
+
+/**
+ * Step 1b — a recipe NAMED in the request.
+ *
+ * Naming a recipe is an explicit request, the prose equivalent of `--workflow=NAME`, so it is
+ * resolved before any `match:` block. That ordering is load-bearing: `docs-only` carries
+ * `match.config_only`, a condition on the DIFF, so auto-selection can never reach it from prompt
+ * text — which is how issue #176 answered a "does docs-only fit under its cap?" question with
+ * `default`'s six phases and its cap, both figures real and the substitution invisible.
+ *
+ * Everything here is deterministic and closed over the DISCOVERED names: a cue word
+ * (workflow/recipe/pipeline) must be present, so the feature description "add debug logging"
+ * does not switch recipes, and `analysis` / `testing` — ordinary English words — stay safe.
+ * Anything short of exactly one hit falls through to the next tier with a WARN, never silently.
+ */
+export function matchNamedRecipe({ args = "", recipes = [] } = {}) {
+  const text = String(args);
+  if (/--workflow=/.test(text) || /--no-auto-workflow\b/.test(text)) return null;
+  if (!new RegExp(`\\b${CUE}\\b`, "i").test(text)) return null;
+
+  const names = availableNames(recipes);
+  if (names.length === 0) return null;
+
+  const present = names.filter((n) => new RegExp(`\\b${escapeRe(n)}\\b`, "i").test(text));
+  // `-` is a word boundary, so 'docs' "matches" inside 'docs-only'. The longer name is the one
+  // the text actually contains.
+  const hits = present.filter((n) => !present.some((o) => o !== n && o.includes(n)));
+
+  if (hits.length === 1) {
+    const name = hits[0];
+    return {
+      name,
+      warnings: [],
+      print: `🧭 Recipe '${name}' named in the request — resolved as --workflow=${name}. Override with --workflow=NAME.`,
+    };
+  }
+  if (hits.length > 1) {
+    return { name: null, print: null, warnings: [
+      `WARN: the request names more than one workflow recipe (${hits.join(", ")}) — not choosing between them. Pass --workflow=NAME to be explicit.`,
+    ] };
+  }
+
+  const unknown = candidateNames(text);
+  if (unknown.length === 0) return null;
+  return { name: null, print: null, warnings: [
+    [`WARN: '${unknown.join("', '")}' reads like a workflow recipe, but no installed recipe has that name.`,
+      `   Available: ${names.join(", ")}`,
+      "   Pass --workflow=NAME to be explicit — resolution continues with the remaining tiers."].join("\n"),
+  ] };
+}
+
+/** Step 1 — the name precedence, tier by tier. */
 export function resolveWorkflowName({ args = "", activeWorkflow = null, recipes = [], signals = null, profileDefault = null } = {}) {
+  const warnings = [];
   const explicit = /--workflow=([^\s]+)/.exec(String(args));
-  if (explicit) return { name: explicit[1], tier: "--workflow", autoselected: false, print: null };
-  if (activeWorkflow) return { name: activeWorkflow, tier: "active_workflow", autoselected: false, print: null };
+  if (explicit) return { name: explicit[1], tier: "--workflow", autoselected: false, print: null, warnings };
+
+  const named = matchNamedRecipe({ args, recipes });
+  if (named) warnings.push(...named.warnings);
+  if (named?.name) return { name: named.name, tier: "named_in_prose", autoselected: false, print: named.print, warnings };
+
+  if (activeWorkflow) return { name: activeWorkflow, tier: "active_workflow", autoselected: false, print: null, warnings };
   if (signals && !/--no-auto-workflow\b/.test(String(args))) {
     const auto = autoSelect(recipes, signals, args);
-    if (auto) return { name: auto.name, tier: "auto", autoselected: true, satisfied: auto.satisfied, print: auto.print };
+    if (auto) return { name: auto.name, tier: "auto", autoselected: true, satisfied: auto.satisfied, print: auto.print, warnings };
   }
-  if (profileDefault) return { name: profileDefault, tier: "profile_default", autoselected: false, print: null };
-  return { name: "default", tier: "fallback", autoselected: false, print: null };
+  if (profileDefault) return { name: profileDefault, tier: "profile_default", autoselected: false, print: null, warnings };
+  return { name: "default", tier: "fallback", autoselected: false, print: null, warnings };
 }
 
 /**
@@ -255,7 +353,7 @@ export function locateRecipe(name, recipes) {
         `   (A project-local <project>/.claude/sdlc-workflows/${name}.yaml would override both.)`].join("\n"),
     };
   }
-  const available = recipes.map((r) => `${r.name}${r.origin === "project" ? " (project)" : ""}`).sort();
+  const available = availableNames(recipes, { annotate: true });
   return {
     recipe: null,
     halt: [`❌ Workflow '${name}' not found.`,

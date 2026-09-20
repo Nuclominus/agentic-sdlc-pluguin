@@ -15,6 +15,7 @@ import Ajv from "ajv/dist/2020.js";
 import {
   discoverRecipes, validateWorkflow, normalizePhases, phaseNames, validateAcyclic,
   evaluateMatch, autoSelect, resolveWorkflowName, locateRecipe, buildResolvedPhases,
+  availableNames, matchNamedRecipe,
 } from "../../../plugins/sdlc/tools/resolve/workflow.mjs";
 import { parseYaml } from "../../../plugins/sdlc/tools/resolve/yaml.mjs";
 import { iterFiles } from "../../../plugins/sdlc/tools/resolve/fsglob.mjs";
@@ -95,6 +96,97 @@ test("--no-auto-workflow falls straight through to the profile default", () => {
 
 test("with nothing at all it falls back to 'default'", () => {
   assert.equal(resolveWorkflowName({}).name, "default");
+});
+
+// -------------------------------------------------- tier 1b: a recipe named in the request
+
+// The recipe set a consumer could name. Only `name`/`origin` matter to this tier — it resolves a
+// NAME, and locateRecipe is what turns the name back into a file.
+const NAMED = ["default", "docs-only", "hotfix", "bugfix", "refactor", "analysis", "testing", "debug"]
+  .map((name) => ({ name, origin: "plugin", doc: { name, phases: ["documentation"] } }));
+
+test("tier 1b: a recipe named in the request resolves as if the flag had been typed", () => {
+  const r = resolveWorkflowName({
+    args: "Would the docs-only SDLC workflow for 'Document the growth log screen' fit under its cost cap? --dry-run",
+    recipes: NAMED,
+  });
+  assert.equal(r.name, "docs-only");
+  assert.equal(r.tier, "named_in_prose");
+  assert.equal(r.autoselected, false, "naming a recipe is an explicit request, not auto-selection");
+  assert.equal(
+    r.print,
+    "🧭 Recipe 'docs-only' named in the request — resolved as --workflow=docs-only. Override with --workflow=NAME.",
+  );
+});
+
+test("tier 1b sits BELOW the flag and ABOVE active_workflow", () => {
+  const flag = resolveWorkflowName({ args: "run the docs-only workflow --workflow=hotfix", recipes: NAMED });
+  assert.equal(flag.name, "hotfix", "an explicit flag still wins");
+  assert.equal(flag.tier, "--workflow");
+
+  const active = resolveWorkflowName({ args: "use the hotfix workflow", recipes: NAMED, activeWorkflow: "android-feature" });
+  assert.equal(active.name, "hotfix", "a name in the request beats the project's standing choice");
+  assert.equal(active.tier, "named_in_prose");
+});
+
+test("tier 1b needs a workflow cue word — 'analysis' and 'debug' are ordinary English", () => {
+  const prose = resolveWorkflowName({ args: "Add debug logging to the analysis screen", recipes: NAMED, profileDefault: "demo-flow" });
+  assert.equal(prose.name, "demo-flow", "a feature description is not a recipe selection");
+  assert.equal(prose.tier, "profile_default");
+
+  const cued = resolveWorkflowName({ args: "run the analysis workflow over the codebase", recipes: NAMED, profileDefault: "demo-flow" });
+  assert.equal(cued.name, "analysis");
+});
+
+test("tier 1b is skipped entirely when the resolution is pinned by a flag", () => {
+  const off = resolveWorkflowName({ args: "the hotfix workflow, please --no-auto-workflow", recipes: NAMED, profileDefault: "demo-flow" });
+  assert.equal(off.name, "demo-flow", "--no-auto-workflow opts out of every inferred tier");
+  assert.equal(off.tier, "profile_default");
+});
+
+test("tier 1b: two recipe names in one request choose neither, and say both", () => {
+  const r = resolveWorkflowName({ args: "is the hotfix workflow cheaper than the refactor recipe?", recipes: NAMED, profileDefault: "demo-flow" });
+  assert.equal(r.name, "demo-flow", "an ambiguous request falls through rather than guessing");
+  assert.equal(r.tier, "profile_default");
+  assert.equal(r.warnings.length, 1);
+  assert.match(r.warnings[0], /^WARN: /);
+  assert.match(r.warnings[0], /hotfix/);
+  assert.match(r.warnings[0], /refactor/);
+});
+
+test("tier 1b: a name-like token matching no installed recipe is reported, not swallowed", () => {
+  const r = resolveWorkflowName({ args: "run the docs-onli workflow --dry-run", recipes: NAMED, profileDefault: "demo-flow" });
+  assert.equal(r.name, "demo-flow", "it falls through — reporting is not halting");
+  assert.equal(r.warnings.length, 1);
+  assert.match(r.warnings[0], /docs-onli/);
+  assert.match(r.warnings[0], /Available: analysis, bugfix, debug, default, docs-only, hotfix, refactor, testing/,
+    "the same list the not-found halt prints");
+});
+
+test("tier 1b: a cue word with no name-like token beside it says nothing", () => {
+  const r = resolveWorkflowName({ args: "how much would the SDLC pipeline cost?", recipes: NAMED, profileDefault: "demo-flow" });
+  assert.equal(r.name, "demo-flow");
+  assert.deepEqual(r.warnings, [], "'the', 'SDLC' and friends are not recipe names anyone typed");
+});
+
+test("tier 1b: the longer of two overlapping names is the one the text contains", () => {
+  const recipes = [...NAMED, { name: "docs", origin: "plugin", doc: { name: "docs", phases: ["documentation"] } }];
+  const r = resolveWorkflowName({ args: "the docs-only workflow", recipes });
+  assert.equal(r.name, "docs-only", "the hyphen is a word boundary, so 'docs' also 'matches' — the longer wins");
+});
+
+test("matchNamedRecipe is inert without recipes to name", () => {
+  assert.equal(matchNamedRecipe({ args: "the docs-only workflow", recipes: [] }), null);
+});
+
+test("availableNames dedupes for machines and annotates for humans", () => {
+  const recipes = [
+    { name: "bugfix", origin: "project" },
+    { name: "bugfix", origin: "plugin" },
+    { name: "default", origin: "plugin" },
+  ];
+  assert.deepEqual(availableNames(recipes), ["bugfix", "default"], "the discoverable set, once each");
+  assert.deepEqual(availableNames(recipes, { annotate: true }), ["bugfix", "bugfix (project)", "default"]);
 });
 
 test("a recipe with no match block is never auto-selected", () => {
