@@ -14,7 +14,7 @@ files_changed: 2
 
 ## Summary
 
-Mirrors the agent memory `merge-develop-into-work-branch` into the vault, per [[ADR-0013]] ("everything written to agent memory is also written into `.brain/`; memory may be a faster-to-recall index, it may never be the only copy").
+Mirrors the agent memory `merge-develop-into-work-branch` into the vault, per [[decisions/ADR-0013-agent-memory-mirrors-into-the-vault]] ("everything written to agent memory is also written into `.brain/`; memory may be a faster-to-recall index, it may never be the only copy").
 
 ## Changed areas
 
@@ -22,7 +22,21 @@ Mirrors the agent memory `merge-develop-into-work-branch` into the vault, per [[
 
 ## Decisions & rationale
 
-- _Enrich: record or link the decision behind this change, e.g. `decisions/ADR-XXXX`._
+- Adds [[decisions/ADR-0025-a-branch-switch-is-a-file-operation]] — a `git checkout` is a bulk
+  write to the working tree, and files tracked only on the branch being left are in its blast
+  radius. Two incidents three weeks apart: the eval suite deleted by a refresh checkout
+  (2026-09-01, "No eval cases found"), and #181's worktree build whose originals were left dirty
+  in the main tree, so a concurrent `checkout develop` merged them against a stale local
+  `develop`, left `UU`/`DU` conflicts and carried off 37 of 57 eval files.
+- The shape the second incident adds to the first: **a worktree isolates the branch, but isolates
+  the files only when the originals stop existing.** A copy leaves two live versions of the same
+  edit, and the one outside the worktree has no branch protecting it.
+- Satisfies [[decisions/ADR-0013-agent-memory-mirrors-into-the-vault]] for the memory
+  `merge-develop-into-work-branch`, which an audit during #180 found held **only** in agent
+  memory — unreviewable, unversioned, and invisible to anyone who is not that agent. `feedback`
+  memories mirror to `decisions/` as an ADR.
+- `status: accepted`, not `proposed`: it writes down practice already paid for twice, rather than
+  proposing a change.
 
 ## Planning
 
