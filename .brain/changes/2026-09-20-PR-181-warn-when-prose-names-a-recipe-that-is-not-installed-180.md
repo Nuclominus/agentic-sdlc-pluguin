@@ -14,7 +14,46 @@ files_changed: 4
 
 ## Summary
 
-Closes #180. Follow-up to #176 / ADR-0024 — the one acceptance criterion of that issue that was still open.
+Closes #180 and finishes [[decisions/ADR-0024-naming-a-recipe-is-an-explicit-request]], whose
+prose-name tier shipped in #178 with one acceptance criterion still open.
+
+`--workflow=mobile-release` halts with exit 1. The same name **in prose** resolved `default` —
+six phases under a different cap — and said nothing at all. That is the mismatch #176 fixed for
+the *known*-name case, still live for the unknown one.
+
+The tier already had an unknown-name report; it was reachable only by a **quoted** token or a
+**one-character slip** from an installed name, so a plausible name nothing answers to was
+invisible by construction. This adds a third way in, guarded twice:
+
+1. **A reference verb** — `run`, `use`, `execute`, `start`, `launch`, `invoke`, `trigger`,
+   `apply`, `kick off`, `with`, `via`, in any tense, with a determiner and one adjective allowed
+   between verb and name, and both word orders (`run the <name> workflow`, `run workflow <name>`).
+2. **A compound name** — the token must be hyphenated.
+
+**The second guard is the one that matters, and review is what established it.** The first cut
+leaned on the verb alone and warned at nine ordinary feature requests in ten: `start`, `launch`
+and `trigger` are app-lifecycle verbs first, so *"trigger the approval workflow when a doc is
+submitted"* and *"replace the old uploader with the streaming pipeline"* both drew a false alarm
+— and `pipeline-orchestrator` echoes every `WARN:` line verbatim, so each one cost a wrong line
+plus the entire recipe list on a routine run. Every false positive names an application's own
+workflow with a **single English noun**; every recipe name that is not a plain word is a
+**hyphenated identifier** (`mobile-release`, like the installed `docs-only`, `android-feature`).
+The compound requirement separates the two classes where the verb cannot — and it is what makes
+the app-lifecycle verbs safe to keep rather than something to cut.
+
+The trade is a miss on a single-word recipe nobody installed (`run the checkout workflow`). That
+is the cheap direction: prose warns and never halts, so a miss costs a silence while a false
+positive costs noise on every run that trips it.
+
+**The asymmetry this settles.** A halt belongs to `--workflow=NAME`, a machine-checkable
+instruction. Prose is a soft signal: it must never abort a run, and after this it must never be
+silent either.
+
+Review also caught a test that passed for the wrong reason: the flag-halt case re-mapped the
+already-mapped `NAMED` fixture, so `locateRecipe` searched a set where every `name` was an object
+and matched a halt reading `Available: [object Object], …` — the assertion stopped at the first
+line. It now asserts the halt whole. 20 silent and 13 warning phrasings are locked in as tests
+(731 pass, up from 725).
 
 ## Changed areas
 
@@ -22,7 +61,15 @@ Closes #180. Follow-up to #176 / ADR-0024 — the one acceptance criterion of th
 
 ## Decisions & rationale
 
-- _Enrich: record or link the decision behind this change, e.g. `decisions/ADR-XXXX`._
+- Implements the last open piece of [[decisions/ADR-0024-naming-a-recipe-is-an-explicit-request]]
+  — "a token plainly meant as a name that matches nothing installed produces a `WARN:`". No new
+  ADR: this widens *what counts as plainly meant*, inside that decision rather than beside it.
+  ADR-0024 gained a **Decision** bullet for the halt/prose asymmetry and the compound-name
+  rationale.
+- `plugins/sdlc/workflows/RESOLVER.md` is the spec the orchestrator reads, so both guards, the
+  tenses, the determiner allowance and both word orders are stated there. The first cut let the
+  doc list twelve verbs where the code matched twenty tokens — the kind of drift that makes a
+  spec stop being one.
 
 ## Planning
 
