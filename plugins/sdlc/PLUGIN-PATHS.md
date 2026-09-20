@@ -78,6 +78,35 @@ the line above:
 
 ---
 
+## The running plugin is also a discovered plugin
+
+The table above splits reads in two, and a plugin's own `manifest.yaml`, `workflows/*.yaml` and
+`runtime-dependencies.json` fall on both sides: they are self-referential facts, read through the
+cross-plugin path because they are the same files a consumer discovers in any other plugin.
+
+That is free while the plugin is installed and fatal when it is not. Under
+`claude --plugin-dir plugins/sdlc`, `claude plugin eval plugins/sdlc` or any development checkout
+the plugin is in no cache and in no `installed_plugins.json`, so registry-keyed discovery finds
+nothing — including itself. The run halts at Step 0 with `Workflow 'default' not found. Available:
+(none)` while `default.yaml` sits next to the code printing it (issue #164).
+
+So: **when `CLAUDE_PLUGIN_ROOT` points OUTSIDE `/plugins/cache/`, that root joins the set of
+installed plugins** (`pathLoadedRoots` in `tools/resolve/roots.mjs`, folded in by
+`mergePathLoaded` in `tools/resolve/manifests.mjs`). Manifests, recipes, dependencies and skills
+are then discovered from it like any other install.
+
+- A root **inside** the cache is not a path load — it is registered already, and offering it twice
+  is how one plugin becomes two foundations of equal priority.
+- A path load **replaces** the registered copy of the same plugin and keeps its key, so the tree
+  being edited wins while `enabledPlugins` and every `plugin:skill` label keep working. The
+  displaced path is reported as a `WARN`.
+- Physical module location (`ownPluginRoot()`) is deliberately not a fallback signal: it names the
+  checkout for every caller, including ones that never loaded the plugin.
+
+The full argument is [`ADR-0022`](../../.brain/decisions/ADR-0022-a-path-loaded-plugin-is-its-own-install.md).
+
+---
+
 ## Known gap — enablement is not consulted
 
 Discovery globs the **cache**, which holds every plugin ever installed under that config dir,

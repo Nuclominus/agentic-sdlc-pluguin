@@ -517,3 +517,50 @@ test("the orchestrator's 0-large jq projection names only real plan keys", () =>
     assert.ok(!projected.includes("prompt_blocks"));
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
+
+// Issue #164, end to end and against the REAL plugin — the repro from the report, reduced to a
+// test. An empty config dir plus `CLAUDE_PLUGIN_ROOT=<checkout>/plugins/sdlc` is what
+// `--plugin-dir`, `claude plugin eval` and every development checkout look like from in here.
+// Before the fix this halted at "Workflow 'default' not found. Available: (none)" while
+// default.yaml sat next to the code printing the halt.
+test("a path-loaded plugin resolves its own manifest, recipes and dependencies", () => {
+  const SDLC = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "plugins", "sdlc");
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-pathload-"));
+  try {
+    const proj = join(dir, "project");
+    write(join(proj, "src.txt"), "seed\n");
+    const g = (...a) => execFileSync("git", a, { cwd: proj, stdio: "ignore" });
+    g("init", "-q", "-b", "main");
+    g("config", "user.email", "t@example.com");
+    g("config", "user.name", "t");
+    g("add", "-A"); g("commit", "-qm", "seed");
+    g("update-ref", "refs/remotes/origin/main", "HEAD");
+
+    // No installed_plugins.json, no cache: the registry every discovery keys off is empty.
+    const env = { HOME: dir, CLAUDE_CONFIG_DIR: join(dir, "cfg"), CLAUDE_PLUGIN_ROOT: SDLC };
+    const { plan, halt } = resolvePlan({ cwd: proj, args: '"Add dark mode" --dry-run', env });
+
+    assert.equal(halt, null, "the plugin that ships `vanilla` and default.yaml must not report neither");
+    assert.equal(plan.stack.primary_profile, "vanilla");
+    assert.equal(plan.workflow.name, "default");
+    assert.ok(plan.workflow.resolved_phases.length > 0);
+    assert.deepEqual(Object.keys(plan.deps_preflight), ["superpowers"],
+      "runtime-dependencies.json is read through the same registry, so it went missing with the rest");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("an explicit --stack=vanilla resolves under a path load", () => {
+  // The other face of the same defect: "no installed foundation declares that stack" for a stack
+  // that ships in the plugin doing the reporting.
+  const SDLC = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "plugins", "sdlc");
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-pathload-"));
+  try {
+    const proj = join(dir, "project");
+    mkdirSync(proj, { recursive: true });
+    const env = { HOME: dir, CLAUDE_CONFIG_DIR: join(dir, "cfg"), CLAUDE_PLUGIN_ROOT: SDLC };
+    const { plan, halt } = resolvePlan({ cwd: proj, args: '"Add dark mode" --stack=vanilla --dry-run', env });
+    assert.equal(halt, null);
+    assert.equal(plan.stack.primary_profile, "vanilla");
+    assert.equal(plan.stack.forced, true);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

@@ -10,7 +10,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  loadManifestsFromTree, loadInstalledManifests, readEnabledPlugins, readInstalledPlugins,
+  loadManifestsFromTree, loadInstalledManifests, readEnabledPlugins, readInstalledPlugins, mergePathLoaded,
 } from "../../../plugins/sdlc/tools/resolve/manifests.mjs";
 
 const REPO = new URL("../../../", import.meta.url).pathname;
@@ -185,5 +185,83 @@ test("a malformed manifest becomes an error record, never an exception", () => {
     const r = loadInstalledManifests({ configDir });
     assert.equal(r.errors.length, 1);
     assert.match(r.errors[0].error, /parse:/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// Issue #164 — the path-load case, and the shadowing it must not create.
+//
+// The repro that opened the issue: `CLAUDE_PLUGIN_ROOT=$PWD/plugins/sdlc` with an empty config
+// dir halted at "Workflow 'default' not found. Available: (none)" while default.yaml sat next to
+// the code printing the halt. `vanilla` ships in that very plugin, so "none installed" was wrong
+// whenever the plugin itself was the thing loaded.
+
+test("a path-loaded plugin joins the installs map under its own name", () => {
+  const dir = scratch();
+  try {
+    const dev = join(dir, "sdlc");
+    write(join(dev, "manifest.yaml"), manifest("vanilla"));
+    write(join(dev, ".claude-plugin", "plugin.json"), { name: "sdlc", version: "2.4.1" });
+    const merged = mergePathLoaded(new Map(), [dev]);
+    assert.deepEqual([...merged.keys()], ["sdlc@path"]);
+    assert.equal(merged.get("sdlc@path").installPath, dev);
+    assert.equal(merged.get("sdlc@path").version, "2.4.1", "the version comes from plugin.json, not from a guess");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a path load REPLACES the installed copy of the same plugin, keeping its key", () => {
+  // Two roots of one plugin would both be read, and two `vanilla` foundations of equal priority
+  // make stack detection a coin toss decided by iteration order. Keeping the registered key is
+  // what keeps an enabledPlugins entry — and every plugin:skill label — pointing at the same
+  // plugin it did before.
+  const dir = scratch();
+  try {
+    const cached = join(dir, "cache", "sdlc", "2.4.0");
+    const dev = join(dir, "checkout", "sdlc");
+    write(join(cached, "manifest.yaml"), manifest("vanilla"));
+    write(join(dev, "manifest.yaml"), manifest("vanilla"));
+    write(join(dev, ".claude-plugin", "plugin.json"), { name: "sdlc", version: "2.4.1" });
+    const installs = new Map([["sdlc@m", { installPath: cached, version: "2.4.0", scope: "user" }]]);
+    const merged = mergePathLoaded(installs, [dev]);
+    assert.deepEqual([...merged.keys()], ["sdlc@m"], "one plugin, one entry");
+    assert.equal(merged.get("sdlc@m").installPath, dev, "the tree being edited wins over the installed copy");
+    assert.equal(merged.get("sdlc@m").shadows, cached, "and the copy it displaced is reported, not dropped silently");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a path load alongside a cache install of the same plugin yields ONE foundation", () => {
+  const dir = scratch();
+  try {
+    const cached = join(dir, "cache", "sdlc", "2.4.0");
+    const dev = join(dir, "checkout", "sdlc");
+    write(join(cached, "manifest.yaml"), manifest("vanilla"));
+    write(join(dev, "manifest.yaml"), manifest("vanilla"));
+    write(join(dev, ".claude-plugin", "plugin.json"), { name: "sdlc", version: "2.4.1" });
+    const { configDir } = fakeConfig(dir, {
+      installs: { "sdlc@m": [{ scope: "user", installPath: cached, version: "2.4.0" }] },
+      enabled: {},
+    });
+    const r = loadInstalledManifests({ configDir, extraRoots: [dev] });
+    assert.equal(r.foundations.length, 1, "duplicate-priority vanilla is exactly the ambiguity this must not create");
+    assert.equal(r.foundations[0].file, join(dev, "manifest.yaml"));
+    assert.equal(r.foundations[0].scope, "path");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("disabling a plugin still disables it when the plugin is path-loaded", () => {
+  // The replacement keeps the registered key precisely so this stays true.
+  const dir = scratch();
+  try {
+    const cached = join(dir, "cache", "sdlc", "2.4.0");
+    const dev = join(dir, "checkout", "sdlc");
+    write(join(cached, "manifest.yaml"), manifest("vanilla"));
+    write(join(dev, "manifest.yaml"), manifest("vanilla"));
+    write(join(dev, ".claude-plugin", "plugin.json"), { name: "sdlc", version: "2.4.1" });
+    const { configDir } = fakeConfig(dir, {
+      installs: { "sdlc@m": [{ scope: "user", installPath: cached, version: "2.4.0" }] },
+      enabled: { "sdlc@m": false },
+    });
+    const r = loadInstalledManifests({ configDir, extraRoots: [dev] });
+    assert.equal(r.foundations.length, 0);
+    assert.equal(r.skipped[0].reason, "disabled");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

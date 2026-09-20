@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resolveConfigDir, resolveSdlcRoot, resolveRoots } from "../../../plugins/sdlc/tools/resolve/roots.mjs";
+import { resolveConfigDir, resolveSdlcRoot, resolveRoots, pathLoadedRoots } from "../../../plugins/sdlc/tools/resolve/roots.mjs";
 
 function scratch() { return mkdtempSync(join(tmpdir(), "sdlc-roots-")); }
 function write(file, content) {
@@ -89,4 +89,35 @@ test("resolveRoots derives the cache root from the config dir", () => {
   assert.equal(r.config_dir, "/home/u/.claude");
   assert.equal(r.plugin_cache_root, "/home/u/.claude/plugins/cache");
   assert.equal(r.sdlc_plugin_root, "/home/u/.claude/plugins/cache/mkt/sdlc/1.16.0");
+});
+
+// Issue #164 — a plugin loaded from a path is in no cache and in no installed_plugins.json, so
+// every registry-keyed discovery is blind to it. These fix the boundary of the escape hatch.
+
+test("a path-loaded plugin root is offered for discovery", () => {
+  const dir = scratch();
+  try {
+    write(join(dir, "plug", "manifest.yaml"), "kind: foundation\nstack: dev\n");
+    assert.deepEqual(pathLoadedRoots({ CLAUDE_PLUGIN_ROOT: join(dir, "plug") }), [join(dir, "plug")]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a plugin root inside the cache is NOT a path load", () => {
+  // It is registered, and installed discovery already has it with the right key and version.
+  // Offering it twice is how one plugin becomes two foundations of equal priority.
+  assert.deepEqual(pathLoadedRoots({ CLAUDE_PLUGIN_ROOT: "/home/u/.claude/plugins/cache/mkt/sdlc/2.4.1" }), []);
+});
+
+test("no CLAUDE_PLUGIN_ROOT means no path load — the module never volunteers its own location", () => {
+  // ownPluginRoot() would name this checkout for every caller, including test fixtures and lint
+  // passes that loaded the module without loading the plugin. Absent the env var, nothing did.
+  assert.deepEqual(pathLoadedRoots({}), []);
+});
+
+test("a path root carrying no manifest is not a plugin root", () => {
+  const dir = scratch();
+  try {
+    mkdirSync(join(dir, "empty"), { recursive: true });
+    assert.deepEqual(pathLoadedRoots({ CLAUDE_PLUGIN_ROOT: join(dir, "empty") }), []);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
