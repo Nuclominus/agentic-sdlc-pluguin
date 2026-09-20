@@ -72,3 +72,24 @@ test("CLI `all` exits non-zero on an invalid manifest", () => {
     assert.ok(status >= 1, `expected non-zero exit, got ${status}`);
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 });
+
+// ADR-0026 follow-up: `frameworks: []` is legal. The property originally carried `minItems: 1`,
+// which made a foundation that hosts no frameworks yet — a freshly scaffolded one — fail AJV
+// with a message that pointed at the array rather than at the real (absent) problem. The
+// create-pluguin skill's own scaffold text described exactly that state, so the constraint and
+// the authoring guidance contradicted each other.
+test("a foundation declaring an empty frameworks array validates", () => {
+  const tmp = mkTmp();
+  try {
+    cpSync(join(REPO, "schemas"), join(tmp, "schemas"), { recursive: true });
+    mkdirSync(join(tmp, "plugins", "bare"), { recursive: true });
+    writeFileSync(
+      join(tmp, "plugins", "bare", "manifest.yaml"),
+      "kind: foundation\nstack: bare\npriority: 100\ndetect:\n  any:\n    - file_exists: go.mod\nframeworks: []\n",
+    );
+    const results = checkSchemas(tmp);
+    const manifest = results.find((r) => String(r.file).includes(join("plugins", "bare", "manifest.yaml")));
+    assert.ok(manifest, "the manifest should have been validated");
+    assert.equal(manifest.ok, true, `empty frameworks must validate, got: ${JSON.stringify(manifest.errors ?? [])}`);
+  } finally { rmSync(tmp, { recursive: true, force: true }); }
+});

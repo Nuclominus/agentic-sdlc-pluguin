@@ -25,8 +25,8 @@ const android = {
   post_pipeline_checks: ["./gradlew testDebugUnitTest"],
   heal_checks: ["./gradlew compileDebugKotlin"],
 };
-const retrofit = { stack: "retrofit", convention_skills: ["retrofit-plugin:retrofit-conventions"], phase_injections: { development: "RETROFIT RULES" } };
-const room = { stack: "room", convention_skills: ["room-plugin:room-conventions"], phase_injections: { development: "ROOM RULES" } };
+const retrofit = { stack: "retrofit", convention_skills: ["android-foundation:retrofit-conventions"], phase_injections: { development: "RETROFIT RULES" } };
+const room = { stack: "room", convention_skills: ["android-foundation:room-conventions"], phase_injections: { development: "ROOM RULES" } };
 
 function merged(extra = {}) {
   return mergeProfiles({ primary: android, active: { android }, additive: [room, retrofit], vanilla, ...extra });
@@ -61,7 +61,7 @@ test("injections concatenate stack-first, then additive alphabetically by stack"
 test("convention skills union across stack and additive profiles", () => {
   const { profile } = merged();
   assert.deepEqual(profile.convention_skills.sort(), [
-    "android-foundation:android-architecture", "retrofit-plugin:retrofit-conventions", "room-plugin:room-conventions",
+    "android-foundation:android-architecture", "android-foundation:retrofit-conventions", "android-foundation:room-conventions",
   ]);
 });
 

@@ -104,17 +104,36 @@ function classify(records) {
     if (!byStack.has(stack)) byStack.set(stack, []);
     byStack.get(stack).push(f);
   }
+  const isEmbedded = (f) => foundations.some((fo) => fo.file === f.file);
+  // Sorting by `file` before picking is what makes the choice DETERMINISTIC. Record order is
+  // an artifact of enumeration — a glob in tree mode, `installed_plugins.json` order in
+  // installed mode — and the two need not agree. Picking "the first one that matches" would
+  // therefore let the two modes resolve different winners for the same tree, which is exactly
+  // the dual-mode divergence ADR-0026 exists to make impossible. Sort is stable in V8, so two
+  // rows from the SAME file (a foundation declaring one `stack` twice) keep their YAML order,
+  // which is itself identical in both modes.
+  const byFile = (a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0);
   const deduped = [];
   for (const [stack, group] of byStack) {
     if (group.length === 1) { deduped.push(group[0]); continue; }
-    // Prefer the record synthesized from a foundation (its `file` matches a foundation
-    // record's own manifest path) — the foundation is authoritative once it embeds a row for
-    // this stack. Fall back to the first if none matches (defensive; should not occur).
-    const winner = group.find((f) => foundations.some((fo) => fo.file === f.file)) ?? group[0];
+    // The foundation is authoritative once it embeds a row for this stack, so an embedded
+    // record beats a standalone one. Among equals, lowest `file` path wins.
+    const embedded = group.filter(isEmbedded);
+    const winner = (embedded.length ? embedded : group).slice().sort(byFile)[0];
     deduped.push(winner);
     for (const loser of group) {
       if (loser === winner) continue;
-      shadowed_frameworks.push({ stack, file: loser.file, reason: "superseded-by-embedded" });
+      // Two distinct reasons, because they are two different problems with different fixes.
+      // A standalone copy losing to an embedded row is the EXPECTED post-merge state — the
+      // user uninstalls the stale plugin. Two embedded rows colliding is a MANIFEST BUG: the
+      // `stack` id is declared twice (in one foundation or across two), which
+      // `tools/sdlc-lint`'s `stack-uniqueness` verb rejects in-repo. Reporting the second as
+      // `superseded-by-embedded` told the user to uninstall a plugin that was never the cause.
+      shadowed_frameworks.push({
+        stack,
+        file: loser.file,
+        reason: isEmbedded(loser) ? "duplicate-embedded-row" : "superseded-by-embedded",
+      });
     }
   }
 

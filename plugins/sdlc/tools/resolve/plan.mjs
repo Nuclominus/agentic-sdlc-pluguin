@@ -201,7 +201,14 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   const manifests = mode === "tree" ? loadManifestsFromTree(cwd) : loadInstalledManifests({ configDir, projectRoot: cwd, extraRoots });
   for (const s of manifests.skipped ?? []) warn(`WARN: ${s.key} ships a manifest but is disabled — not considered for detection`);
   for (const e of manifests.errors ?? []) warn(`WARN: unreadable manifest ${e.file}: ${e.error}`);
-  for (const sf of manifests.shadowed_frameworks ?? []) warn(`WARN: ${sf.stack} is now embedded in a foundation; the standalone copy at ${sf.file} is not used (${sf.reason})`);
+  for (const sf of manifests.shadowed_frameworks ?? []) {
+    // The two reasons need different advice: one is a stale install the user should remove,
+    // the other is a manifest declaring the same `stack` twice. Telling someone to uninstall
+    // a plugin when the real fault is a duplicated row sends them after the wrong file.
+    warn(sf.reason === "duplicate-embedded-row"
+      ? `WARN: ${sf.stack} is declared by more than one embedded framework row; the row in ${sf.file} is not used (${sf.reason}) — a \`stack\` id must be unique across every foundation's \`frameworks:\` array`
+      : `WARN: ${sf.stack} is now embedded in a foundation; the standalone copy at ${sf.file} is not used (${sf.reason})`);
+  }
 
   // ---- Step 0a: dependency preflight
   const deps = preflight({ configDir, projectRoot: cwd, installs, enabled, headless, force: flag(args, "--force-preflight"), skills: opt(args, "--skills") });

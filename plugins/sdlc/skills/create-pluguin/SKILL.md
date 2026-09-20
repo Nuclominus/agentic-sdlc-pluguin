@@ -93,7 +93,7 @@ needs to be unique.
 ```
 plugins/<slug>/
 ├── .claude-plugin/plugin.json        # name, version "1.0.0", description, author, license, keywords, dependencies: ["sdlc"]
-├── manifest.yaml                     # the profile (template below) — its OWN frameworks: array starts empty
+├── manifest.yaml                     # the profile (template below) — hosts no frameworks yet: omit `frameworks:`, or write `frameworks: []` (both are valid)
 ├── skills/<slug>-conventions/SKILL.md  # optional convention skill(s)
 ├── rules/snippets/<slug>-*.md        # OPTIONAL
 ├── runtime-dependencies.json         # { "dependencies": [] } unless it needs external skills (e.g. superpowers)

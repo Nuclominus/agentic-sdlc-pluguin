@@ -269,11 +269,10 @@
     },
     "frameworks": {
       "type": "array",
-      "description": "Foundation only (ADR-0026): embedded framework rows, one per additive library this foundation hosts directly instead of via a separate installed plugin. The resolver's `classify()` synthesizes one ordinary `kind: framework` record per row (in both tree and installed loader modes), so downstream consumers (`detect.mjs`, `plan.mjs`) are unaffected. `stack` must be unique across all rows and must not collide with any foundation's own `stack` id — enforced by `tools/sdlc-lint` (a computed cross-item key is awkward to express in JSON Schema directly).",
+      "description": "Foundation only (ADR-0026): embedded framework rows, one per additive library this foundation hosts directly instead of via a separate installed plugin. The resolver's `classify()` synthesizes one ordinary `kind: framework` record per row (in both tree and installed loader modes), so downstream consumers (`detect.mjs`, `plan.mjs`) are unaffected. `stack` must be unique across all rows and must not collide with any foundation's own `stack` id — enforced by `tools/sdlc-lint`'s `stack-uniqueness` verb (a computed cross-item key is awkward to express in JSON Schema directly). An EMPTY array is deliberately legal: a foundation hosting no frameworks yet is a normal state (a freshly scaffolded one, or a platform nobody has written a row for), and `classify()` maps it to zero synthesized records. Rejecting `[]` would only teach authors to delete the key and rediscover it later.",
       "items": {
         "$ref": "#/$defs/frameworkRow"
-      },
-      "minItems": 1
+      }
     },
     "workflow": {
       "type": "string",

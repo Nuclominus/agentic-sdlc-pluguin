@@ -487,3 +487,91 @@ frameworks:
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+// ---- ADR-0026 follow-ups: de-dup determinism and reason accuracy -------------------------
+//
+// The de-dup tie-break used to be `group.find(isEmbedded) ?? group[0]` — "first match wins",
+// where "first" is an artifact of enumeration order (a glob in tree mode, installed_plugins.json
+// order in installed mode). Two foundations embedding the same `stack` could therefore resolve
+// DIFFERENT winners in the two modes: the precise dual-mode divergence ADR-0026 exists to make
+// impossible. It also reported every loser as `superseded-by-embedded`, which names a stale
+// standalone install — sending the user to uninstall a plugin when the real fault is a `stack`
+// id declared twice.
+
+function foundationEmbedding(stack, ownStack) {
+  return `kind: foundation\nstack: ${ownStack}\npriority: 300\ndetect:\n  any:\n    - file_exists: settings.gradle.kts\nframeworks:\n  - stack: ${stack}\n    enriches_aspect: network\n    dependency: com.example.${stack}\n`;
+}
+
+test("two foundations embedding the same stack pick the SAME winner in both loader modes", () => {
+  const dir = scratch();
+  try {
+    // `zeta` sorts after `alpha`, so a file-order-dependent pick is visible: whichever loader
+    // happens to enumerate zeta first would otherwise win there and lose in the other mode.
+    const alpha = join(dir, "installed", "alpha-foundation");
+    const zeta = join(dir, "installed", "zeta-foundation");
+    write(join(alpha, "manifest.yaml"), foundationEmbedding("retrofit", "alpha"));
+    write(join(zeta, "manifest.yaml"), foundationEmbedding("retrofit", "zeta"));
+
+    const treeRoot = join(dir, "tree");
+    write(join(treeRoot, "plugins", "alpha-foundation", "manifest.yaml"), foundationEmbedding("retrofit", "alpha"));
+    write(join(treeRoot, "plugins", "zeta-foundation", "manifest.yaml"), foundationEmbedding("retrofit", "zeta"));
+
+    const { configDir } = fakeConfig(dir, {
+      installs: {
+        "zeta-foundation@m": [{ scope: "user", installPath: zeta, version: "1.0.0" }],
+        "alpha-foundation@m": [{ scope: "user", installPath: alpha, version: "1.0.0" }],
+      },
+      enabled: { "alpha-foundation@m": true, "zeta-foundation@m": true },
+    });
+
+    const installed = loadInstalledManifests({ configDir });
+    const tree = loadManifestsFromTree(treeRoot);
+
+    const pick = (r) => r.frameworks.filter((f) => f.doc.stack === "retrofit");
+    assert.equal(pick(installed).length, 1, "installed mode must not double-attach");
+    assert.equal(pick(tree).length, 1, "tree mode must not double-attach");
+    // Both modes resolve the alphabetically-lowest manifest path — the only tie-break that
+    // does not depend on enumeration order.
+    assert.ok(pick(installed)[0].file.includes("alpha-foundation"), "installed mode picks the lowest path");
+    assert.ok(pick(tree)[0].file.includes("alpha-foundation"), "tree mode picks the lowest path");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("an embedded row losing to another embedded row reports duplicate-embedded-row, not superseded-by-embedded", () => {
+  const dir = scratch();
+  try {
+    const alpha = join(dir, "installed", "alpha-foundation");
+    const zeta = join(dir, "installed", "zeta-foundation");
+    write(join(alpha, "manifest.yaml"), foundationEmbedding("retrofit", "alpha"));
+    write(join(zeta, "manifest.yaml"), foundationEmbedding("retrofit", "zeta"));
+    const { configDir } = fakeConfig(dir, {
+      installs: {
+        "alpha-foundation@m": [{ scope: "user", installPath: alpha, version: "1.0.0" }],
+        "zeta-foundation@m": [{ scope: "user", installPath: zeta, version: "1.0.0" }],
+      },
+      enabled: { "alpha-foundation@m": true, "zeta-foundation@m": true },
+    });
+
+    const { shadowed_frameworks } = loadInstalledManifests({ configDir });
+    assert.equal(shadowed_frameworks.length, 1);
+    assert.equal(shadowed_frameworks[0].stack, "retrofit");
+    assert.equal(shadowed_frameworks[0].reason, "duplicate-embedded-row");
+    assert.ok(shadowed_frameworks[0].file.includes("zeta-foundation"), "the loser is the higher path");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a foundation with an empty frameworks array is valid and synthesizes nothing", () => {
+  const dir = scratch();
+  try {
+    const p = join(dir, "installed", "bare-foundation");
+    write(join(p, "manifest.yaml"), `kind: foundation\nstack: bare\npriority: 100\ndetect:\n  any:\n    - file_exists: go.mod\nframeworks: []\n`);
+    const { configDir } = fakeConfig(dir, {
+      installs: { "bare-foundation@m": [{ scope: "user", installPath: p, version: "1.0.0" }] },
+      enabled: { "bare-foundation@m": true },
+    });
+    const { foundations, frameworks, errors } = loadInstalledManifests({ configDir });
+    assert.equal(errors.length, 0);
+    assert.equal(foundations.length, 1);
+    assert.equal(frameworks.length, 0, "an empty array synthesizes zero records");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
