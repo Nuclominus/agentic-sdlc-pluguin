@@ -169,10 +169,60 @@ test("tier 1b: a cue word with no name-like token beside it says nothing", () =>
   assert.deepEqual(r.warnings, [], "'the', 'SDLC' and friends are not recipe names anyone typed");
 });
 
+test("tier 1b: co-occurrence is not naming — the name must STAND AT the cue word", () => {
+  // The cue word guards the tier, but on its own it only proves the word exists somewhere. Every
+  // string below carries a cue word AND a recipe name, and every one of them is a change to make,
+  // not a recipe to run — `/sdlc:start` is documented to the user as "run the SDLC pipeline".
+  for (const args of [
+    "run the SDLC pipeline to add debug logging to the growth screen",
+    "Refactor the data pipeline module",
+    "Add a testing stage to the release pipeline",
+    "Document the hotfix rollback runbook in the CI pipeline docs",
+    "Speed up the ingestion pipeline; refactor the mapper",
+  ]) {
+    const r = resolveWorkflowName({ args, recipes: NAMED, profileDefault: "demo-flow" });
+    assert.equal(r.name, "demo-flow", `'${args}' describes a change — it does not select a recipe`);
+  }
+});
+
+test("tier 1b: an ordinary word standing beside the cue word is not a mistyped recipe", () => {
+  // The unknown-name report reaches the user through prints[], so a false alarm costs a line of
+  // output and the whole recipe list on an ordinary feature request.
+  for (const args of [
+    "run the SDLC pipeline: implement offline-first sync",
+    "Fix the login crash and update the CI pipeline config",
+    "Add a growth-log pipeline for analytics events",
+    "Wire up the multi-tenant workflow engine for orders",
+  ]) {
+    const r = resolveWorkflowName({ args, recipes: NAMED, profileDefault: "demo-flow" });
+    assert.deepEqual(r.warnings, [], `'${args}' names no recipe and must say nothing`);
+  }
+});
+
+test("tier 1b: a name spelled one character off IS reported", () => {
+  const r = resolveWorkflowName({ args: "run the docs-onli workflow --dry-run", recipes: NAMED, profileDefault: "demo-flow" });
+  assert.equal(r.name, "demo-flow");
+  assert.match(r.warnings[0], /'docs-onli' reads like a workflow recipe/);
+});
+
+test("tier 1b: a QUOTED name nothing answers to is reported, however unlike a recipe it looks", () => {
+  const r = resolveWorkflowName({ args: "run the 'frobnicate' workflow", recipes: NAMED, profileDefault: "demo-flow" });
+  assert.match(r.warnings[0], /frobnicate/, "quoting it leaves no doubt it was meant as a name");
+});
+
+test("tier 1b: two names that are BOTH really named stay ambiguous", () => {
+  const recipes = [...NAMED, { name: "docs", origin: "plugin", doc: { name: "docs", phases: ["documentation"] } }];
+  const r = resolveWorkflowName({ args: "compare the docs workflow with the docs-only workflow", recipes, profileDefault: "demo-flow" });
+  assert.equal(r.name, "demo-flow", "an overlap in spelling is not a licence to pick one");
+  assert.match(r.warnings[0], /names more than one workflow recipe/);
+  assert.match(r.warnings[0], /docs/);
+  assert.match(r.warnings[0], /docs-only/);
+});
+
 test("tier 1b: the longer of two overlapping names is the one the text contains", () => {
   const recipes = [...NAMED, { name: "docs", origin: "plugin", doc: { name: "docs", phases: ["documentation"] } }];
   const r = resolveWorkflowName({ args: "the docs-only workflow", recipes });
-  assert.equal(r.name, "docs-only", "the hyphen is a word boundary, so 'docs' also 'matches' — the longer wins");
+  assert.equal(r.name, "docs-only", "the token at the cue word is the whole name, not its prefix");
 });
 
 test("matchNamedRecipe is inert without recipes to name", () => {

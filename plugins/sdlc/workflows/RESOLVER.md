@@ -93,13 +93,18 @@ decided) or `--no-auto-workflow` (the user opted out of every inferred tier).
 **The match.** Deterministic, closed over the *discovered* recipe names — no free-form guessing,
 and no model involvement:
 
-- A **cue word** must be present somewhere in `$ARGUMENTS`: `workflow`, `recipe` or `pipeline`
-  (plural accepted). Without it a feature description that merely contains "hotfix" or "debug"
-  would switch recipes; `analysis` and `testing` are ordinary English words, and this guard is
-  what keeps them safe.
-- A discovered recipe name matching `$ARGUMENTS` **case-insensitively on word boundaries** is a
-  hit. `-` is itself a word boundary, so when two hits overlap (`docs` inside `docs-only`) the
-  **longer** name is the one the text contains.
+- Collect the kebab-shaped tokens **standing at a cue word** (`workflow`, `recipe`, `pipeline`,
+  plural accepted): `<token> workflow`, `workflow <token>`, `<token> SDLC workflow`, and a token
+  **quoted** against the cue word. Matching is case-insensitive.
+- A token that **is** a discovered recipe name is a hit.
+
+**Adjacency is the guard, and a cue word alone is not.** Requiring only that a cue word appear
+*somewhere* — and matching names anywhere else in the text — routes ordinary feature descriptions
+to recipes: `/sdlc:start` is documented to the user as "run the SDLC pipeline", so "run the SDLC
+pipeline to add **debug** logging" carries both a cue word and a recipe name while naming no
+recipe, and "Add a **testing** stage to the release pipeline" would select the QA-only `testing`
+recipe — a pipeline with no `development` phase — for a request to implement something. Only a
+token standing at the cue word counts.
 
 **Outcomes.** Only an unambiguous hit selects; everything else falls through to the next tier —
 never silently.
@@ -117,8 +122,9 @@ never silently.
   WARN: the request names more than one workflow recipe ({csv}) — not choosing between them. Pass --workflow=NAME to be explicit.
   ```
 
-- **No hit, but a kebab-shaped token sits where a recipe name sits** (next to the cue word, and
-  not an ordinary English word standing there) → report it against the same list the not-found
+- **No hit, but a token at the cue word was plainly MEANT as a name** — it is a one-character
+  slip from a discovered name (`docs-onli`), or it was quoted (`the 'frobnicate' workflow`), or
+  it followed `--workflow ` written with a space → report it against the same list the not-found
   halt prints, then continue with the remaining tiers:
 
   ```text
@@ -130,7 +136,15 @@ never silently.
   A wrong name reaching `default` unannounced is the defect this tier exists to close; it must not
   come back through this branch.
 
-- **No hit and no candidate token** → print nothing, fall through.
+  **The gate is deliberately narrower than "any unrecognized token".** This warning reaches the
+  user — `plan.mjs` pushes it into `prints[]` — and a plain denylist of English words cannot be
+  complete, so an ungated version reports `implement`, `config`, `growth-log` and `engine` as
+  mistyped recipes on ordinary feature requests. The accepted cost of the narrowing: a token that
+  resembles no installed recipe and was not quoted (`the frobnicate workflow`) falls through
+  silently, and the resolved recipe is visible where it always was — the `Workflow:` line of the
+  preview.
+
+- **No hit and no such token** → print nothing, fall through.
 
 ## Step 1.5: Match-based auto-selection
 

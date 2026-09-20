@@ -231,13 +231,21 @@ export function availableNames(recipes, { annotate = false } = {}) {
 // ---------------------------------------------------------------- tier 1b
 
 const CUE = "(?:workflow|recipe|pipeline)s?";
-// A token in the shape of a recipe name, sitting where a recipe name sits. `sdlc` is skipped
-// over ("the docs-only SDLC workflow") rather than read as the name.
+// A token in the shape of a recipe name, STANDING AT the cue word — `<name> workflow` or
+// `workflow <name>`. Adjacency is the whole guard: a cue word proves only that the word exists
+// somewhere in the text, and "run the SDLC pipeline to add debug logging" carries both a cue
+// word and a recipe name while naming no recipe at all. `sdlc` is stepped over rather than read
+// as the name ("the docs-only SDLC workflow").
 const BEFORE_CUE = new RegExp(`\\b([A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*)\\s+(?:sdlc\\s+)?${CUE}\\b`, "gi");
 const AFTER_CUE = new RegExp(`\\b${CUE}\\s*[:=]?\\s+([A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*)\\b`, "gi");
+// Shapes that leave no doubt a token was MEANT as a recipe name, even when nothing answers to
+// it: quoted against the cue word, or the flag written with a space instead of `=`.
+const EXPLICIT_NAME = new RegExp(
+  `['"\`]([A-Za-z][A-Za-z0-9-]*)['"\`]\\s+(?:sdlc\\s+)?${CUE}\\b`
+  + `|\\b${CUE}\\s*[:=]?\\s*['"\`]([A-Za-z][A-Za-z0-9-]*)['"\`]`
+  + `|--workflow\\s+([A-Za-z][A-Za-z0-9-]*)`, "gi");
 const KEBAB = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
-// Words that stand next to "workflow" in ordinary English. A recipe is never called one of these,
-// so dropping them costs nothing and keeps the unknown-name report from crying wolf.
+// Words that stand next to "workflow" in ordinary English. A recipe is never called one of these.
 const NOISE = new Set([
   "a", "an", "the", "this", "that", "these", "those", "its", "it", "our", "your", "my", "their",
   "one", "some", "any", "each", "every", "no", "not", "full", "whole", "entire", "same", "other",
@@ -249,19 +257,30 @@ const NOISE = new Set([
   "when", "what", "which", "how", "much", "cost", "phase", "phases", "name", "names", "above",
   "below", "said", "given", "only", "just", "like", "step", "steps", "whose", "here", "there",
 ]);
-const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/** Every kebab-shaped token the text offers up as a recipe name. */
-function candidateNames(text) {
-  const out = [];
-  for (const re of [BEFORE_CUE, AFTER_CUE]) {
-    re.lastIndex = 0;
-    for (const m of text.matchAll(re)) {
-      const token = m[1];
-      if (KEBAB.test(token) && !NOISE.has(token) && !out.includes(token)) out.push(token);
-    }
+/** Tokens gathered from a `g`-flagged regex's capture groups, lowercased and deduped. */
+function tokensFrom(text, re, out = []) {
+  for (const m of text.matchAll(re)) {
+    const token = (m.slice(1).find(Boolean) ?? "").toLowerCase();
+    if (KEBAB.test(token) && !out.includes(token)) out.push(token);
   }
   return out;
+}
+
+/** One-character-slip distance, capped — enough to spot `docs-onli`, not enough to pair words. */
+function offByOne(a, b) {
+  if (a === b || Math.abs(a.length - b.length) > 1) return false;
+  let row = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = row[0];
+    row[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cur = row[j];
+      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = cur;
+    }
+  }
+  return row[b.length] === 1;
 }
 
 /**
@@ -273,23 +292,30 @@ function candidateNames(text) {
  * text — which is how issue #176 answered a "does docs-only fit under its cap?" question with
  * `default`'s six phases and its cap, both figures real and the substitution invisible.
  *
- * Everything here is deterministic and closed over the DISCOVERED names: a cue word
- * (workflow/recipe/pipeline) must be present, so the feature description "add debug logging"
- * does not switch recipes, and `analysis` / `testing` — ordinary English words — stay safe.
- * Anything short of exactly one hit falls through to the next tier with a WARN, never silently.
+ * Everything here is deterministic and closed over the DISCOVERED names. Two guards bound it,
+ * and both exist because a looser draft of this tier was wrong in review:
+ *
+ * - **Only a token standing AT the cue word counts.** Requiring the cue word merely to be
+ *   present, and matching names anywhere, routed "Add a testing stage to the release pipeline"
+ *   to the QA-only `testing` recipe — a pipeline with no `development` phase, for a request to
+ *   implement something.
+ * - **Nothing ambiguous selects.** Two names, and neither wins. A token nothing answers to is
+ *   reported only when it is a one-character slip from an installed name or was quoted as one;
+ *   `NOISE` plus that gate is what keeps an ordinary feature description from being told it
+ *   mistyped a recipe.
  */
 export function matchNamedRecipe({ args = "", recipes = [] } = {}) {
   const text = String(args);
   if (/--workflow=/.test(text) || /--no-auto-workflow\b/.test(text)) return null;
-  if (!new RegExp(`\\b${CUE}\\b`, "i").test(text)) return null;
-
   const names = availableNames(recipes);
   if (names.length === 0) return null;
 
-  const present = names.filter((n) => new RegExp(`\\b${escapeRe(n)}\\b`, "i").test(text));
-  // `-` is a word boundary, so 'docs' "matches" inside 'docs-only'. The longer name is the one
-  // the text actually contains.
-  const hits = present.filter((n) => !present.some((o) => o !== n && o.includes(n)));
+  const named = new Set(names.map((n) => n.toLowerCase()));
+  // A quoted name sits inside its quotes, not against whitespace, so it needs its own pass —
+  // and it is a hit like any other when something answers to it.
+  const quoted = tokensFrom(text, EXPLICIT_NAME);
+  const tokens = tokensFrom(text, AFTER_CUE, tokensFrom(text, BEFORE_CUE, [...quoted]));
+  const hits = tokens.filter((t) => named.has(t));
 
   if (hits.length === 1) {
     const name = hits[0];
@@ -305,10 +331,13 @@ export function matchNamedRecipe({ args = "", recipes = [] } = {}) {
     ] };
   }
 
-  const unknown = candidateNames(text);
+  const unknown = tokens.filter((t) => quoted.includes(t) || (!NOISE.has(t) && names.some((n) => offByOne(t, n))));
   if (unknown.length === 0) return null;
+  const label = unknown.length === 1
+    ? `'${unknown[0]}' reads like a workflow recipe, but no installed recipe has that name`
+    : `'${unknown.join("', '")}' read like workflow recipes, but no installed recipe has those names`;
   return { name: null, print: null, warnings: [
-    [`WARN: '${unknown.join("', '")}' reads like a workflow recipe, but no installed recipe has that name.`,
+    [`WARN: ${label}.`,
       `   Available: ${names.join(", ")}`,
       "   Pass --workflow=NAME to be explicit — resolution continues with the remaining tiers."].join("\n"),
   ] };

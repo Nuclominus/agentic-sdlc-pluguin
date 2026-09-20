@@ -44,13 +44,11 @@ the recipe names the run actually discovered, and it is reported.**
   inferred selection from a typed one.
 - The plan JSON gains `workflow.available` — the sorted, deduped discoverable names. The
   not-found halt already computed that list privately; the successful plan now carries it too.
-- Selection is deterministic and closed over the discovered set: a cue word (`workflow`,
-  `recipe`, `pipeline`) must be present, and a discovered name must match case-insensitively on a
-  word boundary. The cue word is what keeps `analysis`, `testing` and `debug` — ordinary English
-  words — from hijacking a feature description.
-- **Nothing ambiguous selects.** Two names matched, or a name-like token matching nothing
-  installed, produces a `WARN:` and falls through to the next tier. The unknown-name warning
-  prints the same `Available:` list the halt does.
+- Selection is deterministic and closed over the discovered set: only a token **standing at** a
+  cue word (`workflow`, `recipe`, `pipeline`) is considered, and it must *be* a discovered name.
+- **Nothing ambiguous selects.** Two names matched, or a token plainly meant as a name that
+  matches nothing installed, produces a `WARN:` and falls through to the next tier. The
+  unknown-name warning prints the same `Available:` list the halt does.
 - The orchestrator's one obligation is **not to trim the name out of `$ARGUMENTS`** while it
   shortens a request into a brief. It does not build the flag and does not screen the name.
 
@@ -68,12 +66,23 @@ the recipe names the run actually discovered, and it is reported.**
 **Negative, and accepted.**
 
 - **A heuristic sits on the resolution path.** It is small, deterministic and tested, but it is
-  the first tier that reads intent out of free text rather than a flag or a file. The cue-word
-  guard and the fall-through-on-ambiguity rule are what bound the damage: the worst case is a
-  `WARN` and the behaviour that existed before.
-- **The unknown-name report can cry wolf.** A kebab-shaped token standing next to "pipeline" in a
-  sentence about something else earns a warning. A stop-list of ordinary English words keeps it
-  rare; it costs a line of output and changes no resolution.
+  the first tier that reads intent out of free text rather than a flag or a file. Adjacency and
+  the fall-through-on-ambiguity rule are what bound the damage: the worst case is a `WARN` and the
+  behaviour that existed before.
+- **A cue word alone was not enough, and the first draft of this tier proved it.** Requiring only
+  that `workflow`/`recipe`/`pipeline` appear *somewhere* routed "Add a testing stage to the
+  release pipeline" to the QA-only `testing` recipe — no `development` phase, for a request to
+  implement something — because `/sdlc:start` is itself described to users as "run the SDLC
+  pipeline". Co-occurrence is not naming; the name must stand at the cue word. Caught in review
+  of #178, before merge.
+- **The unknown-name report is narrower than the issue's wording.** #176 asks that a prose name
+  matching no installed recipe be reported. Reporting *every* unrecognized token at a cue word
+  cannot be done from a denylist of English words: `implement`, `config`, `growth-log` and
+  `engine` all earn a false "did you mean a recipe?" on ordinary requests, printed to the user
+  with the whole recipe list. The report is therefore gated on evidence the token was meant as a
+  name — a one-character slip from an installed name, a quoted token, or `--workflow ` with a
+  space. A token resembling nothing installed and quoted by nobody falls through silently, and
+  the recipe that did resolve stays visible on the preview's `Workflow:` line.
 - **The name must survive the orchestrator's reconstruction of `$ARGUMENTS`.** That is a prose
   obligation in `SKILL.md`, and prose obligations are the ones that get skipped
   ([[planning/h1-compliance-auditor]]). It is the minimum possible one — *do not delete these
