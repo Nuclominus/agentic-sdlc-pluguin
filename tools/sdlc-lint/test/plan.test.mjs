@@ -133,6 +133,68 @@ function world({ localYaml = null, modelJson = null, recipe = null, roleExpertis
   return { dir, cfg, proj, plug, core, env: { HOME: dir, CLAUDE_CONFIG_DIR: cfg } };
 }
 
+/**
+ * A consumer that has installed NOTHING: a fresh config dir, no registry, no cache — and a host
+ * that loaded this plugin without exporting `CLAUDE_PLUGIN_ROOT`. That is `claude plugin eval`
+ * (issue #173), and it is also a bare `node tools/resolve/cli.mjs` against a checkout.
+ */
+function bareWorld() {
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-bare-"));
+  const proj = join(dir, "project");
+  write(join(proj, "README.md"), "# demo\n");
+
+  const g = (...a) => execFileSync("git", a, { cwd: proj, stdio: "ignore" });
+  g("init", "-q", "-b", "main");
+  g("config", "user.email", "t@example.com");
+  g("config", "user.name", "t");
+  g("add", "-A"); g("commit", "-qm", "seed");
+  g("update-ref", "refs/remotes/origin/main", "HEAD");
+
+  // A diff big enough that no skip-rule trims the recipe — the preview must be the full six.
+  write(join(proj, "src.txt"), Array.from({ length: 80 }, (_, i) => `line ${i}`).join("\n"));
+  g("add", "-A"); g("commit", "-qm", "work");
+
+  return { dir, proj, env: { HOME: dir, CLAUDE_CONFIG_DIR: join(dir, "cfg") } };
+}
+
+test("a registered install is never displaced by the checkout, however partial it is", () => {
+  // Two definitions of "the consumer has an install" must not disagree. `resolveSdlcRoot`'s
+  // registry branch additionally requires config/models.json; gating the self root on that alone
+  // let a PARTIAL sdlc entry keep its place in discovery while self-referential reads moved to
+  // whatever checkout was executing — two trees, one run, and a checkout announced to a consumer
+  // that never loaded it. The registry either lists this plugin or it does not.
+  const w = bareWorld();
+  try {
+    const partial = join(w.dir, "partial-install");
+    write(join(partial, "README.md"), "an install that lost its config/\n");
+    write(join(w.dir, "cfg", "plugins", "installed_plugins.json"), {
+      version: 2,
+      plugins: { "sdlc@m": [{ scope: "user", installPath: partial, version: "2.4.1" }] },
+    });
+    const { warnings } = resolvePlan({ cwd: w.proj, args: "--dry-run", env: w.env });
+    assert.deepEqual(
+      warnings.filter((x) => /loaded from a path/.test(x)), [],
+      "the consumer's own entry stands; repairing it is /sdlc:doctor's job, not a silent swap",
+    );
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("issue #173: with nothing installed and nothing exported, the checkout resolves its own plan", () => {
+  // The regression this guards: every registry-keyed discovery was blind to the tree the code
+  // was running from, so the run halted with "Workflow 'default' not found. Available: (none)"
+  // while default.yaml sat next to the code printing it. Under `claude plugin eval` that halt
+  // hit every should-fire case of plugins/sdlc/evals/.
+  const w = bareWorld();
+  try {
+    const { plan, halt } = resolvePlan({ cwd: w.proj, args: "--dry-run", env: w.env });
+    assert.equal(halt, null, "the recipe is found in the tree the code is executing from");
+    assert.equal(plan.stack.primary_profile, "vanilla");
+    assert.equal(plan.workflow.name, "default");
+    assert.equal(plan.workflow.resolved_phases.length, 6);
+    assert.ok(plan.dry_run.expected_total > 0, "config/models.json resolves from that same tree");
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
 test("end to end: detection, profile, workflow and cap resolve into one plan", () => {
   const w = world();
   try {
