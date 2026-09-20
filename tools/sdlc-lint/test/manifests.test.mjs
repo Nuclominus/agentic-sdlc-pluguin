@@ -334,3 +334,156 @@ test("a path root that declares no version keeps the version the registry knew",
     assert.equal(merged.get("sdlc@m").version, "2.4.0");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+// ---- ADR-0026: embedded frameworks (Story 2 — the dual-mode equality test) ----------------
+//
+// The whole point of the merge: tree mode (globs plugins/**/manifest.yaml) and installed mode
+// (reads exactly one manifest per installPath) MUST resolve the identical additive set from a
+// foundation's embedded `frameworks:` array. A file-move-only implementation would pass this
+// test today (before any file moves) and then silently regress it the moment the synthesis
+// logic diverges between the two loaders — which is exactly the trap `manifests.mjs:10-13`
+// already documents once happening for real.
+const SEVEN_FRAMEWORKS = ["retrofit", "ktor", "room", "datastore-proto", "dagger", "koin", "workmanager"];
+
+function embeddedFoundationManifest() {
+  const rows = SEVEN_FRAMEWORKS.map((stack) => `  - stack: ${stack}
+    enriches_aspect: network
+    dependency: com.example.${stack}
+    convention_skills: [android-foundation:${stack}-conventions]
+    phase_injections:
+      development: "${stack} guidance"
+`).join("");
+  return `kind: foundation\nstack: android\npriority: 300\ndetect:\n  any:\n    - file_exists: settings.gradle.kts\nframeworks:\n${rows}`;
+}
+
+test("Story 2: tree mode and installed mode resolve the identical embedded-framework set", () => {
+  const dir = scratch();
+  try {
+    // Tree mode fixture: a bare marketplace checkout with one foundation manifest.
+    const treeRoot = join(dir, "tree");
+    write(join(treeRoot, "plugins", "android-foundation", "manifest.yaml"), embeddedFoundationManifest());
+
+    // Installed mode fixture: the same single manifest, at its installPath.
+    const installPath = join(dir, "installed", "android-foundation");
+    write(join(installPath, "manifest.yaml"), embeddedFoundationManifest());
+    const { configDir } = fakeConfig(dir, {
+      installs: { "android-foundation@m": [{ scope: "user", installPath, version: "1.0.0" }] },
+      enabled: { "android-foundation@m": true },
+    });
+
+    const tree = loadManifestsFromTree(treeRoot);
+    const installed = loadInstalledManifests({ configDir });
+
+    assert.equal(tree.foundations.length, 1);
+    assert.equal(installed.foundations.length, 1);
+
+    const treeStacks = tree.frameworks.map((f) => f.doc.stack).sort();
+    const installedStacks = installed.frameworks.map((f) => f.doc.stack).sort();
+    assert.deepEqual(treeStacks, [...SEVEN_FRAMEWORKS].sort(), "tree mode must expand all 7 rows");
+    assert.deepEqual(installedStacks, [...SEVEN_FRAMEWORKS].sort(), "installed mode must expand all 7 rows");
+    assert.deepEqual(treeStacks, installedStacks, "tree and installed mode must resolve the identical additive set");
+
+    for (const stack of SEVEN_FRAMEWORKS) {
+      const t = tree.frameworks.find((f) => f.doc.stack === stack);
+      const i = installed.frameworks.find((f) => f.doc.stack === stack);
+      assert.equal(t.doc.kind, "framework", `${stack}: synthesized record must carry kind: framework`);
+      assert.equal(i.doc.kind, "framework");
+      assert.deepEqual(t.doc, i.doc, `${stack}: synthesized doc must be identical in both modes`);
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("Story 1/4: an embedded row's synthesized record carries dependency + enriches_aspect for gated activation", () => {
+  const dir = scratch();
+  try {
+    const installPath = join(dir, "installed", "android-foundation");
+    write(join(installPath, "manifest.yaml"), embeddedFoundationManifest());
+    const { configDir } = fakeConfig(dir, {
+      installs: { "android-foundation@m": [{ scope: "user", installPath, version: "1.0.0" }] },
+      enabled: { "android-foundation@m": true },
+    });
+    const { frameworks } = loadInstalledManifests({ configDir });
+    const retrofit = frameworks.find((f) => f.doc.stack === "retrofit");
+    assert.equal(retrofit.doc.dependency, "com.example.retrofit");
+    assert.equal(retrofit.doc.enriches_aspect, "network");
+    assert.deepEqual(retrofit.doc.convention_skills, ["android-foundation:retrofit-conventions"]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("edge case 1: a stale standalone copy of an embedded framework is shadowed, not duplicated", () => {
+  const dir = scratch();
+  try {
+    const foundationPath = join(dir, "installed", "android-foundation");
+    write(join(foundationPath, "manifest.yaml"), embeddedFoundationManifest());
+    const stalePath = join(dir, "installed", "retrofit-plugin");
+    write(join(stalePath, "manifest.yaml"), `kind: framework\nstack: retrofit\npriority: 150\nenriches_aspect: network\ndependency: com.squareup.retrofit2\n`);
+    const { configDir } = fakeConfig(dir, {
+      installs: {
+        "android-foundation@m": [{ scope: "user", installPath: foundationPath, version: "1.0.0" }],
+        "retrofit-plugin@m": [{ scope: "user", installPath: stalePath, version: "0.9.0" }],
+      },
+      enabled: { "android-foundation@m": true, "retrofit-plugin@m": true },
+    });
+    const { frameworks, shadowed_frameworks } = loadInstalledManifests({ configDir });
+    const retrofits = frameworks.filter((f) => f.doc.stack === "retrofit");
+    assert.equal(retrofits.length, 1, "must not double-attach the same stack");
+    assert.equal(retrofits[0].file, join(foundationPath, "manifest.yaml"), "the embedded row wins");
+    assert.equal(shadowed_frameworks.length, 1);
+    assert.equal(shadowed_frameworks[0].stack, "retrofit");
+    assert.equal(shadowed_frameworks[0].reason, "superseded-by-embedded");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// Every optional `frameworks[]` row key is passed through `synthesizeEmbeddedFrameworks`
+// behind its own `!== undefined` guard (manifests.mjs:72-77). SEVEN_FRAMEWORKS/
+// embeddedFoundationManifest() above only ever sets `convention_skills` + `phase_injections`,
+// so a dropped or misnamed key among `priority`, `extra_phases`, `pre_phase_commands` or
+// `post_pipeline_checks` would silently strip that framework's guidance without failing any
+// existing test. Exercise all six optional keys on one row, plus a second row that omits them
+// all, to also confirm the guard truly omits absent keys rather than writing them as
+// `undefined`.
+test("synthesized embedded-framework record passes through every optional row key, and omits absent ones", () => {
+  const dir = scratch();
+  try {
+    const installPath = join(dir, "installed", "android-foundation");
+    write(join(installPath, "manifest.yaml"), `kind: foundation
+stack: android
+priority: 300
+detect:
+  any:
+    - file_exists: settings.gradle.kts
+frameworks:
+  - stack: retrofit
+    enriches_aspect: network
+    dependency: com.example.retrofit
+    priority: 150
+    convention_skills: [android-foundation:retrofit-conventions]
+    phase_injections:
+      development: "retrofit guidance"
+    extra_phases: [contract-test]
+    pre_phase_commands: ["echo pre"]
+    post_pipeline_checks: ["echo post"]
+  - stack: ktor
+    enriches_aspect: network
+    dependency: com.example.ktor
+`);
+    const { configDir } = fakeConfig(dir, {
+      installs: { "android-foundation@m": [{ scope: "user", installPath, version: "1.0.0" }] },
+      enabled: { "android-foundation@m": true },
+    });
+    const { frameworks } = loadInstalledManifests({ configDir });
+
+    const retrofit = frameworks.find((f) => f.doc.stack === "retrofit");
+    assert.equal(retrofit.doc.priority, 150, "priority must pass through");
+    assert.deepEqual(retrofit.doc.extra_phases, ["contract-test"], "extra_phases must pass through");
+    assert.deepEqual(retrofit.doc.pre_phase_commands, ["echo pre"], "pre_phase_commands must pass through");
+    assert.deepEqual(retrofit.doc.post_pipeline_checks, ["echo post"], "post_pipeline_checks must pass through");
+    assert.deepEqual(retrofit.doc.convention_skills, ["android-foundation:retrofit-conventions"]);
+    assert.deepEqual(retrofit.doc.phase_injections, { development: "retrofit guidance" });
+
+    const ktor = frameworks.find((f) => f.doc.stack === "ktor");
+    for (const key of ["priority", "convention_skills", "phase_injections", "extra_phases", "pre_phase_commands", "post_pipeline_checks"]) {
+      assert.equal(key in ktor.doc, false, `absent optional key "${key}" must not be synthesized as undefined`);
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

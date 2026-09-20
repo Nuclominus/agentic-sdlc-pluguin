@@ -29,16 +29,21 @@ It is also where a project catches up with an agent rename. The marketplace ship
 
 3b. **Probe host capability.** Run `uname -s -m` for the OS/arch, then best-effort probe the host toolchains relevant to installed stack plugins — never fail, just report version or `not found`. Suggested probes (skip any that don't apply to the installed plugins): `node --version`, `java -version`, `./gradlew --version` (if a wrapper exists), `swift --version`, `xcodebuild -version`, `android --version`. This surfaces capability-gated checks up front (e.g. iOS lint/build needs macOS + Xcode; those post-pipeline checks SKIP rather than fail off-host).
 
-3c. **Check this project's config for stale agent names.** Run:
+3c. **Check this project's config for stale agent names and stale skill ids.** Run:
 
    ```
    node {SDLC_PLUGIN_ROOT}/tools/migrate/cli.mjs check --json
    ```
 
-   It reads the rename data in `config/agent-migrations.json` and reports every `sdlc.local.yaml`
-   `extensions.skills[].agents` entry and `model.local.json` `agents{}` key that names an agent the
-   marketplace no longer ships. Exit 2 means findings, 0 means clean; the JSON carries
-   `findings[] = {file, where, from, to, conflict?}`. Render them in the report (below).
+   It reads two rename tables — `config/agent-migrations.json` (bare agent names, ADR-0021) and
+   `config/plugin-migrations.json` (fully-qualified `plugin:skill` ids, ADR-0026 — e.g. a project
+   still naming `retrofit-plugin:retrofit-conventions` after the 7 additive Android framework
+   plugins were embedded into `android-foundation`) — and reports every `sdlc.local.yaml`
+   `extensions.skills[].agents` entry, `extensions.skills[].skill` id, and `model.local.json`
+   `agents{}` key that the marketplace no longer ships under that spelling. Exit 2 means findings,
+   0 means clean; the JSON carries `findings[] = {file, where, from, to, kind: "agent"|"skill",
+   conflict?}` — `kind` disambiguates the two migrations sharing this one report shape. Render them
+   in the report (below).
 
    **If there are findings and this is an interactive session,** ask the user whether to apply them,
    listing each `from → to`. On an explicit yes, and only then, run:
@@ -47,9 +52,16 @@ It is also where a project catches up with an agent rename. The marketplace ship
    node {SDLC_PLUGIN_ROOT}/tools/migrate/cli.mjs apply --json
    ```
 
-   which rewrites only those name tokens in place, preserving comments and formatting. On no, or in
-   a non-interactive session, leave the files alone and print the exact command above so the user
+   which rewrites only those name/id tokens in place, preserving comments and formatting. On no, or
+   in a non-interactive session, leave the files alone and print the exact command above so the user
    can run it themselves. Never apply without an answer.
+
+   **Also report (advisory only, never a file rewrite):** if `manifests.mjs`'s `shadowed_frameworks`
+   is non-empty for this project (a stale standalone install of a now-embedded framework plugin is
+   still registered alongside `android-foundation`'s own embedded row), or `installed_plugins.json`
+   still registers one of the 7 removed plugin names, print a line telling the user to uninstall it:
+   `/plugin uninstall <name>@agentic-sdlc`. `/sdlc:doctor` never writes `installed_plugins.json` or
+   `settings.json` itself — those are harness-owned, and the consumer's, not this repo's.
 
 4. **Read cost baseline (if present).** Try `<repo>/docs/cost-baseline.md`. If it has a fenced JSON block tagged `summary` (e.g. ```` ```json summary ````) parse and extract `avg_cost_per_medium_run_usd`, `p90_cost_per_medium_run_usd`, `cache_hit_ratio`, `runs_aggregated`. Otherwise show the raw "not yet baselined" notice.
 
@@ -82,11 +94,16 @@ Host capability:
   node: v20.11.0   java: 17.0.10   ./gradlew: 8.7
   android (CLI): not found (optional)
 
-Agent names in this project's config:
-  ⚠️ 2 stale name(s) — they currently target nothing:
+Agent names / skill ids in this project's config:
+  ⚠️ 2 agent name(s), 1 skill id(s) stale — they currently target nothing:
      .claude/sdlc.local.yaml extensions.skills[0].agents: android-developer → developer
      .claude/model.local.json agents: android-ba → business-analyst
+     .claude/sdlc.local.yaml extensions.skills[1].skill: retrofit-plugin:retrofit-conventions → android-foundation:retrofit-conventions
   Fix available: /sdlc:doctor will rewrite them in place if you approve.
+
+Stale plugin installs (advisory — uninstall yourself, /sdlc:doctor does not write installed_plugins.json):
+  ⚠️ retrofit-plugin@agentic-sdlc is still registered; its framework is now embedded in android-foundation.
+     Run: /plugin uninstall retrofit-plugin@agentic-sdlc
 
 Cost baseline (docs/cost-baseline.md, last updated 2026-05-04, 22 runs):
   avg medium-run: $1.62
@@ -137,13 +154,15 @@ If a section is absent (no baseline file, no missing deps, etc.) say so explicit
     }
   },
   "agent_names": {
-    "stale": 2,
+    "stale": 3,
     "findings": [
-      { "file": ".claude/sdlc.local.yaml", "where": "extensions.skills[0].agents", "from": "android-developer", "to": "developer" },
-      { "file": ".claude/model.local.json", "where": "agents", "from": "android-ba", "to": "business-analyst" }
+      { "file": ".claude/sdlc.local.yaml", "where": "extensions.skills[0].agents", "from": "android-developer", "to": "developer", "kind": "agent" },
+      { "file": ".claude/model.local.json", "where": "agents", "from": "android-ba", "to": "business-analyst", "kind": "agent" },
+      { "file": ".claude/sdlc.local.yaml", "where": "extensions.skills[1].skill", "from": "retrofit-plugin:retrofit-conventions", "to": "android-foundation:retrofit-conventions", "kind": "skill" }
     ],
     "applied": false
   },
+  "shadowed_frameworks": [],
   "cost_baseline": {
     "available": true,
     "runs_aggregated": 22,
@@ -160,7 +179,7 @@ If a section is absent (no baseline file, no missing deps, etc.) say so explicit
 
 ## Hard rules
 
-- **Diagnosis is read-only.** Do NOT install plugins, run pipelines, or write files. The ONE exception is step 3c's `migrate apply`, which touches only `.claude/sdlc.local.yaml` and `.claude/model.local.json`, only renames agent-name tokens, and only after an explicit yes. Never run it as part of a plain `/sdlc:doctor` invocation, never in a non-interactive session, and never with `--json` (a machine caller gets the findings and decides for itself).
+- **Diagnosis is read-only.** Do NOT install plugins, run pipelines, or write files. The ONE exception is step 3c's `migrate apply`, which touches only `.claude/sdlc.local.yaml` and `.claude/model.local.json`, only renames agent-name and `plugin:skill`-id tokens, and only after an explicit yes. Never run it as part of a plain `/sdlc:doctor` invocation, never in a non-interactive session, and never with `--json` (a machine caller gets the findings and decides for itself). The stale-plugin-install advisory (step 3c) is print-only — it never runs `/plugin uninstall` itself.
 - **Do not enforce policy.** A missing `block` dep here is just reported, not actioned.
 - **Reuse, don't reimplement.** The dependency-status algorithm now lives in code, not prose: `tools/resolve/deps.mjs` (`enumerateSkills`, `collectDependencies`, `computeDepsStatus`, `enforcePolicies`), covered by `tools/sdlc-lint/test/deps.test.mjs`. If that module changes, this command's behavior must follow — this command delegates to it, and must not become a parallel implementation. (It cited SKILL.md Steps 0a-2 / 0a-3 until #121 replaced them with the module.)
 - **Exit code semantics with `--json`:** exit 0 normally; exit 1 only if the runtime-dependencies.json file itself is malformed JSON (parse error). Missing-but-blocking deps still exit 0 — report them in the JSON and let the caller decide.

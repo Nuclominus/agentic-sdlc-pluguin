@@ -201,6 +201,7 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   const manifests = mode === "tree" ? loadManifestsFromTree(cwd) : loadInstalledManifests({ configDir, projectRoot: cwd, extraRoots });
   for (const s of manifests.skipped ?? []) warn(`WARN: ${s.key} ships a manifest but is disabled — not considered for detection`);
   for (const e of manifests.errors ?? []) warn(`WARN: unreadable manifest ${e.file}: ${e.error}`);
+  for (const sf of manifests.shadowed_frameworks ?? []) warn(`WARN: ${sf.stack} is now embedded in a foundation; the standalone copy at ${sf.file} is not used (${sf.reason})`);
 
   // ---- Step 0a: dependency preflight
   const deps = preflight({ configDir, projectRoot: cwd, installs, enabled, headless, force: flag(args, "--force-preflight"), skills: opt(args, "--skills") });

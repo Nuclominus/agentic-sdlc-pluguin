@@ -44,16 +44,81 @@ export function defaultConfigDir(env = process.env) {
   return resolveConfigDir(env).value;
 }
 
+// ADR-0026: a foundation may embed its own frameworks via a `frameworks:` array (see
+// schemas/manifest.schema.json `$defs/frameworkRow`), instead of each one shipping as a
+// separate installed plugin. A row never carries `kind` — this synthesizer adds
+// `kind: "framework"` and stamps `file` to the FOUNDATION's own manifest path, so every
+// downstream consumer that reads `r.doc.kind` or resolves "this framework's directory" via
+// `dirname(r.file)` (plan.mjs's role_expertise / rule-path resolution) keeps working
+// unchanged, and lands on the foundation's own directory — where the embedded row's
+// relocated skill/snippet assets actually live.
+//
+// Called once per foundation record, inside `classify()`, so both `loadManifestsFromTree`
+// and `loadInstalledManifests` (which both call `classify`) get identical synthesis for
+// free — the "one production path" the dual-mode equality test guards.
+function synthesizeEmbeddedFrameworks(foundationRecord) {
+  const rows = foundationRecord.doc?.frameworks ?? [];
+  return rows.map((row) => ({
+    file: foundationRecord.file,
+    key: foundationRecord.key,
+    version: foundationRecord.version,
+    scope: foundationRecord.scope,
+    source: foundationRecord.source,
+    doc: {
+      kind: "framework",
+      stack: row.stack,
+      enriches_aspect: row.enriches_aspect,
+      dependency: row.dependency,
+      ...(row.priority !== undefined ? { priority: row.priority } : {}),
+      ...(row.convention_skills !== undefined ? { convention_skills: row.convention_skills } : {}),
+      ...(row.phase_injections !== undefined ? { phase_injections: row.phase_injections } : {}),
+      ...(row.extra_phases !== undefined ? { extra_phases: row.extra_phases } : {}),
+      ...(row.pre_phase_commands !== undefined ? { pre_phase_commands: row.pre_phase_commands } : {}),
+      ...(row.post_pipeline_checks !== undefined ? { post_pipeline_checks: row.post_pipeline_checks } : {}),
+    },
+  }));
+}
+
 function classify(records) {
   const foundations = [], frameworks = [], errors = [];
+  const shadowed_frameworks = [];
   for (const r of records) {
     if (r.error) { errors.push(r); continue; }
     const kind = r.doc?.kind;
-    if (kind === "foundation") foundations.push(r);
-    else if (kind === "framework") frameworks.push(r);
+    if (kind === "foundation") {
+      foundations.push(r);
+      frameworks.push(...synthesizeEmbeddedFrameworks(r));
+    } else if (kind === "framework") frameworks.push(r);
     else errors.push({ file: r.file, error: `unknown or missing kind: ${kind}` });
   }
-  return { foundations, frameworks, errors };
+
+  // Edge case 1 (BA): a stale standalone copy of a now-embedded framework (e.g. a cached
+  // `retrofit-plugin` still installed after the merge) must not double-attach. When both an
+  // embedded row and a standalone record share a `stack`, the embedded row wins — the
+  // foundation is now authoritative — and the standalone copy is reported, following the
+  // existing `shadows` precedent in `mergePathLoaded` above.
+  const byStack = new Map();
+  for (const f of frameworks) {
+    const stack = f.doc?.stack;
+    if (!stack) continue;
+    if (!byStack.has(stack)) byStack.set(stack, []);
+    byStack.get(stack).push(f);
+  }
+  const deduped = [];
+  for (const [stack, group] of byStack) {
+    if (group.length === 1) { deduped.push(group[0]); continue; }
+    // Prefer the record synthesized from a foundation (its `file` matches a foundation
+    // record's own manifest path) — the foundation is authoritative once it embeds a row for
+    // this stack. Fall back to the first if none matches (defensive; should not occur).
+    const winner = group.find((f) => foundations.some((fo) => fo.file === f.file)) ?? group[0];
+    deduped.push(winner);
+    for (const loser of group) {
+      if (loser === winner) continue;
+      shadowed_frameworks.push({ stack, file: loser.file, reason: "superseded-by-embedded" });
+    }
+  }
+
+  return { foundations, frameworks: deduped, errors, shadowed_frameworks };
 }
 
 function readManifest(file) {

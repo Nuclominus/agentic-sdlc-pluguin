@@ -23,13 +23,13 @@ agentic-sdlc` (and auto-updates) pull the latest commit of `release`, not of `de
 `release` branch only moves when a release is cut (fast-forward from `develop`), so the stable
 channel never sees work-in-progress.
 
-### 2. Install Android Foundation (+ optional frameworks)
+### 2. Install Android Foundation
 
 ```bash
 # Core (sdlc) installs automatically as a dependency
 /plugin install android-foundation@agentic-sdlc
-# Optional: framework plugins auto-activate when their library is detected
-/plugin install retrofit-plugin@agentic-sdlc
+# Frameworks (Retrofit, Ktor, Room, Proto DataStore, Dagger/Hilt, Koin, WorkManager) are embedded
+# (ADR-0026) and auto-activate when their library is detected — nothing extra to install.
 ```
 
 ### 3. Optional dependencies

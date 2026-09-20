@@ -9,7 +9,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadRenames, scanConfigs, applyRenames } from "../../../plugins/sdlc/tools/migrate/migrate.mjs";
+import { loadRenames, loadSkillRenames, scanConfigs, applyRenames } from "../../../plugins/sdlc/tools/migrate/migrate.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
@@ -122,5 +122,73 @@ test("a JSON key collision keeps the already-migrated value and reports the conf
     applyRenames(dir, found);
     const json = JSON.parse(readFileSync(join(dir, ".claude", "model.local.json"), "utf8"));
     assert.deepEqual(json.agents, { developer: "haiku" }, "the stale key is removed, the explicit one survives");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// ---- ADR-0026: skill-id migration — the same mechanism, keyed on `plugin:skill` instead ----
+
+const SKILL_RENAMES = {
+  "retrofit-plugin:retrofit-conventions": "android-foundation:retrofit-conventions",
+  "dagger-plugin:hilt-conventions": "android-foundation:hilt-conventions",
+};
+
+test("the shipped plugin-migrations data is keyed old skill id to new, covers all 7, including the divergent dagger/hilt case", () => {
+  const renames = loadSkillRenames(join(REPO, "plugins", "sdlc"));
+  assert.equal(renames["retrofit-plugin:retrofit-conventions"], "android-foundation:retrofit-conventions");
+  assert.equal(renames["dagger-plugin:hilt-conventions"], "android-foundation:hilt-conventions");
+  assert.equal(Object.keys(renames).length, 7, "one entry per merged framework plugin");
+});
+
+test("scan finds a stale `plugin:skill` id in extensions.skills[].skill, tagged kind: skill", () => {
+  const dir = project([
+    "extensions:",
+    "  skills:",
+    '    - skill: "retrofit-plugin:retrofit-conventions"',
+    "      agents: [developer]",
+    '    - skill: "local:already-fine"',
+    "      agents: [developer]",
+    "",
+  ].join("\n"), null);
+  try {
+    const found = scanConfigs(dir, {}, SKILL_RENAMES);
+    assert.equal(found.length, 1);
+    assert.equal(found[0].kind, "skill");
+    assert.equal(found[0].from, "retrofit-plugin:retrofit-conventions");
+    assert.equal(found[0].to, "android-foundation:retrofit-conventions");
+    assert.equal(found[0].where, "extensions.skills[0].skill");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("apply rewrites the stale skill id in place, leaving the agents row and comments untouched", () => {
+  const dir = project([
+    "extensions:",
+    "  skills:",
+    '    - skill: "dagger-plugin:hilt-conventions"   # old namespace',
+    "      agents: [developer]",
+    "",
+  ].join("\n"), null);
+  try {
+    const found = scanConfigs(dir, {}, SKILL_RENAMES);
+    const changed = applyRenames(dir, found);
+    assert.deepEqual(changed, [".claude/sdlc.local.yaml"]);
+    const yaml = readFileSync(join(dir, ".claude", "sdlc.local.yaml"), "utf8");
+    assert.match(yaml, /skill: "android-foundation:hilt-conventions"   # old namespace/, "id rewritten, trailing comment preserved");
+    assert.match(yaml, /agents: \[developer\]/, "unrelated line untouched");
+    assert.deepEqual(scanConfigs(dir, {}, SKILL_RENAMES), [], "idempotent — nothing left to migrate");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("agent and skill migrations run together and are both reported, disambiguated by kind", () => {
+  const dir = project([
+    "extensions:",
+    "  skills:",
+    '    - skill: "retrofit-plugin:retrofit-conventions"',
+    "      agents: [android-developer]",
+    "",
+  ].join("\n"), null);
+  try {
+    const found = scanConfigs(dir, RENAMES, SKILL_RENAMES);
+    assert.equal(found.length, 2);
+    assert.deepEqual(found.map((f) => f.kind).sort(), ["agent", "skill"]);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
