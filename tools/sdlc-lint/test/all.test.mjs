@@ -162,7 +162,12 @@ test("no headless ABORT contract depends on a printed marker line — telemetry 
   // Whitespace-collapsed: these are prose sentences in a wrapped markdown list, so where the line
   // break falls is an editing accident. Matching the raw text made an earlier edit fail for moving
   // a word across a newline — a guard that reports on reflow is a guard nobody trusts.
-  const resolve = text.slice(step0, step0 + 3000).replace(/\s+/g, " ");
+  // Bounded by the NEXT step heading, not by a character count. A fixed window makes the guard a
+  // function of how much prose happens to precede the obligation it checks: adding the
+  // preview-request rule (#165) pushed `echo the JSON's halt` past 3000 characters and failed this
+  // test without touching a single one of the three contracts below. The section is the unit.
+  const nextStep = text.indexOf("\n### Step", step0 + 1);
+  const resolve = text.slice(step0, nextStep > -1 ? nextStep : text.length).replace(/\s+/g, " ");
   assert.match(resolve, /Echo `prints\[\]` in order, verbatim/,
     "the verbatim-echo obligation is what carries every composed signal, the headless dry-run line " +
     "included; its shape is asserted in caps.test.mjs and plan.test.mjs");
