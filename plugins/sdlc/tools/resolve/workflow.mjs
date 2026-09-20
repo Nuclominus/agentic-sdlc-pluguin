@@ -222,17 +222,144 @@ export function autoSelect(recipes, signals, args = "") {
   };
 }
 
-/** Step 1 — the five-tier name precedence. */
+/** The recipe names this consumer could name. Annotated for humans, deduped for machines. */
+export function availableNames(recipes, { annotate = false } = {}) {
+  const names = recipes.map((r) => `${r.name}${annotate && r.origin === "project" ? " (project)" : ""}`);
+  return (annotate ? names : [...new Set(names)]).sort();
+}
+
+// ---------------------------------------------------------------- tier 1b
+
+const CUE = "(?:workflow|recipe|pipeline)s?";
+// A token in the shape of a recipe name, STANDING AT the cue word — `<name> workflow` or
+// `workflow <name>`. Adjacency is the whole guard: a cue word proves only that the word exists
+// somewhere in the text, and "run the SDLC pipeline to add debug logging" carries both a cue
+// word and a recipe name while naming no recipe at all. `sdlc` is stepped over rather than read
+// as the name ("the docs-only SDLC workflow").
+const BEFORE_CUE = new RegExp(`\\b([A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*)\\s+(?:sdlc\\s+)?${CUE}\\b`, "gi");
+const AFTER_CUE = new RegExp(`\\b${CUE}\\s*[:=]?\\s+([A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*)\\b`, "gi");
+// Shapes that leave no doubt a token was MEANT as a recipe name, even when nothing answers to
+// it: quoted against the cue word, or the flag written with a space instead of `=`.
+const EXPLICIT_NAME = new RegExp(
+  `['"\`]([A-Za-z][A-Za-z0-9-]*)['"\`]\\s+(?:sdlc\\s+)?${CUE}\\b`
+  + `|\\b${CUE}\\s*[:=]?\\s*['"\`]([A-Za-z][A-Za-z0-9-]*)['"\`]`
+  + `|--workflow\\s+([A-Za-z][A-Za-z0-9-]*)`, "gi");
+const KEBAB = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+// Words that stand next to "workflow" in ordinary English. A recipe is never called one of these.
+const NOISE = new Set([
+  "a", "an", "the", "this", "that", "these", "those", "its", "it", "our", "your", "my", "their",
+  "one", "some", "any", "each", "every", "no", "not", "full", "whole", "entire", "same", "other",
+  "another", "new", "old", "current", "existing", "normal", "standard", "usual", "best", "right",
+  "correct", "main", "and", "or", "of", "for", "in", "on", "to", "with", "without", "as", "by",
+  "at", "from", "would", "will", "should", "could", "can", "does", "do", "did", "is", "are",
+  "was", "were", "be", "run", "running", "use", "using", "used", "sdlc", "ci", "cd", "build",
+  "release", "deploy", "deployment", "data", "git", "github", "gitlab", "if", "then", "than",
+  "when", "what", "which", "how", "much", "cost", "phase", "phases", "name", "names", "above",
+  "below", "said", "given", "only", "just", "like", "step", "steps", "whose", "here", "there",
+]);
+
+/** Tokens gathered from a `g`-flagged regex's capture groups, lowercased and deduped. */
+function tokensFrom(text, re, out = []) {
+  for (const m of text.matchAll(re)) {
+    const token = (m.slice(1).find(Boolean) ?? "").toLowerCase();
+    if (KEBAB.test(token) && !out.includes(token)) out.push(token);
+  }
+  return out;
+}
+
+/** One-character-slip distance, capped — enough to spot `docs-onli`, not enough to pair words. */
+function offByOne(a, b) {
+  if (a === b || Math.abs(a.length - b.length) > 1) return false;
+  let row = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = row[0];
+    row[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cur = row[j];
+      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = cur;
+    }
+  }
+  return row[b.length] === 1;
+}
+
+/**
+ * Step 1b — a recipe NAMED in the request.
+ *
+ * Naming a recipe is an explicit request, the prose equivalent of `--workflow=NAME`, so it is
+ * resolved before any `match:` block. That ordering is load-bearing: `docs-only` carries
+ * `match.config_only`, a condition on the DIFF, so auto-selection can never reach it from prompt
+ * text — which is how issue #176 answered a "does docs-only fit under its cap?" question with
+ * `default`'s six phases and its cap, both figures real and the substitution invisible.
+ *
+ * Everything here is deterministic and closed over the DISCOVERED names. Two guards bound it,
+ * and both exist because a looser draft of this tier was wrong in review:
+ *
+ * - **Only a token standing AT the cue word counts.** Requiring the cue word merely to be
+ *   present, and matching names anywhere, routed "Add a testing stage to the release pipeline"
+ *   to the QA-only `testing` recipe — a pipeline with no `development` phase, for a request to
+ *   implement something.
+ * - **Nothing ambiguous selects.** Two names, and neither wins. A token nothing answers to is
+ *   reported only when it is a one-character slip from an installed name or was quoted as one;
+ *   `NOISE` plus that gate is what keeps an ordinary feature description from being told it
+ *   mistyped a recipe.
+ */
+export function matchNamedRecipe({ args = "", recipes = [] } = {}) {
+  const text = String(args);
+  if (/--workflow=/.test(text) || /--no-auto-workflow\b/.test(text)) return null;
+  const names = availableNames(recipes);
+  if (names.length === 0) return null;
+
+  const named = new Set(names.map((n) => n.toLowerCase()));
+  // A quoted name sits inside its quotes, not against whitespace, so it needs its own pass —
+  // and it is a hit like any other when something answers to it.
+  const quoted = tokensFrom(text, EXPLICIT_NAME);
+  const tokens = tokensFrom(text, AFTER_CUE, tokensFrom(text, BEFORE_CUE, [...quoted]));
+  const hits = tokens.filter((t) => named.has(t));
+
+  if (hits.length === 1) {
+    const name = hits[0];
+    return {
+      name,
+      warnings: [],
+      print: `🧭 Recipe '${name}' named in the request — resolved as --workflow=${name}. Override with --workflow=NAME.`,
+    };
+  }
+  if (hits.length > 1) {
+    return { name: null, print: null, warnings: [
+      `WARN: the request names more than one workflow recipe (${hits.join(", ")}) — not choosing between them. Pass --workflow=NAME to be explicit.`,
+    ] };
+  }
+
+  const unknown = tokens.filter((t) => quoted.includes(t) || (!NOISE.has(t) && names.some((n) => offByOne(t, n))));
+  if (unknown.length === 0) return null;
+  const label = unknown.length === 1
+    ? `'${unknown[0]}' reads like a workflow recipe, but no installed recipe has that name`
+    : `'${unknown.join("', '")}' read like workflow recipes, but no installed recipe has those names`;
+  return { name: null, print: null, warnings: [
+    [`WARN: ${label}.`,
+      `   Available: ${names.join(", ")}`,
+      "   Pass --workflow=NAME to be explicit — resolution continues with the remaining tiers."].join("\n"),
+  ] };
+}
+
+/** Step 1 — the name precedence, tier by tier. */
 export function resolveWorkflowName({ args = "", activeWorkflow = null, recipes = [], signals = null, profileDefault = null } = {}) {
+  const warnings = [];
   const explicit = /--workflow=([^\s]+)/.exec(String(args));
-  if (explicit) return { name: explicit[1], tier: "--workflow", autoselected: false, print: null };
-  if (activeWorkflow) return { name: activeWorkflow, tier: "active_workflow", autoselected: false, print: null };
+  if (explicit) return { name: explicit[1], tier: "--workflow", autoselected: false, print: null, warnings };
+
+  const named = matchNamedRecipe({ args, recipes });
+  if (named) warnings.push(...named.warnings);
+  if (named?.name) return { name: named.name, tier: "named_in_prose", autoselected: false, print: named.print, warnings };
+
+  if (activeWorkflow) return { name: activeWorkflow, tier: "active_workflow", autoselected: false, print: null, warnings };
   if (signals && !/--no-auto-workflow\b/.test(String(args))) {
     const auto = autoSelect(recipes, signals, args);
-    if (auto) return { name: auto.name, tier: "auto", autoselected: true, satisfied: auto.satisfied, print: auto.print };
+    if (auto) return { name: auto.name, tier: "auto", autoselected: true, satisfied: auto.satisfied, print: auto.print, warnings };
   }
-  if (profileDefault) return { name: profileDefault, tier: "profile_default", autoselected: false, print: null };
-  return { name: "default", tier: "fallback", autoselected: false, print: null };
+  if (profileDefault) return { name: profileDefault, tier: "profile_default", autoselected: false, print: null, warnings };
+  return { name: "default", tier: "fallback", autoselected: false, print: null, warnings };
 }
 
 /**
@@ -255,7 +382,7 @@ export function locateRecipe(name, recipes) {
         `   (A project-local <project>/.claude/sdlc-workflows/${name}.yaml would override both.)`].join("\n"),
     };
   }
-  const available = recipes.map((r) => `${r.name}${r.origin === "project" ? " (project)" : ""}`).sort();
+  const available = availableNames(recipes, { annotate: true });
   return {
     recipe: null,
     halt: [`❌ Workflow '${name}' not found.`,

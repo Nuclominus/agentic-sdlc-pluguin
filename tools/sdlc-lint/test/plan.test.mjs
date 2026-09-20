@@ -195,6 +195,40 @@ test("issue #173: with nothing installed and nothing exported, the checkout reso
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
 
+test("issue #176: the recipe the request names is the recipe the plan prices", () => {
+  // The defect: "would the docs-only workflow fit under its cost cap?" resolved `default` — six
+  // phases and a $16.00 cap — and answered the cap question for a pipeline nobody asked about.
+  // `docs-only` carries `match.config_only`, a condition on the DIFF, so auto-selection can never
+  // reach it from prose; naming it is the explicit request, and tier 1b is where that lands.
+  const w = bareWorld();
+  try {
+    const { plan, halt, prints } = resolvePlan({
+      cwd: w.proj,
+      args: "Would the docs-only SDLC workflow for 'Document the growth log screen' fit under its cost cap? --dry-run",
+      env: w.env,
+    });
+    assert.equal(halt, null);
+    assert.equal(plan.workflow.name, "docs-only");
+    assert.equal(plan.workflow.tier, "named_in_prose");
+    assert.deepEqual(plan.workflow.resolved_phases.map((p) => p.name), ["documentation"]);
+    assert.ok(
+      prints.some((p) => p.includes("🧭 Recipe 'docs-only' named in the request")),
+      "the substitution the old behaviour made silently is now announced",
+    );
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("the plan carries the recipe names a consumer could name", () => {
+  const w = bareWorld();
+  try {
+    const { plan } = resolvePlan({ cwd: w.proj, args: "--dry-run", env: w.env });
+    for (const name of ["default", "docs-only", "hotfix", "bugfix", "refactor", "analysis", "testing", "debug"]) {
+      assert.ok(plan.workflow.available.includes(name), `'${name}' is discoverable and must be listed`);
+    }
+    assert.deepEqual(plan.workflow.available, [...plan.workflow.available].sort(), "sorted, so it is stable to diff");
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
 test("end to end: detection, profile, workflow and cap resolve into one plan", () => {
   const w = world();
   try {
