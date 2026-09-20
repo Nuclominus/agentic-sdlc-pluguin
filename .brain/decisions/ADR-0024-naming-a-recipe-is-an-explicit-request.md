@@ -49,6 +49,18 @@ the recipe names the run actually discovered, and it is reported.**
 - **Nothing ambiguous selects.** Two names matched, or a token plainly meant as a name that
   matches nothing installed, produces a `WARN:` and falls through to the next tier. The
   unknown-name warning prints the same `Available:` list the halt does.
+- **A halt belongs to the flag alone.** `--workflow=NAME` is a machine-checkable instruction, so
+  an unknown name there stays fatal. Prose is a soft signal and never halts: a user sentence that
+  happens to carry a name-like token must not be able to abort a run. Issue #180 closed the other
+  half of that asymmetry — prose that names nothing installed must not be *silent* either, so a
+  **compound** token **referred to** as the recipe being run (`run`/`use`/`execute`/`start`/… +
+  `the <X> workflow`) is reported like a quoted or misspelt one. Both guards are load-bearing,
+  and the compound one carries the weight: the verb alone warned at nine ordinary feature
+  requests in ten, because `start`, `launch` and `trigger` are app-lifecycle verbs first
+  ("trigger the approval workflow when a doc is submitted"). Those name an application's own
+  workflow with a single English noun; a recipe name that is not a plain word is a hyphenated
+  identifier. The trade is a miss on a single-word recipe nobody installed, which is the cheap
+  direction when the outcome is a warning and never a halt.
 - The orchestrator's one obligation is **not to trim the name out of `$ARGUMENTS`** while it
   shortens a request into a brief. It does not build the flag and does not screen the name.
 
