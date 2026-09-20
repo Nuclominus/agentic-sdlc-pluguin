@@ -100,10 +100,15 @@ are then discovered from it like any other install.
 - A path load **replaces** the registered copy of the same plugin and keeps its key, so the tree
   being edited wins while `enabledPlugins` and every `plugin:skill` label keep working. The
   displaced path is reported as a `WARN`.
-- Physical module location (`ownPluginRoot()`) is deliberately not a fallback signal: it names the
-  checkout for every caller, including ones that never loaded the plugin.
+- A host may load a plugin and export nothing — `claude plugin eval` does exactly that — so the
+  physical module location (`selfPluginRoot()`) is the **last** resort: it answers only when
+  `CLAUDE_PLUGIN_ROOT` is unset AND the consumer's registry holds no copy of this plugin. Ranked
+  below the registry, because it names the checkout for every caller, including ones that never
+  loaded the plugin. A module running from inside `/plugins/cache/` has no self root at all — that
+  copy is the install.
 
-The full argument is [`ADR-0022`](../../.brain/decisions/ADR-0022-a-path-loaded-plugin-is-its-own-install.md).
+The full argument is [`ADR-0022`](../../.brain/decisions/ADR-0022-a-path-loaded-plugin-is-its-own-install.md),
+amended on the signal by [`ADR-0023`](../../.brain/decisions/ADR-0023-a-silent-host-still-loaded-the-plugin.md).
 
 ---
 

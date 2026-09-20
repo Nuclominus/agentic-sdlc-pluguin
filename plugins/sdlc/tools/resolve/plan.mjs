@@ -179,7 +179,14 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   // development checkout this plugin is in no registry, and every discovery below keys off the
   // registry. Merging the root INTO `installs` is what fixes manifests, recipes, dependencies and
   // the skill enumeration at once, rather than four times over — see ./manifests.mjs.
-  const extraRoots = pathLoadedRoots(env);
+  //
+  // The host does not always export `CLAUDE_PLUGIN_ROOT` — `claude plugin eval` does not (issue
+  // #173) — so the tree this module is executing from is offered as the fallback. Offered only
+  // when Step 0 ALREADY resolved this plugin's own root from that same location: a consumer with
+  // an install of its own keeps getting it, and self-referential reads (`config/**`, `tools/**`)
+  // and cross-plugin discovery can never end up pointed at two different trees.
+  const selfRoot = roots.sources.sdlc_plugin_root === "self" ? roots.sdlc_plugin_root : null;
+  const extraRoots = pathLoadedRoots(env, selfRoot);
   const { installs: registered, conflicts } = readInstalledPlugins({ configDir });
   const installs = mergePathLoaded(registered, extraRoots);
   const enabled = withPathLoadedEnabled(readEnabledPlugins({ configDir, projectRoot: cwd }), installs);

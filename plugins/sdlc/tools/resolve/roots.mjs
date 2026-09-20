@@ -18,6 +18,7 @@
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const CACHE_MARKER = "/plugins/cache/";
 
@@ -58,7 +59,7 @@ export function resolveConfigDir(env = process.env) {
  * Order: the harness's own export, then the installed registry, then the newest cached
  * version. Only the last is a guess, and it says so.
  */
-export function resolveSdlcRoot(configDir, env = process.env) {
+export function resolveSdlcRoot(configDir, env = process.env, self = selfPluginRoot()) {
   if (env.CLAUDE_PLUGIN_ROOT) return { value: env.CLAUDE_PLUGIN_ROOT, source: "CLAUDE_PLUGIN_ROOT" };
 
   const registry = readJson(join(configDir, "plugins", "installed_plugins.json"));
@@ -70,6 +71,12 @@ export function resolveSdlcRoot(configDir, env = process.env) {
       if (hit) return { value: hit.installPath, source: "installed_plugins.json", version: hit.version ?? null };
     }
   }
+
+  // The tree this module is executing from, when the consumer has no copy of its own (#173).
+  // It ranks BELOW the registry deliberately: `claude plugin eval` and a bare checkout have no
+  // registry to consult, while a consumer that installed the plugin must keep getting what it
+  // installed, whatever checkout happens to be running the code.
+  if (self && existsSync(join(self, "config", "models.json"))) return { value: self, source: "self" };
 
   // Last resort: the newest cached copy that actually carries config/models.json.
   const cacheRoot = join(configDir, "plugins", "cache");
@@ -93,9 +100,9 @@ function safeDirs(dir) {
 }
 
 /** All three roots plus the provenance of each. */
-export function resolveRoots(env = process.env) {
+export function resolveRoots(env = process.env, self = selfPluginRoot()) {
   const config = resolveConfigDir(env);
-  const sdlc = resolveSdlcRoot(config.value, env);
+  const sdlc = resolveSdlcRoot(config.value, env, self);
   return {
     config_dir: config.value,
     plugin_cache_root: join(config.value, "plugins", "cache"),
@@ -108,7 +115,21 @@ export function resolveRoots(env = process.env) {
 
 /** Where the module itself lives — the development-checkout escape hatch. */
 export function ownPluginRoot() {
-  return dirname(dirname(dirname(new URL(import.meta.url).pathname)));
+  // fileURLToPath, not `new URL(...).pathname`: the latter hands back a percent-encoded path, so
+  // a checkout under `~/My Plugins/` resolves to a directory that does not exist. Harmless while
+  // this was an unused escape hatch; not harmless now that #173 made it load-bearing.
+  return dirname(dirname(dirname(fileURLToPath(import.meta.url))));
+}
+
+/**
+ * The plugin tree this module is executing from, or `null` when that tree is a cache install.
+ *
+ * A module running out of `<config>/plugins/cache/...` IS the installed copy: registry-keyed
+ * discovery already has it with the right key, version and scope, and offering it a second time
+ * as a path load is how one plugin becomes two foundations of equal priority.
+ */
+export function selfPluginRoot(own = ownPluginRoot()) {
+  return own && !own.includes(CACHE_MARKER) ? own : null;
 }
 
 /**
@@ -121,19 +142,22 @@ export function ownPluginRoot() {
  * halts at Step 0 with "Workflow 'default' not found. Available: (none)" while the recipe sits
  * next to the code printing the halt (issue #164).
  *
- * The signal is `CLAUDE_PLUGIN_ROOT` and nothing else. A root inside `/plugins/cache/` is
- * dropped: that copy IS registered, and ordinary installed discovery already covers it with the
- * right key, version and scope.
+ * The first signal is `CLAUDE_PLUGIN_ROOT`. A root inside `/plugins/cache/` is dropped: that copy
+ * IS registered, and ordinary installed discovery already covers it with the right key, version
+ * and scope.
  *
- * `ownPluginRoot()` is deliberately NOT a fallback here, although it names the same directory
- * under a real path load. It names it under every OTHER caller too — a test fixture, a lint
- * pass, any tool that imports this module out of the checkout — and the module would then
- * announce the checkout as an installed plugin to a consumer that never loaded it. A harness
- * that runs this code at all exports `CLAUDE_PLUGIN_ROOT`, because the skill's own Bash calls
- * interpolate it into the path they execute; absent it, no plugin was loaded to speak for.
+ * `CLAUDE_PLUGIN_ROOT` is not the ONLY signal, because a host can load a plugin without exporting
+ * it — `claude plugin eval` is exactly that host, and under it every should-fire case of
+ * `plugins/sdlc/evals/` halted at Step 0 (issue #173). So the caller may OFFER the tree this
+ * module is executing from, via `selfPluginRoot()`. The offer is the caller's to make and not a
+ * default here: the module volunteering its own location unconditionally would announce a
+ * checkout to any consumer that merely imported it — a test fixture, a lint pass — while having
+ * a registered install of its own. `resolveProfile` therefore offers it only when Step 0 already
+ * resolved this plugin's root from that same location (`sources.sdlc_plugin_root === "self"`),
+ * which keeps self-referential reads and cross-plugin discovery pointed at ONE tree.
  */
-export function pathLoadedRoots(env = process.env) {
-  const candidate = env.CLAUDE_PLUGIN_ROOT;
+export function pathLoadedRoots(env = process.env, self = null) {
+  const candidate = env.CLAUDE_PLUGIN_ROOT || self;
   if (!candidate || candidate.includes(CACHE_MARKER)) return [];
   const root = resolve(candidate);
   return existsSync(join(root, "manifest.yaml")) ? [root] : [];

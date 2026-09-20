@@ -2,6 +2,7 @@
 
 > One note per architecture decision. Newest first.
 
+- [[decisions/ADR-0023-a-silent-host-still-loaded-the-plugin]]
 - [[decisions/ADR-0022-a-path-loaded-plugin-is-its-own-install]]
 - [[decisions/ADR-0021-agents-live-in-the-core-foundations-carry-expertise]]
 - [[decisions/ADR-0020-logging-lives-in-a-development-artifact]]
