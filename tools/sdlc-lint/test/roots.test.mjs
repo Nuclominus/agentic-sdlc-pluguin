@@ -7,7 +7,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveConfigDir, resolveSdlcRoot, resolveRoots, pathLoadedRoots, ownPluginRoot, selfPluginRoot } from "../../../plugins/sdlc/tools/resolve/roots.mjs";
+import { resolveConfigDir, resolveSdlcRoot, resolveRoots, pathLoadedRoots, ownPluginRoot, selfPluginRoot, registryListsSdlc } from "../../../plugins/sdlc/tools/resolve/roots.mjs";
 
 function scratch() { return mkdtempSync(join(tmpdir(), "sdlc-roots-")); }
 function write(file, content) {
@@ -210,4 +210,14 @@ test("resolveRoots carries the self root through with its provenance", () => {
     assert.equal(r.sdlc_plugin_root, self);
     assert.equal(r.sources.sdlc_plugin_root, "self");
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("registryListsSdlc asks only whether the consumer HAS a copy, not whether it is readable", () => {
+  // The stricter question — does that installPath carry config/models.json — belongs to
+  // resolveSdlcRoot alone. Answering the two differently is how a partial install kept its place
+  // in discovery while the self root took over the self-referential reads.
+  assert.equal(registryListsSdlc(new Map([["sdlc@mkt", { installPath: "/anything" }]])), true);
+  assert.equal(registryListsSdlc(new Map([["sdlc@other-marketplace", { installPath: "/x" }]])), true);
+  assert.equal(registryListsSdlc(new Map([["superpowers@obra", { installPath: "/x" }]])), false);
+  assert.equal(registryListsSdlc(new Map()), false);
 });

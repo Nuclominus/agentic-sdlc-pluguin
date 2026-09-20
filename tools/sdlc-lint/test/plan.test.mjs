@@ -157,6 +157,28 @@ function bareWorld() {
   return { dir, proj, env: { HOME: dir, CLAUDE_CONFIG_DIR: join(dir, "cfg") } };
 }
 
+test("a registered install is never displaced by the checkout, however partial it is", () => {
+  // Two definitions of "the consumer has an install" must not disagree. `resolveSdlcRoot`'s
+  // registry branch additionally requires config/models.json; gating the self root on that alone
+  // let a PARTIAL sdlc entry keep its place in discovery while self-referential reads moved to
+  // whatever checkout was executing — two trees, one run, and a checkout announced to a consumer
+  // that never loaded it. The registry either lists this plugin or it does not.
+  const w = bareWorld();
+  try {
+    const partial = join(w.dir, "partial-install");
+    write(join(partial, "README.md"), "an install that lost its config/\n");
+    write(join(w.dir, "cfg", "plugins", "installed_plugins.json"), {
+      version: 2,
+      plugins: { "sdlc@m": [{ scope: "user", installPath: partial, version: "2.4.1" }] },
+    });
+    const { warnings } = resolvePlan({ cwd: w.proj, args: "--dry-run", env: w.env });
+    assert.deepEqual(
+      warnings.filter((x) => /loaded from a path/.test(x)), [],
+      "the consumer's own entry stands; repairing it is /sdlc:doctor's job, not a silent swap",
+    );
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
 test("issue #173: with nothing installed and nothing exported, the checkout resolves its own plan", () => {
   // The regression this guards: every registry-keyed discovery was blind to the tree the code
   // was running from, so the run halted with "Workflow 'default' not found. Available: (none)"

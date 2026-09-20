@@ -122,6 +122,21 @@ export function ownPluginRoot() {
 }
 
 /**
+ * Does the consumer's registry list a copy of THIS plugin — in any state?
+ *
+ * The question `resolveSdlcRoot` asks of the registry is stricter (it wants an installPath that
+ * actually carries `config/models.json`), and the two must not be confused: gating the self root
+ * on the strict answer let a PARTIAL install keep its entry for cross-plugin discovery while
+ * self-referential reads moved to whatever checkout happened to be executing. One run, two trees.
+ * A registry entry that cannot be read is a broken install — `/sdlc:doctor`'s problem, not a
+ * reason to substitute a directory the consumer never pointed at.
+ */
+export function registryListsSdlc(installs) {
+  for (const key of installs.keys()) if (/^sdlc@/.test(key)) return true;
+  return false;
+}
+
+/**
  * The plugin tree this module is executing from, or `null` when that tree is a cache install.
  *
  * A module running out of `<config>/plugins/cache/...` IS the installed copy: registry-keyed

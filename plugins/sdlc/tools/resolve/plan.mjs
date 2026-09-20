@@ -10,7 +10,7 @@
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { resolveRoots, pathLoadedRoots } from "./roots.mjs";
+import { resolveConfigDir, resolveRoots, pathLoadedRoots, selfPluginRoot, registryListsSdlc } from "./roots.mjs";
 import { readInstalledPlugins, readEnabledPlugins, loadInstalledManifests, loadManifestsFromTree, mergePathLoaded, withPathLoadedEnabled } from "./manifests.mjs";
 import { resolveStack } from "./detect.mjs";
 import { preflight } from "./deps.mjs";
@@ -170,8 +170,15 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   const headless = env.SDLC_NONINTERACTIVE === "true" || env.SDLC_NONINTERACTIVE === "1";
 
   // ---- Step 0: roots
-  const roots = resolveRoots(env);
-  const configDir = roots.config_dir;
+  //
+  // The registry is read BEFORE the roots, because one question governs both halves of Step 0:
+  // does this consumer list a copy of this plugin at all? If it does, the module's own location
+  // is never consulted — not for `config/**` and `tools/**`, and not for discovery. If it does
+  // not, the same self root answers for both, so a run can never price itself from one tree
+  // while executing another's recipe (issue #173, ADR-0023).
+  const configDir = resolveConfigDir(env).value;
+  const { installs: registered, conflicts } = readInstalledPlugins({ configDir });
+  const roots = resolveRoots(env, registryListsSdlc(registered) ? null : selfPluginRoot());
 
   // ---- Step 0b inputs: what is installed and enabled
   //
@@ -181,13 +188,9 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   // the skill enumeration at once, rather than four times over — see ./manifests.mjs.
   //
   // The host does not always export `CLAUDE_PLUGIN_ROOT` — `claude plugin eval` does not (issue
-  // #173) — so the tree this module is executing from is offered as the fallback. Offered only
-  // when Step 0 ALREADY resolved this plugin's own root from that same location: a consumer with
-  // an install of its own keeps getting it, and self-referential reads (`config/**`, `tools/**`)
-  // and cross-plugin discovery can never end up pointed at two different trees.
-  const selfRoot = roots.sources.sdlc_plugin_root === "self" ? roots.sdlc_plugin_root : null;
-  const extraRoots = pathLoadedRoots(env, selfRoot);
-  const { installs: registered, conflicts } = readInstalledPlugins({ configDir });
+  // #173) — so the tree this module is executing from is offered as the fallback, and offered
+  // only when Step 0 above actually resolved this plugin's root from that same location.
+  const extraRoots = pathLoadedRoots(env, roots.sources.sdlc_plugin_root === "self" ? roots.sdlc_plugin_root : null);
   const installs = mergePathLoaded(registered, extraRoots);
   const enabled = withPathLoadedEnabled(readEnabledPlugins({ configDir, projectRoot: cwd }), installs);
   for (const c of conflicts) warn(`WARN: ${c.key} is installed at several paths; using the ${c.scope} copy (${c.chosen})`);

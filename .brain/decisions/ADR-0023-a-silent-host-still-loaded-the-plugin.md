@@ -58,6 +58,14 @@ resort — never over a copy the consumer has of its own.**
    self root speaks only where nobody else can. This is what keeps the repo's own 700-test suite
    honest: its synthetic worlds register an `sdlc@m` of their own, so the module's location never
    displaces the fixture.
+   The gate is `registryListsSdlc(installs)` — **does the registry list this plugin at all**, not
+   the stricter question `resolveSdlcRoot` asks of an entry (does its `installPath` carry
+   `config/models.json`). Asking the two differently is a defect, not a nuance: a partial install
+   then kept its entry for cross-plugin discovery while the self root took over the
+   self-referential reads, so one run priced itself from the install and executed the checkout's
+   recipe. A registry entry that cannot be read is a broken install — `/sdlc:doctor`'s problem,
+   never a licence to substitute a tree the consumer never pointed at. (Found in review of the
+   implementing PR, like decisions 4–6 of ADR-0022 before it.)
 2. **A module running from `/plugins/cache/` has no self root.** `selfPluginRoot()` returns `null`
    there. That copy IS the install — offering it a second time as a path load is how one plugin
    becomes two `vanilla` foundations of equal priority, the nondeterminism ADR-0009 exists to
@@ -91,6 +99,11 @@ load-bearing.
   ranking it below the registry bounds it to the case where there is no other answer at all.
 - Decision 2 of ADR-0022 is amended, not withdrawn: the module still never *outranks* a declared
   install. Only the "stay silent" half is gone.
+- The shell bootstrap in `PLUGIN-PATHS.md` ("How to resolve them") knows only
+  `CLAUDE_PLUGIN_ROOT` → newest cache, so under a silent host it still resolves
+  `SDLC_PLUGIN_ROOT` to the empty string. A shell snippet has no `import.meta.url`, but the skill
+  running it is always told its own base directory, so the last resort there is that path with
+  `/skills/<name>` trimmed — the same rule, stated for the reader rather than executed.
 - The premise that made decision 2 look safe — "a harness that runs this code exports
   `CLAUDE_PLUGIN_ROOT`" — was never tested against a harness that does not. Worth remembering as
   the shape this class of assumption fails in: the environment is evidence when present, and
