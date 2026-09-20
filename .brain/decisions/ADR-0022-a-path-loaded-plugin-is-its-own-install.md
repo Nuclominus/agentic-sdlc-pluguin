@@ -51,6 +51,9 @@ other install.**
    installed plugin to a consumer that never loaded it. A harness that runs this code at all
    exports `CLAUDE_PLUGIN_ROOT`, because the skill's own `Bash` calls interpolate it into the path
    they execute. Absent it, no plugin was loaded to speak for.
+   **Amended by [[decisions/ADR-0023-a-silent-host-still-loaded-the-plugin]]** — the premise is
+   false: `claude plugin eval` loads the plugin and exports nothing. The module may now name its
+   own tree, but only as a LAST resort, ranked below the installed registry (issue #173).
 3. **Merge into `installs`, not into each consumer.** `mergePathLoaded(installs, roots)` in
    `manifests.mjs` is applied once, in `resolveProfile`. Manifest loading, recipe discovery
    (`workflow.mjs`), dependency aggregation and skill enumeration (`deps.mjs`) all iterate
@@ -106,5 +109,6 @@ other install.**
 
 ## Related
 - Implemented by: #164 fix (this change). Found by: the `plugins/sdlc/evals/` orchestrator suite.
+- Amended by: [[decisions/ADR-0023-a-silent-host-still-loaded-the-plugin]] (decision 2)
 - Relates to: [[decisions/ADR-0009-plugin-root-resolution]] / [[decisions/ADR-0019-the-run-start-is-one-command]] /
   [[components/sdlc]]
