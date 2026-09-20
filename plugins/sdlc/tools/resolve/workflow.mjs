@@ -244,14 +244,37 @@ const EXPLICIT_NAME = new RegExp(
   `['"\`]([A-Za-z][A-Za-z0-9-]*)['"\`]\\s+(?:sdlc\\s+)?${CUE}\\b`
   + `|\\b${CUE}\\s*[:=]?\\s*['"\`]([A-Za-z][A-Za-z0-9-]*)['"\`]`
   + `|--workflow\\s+([A-Za-z][A-Za-z0-9-]*)`, "gi");
-// A token REFERRED TO as a recipe rather than merely standing beside the cue word: something
-// is being run/used, and the token is what it is being run as. The verb is the whole guard for
-// the unknown-name report — "the <X> workflow" alone is how English also describes a thing to
-// BUILD ("wire up the multi-tenant workflow engine", "speed up the ingestion pipeline"), and a
-// recipe list printed at those is pure noise. `sdlc` is stepped over as it is for BEFORE_CUE.
-const REFERS = "(?:run|runs|ran|running|use|uses|used|using|execute|executes|start|starts|launch|invoke|trigger|follow|with|via|through|under)";
+// A token REFERRED TO as a recipe rather than merely standing beside the cue word: something is
+// being run, and the token is what it is being run AS. Two conditions, and the second is the one
+// that carries the weight:
+//
+// - **A reference verb**, so that describing a thing to BUILD says nothing ("wire up the
+//   multi-tenant workflow engine", "add a growth-log pipeline for analytics events").
+// - **A COMPOUND name.** A first draft leaned on the verb alone and warned at nine ordinary
+//   feature requests in ten — "trigger the approval workflow when a doc is submitted", "start
+//   the checkout workflow from the cart screen", "replace the old uploader with the streaming
+//   pipeline". Every one of those names an application workflow with a single English noun,
+//   and every recipe name that is not a plain word is a hyphenated identifier (`mobile-release`,
+//   like the installed `docs-only`, `android-feature`). Requiring the hyphen separates the two
+//   classes where the verb cannot: `start`, `launch` and `trigger` are app-lifecycle verbs
+//   first, and they are safe to accept only because a compound stands after them.
+//
+// The cost is a miss on a single-word recipe nobody installed ("run the checkout workflow"),
+// which is the cheap direction: issue #180 asks for a warning, never a halt.
+const REFERS = "(?:run|runs|ran|running|use|uses|used|using"
+  + "|execute|executes|executed|executing|start|starts|started|starting"
+  + "|launch|launches|launched|launching|invoke|invokes|invoked|invoking"
+  + "|trigger|triggers|triggered|triggering|apply|applies|applied|applying"
+  + "|kicks?\\s+off|kicked\\s+off|kicking\\s+off|with|via)";
+// A determiner and/or one adjective may stand between the verb and the name — "run OUR
+// mobile-release workflow", "run THE FULL mobile-release workflow".
+const FILLER = "(?:[A-Za-z][A-Za-z0-9'-]*\\s+){0,2}";
+const COMPOUND = "([A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)+)";
+// Both word orders: `run the <name> workflow` and `run workflow <name>`. `sdlc` is stepped over
+// as it is for BEFORE_CUE.
 const REFERENCED_NAME = new RegExp(
-  `\\b${REFERS}\\s+(?:the\\s+)?([A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*)\\s+(?:sdlc\\s+)?${CUE}\\b`, "gi");
+  `\\b${REFERS}\\s+${FILLER}${COMPOUND}\\s+(?:sdlc\\s+)?${CUE}\\b`
+  + `|\\b${REFERS}\\s+${FILLER}(?:sdlc\\s+)?${CUE}\\s*[:=]?\\s+${COMPOUND}`, "gi");
 const KEBAB = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 // Words that stand next to "workflow" in ordinary English. A recipe is never called one of these.
 const NOISE = new Set([
@@ -308,9 +331,9 @@ function offByOne(a, b) {
  *   to the QA-only `testing` recipe — a pipeline with no `development` phase, for a request to
  *   implement something.
  * - **Nothing ambiguous selects.** Two names, and neither wins. A token nothing answers to is
- *   reported only when it is a one-character slip from an installed name or was quoted as one;
- *   `NOISE` plus that gate is what keeps an ordinary feature description from being told it
- *   mistyped a recipe.
+ *   reported only when it was quoted as one, is a one-character slip from an installed name, or
+ *   is a COMPOUND name something is being run as (`REFERENCED_NAME`); `NOISE` plus that gate is
+ *   what keeps an ordinary feature description from being told it mistyped a recipe.
  */
 export function matchNamedRecipe({ args = "", recipes = [] } = {}) {
   const text = String(args);

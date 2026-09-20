@@ -216,16 +216,49 @@ test("tier 1b: a recipe REFERRED TO by name and not installed is reported, not s
   assert.match(r.warnings[0], /Available: analysis, bugfix, debug, default, docs-only, hotfix, refactor, testing/);
 });
 
-test("tier 1b: the reference verb is what separates naming a recipe from describing a pipeline", () => {
+test("tier 1b: the reference reads in every tense, determiner and word order", () => {
+  // A first cut inflected `run` and `use` but not `start`/`launch`/`execute`/`trigger`, and
+  // admitted only a bare `the` — so four of these silently resolved the default pipeline,
+  // which IS the #180 bug, merely spelt differently.
   for (const args of [
-    "Run the mobile-release workflow",
+    "Starting the mobile-release workflow for Ship 2.1",
+    "Launching the mobile-release workflow now",
+    "Triggering the mobile-release workflow",
+    "Executing the mobile-release workflow",
+    "Run our mobile-release workflow",
+    "Run the full mobile-release workflow",
+    "Kick off the mobile-release workflow",
     "run mobile-release workflow --dry-run",
+    "run workflow mobile-release",
+    "use recipe mobile-release",
     "Ship 2.1 with the mobile-release workflow",
     "Please use the mobile-release recipe",
   ]) {
     const r = resolveWorkflowName({ args, recipes: NAMED, profileDefault: "demo-flow" });
+    assert.equal(r.name, "demo-flow", `'${args}' must still fall through — prose never halts`);
     assert.equal(r.warnings.length, 1, `'${args}' refers to a recipe by name`);
     assert.match(r.warnings[0], /mobile-release/);
+  }
+});
+
+test("tier 1b: naming an application's own workflow is not naming a recipe", () => {
+  // The verb alone is NOT enough, and leaning on it warned at nine ordinary feature requests in
+  // ten: `start`, `launch` and `trigger` are app-lifecycle verbs first. What separates these
+  // from the block above is the shape of the name — a single English noun, never a compound.
+  // The warning reaches the user verbatim (pipeline-orchestrator echoes every `WARN:` line), so
+  // a false alarm here costs a wrong line plus the whole recipe list on a routine run.
+  for (const args of [
+    "Trigger the approval workflow when a doc is submitted",
+    "Send analytics events through the ingestion pipeline",
+    "Start the checkout workflow from the cart screen",
+    "Make new users follow the onboarding workflow",
+    "Integrate the exporter with the billing pipeline",
+    "Replace the old uploader with the streaming pipeline",
+    "Users can launch the signup workflow from the banner",
+    "Stream uploads via the media pipeline",
+  ]) {
+    const r = resolveWorkflowName({ args, recipes: NAMED, profileDefault: "demo-flow" });
+    assert.deepEqual(r.warnings, [], `'${args}' describes the product, not a recipe to run`);
   }
 });
 
@@ -252,13 +285,16 @@ test("tier 1b: referring to an INSTALLED recipe still selects it, warning nothin
 });
 
 test("an unknown name passed as the FLAG still halts — prose is soft, the flag is not", () => {
-  const recipes = NAMED.map((n) => ({ name: n, origin: "plugin", doc: { name: n, phases: ["development"] } }));
-  const r = resolveWorkflowName({ args: "Ship 2.1 --workflow=mobile-release --dry-run", recipes, profileDefault: "demo-flow" });
+  const r = resolveWorkflowName({ args: "Ship 2.1 --workflow=mobile-release --dry-run", recipes: NAMED, profileDefault: "demo-flow" });
   assert.equal(r.name, "mobile-release");
   assert.equal(r.tier, "--workflow");
-  const located = locateRecipe("mobile-release", recipes);
+  const located = locateRecipe("mobile-release", NAMED);
   assert.equal(located.recipe, null);
-  assert.match(located.halt, /^❌ Workflow 'mobile-release' not found\./);
+  assert.equal(located.halt, ["❌ Workflow 'mobile-release' not found.",
+    "   Available: analysis, bugfix, debug, default, docs-only, hotfix, refactor, testing",
+    "   Omit --workflow=NAME to use the default workflow."].join("\n"),
+  "asserted whole: a first cut re-mapped the already-mapped NAMED fixture, and the halt it "
+  + "matched listed '[object Object]' eight times behind a first line that looked right");
 });
 
 test("tier 1b: a QUOTED name nothing answers to is reported, however unlike a recipe it looks", () => {

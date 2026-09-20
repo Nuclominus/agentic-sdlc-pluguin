@@ -110,11 +110,24 @@ token standing at the cue word counts.
 unknown name there is fatal. Prose is a soft signal: a sentence that happens to carry a name-like
 token must never abort a run, so this tier only ever selects or warns.
 
-**A reference verb is the guard on the unknown-name report.** "the `<X>` workflow" is also how
-English describes a thing to *build* — "wire up the multi-tenant **workflow** engine", "speed up
-the ingestion **pipeline**" — and printing the recipe list at those is noise. The token is
-reported only when something is being run *as* it: `run`, `use`, `execute`, `start`, `launch`,
-`invoke`, `trigger`, `follow`, `with`, `via`, `through`, `under`.
+**Two guards stand on the unknown-name report, and the second carries the weight.**
+
+1. **A reference verb** — something is being run, and the token is what it is being run *as*:
+   `run`, `use`, `execute`, `start`, `launch`, `invoke`, `trigger`, `apply`, `kick off`, `with`,
+   `via`, each in any tense. A determiner and one adjective may stand between the verb and the
+   name ("run **our** mobile-release workflow", "run **the full** mobile-release workflow"), and
+   either word order counts (`run the <name> workflow`, `run workflow <name>`).
+2. **A compound name** — the token must be hyphenated (`mobile-release`, like the installed
+   `docs-only` and `android-feature`). The verb alone is not enough: `start`, `launch` and
+   `trigger` are app-lifecycle verbs first, so "trigger the **approval** workflow when a doc is
+   submitted" and "replace the old uploader with the **streaming** pipeline" name an
+   application's own workflow, not a recipe. Those are single English nouns; a recipe name that
+   is not a plain word is a hyphenated identifier. That is what separates the two classes.
+
+The cost is a miss on a single-word recipe nobody installed ("run the checkout workflow"), which
+is the cheap direction — this tier warns and never halts. "the `<X>` workflow" without a verb is
+also how English describes a thing to *build* ("wire up the multi-tenant **workflow** engine"),
+and printing the recipe list at those is noise.
 
 **Outcomes.** Only an unambiguous hit selects; everything else falls through to the next tier —
 never silently.
