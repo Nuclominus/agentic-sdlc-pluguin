@@ -115,6 +115,18 @@ recipe. The phase list, the estimate and the cap verdict are machine values (`MA
 recalling any of them — including from this document, which deliberately states none — is not an
 available option.
 
+One thing the reconstruction must **not** drop: if the request **names a workflow recipe** — "the
+docs-only workflow", "run this as a hotfix", "як рецепт refactor" — those words stay in
+`$ARGUMENTS` verbatim. Do not map them to `--workflow=NAME` yourself and do not screen the name
+against a list of your own: tier 1b of `workflows/RESOLVER.md` does that inside the command,
+against the recipes it actually discovered, and it is the only thing that knows the set (a
+platform foundation ships its own). Your job is to not trim the name out while you shorten the
+request into a brief. Trimming it is issue #176: the run asked whether `docs-only` fits under its
+cap, `$ARGUMENTS` arrived as `"Document the growth log screen"`, and the answer came back with
+`default`'s six phases and its cap — both figures real, the substitution invisible. The command
+announces what it resolved (`🧭 Recipe '<name>' named in the request …`) and says so when a name
+matches nothing installed; echoing that is item 1 below.
+
 Then do exactly three things:
 
 1. **Echo `prints[]` in order, verbatim.** Every block this pipeline owes the user — the dependency

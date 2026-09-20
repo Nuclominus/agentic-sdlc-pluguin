@@ -19,7 +19,7 @@ import {
   mergeProfiles, applyLocalOverrides, parseModelOverrides, renderOverridesPrint, renderModelPrint, renderStackPrint,
   mergeRoleExpertise, renderRoleExpertiseBlock, renderSkillsBlock,
 } from "./profile.mjs";
-import { discoverRecipes, resolveWorkflowName, locateRecipe, validateWorkflow, normalizePhases, validateAcyclic, buildResolvedPhases, renderWorkflowPrint } from "./workflow.mjs";
+import { discoverRecipes, resolveWorkflowName, locateRecipe, validateWorkflow, normalizePhases, validateAcyclic, buildResolvedPhases, renderWorkflowPrint, availableNames } from "./workflow.mjs";
 import { resolveCostCap, renderCapOverridePrint, expandRows, estimate, renderDryRun, renderHeadlessDryRun } from "./caps.mjs";
 import { loadCheckpoints, doneUnitIds } from "../run/reentry.mjs";
 import { parseYaml } from "./yaml.mjs";
@@ -352,6 +352,7 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
     signals: signals.degraded ? null : signals,
     profileDefault: effective.profile_default_workflow,
   });
+  warnAll(resolvedName.warnings ?? []);
   if (resolvedName.print) prints.push(resolvedName.print);
 
   const located = locateRecipe(resolvedName.name, recipes);
@@ -440,6 +441,10 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
       autoselected: resolvedName.autoselected,
       file: located.recipe.file,
       origin: located.recipe.origin ?? null,
+      // The names a consumer could have asked for. It is what the not-found halt lists, what
+      // tier 1b matches a prose mention against, and the only place the plan says out loud
+      // which recipes this machine actually has.
+      available: availableNames(recipes),
       shadowed: located.shadowed,
       resolved_phases: built.phases,
     },
