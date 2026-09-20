@@ -244,6 +244,14 @@ const EXPLICIT_NAME = new RegExp(
   `['"\`]([A-Za-z][A-Za-z0-9-]*)['"\`]\\s+(?:sdlc\\s+)?${CUE}\\b`
   + `|\\b${CUE}\\s*[:=]?\\s*['"\`]([A-Za-z][A-Za-z0-9-]*)['"\`]`
   + `|--workflow\\s+([A-Za-z][A-Za-z0-9-]*)`, "gi");
+// A token REFERRED TO as a recipe rather than merely standing beside the cue word: something
+// is being run/used, and the token is what it is being run as. The verb is the whole guard for
+// the unknown-name report — "the <X> workflow" alone is how English also describes a thing to
+// BUILD ("wire up the multi-tenant workflow engine", "speed up the ingestion pipeline"), and a
+// recipe list printed at those is pure noise. `sdlc` is stepped over as it is for BEFORE_CUE.
+const REFERS = "(?:run|runs|ran|running|use|uses|used|using|execute|executes|start|starts|launch|invoke|trigger|follow|with|via|through|under)";
+const REFERENCED_NAME = new RegExp(
+  `\\b${REFERS}\\s+(?:the\\s+)?([A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*)\\s+(?:sdlc\\s+)?${CUE}\\b`, "gi");
 const KEBAB = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 // Words that stand next to "workflow" in ordinary English. A recipe is never called one of these.
 const NOISE = new Set([
@@ -331,7 +339,13 @@ export function matchNamedRecipe({ args = "", recipes = [] } = {}) {
     ] };
   }
 
-  const unknown = tokens.filter((t) => quoted.includes(t) || (!NOISE.has(t) && names.some((n) => offByOne(t, n))));
+  // Three ways a token nothing answers to is still worth reporting, and no fourth: it was
+  // quoted as a name, it is a one-character slip from an installed one, or it was REFERRED TO
+  // as the recipe to run (issue #180 — `--workflow=mobile-release` halts, so the same name in
+  // prose must at least say that it changed nothing).
+  const referenced = tokensFrom(text, REFERENCED_NAME);
+  const unknown = tokens.filter((t) => quoted.includes(t)
+    || (!NOISE.has(t) && (referenced.includes(t) || names.some((n) => offByOne(t, n)))));
   if (unknown.length === 0) return null;
   const label = unknown.length === 1
     ? `'${unknown[0]}' reads like a workflow recipe, but no installed recipe has that name`

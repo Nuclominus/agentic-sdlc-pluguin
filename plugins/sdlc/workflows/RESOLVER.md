@@ -106,6 +106,16 @@ recipe, and "Add a **testing** stage to the release pipeline" would select the Q
 recipe — a pipeline with no `development` phase — for a request to implement something. Only a
 token standing at the cue word counts.
 
+**A halt is for the flag only.** `--workflow=NAME` is a machine-checkable instruction, so an
+unknown name there is fatal. Prose is a soft signal: a sentence that happens to carry a name-like
+token must never abort a run, so this tier only ever selects or warns.
+
+**A reference verb is the guard on the unknown-name report.** "the `<X>` workflow" is also how
+English describes a thing to *build* — "wire up the multi-tenant **workflow** engine", "speed up
+the ingestion **pipeline**" — and printing the recipe list at those is noise. The token is
+reported only when something is being run *as* it: `run`, `use`, `execute`, `start`, `launch`,
+`invoke`, `trigger`, `follow`, `with`, `via`, `through`, `under`.
+
 **Outcomes.** Only an unambiguous hit selects; everything else falls through to the next tier —
 never silently.
 
@@ -124,8 +134,9 @@ never silently.
 
 - **No hit, but a token at the cue word was plainly MEANT as a name** — it is a one-character
   slip from a discovered name (`docs-onli`), or it was quoted (`the 'frobnicate' workflow`), or
-  it followed `--workflow ` written with a space → report it against the same list the not-found
-  halt prints, then continue with the remaining tiers:
+  it followed `--workflow ` written with a space, or it was REFERRED TO as the recipe to run
+  (`Run the mobile-release workflow`) → report it against the same list the not-found halt
+  prints, then continue with the remaining tiers:
 
   ```text
   WARN: '{token}' reads like a workflow recipe, but no installed recipe has that name.

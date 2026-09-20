@@ -205,6 +205,62 @@ test("tier 1b: a name spelled one character off IS reported", () => {
   assert.match(r.warnings[0], /'docs-onli' reads like a workflow recipe/);
 });
 
+test("tier 1b: a recipe REFERRED TO by name and not installed is reported, not silently replaced", () => {
+  // Issue #180. `--workflow=mobile-release` halts; the same name in prose used to resolve
+  // `default` — a different pipeline under a different cap — and say nothing at all.
+  const r = resolveWorkflowName({ args: "Run the mobile-release workflow for 'Ship 2.1' --dry-run", recipes: NAMED, profileDefault: "demo-flow" });
+  assert.equal(r.name, "demo-flow", "prose never halts and never picks — it falls through");
+  assert.equal(r.tier, "profile_default");
+  assert.equal(r.warnings.length, 1);
+  assert.match(r.warnings[0], /^WARN: 'mobile-release' reads like a workflow recipe/);
+  assert.match(r.warnings[0], /Available: analysis, bugfix, debug, default, docs-only, hotfix, refactor, testing/);
+});
+
+test("tier 1b: the reference verb is what separates naming a recipe from describing a pipeline", () => {
+  for (const args of [
+    "Run the mobile-release workflow",
+    "run mobile-release workflow --dry-run",
+    "Ship 2.1 with the mobile-release workflow",
+    "Please use the mobile-release recipe",
+  ]) {
+    const r = resolveWorkflowName({ args, recipes: NAMED, profileDefault: "demo-flow" });
+    assert.equal(r.warnings.length, 1, `'${args}' refers to a recipe by name`);
+    assert.match(r.warnings[0], /mobile-release/);
+  }
+});
+
+test("tier 1b: an unknown name only DESCRIBED beside the cue word stays silent", () => {
+  // The widened report must not reach the prose that the tier was deliberately narrowed for.
+  for (const args of [
+    "Document the growth log screen",
+    "Fix the hotfix button label on the settings screen",
+    "Speed up the ingestion pipeline; refactor the mapper",
+    "Wire up the multi-tenant workflow engine for orders",
+    "Add a growth-log pipeline for analytics events",
+    "Add a release-train stage to the build pipeline",
+  ]) {
+    const r = resolveWorkflowName({ args, recipes: NAMED, profileDefault: "demo-flow" });
+    assert.deepEqual(r.warnings, [], `'${args}' names no recipe and must say nothing`);
+  }
+});
+
+test("tier 1b: referring to an INSTALLED recipe still selects it, warning nothing", () => {
+  const r = resolveWorkflowName({ args: "Would the docs-only SDLC workflow fit under its cost cap?", recipes: NAMED, profileDefault: "demo-flow" });
+  assert.equal(r.name, "docs-only");
+  assert.equal(r.tier, "named_in_prose");
+  assert.deepEqual(r.warnings, []);
+});
+
+test("an unknown name passed as the FLAG still halts — prose is soft, the flag is not", () => {
+  const recipes = NAMED.map((n) => ({ name: n, origin: "plugin", doc: { name: n, phases: ["development"] } }));
+  const r = resolveWorkflowName({ args: "Ship 2.1 --workflow=mobile-release --dry-run", recipes, profileDefault: "demo-flow" });
+  assert.equal(r.name, "mobile-release");
+  assert.equal(r.tier, "--workflow");
+  const located = locateRecipe("mobile-release", recipes);
+  assert.equal(located.recipe, null);
+  assert.match(located.halt, /^❌ Workflow 'mobile-release' not found\./);
+});
+
 test("tier 1b: a QUOTED name nothing answers to is reported, however unlike a recipe it looks", () => {
   const r = resolveWorkflowName({ args: "run the 'frobnicate' workflow", recipes: NAMED, profileDefault: "demo-flow" });
   assert.match(r.warnings[0], /frobnicate/, "quoting it leaves no doubt it was meant as a name");

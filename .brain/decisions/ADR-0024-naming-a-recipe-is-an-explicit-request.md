@@ -49,6 +49,14 @@ the recipe names the run actually discovered, and it is reported.**
 - **Nothing ambiguous selects.** Two names matched, or a token plainly meant as a name that
   matches nothing installed, produces a `WARN:` and falls through to the next tier. The
   unknown-name warning prints the same `Available:` list the halt does.
+- **A halt belongs to the flag alone.** `--workflow=NAME` is a machine-checkable instruction, so
+  an unknown name there stays fatal. Prose is a soft signal and never halts: a user sentence that
+  happens to carry a name-like token must not be able to abort a run. Issue #180 closed the other
+  half of that asymmetry — prose that names nothing installed must not be *silent* either, so a
+  token **referred to** as the recipe being run (`run`/`use`/`execute`/`with`/`via`/… + `the <X>
+  workflow`) is reported like a quoted or misspelt one. The reference verb is the guard: "the
+  `<X>` workflow" is also how English describes a thing to build ("wire up the multi-tenant
+  workflow engine"), and the recipe list printed at those is noise.
 - The orchestrator's one obligation is **not to trim the name out of `$ARGUMENTS`** while it
   shortens a request into a brief. It does not build the flag and does not screen the name.
 
