@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-09-20 | #186 | `docs` | — | [[changes/2026-09-20-PR-186-the-change-note-summary-is-enrichable-too]] |
 | 2026-09-20 | #183 | `docs` | — | [[changes/2026-09-20-PR-183-adr-0025-a-branch-switch-is-a-file-operation]] |
 | 2026-09-20 | #181 | `fix` | — | [[changes/2026-09-20-PR-181-warn-when-prose-names-a-recipe-that-is-not-installed-180]] |
 | 2026-09-20 | #178 | `fix` | — | [[changes/2026-09-20-PR-178-resolve-a-workflow-recipe-named-in-the-request-176]] |
