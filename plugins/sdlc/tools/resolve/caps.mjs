@@ -95,8 +95,17 @@ export function expandRows(phases, { agentsPerPhase = {}, aspects = [], modelOve
     // resume contract names). Accept both, so a caller can hand over the set `loadCheckpoints`
     // produced without transliterating ids — a transliteration step is a place to be wrong, and
     // silently: an unrecognised id just prices the phase as if it had never run.
-    const resumed = resumedDone.has(phase)
-      || (extra.aspect != null && (resumedDone.has(`${phase}:${extra.aspect}`) || resumedDone.has(`${phase}-${extra.aspect}`)));
+    //
+    // A BARE `{phase}` id does NOT resume an aspect row, though it is tempting. `reentry.mjs`'s
+    // `plainDone` requires every `{phase}-{aspect}` for an aspect-aware phase and never consults a
+    // bare entry, so honouring one here would price a `development` fan-out at $0.00 — its
+    // ×5.4 multiplier makes it the dominant term — while the real `--resume` re-dispatches every
+    // aspect. Under-pricing in the one direction nobody checks. Matching the resume rule matters
+    // more than second-guessing it: if a bare skipped-phase checkpoint should satisfy an
+    // aspect-aware phase, that belongs in reentry.mjs, where both callers would see it.
+    const resumed = extra.aspect == null
+      ? resumedDone.has(phase)
+      : resumedDone.has(`${phase}:${extra.aspect}`) || resumedDone.has(`${phase}-${extra.aspect}`);
     rows.push({ phase, agent, tier, resumed, ...extra });
   };
 
@@ -200,10 +209,14 @@ export function renderDryRun({ estimate: est, slots, stack, workflow, autoselect
     "🔎 DRY RUN — no agents dispatched, no code written.",
     `Stack: ${stack} | Workflow: ${workflow}${autoselected ? " (auto-selected)" : ""}`,
   ];
-  if (resume?.requested) {
-    const done = est.rows.filter((r) => r.resumed).length;
+  // Gated on what was actually resumed, not on the flag being present. A `--resume` whose slug
+  // found no checkpoints prices a full run, and announcing that as `⏭ Resume: … 0 of 6 complete`
+  // would dress the unchanged full-run preview up as a resumed one — the warning already says what
+  // happened, and this header would contradict it.
+  const done = est.rows.filter((r) => r.resumed).length;
+  if (done > 0) {
     const next = est.rows.find((r) => !r.resumed);
-    lines.push(`⏭ Resume: ${resume.slug ?? "(slug unresolved)"}  — ${done} of ${est.rows.length} unit(s) already complete`);
+    lines.push(`⏭ Resume: ${resume?.slug ?? "(slug unresolved)"}  — ${done} of ${est.rows.length} unit(s) already complete`);
     lines.push(`   Re-entering at: ${next ? next.phase : "nothing left to run"}`);
   }
   lines.push(`Phases (${slots}):`);

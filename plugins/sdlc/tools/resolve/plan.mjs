@@ -46,8 +46,22 @@ function frontmatterTiers(installs, enabled) {
 /** Step 2's slug rule, in code: lowercase, alphanumerics + dashes, max 40 chars. */
 const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40).replace(/-+$/, "");
 
-/** `$ARGUMENTS` with every flag and quote stripped — the description Step 2 slugifies. */
-const briefOf = (args) => String(args).replace(/--[a-z][a-z0-9-]*(=[^\s]+)?/g, " ").replace(/["'`]/g, " ").replace(/\s+/g, " ").trim();
+/**
+ * Flags whose value is a SEPARATE token (`--mode tree`), as `cli.mjs`'s `tokenOpt` reads them.
+ * Their value is not part of the description and must not reach the slug — `--mode tree "Add dark
+ * mode"` otherwise derives `tree-add-dark-mode`, which matches no workspace.
+ */
+const TOKEN_VALUE_FLAGS = ["--mode", "--role", "--skills", "--base-ref", "--workflow"];
+
+/** `$ARGUMENTS` with every flag, flag value and quote stripped — the description Step 2 slugifies. */
+const briefOf = (args) => {
+  let out = String(args);
+  for (const f of TOKEN_VALUE_FLAGS) out = out.replace(new RegExp(`(^|\\s)${f}\\s+\\S+`, "g"), " ");
+  return out.replace(/--[a-z][a-z0-9-]*(=[^\s]*)?/g, " ").replace(/["'`]/g, " ").replace(/\s+/g, " ").trim();
+};
+
+/** A slug is a directory name under docs/plans/ — never a path, never a traversal. */
+const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
 
 /**
  * Which units a `--resume` would skip, so the preview can price them at $0 (issue #168).
@@ -69,17 +83,27 @@ const briefOf = (args) => String(args).replace(/--[a-z][a-z0-9-]*(=[^\s]+)?/g, "
  * preview says so instead of quietly showing a full run.
  */
 export function resolveResume({ cwd = process.cwd(), args = "" } = {}) {
-  const m = /(^|\s)--resume(=([^\s]+))?(\s|$)/.exec(String(args));
+  // `(?=\s|$)` rather than a consuming `(\s|$)`: with the latter a trailing `--resume=` cannot
+  // match at all, so an empty slug read as "no resume at all" — no preview, and no warning either.
+  // A silent no-op is the one outcome this function exists to prevent.
+  const m = /(^|\s)--resume(=(\S*))?(?=\s|$)/.exec(String(args));
   if (!m) return { requested: false, slug: null, done: new Set(), warnings: [] };
   const warnings = [];
-  const slug = m[3] ?? slugify(briefOf(args));
+  const explicit = m[2] !== undefined;
+  const slug = explicit ? m[3] : slugify(briefOf(args));
   if (!slug) {
-    warnings.push("WARN: --resume: no slug given and none derivable from the description — previewing a full run");
+    warnings.push(explicit
+      ? "WARN: --resume=: empty slug — previewing a full run"
+      : "WARN: --resume: no slug given and none derivable from the description — previewing a full run");
+    return { requested: true, slug: null, done: new Set(), warnings };
+  }
+  if (!SLUG_RE.test(slug)) {
+    warnings.push(`WARN: --resume=${slug}: not a run slug (a directory name under docs/plans/) — previewing a full run`);
     return { requested: true, slug: null, done: new Set(), warnings };
   }
   const checkpointDir = join(cwd, "docs", "plans", slug, ".checkpoint");
   if (!existsSync(checkpointDir)) {
-    warnings.push(`WARN: --resume: no checkpoints at docs/plans/${slug}/.checkpoint — previewing a full run${m[3] ? "" : " (slug derived from the description; pass --resume=<slug> if it differs)"}`);
+    warnings.push(`WARN: --resume: no checkpoints at docs/plans/${slug}/.checkpoint — previewing a full run${explicit ? "" : " (slug derived from the description; pass --resume=<slug> if it differs)"}`);
     return { requested: true, slug, done: new Set(), warnings };
   }
   const { units, warnings: cw } = loadCheckpoints(checkpointDir);
@@ -458,15 +482,19 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
     } else {
       const healEnabled = (effective.heal_checks ?? []).length > 0;
       const est = estimate(rows, registry, { healEnabled });
-      const reenterAt = est.rows.find((r) => !r.resumed)?.phase ?? null;
+      // `resumed` reports what the estimate ACTUALLY accounts for, not that the flag was typed. A
+      // --resume whose slug found nothing prices a full run; emitting `resumed: true` beside a
+      // full-run figure would have a CI consumer read one as the other.
+      const anyResumed = est.rows.some((r) => r.resumed);
+      const reenterAt = anyResumed ? (est.rows.find((r) => !r.resumed)?.phase ?? null) : null;
       plan.dry_run = {
         rows: est.rows.map((r) => ({ phase: r.phase, aspect: r.aspect ?? null, agent: r.agent, tier: r.tier, est: r.est, resumed: r.resumed === true })),
         expected_total: est.expected_total,
         worst_total: est.worst_total,
-        ...(resume.requested ? { resumed: true, resume_slug: resume.slug, reenter_at: reenterAt } : {}),
+        ...(anyResumed ? { resumed: true, resume_slug: resume.slug, reenter_at: reenterAt } : {}),
       };
       prints.push(headless
-        ? renderHeadlessDryRun({ estimate: est, slots: built.phases.length, workflow: resolvedName.name, cap: cap.cost_cap, resumed: resume.requested, reenterAt })
+        ? renderHeadlessDryRun({ estimate: est, slots: built.phases.length, workflow: resolvedName.name, cap: cap.cost_cap, resumed: anyResumed, reenterAt })
         : renderDryRun({
           estimate: est, slots: built.phases.length, stack: stack.foundation, workflow: resolvedName.name,
           autoselected: resolvedName.autoselected, skipRules: skip.applied, cap: cap.cost_cap,

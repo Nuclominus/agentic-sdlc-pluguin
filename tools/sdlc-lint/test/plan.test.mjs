@@ -621,7 +621,7 @@ function withCheckpoints(slug, statuses) {
 
 test("--resume --dry-run prices only the phases that would actually be dispatched", () => {
   const w = withCheckpoints("add-dark-mode", {
-    business_analysis: "completed", development: "completed", qa: "completed", security: "skipped",
+    business_analysis: "completed", "development-vanilla": "completed", qa: "completed", security: "skipped",
   });
   try {
     const args = '"Add dark mode" --resume --dry-run --no-skip-rules';
@@ -631,6 +631,7 @@ test("--resume --dry-run prices only the phases that would actually be dispatche
     const resumed = plan.dry_run.rows.filter((r) => r.resumed);
     assert.deepEqual(resumed.map((r) => r.phase), ["business_analysis", "development", "qa", "security"],
       "a `skipped` checkpoint is as terminal as a `completed` one");
+    assert.equal(resumed[1].aspect, "vanilla", "the aspect row matched its on-disk `development-vanilla` id");
     assert.ok(resumed.every((r) => r.est === 0), "a resumed row costs nothing to redo");
     assert.equal(plan.dry_run.reenter_at, "remediation");
     assert.equal(plan.dry_run.resume_slug, "add-dark-mode");
@@ -655,7 +656,7 @@ test("the human preview marks resumed phases and names the re-entry point", () =
 });
 
 test("the headless dry-run line carries resumed and reenter_at", () => {
-  const w = withCheckpoints("add-dark-mode", { business_analysis: "completed", development: "completed" });
+  const w = withCheckpoints("add-dark-mode", { business_analysis: "completed", "development-vanilla": "completed" });
   try {
     const env = { ...w.env, SDLC_NONINTERACTIVE: "true" };
     const { prints } = resolvePlan({ cwd: w.proj, args: '"Add dark mode" --resume --dry-run --no-skip-rules', env });
@@ -691,4 +692,43 @@ test("resolveResume is inert without --resume, and slugifies by Step 2's rule", 
   const r = resolveResume({ cwd: "/nonexistent", args: '"Add Dark Mode, now!" --resume --dry-run' });
   assert.equal(r.slug, "add-dark-mode-now");
   assert.equal(r.done.size, 0);
+});
+
+// Findings from the review of #171.
+
+test("a --resume that resumed nothing is not reported as a resume", () => {
+  // Gating the output on the FLAG rather than on what was resumed dressed an unchanged full-run
+  // preview up as a resumed one: `⏭ Resume: … 0 of 6 complete` beside the full estimate, and
+  // `{"resumed":true}` in the headless line for a CI consumer to misread.
+  const w = withCheckpoints("add-dark-mode", { business_analysis: "completed" });
+  try {
+    const args = '"Something else entirely" --resume --dry-run --no-skip-rules';
+    const { plan, prints, warnings } = resolvePlan({ cwd: w.proj, args, env: w.env });
+    assert.ok(warnings.some((x) => /no checkpoints at/.test(x)), "the warning is still owed");
+    assert.equal(plan.dry_run.resumed, undefined);
+    assert.equal(plan.dry_run.reenter_at, undefined);
+    assert.ok(!prints.join("\n").includes("⏭ Resume:"));
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("a space-separated flag value stays out of the derived slug", () => {
+  // `cli.mjs` reads `--mode tree` as two tokens, so a value-stripping rule keyed only on
+  // `--flag=value` left "tree" in the description: `--mode tree "Add dark mode"` derived
+  // `tree-add-dark-mode` and matched no workspace.
+  assert.equal(resolveResume({ cwd: "/nonexistent", args: "--mode tree Add dark mode --resume" }).slug, "add-dark-mode");
+  assert.equal(resolveResume({ cwd: "/nonexistent", args: "Add dark mode --skills a,b --resume" }).slug, "add-dark-mode");
+});
+
+test("--resume= with an empty slug warns instead of silently doing nothing", () => {
+  const r = resolveResume({ cwd: "/nonexistent", args: "Add dark mode --resume= --dry-run" });
+  assert.equal(r.requested, true, "a consuming (\\s|$) could not match the trailing '=' and read this as no resume at all");
+  assert.equal(r.slug, null);
+  assert.ok(r.warnings.some((w) => /empty slug/.test(w)));
+});
+
+test("a slug that is a path, not a run name, is refused", () => {
+  const r = resolveResume({ cwd: "/nonexistent", args: "--resume=../../elsewhere --dry-run" });
+  assert.equal(r.slug, null);
+  assert.equal(r.done.size, 0);
+  assert.ok(r.warnings.some((w) => /not a run slug/.test(w)));
 });

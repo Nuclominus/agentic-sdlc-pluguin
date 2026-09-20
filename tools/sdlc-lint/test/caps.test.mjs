@@ -154,10 +154,18 @@ test("a resumed unit is recognised by its ON-DISK id, not only by this module's 
   assert.equal(rows[1].resumed, false);
 });
 
-test("a bare phase id resumes every aspect of that phase", () => {
+test("a bare phase id does NOT resume an aspect-aware phase", () => {
+  // reentry.mjs's plainDone requires every `{phase}-{aspect}` and never consults a bare entry, so
+  // honouring one here would zero a development fan-out (×5.4, the dominant term) that the real
+  // --resume would re-dispatch in full. Under-pricing, in the direction nobody checks.
   const rows = expandRows([{ name: "development" }], { agentsPerPhase: AGENTS, resumedDone: new Set(["development"]) });
-  assert.ok(rows.length > 0);
-  assert.ok(rows.every((r) => r.resumed), "an aspect-agnostic checkpoint covers the phase");
+  assert.ok(rows.length > 0 && rows.every((r) => r.aspect != null), "AGENTS makes development aspect-aware");
+  assert.ok(rows.every((r) => !r.resumed));
+});
+
+test("a bare phase id resumes an aspect-AGNOSTIC phase", () => {
+  const rows = expandRows([{ name: "documentation" }], { agentsPerPhase: AGENTS, resumedDone: new Set(["documentation"]) });
+  assert.ok(rows.every((r) => r.resumed));
 });
 
 test("an unrelated id resumes nothing", () => {
