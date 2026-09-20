@@ -2,6 +2,7 @@
 
 > One note per architecture decision. Newest first.
 
+- [[decisions/ADR-0025-a-branch-switch-is-a-file-operation]]
 - [[decisions/ADR-0024-naming-a-recipe-is-an-explicit-request]]
 - [[decisions/ADR-0023-a-silent-host-still-loaded-the-plugin]]
 - [[decisions/ADR-0022-a-path-loaded-plugin-is-its-own-install]]
