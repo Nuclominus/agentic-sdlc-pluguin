@@ -38,23 +38,31 @@ export function checkMarketplaceSurface(root = process.cwd()) {
     return [{ file: FILE, ok: false, errors: ["`plugins` is missing or not an array"] }];
   }
 
+  // The clone key a bad entry would produce is `<name>@<this marketplace>`, so the marketplace
+  // name comes from the manifest being checked rather than a literal — a rename must not turn the
+  // one message that explains the defect into a wrong one.
+  const marketplace = typeof doc.name === "string" && doc.name ? doc.name : "<marketplace>";
+
   return doc.plugins.map((entry, i) => {
-    const name = entry?.name ?? `(unnamed #${i})`;
-    const where = `${FILE} plugins[${i}] (${name})`;
+    const named = typeof entry?.name === "string" && entry.name;
+    const where = `${FILE} plugins[${i}]${named ? ` (${entry.name})` : ""}`;
     const errors = [];
     const source = entry?.source;
 
-    if (typeof source !== "string") {
+    if (!named) {
+      // Checked first: every message below quotes the expected path, which is built FROM the name.
+      errors.push("entry has no `name` — a marketplace entry is keyed by name, and the expected source path is derived from it");
+    } else if (typeof source !== "string") {
       const kind = source && typeof source === "object" ? (source.source ?? "object") : typeof source;
       errors.push(
         `source is ${kind}, not a local path — a marketplace entry means this repo redistributes ` +
         `the plugin. A foreign \`url\`/\`git-subdir\` source clones it into our namespace as ` +
-        `${name}@agentic-sdlc and shadows the user's own install. Declare an external dependency ` +
-        `in runtime-dependencies.json (policy: warn) and document it instead (ADR-0028).`,
+        `${entry.name}@${marketplace} and shadows the user's own install. Declare an external ` +
+        `dependency in runtime-dependencies.json (policy: warn) and document it instead (ADR-0028).`,
       );
-    } else if (source !== `./plugins/${name}`) {
-      errors.push(`source is "${source}" — expected "./plugins/${name}" (entry name must match its directory)`);
-    } else if (!existsSync(join(root, "plugins", String(name)))) {
+    } else if (source !== `./plugins/${entry.name}`) {
+      errors.push(`source is "${source}" — expected "./plugins/${entry.name}" (entry name must match its directory)`);
+    } else if (!existsSync(join(root, "plugins", entry.name))) {
       errors.push(`source "${source}" names no directory on disk`);
     }
 

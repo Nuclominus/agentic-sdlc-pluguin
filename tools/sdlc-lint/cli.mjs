@@ -404,7 +404,7 @@ switch (cmd) {
     console.log("  read-discipline   E2: contract present in the stable prefix; no re-read phrasing in agents");
     console.log("  plugin-paths      #70: no home-anchored ~/.claude paths in shipped plugin text");
     console.log("  nested-manifest   ADR-0026: no manifest.yaml below a plugin root (tree-vs-installed trap)");
-    console.log("  marketplace-surface ADR-0028: every marketplace.json entry is a local ./plugins/<name> we actually own");
+    console.log("  marketplace-surface  ADR-0028: every marketplace.json entry is a local ./plugins/<name> we actually own");
     console.log("  stack-uniqueness  ADR-0026: every foundation/embedded/standalone `stack` id is unique repo-wide");
     console.log("  machine-values    H3: no prose computing a value a machine already writes");
     console.log("  agent-tools       ADR-0018: every agent declares tools; none may dispatch agents; reviewers hold no Edit");

@@ -38,7 +38,8 @@ test("a foreign `url` source FAILS — this is the superpowers@agentic-sdlc defe
     const bad = failures(checkMarketplaceSurface(root));
     assert.equal(bad.length, 1);
     assert.match(bad[0].file, /superpowers/);
-    assert.match(bad[0].errors[0], /superpowers@agentic-sdlc/);
+    assert.match(bad[0].errors[0], /superpowers@agentic-sdlc/,
+      "the clone key must name THIS manifest's marketplace, not a hardcoded one");
     assert.match(bad[0].errors[0], /runtime-dependencies\.json/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
@@ -85,5 +86,31 @@ test("a missing or unparseable manifest is reported, not thrown", () => {
     assert.match(checkMarketplaceSurface(root)[0].errors[0], /not valid JSON/);
     writeFileSync(join(root, ".claude-plugin", "marketplace.json"), JSON.stringify({ name: "x" }));
     assert.match(checkMarketplaceSurface(root)[0].errors[0], /missing or not an array/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("the clone key in the message follows the manifest's own marketplace name", () => {
+  const root = scratch();
+  try {
+    mkdirSync(join(root, ".claude-plugin"), { recursive: true });
+    writeFileSync(join(root, ".claude-plugin", "marketplace.json"), JSON.stringify({
+      name: "renamed-marketplace",
+      plugins: [{ name: "superpowers", source: { source: "url", url: "https://example.invalid/x.git" } }],
+    }));
+    const bad = failures(checkMarketplaceSurface(root));
+    assert.match(bad[0].errors[0], /superpowers@renamed-marketplace/);
+    assert.doesNotMatch(bad[0].errors[0], /agentic-sdlc/, "no hardcoded marketplace name may survive a rename");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("an entry with no name FAILS on the name, not on a nonsense expected path", () => {
+  const root = scratch();
+  try {
+    seed(root, [{ source: "./plugins/sdlc" }], ["sdlc"]);
+    const bad = failures(checkMarketplaceSurface(root));
+    assert.equal(bad.length, 1);
+    assert.match(bad[0].errors[0], /has no `name`/);
+    assert.doesNotMatch(bad[0].errors[0], /unnamed/, "the placeholder must never reach an expected-path message");
+    assert.equal(bad[0].file, ".claude-plugin/marketplace.json plugins[0]", "no empty parens for a nameless entry");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

@@ -62,7 +62,7 @@ marketplace instead — note the name is `superpowers-dev`:
 ```bash
 /sdlc:doctor
 # → Stack profiles: vanilla(0), android(300)
-# → superpowers: ✅ installed
+# → superpowers: ✅ available (superpowers@claude-plugins-official)
 # → Android CLI: ⚠️ not found (optional — pipeline runs without it)
 
 /sdlc:list-stacks
