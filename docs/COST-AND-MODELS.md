@@ -24,13 +24,11 @@ Cost is controlled exclusively through `model` + `effort` (Claude Code does not 
 
 - the whole roster → [`plugins/sdlc/README.md`](../plugins/sdlc/README.md). Since ADR-0021 every
   agent lives in `sdlc`, so there is exactly one `model`/`effort` table to read.
-- foundations and framework providers ship **no agents** — they contribute expertise
-  (`role_expertise`, injections, rules), which does not carry a tier:
-  [`android-foundation`](../plugins/android-foundation/README.md) ·
-  [`retrofit-plugin`](../plugins/retrofit-plugin/README.md) ·
-  [`room-plugin`](../plugins/room-plugin/README.md) ·
-  [`dagger-plugin`](../plugins/dagger-plugin/README.md) ·
-  [`workmanager-plugin`](../plugins/workmanager-plugin/README.md)
+- `android-foundation` ships **no agents** — it contributes expertise (`role_expertise`,
+  injections, rules), which does not carry a tier, for itself AND for its 7 embedded frameworks
+  (ADR-0026: Retrofit, Ktor, Room, Proto DataStore, Dagger/Hilt, Koin, WorkManager — each a row in
+  its own `manifest.yaml`, not a separate plugin):
+  [`android-foundation`](../plugins/android-foundation/README.md)
 
 > `effort: high` on Opus is the costliest combination — reserved for leverage agents (BA, Security) where reasoning quality affects every downstream phase.
 

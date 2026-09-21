@@ -1,9 +1,15 @@
 ---
 adr: 2
-status: accepted
+status: superseded
 date: 2026-06-24
 supersedes: null
 ---
+
+> **Superseded by [[decisions/ADR-0026-embed-framework-providers-in-the-foundation]]** (2026-09-20):
+> the per-plugin split described below was reversed — the same conditional-activation contract
+> (`enriches_aspect` + `dependency`) now lives in a `frameworks:` row inside the hosting
+> foundation's own `manifest.yaml`, instead of a separate installed plugin per framework. This
+> note is kept for history; do not implement against it.
 
 # ADR-0002 — Framework Provider Pattern
 

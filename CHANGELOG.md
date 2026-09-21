@@ -4,6 +4,44 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+## [3.0.0] — 2026-09-20
+
+`android-foundation` `2.0.2` → `3.0.0`, marketplace `2.0.0` → `3.0.0`.
+
+### ⚠️ BREAKING CHANGES — `2.*` → `3.*`
+
+**The 7 additive Android framework plugins are merged into `android-foundation` (ADR-0026,
+supersedes ADR-0002).** `retrofit-plugin`, `ktor-plugin`, `room-plugin`, `datastore-proto-plugin`,
+`dagger-plugin`, `koin-plugin` and `workmanager-plugin` no longer exist as installed plugins. Each
+is now a row in `android-foundation/manifest.yaml`'s new `frameworks:` array, and the resolver
+synthesizes an ordinary `kind: framework` record from every row — in **both** loader modes (tree
+and installed), verified by a dual-mode equality test written before any file was moved. Conditional
+activation is unaffected: `retrofit` still activates only when Retrofit is detected, `ktor` only
+when Ktor is detected, and so on — no unconditional injection, no two providers of one aspect
+(network / persistence / di) activating together.
+
+**Stack ids are preserved; skill ids are renamed once, with no alias layer.** `additive_profiles`
+telemetry and `frameworks.enable/disable` keys in `.claude/sdlc.local.yaml` keep their existing
+`stack` ids (`retrofit`, `ktor`, `room`, `datastore-proto`, `dagger`, `koin`, `workmanager`) — no
+action needed there. The skill namespace breaks: `retrofit-plugin:retrofit-conventions` →
+`android-foundation:retrofit-conventions` (×7, including the divergent
+`dagger-plugin:hilt-conventions` → `android-foundation:hilt-conventions`).
+
+**Migrate with `/sdlc:doctor`.** It now also reads `plugins/sdlc/config/plugin-migrations.json` and
+reports every `.claude/sdlc.local.yaml` `extensions.skills[].skill` entry naming a retired
+`<plugin>:<skill>` id, alongside the existing agent-name migration — rewriting only after you
+approve. If `installed_plugins.json` still registers one of the 7 removed plugins, doctor prints an
+advisory to uninstall it (`/plugin uninstall <name>@agentic-sdlc`) rather than writing that
+harness-owned file itself.
+
+**The marketplace shrinks from 9 entries to 3** (`sdlc`, `android-foundation`, plus the two optional
+external dependencies `superpowers` and `security-guidance`) — 7 `*-plugin` entries removed from
+`.claude-plugin/marketplace.json`.
+
+**`sdlc:create-pluguin`'s "framework" branch now scaffolds an embedded row**, not a standalone
+plugin directory: it asks which foundation hosts the new framework and appends to that
+foundation's own `frameworks:` array. The "foundation" branch is unchanged.
+
 ## [2.0.0] — 2026-09-08
 
 `sdlc` `1.16.0` → `2.4.1`, `android-foundation` `1.7.0` → `2.0.2`, marketplace `1.13.0` → `2.0.0`.

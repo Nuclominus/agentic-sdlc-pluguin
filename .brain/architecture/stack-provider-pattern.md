@@ -87,7 +87,14 @@ priority, aspects, detect, workflow, `role_expertise`) + skills + rules + hooks,
 next `/sdlc:start`, the orchestrator finds it via Glob, evaluates `detect`, and dispatches the CORE roster
 carrying that foundation's expertise blocks.
 
-**A framework provider** ships `manifest.yaml` (`kind: framework`, `enriches_aspect`, `dependency`) +
-a convention skill (+ optional ProGuard snippet) and **no agents**. It auto-activates when its library is
-detected and enriches the foundation's phases. `retrofit-plugin` is the reference; `room-plugin` and
-`dagger-plugin` follow the same shape.
+**A framework** (ADR-0026, 2026-09-20 — supersedes ADR-0002) is a **row** appended to its hosting
+foundation's own `manifest.yaml` `frameworks:` array (`stack`, `enriches_aspect`, `dependency`) +
+a convention skill under that foundation's own `skills/` (+ optional ProGuard snippet under its
+`rules/snippets/`) — no separate plugin, no agents. The resolver synthesizes an ordinary
+`kind: framework` record from the row at load time, so it auto-activates when its library is
+detected and enriches the foundation's phases exactly as a standalone framework manifest used to.
+`android-foundation`'s own `frameworks:` array (Retrofit, Ktor, Room, Proto DataStore, Dagger/Hilt,
+Koin, WorkManager) is the reference. **The pattern itself is unchanged** — aspect ownership
+(foundation) vs. aspect enrichment (framework) still holds conceptually; ADR-0026 only changed
+WHERE a framework's declaration physically lives (embedded row vs. standalone plugin root), not
+what a framework IS or how it activates.

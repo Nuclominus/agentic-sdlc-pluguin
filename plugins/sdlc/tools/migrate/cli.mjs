@@ -13,7 +13,7 @@
 
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadRenames, scanConfigs, applyRenames, renderReport } from "./migrate.mjs";
+import { loadRenames, loadSkillRenames, scanConfigs, applyRenames, renderReport } from "./migrate.mjs";
 
 const argv = process.argv.slice(2);
 const cmd = argv[0];
@@ -31,7 +31,8 @@ const projectRoot = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 
 try {
   const renames = loadRenames(pluginRoot);
-  const findings = scanConfigs(projectRoot, renames);
+  const skillRenames = loadSkillRenames(pluginRoot);
+  const findings = scanConfigs(projectRoot, renames, skillRenames);
   const applied = cmd === "apply" ? applyRenames(projectRoot, findings) : [];
 
   if (jsonOut) {

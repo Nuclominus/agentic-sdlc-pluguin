@@ -5,6 +5,7 @@
 - [[planning/roadmap]]
 - [[planning/backlog]]
 - [[planning/c2-framework-providers]] — C2 batch spec (Koin, Ktor, DataStore-Proto)
+- [[planning/c3-embed-framework-providers]] — C3: reverses C1/C2, embeds all 7 framework plugins into android-foundation (ADR-0026)
 - [[planning/h-instruction-fidelity]] — Track H spec: make the orchestrator's procedure execute as written
 - [[planning/h1-compliance-auditor]] — H1 implementation spec: measure step compliance from transcripts
 - [[planning/h5-prompt-surface]] — H5 measurement: prose costs ~3%, cardinality predicts compliance; decision deferred

@@ -11,7 +11,7 @@ source: ARCHITECTURE.md
 ```
 Agentic-SDLC-Plugin/
 ├── .claude-plugin/
-│   └── marketplace.json          ← sdlc + android-foundation + retrofit-plugin (+ 2 optional external)
+│   └── marketplace.json          ← sdlc + android-foundation (+ 2 optional external)
 ├── schemas/
 │   ├── plugin.schema.json
 │   ├── manifest.schema.json      ← validates manifest.yaml (kind: foundation | framework)
@@ -28,24 +28,31 @@ Agentic-SDLC-Plugin/
 │   │   ├── workflows/            ← default, bugfix, hotfix, refactor, docs-only (+ RESOLVER)
 │   │   └── hooks/                ← enforce-agent-model.sh (PreToolUse(Agent): pin declared model tier)
 │   │
-│   ├── android-foundation/       ← STACK PROVIDER — aspect android, priority 300 (the centerpiece)
-│   │   ├── manifest.yaml         ← kind: foundation
-│   │   ├── skills/               ← 13 skills: the platform expertise the CORE roles invoke
-│   │   ├── skills/               ← android-architecture, android-compose-ui, android-data, android-navigation, manage-vault
-│   │   ├── rules/                ← conventions + snippets (non-negotiable, proguard-keep, gradle-commands)
-│   │   ├── workflows/            ← android-feature, android-bugfix
-│   │   ├── vault/                ← Obsidian vault template + Node tooling
-│   │   └── hooks/                ← kotlin-guard, format-on-stop, guard-paths, android-cli-check
-│   │
-│   └── retrofit-plugin/          ← FRAMEWORK PROVIDER — additive, no agents (reference implementation)
-│       ├── manifest.yaml         ← kind: framework, dependency on the retrofit coordinate
-│       ├── skills/retrofit-conventions/SKILL.md
-│       └── rules/snippets/retrofit-proguard.md
+│   └── android-foundation/       ← STACK PROVIDER — aspect android, priority 300 (the centerpiece)
+│       ├── manifest.yaml         ← kind: foundation, PLUS its own frameworks: array (ADR-0026, see below)
+│       ├── skills/               ← 20 skills: the platform expertise the CORE roles invoke, PLUS
+│       │                            7 embedded framework-conventions skills (retrofit, ktor, room,
+│       │                            datastore, hilt, koin, workmanager)
+│       ├── skills/               ← android-architecture, android-compose-ui, android-data, android-navigation, manage-vault
+│       ├── rules/                ← conventions + snippets (non-negotiable, proguard-keep, gradle-commands,
+│       │                            PLUS the 7 relocated per-framework ProGuard snippets)
+│       ├── workflows/            ← android-feature, android-bugfix
+│       ├── vault/                ← Obsidian vault template + Node tooling
+│       └── hooks/                ← kotlin-guard, format-on-stop, guard-paths, android-cli-check
 ```
 
+**ADR-0026 (2026-09-20, supersedes ADR-0002):** the 7 additive frameworks (Retrofit, Ktor, Room,
+Proto DataStore, Dagger/Hilt, Koin, WorkManager) are no longer separate `<name>-plugin/` roots.
+Each is a row in `android-foundation/manifest.yaml`'s `frameworks:` array — `stack`,
+`enriches_aspect`, `dependency`, `convention_skills`, `phase_injections` — and the resolver
+(`plugins/sdlc/tools/resolve/manifests.mjs`) synthesizes an ordinary `kind: framework` record from
+each row at load time, in both tree and installed loader modes.
+
 > **Key detail:** there is no `pipeline-orchestrator/` outside `sdlc`. Core files stay untouched. The
-> foundation adds `manifest.yaml` (`kind: foundation`) + agents + skills + rules + hooks; a framework adds
-> `manifest.yaml` (`kind: framework`) + a skill (+ optional ProGuard snippet) and nothing else.
+> foundation adds `manifest.yaml` (`kind: foundation`) + agents + skills + rules + hooks. A framework
+> adds a **row** to its hosting foundation's `frameworks:` array + a skill under that foundation's own
+> `skills/` (+ optional ProGuard snippet under its `rules/snippets/`) — no separate plugin, no new
+> `manifest.yaml`, no `.claude-plugin/plugin.json` of its own.
 
 ---
 
@@ -93,20 +100,24 @@ and — via `hosts_aspects` + `framework_detection` — owns discovery of its fr
 Room→`persistence`, Dagger→`di`). The stack id stays `android` (config stability); only the plugin name is
 `android-foundation`.
 
-### 3.3. Framework profile (`plugins/retrofit-plugin/manifest.yaml`)
+### 3.3. Embedded framework row (`plugins/android-foundation/manifest.yaml` — `frameworks:` array, ADR-0026)
 
 ```yaml
-kind: framework
-stack: retrofit
-priority: 150
-enriches_aspect: network               # functional category; the foundation hosting it resolves me
-dependency: com.squareup.retrofit2     # just name it; the foundation declares WHERE to look
+frameworks:
+  - stack: retrofit
+    priority: 150
+    enriches_aspect: network               # functional category; the foundation hosting it resolves me
+    dependency: com.squareup.retrofit2     # just name it; the foundation declares WHERE to look
+    convention_skills: [android-foundation:retrofit-conventions]
 ```
-Framework: contributes the `retrofit-conventions` skill plus development/security injections and a
-ProGuard snippet. Declares no agents and no workflow (the schema and the orchestrator both reject those
-for framework manifests). It ships **no detection rules** — it only names the dependency and the aspect it
-enriches; the **foundation** that owns `android` declares where to look (version catalog first, then
-module build files) and the orchestrator executes that search (see §4.1).
+A row (never a separate manifest since ADR-0026) contributes the `android-foundation:retrofit-conventions`
+skill plus development/security injections and a ProGuard snippet, all now living under
+`android-foundation`'s own `skills/`/`rules/snippets/`. A row declares no `kind` (the resolver's
+synthesizer in `manifests.mjs` adds `kind: framework` to the record it builds), no agents and no
+workflow — the schema rejects those on a `frameworks:` row. It ships **no detection rules** of its
+own — it only names the dependency and the aspect it enriches; the **hosting foundation** declares
+where to look (version catalog first, then module build files) and the orchestrator executes that
+search (see §4.1).
 
 ### 3.4. Manifest field spec
 

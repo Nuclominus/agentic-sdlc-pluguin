@@ -2,7 +2,7 @@
 
 A collection of Claude Code plugins that run an AI-assisted development pipeline for **Android** projects. You describe a feature in plain language, and a team of specialized agents takes it through the full cycle: analyzing the requirements, writing the code, adding tests, running a security review, and opening a pull request.
 
-Everything is built around one idea: a single core drives the pipeline, and plugins add the platform and library knowledge on top. **Android Foundation** teaches the pipeline how to build Android apps, and smaller **framework plugins** (Retrofit, Room, Dagger/Hilt, and more) add library-specific conventions — they activate automatically when your project uses that library. You never wire anything by hand; plugins are discovered and combined for you.
+Everything is built around one idea: a single core drives the pipeline, and a plugin adds the platform and library knowledge on top. **Android Foundation** teaches the pipeline how to build Android apps, and embeds its own additive framework support (Retrofit, Ktor, Room, Proto DataStore, Dagger/Hilt, Koin, WorkManager, and more) — each conditionally activates only when your project uses that library. You never wire anything by hand; the active frameworks are detected and combined for you.
 
 ---
 
@@ -15,8 +15,9 @@ Everything is built around one idea: a single core drives the pipeline, and plug
 # 2. Install Android Foundation (sdlc core installs automatically as a dependency)
 /plugin install android-foundation@agentic-sdlc   # Android (Kotlin + Gradle) — the centerpiece
 
-# 3. (Optional) Install framework plugins — they auto-activate when their library is detected
-/plugin install retrofit-plugin@agentic-sdlc      # Retrofit/OkHttp networking enrichment
+# 3. Frameworks (Retrofit, Ktor, Room, Proto DataStore, Dagger/Hilt, Koin, WorkManager) are
+#    embedded in android-foundation and auto-activate when their library is detected — nothing
+#    extra to install.
 
 # 4. Verify
 /sdlc:doctor
@@ -98,11 +99,7 @@ The full board — every track, status and landing PR — is generated from the 
 | Plugin               | Type               | Stack / Technology                                                    |
 | -------------------- | ------------------ | --------------------------------------------------------------------- |
 | `sdlc`               | Core               | Platform-agnostic orchestrator + the entire 12-agent roster            |
-| `android-foundation` | Stack provider     | Android (Kotlin + Gradle) — expertise for 11 roles: 13 skills, MASVS, vault, house rules |
-| `retrofit-plugin`    | Framework provider | Retrofit/OkHttp — additive (skill + injections + ProGuard), no agents  |
-| `room-plugin`        | Framework provider | Room persistence — additive (skill + injections + ProGuard), no agents |
-| `dagger-plugin`      | Framework provider | Dagger/Hilt DI — additive (skill + injections + ProGuard), no agents   |
-| `workmanager-plugin` | Framework provider | WorkManager background — additive (skill + injections + ProGuard), no agents |
+| `android-foundation` | Stack provider     | Android (Kotlin + Gradle) — expertise for 11 roles: 20 skills, MASVS, vault, house rules, **plus 7 embedded frameworks** (ADR-0026): Retrofit, Ktor, Room, Proto DataStore, Dagger/Hilt, Koin, WorkManager — each conditionally activates via its own `enriches_aspect`/`dependency` row in `manifest.yaml`'s `frameworks:` array, no separate install |
 
 ### Optional external dependencies
 
@@ -121,7 +118,7 @@ The full board — every track, status and landing PR — is generated from the 
 
 ## Security: MASVS / MASTG
 
-The core security phase is **platform-neutral** and applies the standard injected by the active profile as authoritative. On Android, `security-analyst` runs a full **MASVS/MASTG** audit; active framework plugins concatenate their own checks (e.g. `retrofit-plugin` adds MASVS-NETWORK TLS/pinning). Details → [`plugins/android-foundation/README.md`](plugins/android-foundation/README.md#security--masvs--mastg).
+The core security phase is **platform-neutral** and applies the standard injected by the active profile as authoritative. On Android, `security-analyst` runs a full **MASVS/MASTG** audit; active embedded frameworks concatenate their own checks (e.g. the `retrofit` row adds MASVS-NETWORK TLS/pinning). Details → [`plugins/android-foundation/README.md`](plugins/android-foundation/README.md#security--masvs--mastg).
 
 ## Optional Obsidian Vault
 

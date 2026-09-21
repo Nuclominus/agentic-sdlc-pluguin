@@ -22,16 +22,19 @@ test("slug strips prefix and kebab-cases", () => {
 
 test("pluginsTouched keeps only known plugins, sorted, deduped", () => {
   const files = [
-    "plugins/workmanager-plugin/manifest.yaml",
-    "plugins/workmanager-plugin/README.md",
+    "plugins/android-foundation/manifest.yaml",
+    "plugins/android-foundation/README.md",
     "plugins/sdlc/skills/x.md",
-    "plugins/android-plugin/old.md", // unknown historical dir → ignored
+    // ADR-0026: the additive Android framework plugins were merged into android-foundation
+    // and are no longer KNOWN_PLUGINS — a path under one of their old dirs is ignored, same
+    // as any other unknown historical dir.
+    "plugins/workmanager-plugin/old.md",
     "README.md",
   ];
-  assert.deepEqual(pluginsTouched(files), ["sdlc", "workmanager-plugin"]);
+  assert.deepEqual(pluginsTouched(files), ["android-foundation", "sdlc"]);
 });
 
 test("classify aggregates", () => {
-  const c = classify({ title: "feat(room): dao (Roadmap C2)", files: ["plugins/room-plugin/x.md"] });
-  assert.deepEqual(c, { type: "feat", plugins: ["room-plugin"], roadmap: "C2", slug: "dao-roadmap-c2" });
+  const c = classify({ title: "feat(android-foundation): embed frameworks (Roadmap C3)", files: ["plugins/android-foundation/x.md"] });
+  assert.deepEqual(c, { type: "feat", plugins: ["android-foundation"], roadmap: "C3", slug: "embed-frameworks-roadmap-c3" });
 });

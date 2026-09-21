@@ -26,7 +26,7 @@ Same detection logic as `/sdlc:list-stacks` — find all installed `manifest.yam
 
 - `sdlc` core (base patterns apply to every project)
 - the active platform plugin: `android-foundation`
-- any active additive framework providers (e.g. `retrofit-plugin`) that contribute their own `security-patterns.yaml`
+- any of its active embedded frameworks (ADR-0026 — e.g. `retrofit`) whose `manifest.yaml` row contributes its own `security-patterns.yaml`
 
 ### 2. Collect security-patterns fragments
 
@@ -71,7 +71,7 @@ patterns:
   # --- android-foundation ---
   - rule_name: android_secret_in_sharedprefs
     ...
-  # --- retrofit-plugin (if active) ---
+  # --- retrofit (embedded framework, if active) ---
   - rule_name: retrofit_cleartext_base_url
     ...
 # <<< sdlc-marketplace managed <<<
@@ -102,7 +102,7 @@ Content inside the block:
 {content of phase_injections.security from android-foundation/manifest.yaml}
 
 ### Frameworks
-{concatenated phase_injections.security from each active framework manifest.yaml, e.g. retrofit-plugin}
+{concatenated phase_injections.security from each active embedded framework row, e.g. retrofit}
 <!-- <<< sdlc-marketplace managed <<< -->
 ```
 
@@ -130,7 +130,7 @@ Files written:
 Rules by source:
   sdlc (core):         6 rules
   android-foundation:  4 rules
-  retrofit-plugin:     N rules (if active)
+  retrofit (embedded): N rules (if active)
   Total:               N rules
 
 Security-guidance plugin: ✅ active / ⚠️ not installed (see above)
