@@ -214,3 +214,43 @@ test("preflight end to end: an authoritative --skills list overrides the filesys
     assert.equal(fromMcp.skills_source, "mcp");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+// ADR-0028: the claim that lets this marketplace stop re-declaring superpowers as an entry of its
+// own. Detection is keyed on the bare plugin name (`pluginNameOf`), never on the marketplace the
+// copy came from — so an install from `claude-plugins-official`, from obra's `superpowers-dev`, or
+// the old `agentic-sdlc` clone all satisfy the same declared dependency. If this test ever fails,
+// removing the marketplace entries broke the pipeline and the entries must come back.
+test("superpowers satisfies its declared dependency from ANY marketplace (ADR-0028)", () => {
+  const dir = scratch();
+  try {
+    const declared = ["brainstorming", "test-driven-development", "verification-before-completion"];
+    const dependencies = [{ name: "superpowers", policy: "warn", skills_used: declared }];
+
+    for (const key of ["superpowers@claude-plugins-official", "superpowers@superpowers-dev", "superpowers@agentic-sdlc"]) {
+      const sp = join(dir, key.replace("@", "-"), "6.3.0");
+      for (const s of declared) skill(sp, s);
+
+      const available = enumerateSkills({ installs: installsOf({ [key]: sp }), enabled: {} });
+      assert.ok(available.skills.has("superpowers:brainstorming"),
+        `${key} must register its skills under the bare 'superpowers:' namespace`);
+      assert.ok(!available.skills.has(`${key}:brainstorming`),
+        "the marketplace segment must never leak into a skill id");
+      assert.deepEqual(computeDepsStatus(dependencies, available).superpowers,
+        { status: "available", missing_skills: [] }, `${key} should satisfy the dependency`);
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// The same guarantee one level up: a user- or project-level `skills/` copy satisfies it too, which
+// is why `install_command` names a RECOMMENDED source rather than a required one.
+test("a bare user-level skill copy also satisfies a plugin-namespaced dependency (ADR-0028)", () => {
+  const dir = scratch();
+  try {
+    const cfg = join(dir, "config");
+    skill(join(cfg), "brainstorming");
+    const available = enumerateSkills({ configDir: cfg, installs: new Map(), enabled: {} });
+    const status = computeDepsStatus([{ name: "superpowers", policy: "warn", skills_used: ["brainstorming"] }], available);
+    assert.equal(status.superpowers.status, "available",
+      "computeDepsStatus accepts the bare name, so no marketplace is required at all");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

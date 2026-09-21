@@ -53,6 +53,23 @@ Full install, optional dependencies, and requirements → [`docs/INSTALLATION.md
 >
 > Details: [`CHANGELOG.md`](CHANGELOG.md#300--2026-09-21).
 
+> **Installed `superpowers` or `security-guidance` from this marketplace?** They were never ours to
+> ship. Earlier versions re-declared both as entries of `agentic-sdlc`, so Claude Code cloned them
+> into our namespace as `superpowers@agentic-sdlc` / `security-guidance@agentic-sdlc`, shadowing the
+> copy you installed yourself. Both entries are gone (ADR-0028). **Install the replacement first,
+> uninstall ours second** — the other order leaves you with no superpowers in between:
+>
+> ```bash
+> /plugin marketplace add anthropics/claude-plugins-official
+> /plugin install superpowers@claude-plugins-official   # replacement FIRST
+> /sdlc:doctor                                          # confirm ✅ available
+> /plugin uninstall superpowers@agentic-sdlc            # only then remove ours
+> /plugin uninstall security-guidance@agentic-sdlc      # if still registered
+> ```
+>
+> Nothing renames: `superpowers:brainstorming` is the same id from either marketplace, so no config
+> migration is needed. Full steps: [`docs/INSTALLATION.md`](docs/INSTALLATION.md#updating-an-existing-install).
+
 > **Upgrading from `1.x`?** Do the `2.0.0` step first: it retired the eleven `android-*` agents in
 > favour of a single platform-neutral roster, also with no runtime aliases. `/sdlc:doctor` migrates
 > agent names and skill ids in the same pass, so one run covers both hops. Rename table:
@@ -123,10 +140,14 @@ The full board — every track, status and landing PR — is generated from the 
 
 ### Optional external dependencies
 
-| Plugin              | Source                               | Role                                                                                              |
-| ------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `superpowers`       | `obra/superpowers`                   | Brainstorming for BA, TDD for QA, verification-before-completion for architects. Degrades gracefully. |
-| `security-guidance` | `anthropics/claude-plugins-official` | Hooks-based in-session security review. The MASVS security phase runs fully without it.            |
+| Plugin              | Install                                               | Role                                                                                              |
+| ------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `superpowers`       | `/plugin install superpowers@claude-plugins-official`     | Brainstorming for BA, TDD for QA, verification-before-completion for architects. Degrades gracefully. |
+| `security-guidance` | `/plugin install security-guidance@claude-plugins-official` | Hooks-based in-session security review. The MASVS security phase runs fully without it.            |
+
+Neither plugin is redistributed by this marketplace — add `anthropics/claude-plugins-official`
+first, then install. The preflight resolves them **by plugin name, not by marketplace**, so an
+install from any source counts (ADR-0028).
 
 ### Optional system tools
 

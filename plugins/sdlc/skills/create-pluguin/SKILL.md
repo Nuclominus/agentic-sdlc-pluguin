@@ -201,6 +201,16 @@ For BOTH the `phase_injections` text AND the conventions skill body, ask the use
 Mention it in the hosting foundation's own `marketplace.json` description and README section instead
 (one line, matching how the embedded frameworks are already described there, ADR-0026).
 
+**Never add a third-party plugin as an entry of this marketplace**, however convenient it looks.
+Only plugins that live in **this repo** get an entry, and their `source` is always
+`./plugins/<slug>` — never a `url` or `git-subdir` pointing at somebody else's repository. Claude
+Code takes such an entry literally and clones the foreign plugin into **our** namespace, registering
+it as `<name>@agentic-sdlc`: a second install of a plugin we did not author, shadowing the user's
+own copy and putting its update path in our hands. An external dependency is declared in
+`runtime-dependencies.json` (name + `policy` + `skills_used` + `install_command`) and documented in
+the README — never registered here (ADR-0028). Enforced by
+`node tools/sdlc-lint/cli.mjs marketplace-surface`.
+
 **Both:** if a new functional category was introduced (Phase 1), make sure `aspects.yaml` + the schema
 enum were both updated.
 

@@ -58,12 +58,34 @@ It is also where a project catches up with an agent rename. The marketplace ship
    in a non-interactive session, leave the files alone and print the exact command above so the user
    can run it themselves. Never apply without an answer.
 
-   **Also report (advisory only, never a file rewrite):** if `manifests.mjs`'s `shadowed_frameworks`
-   is non-empty for this project (a stale standalone install of a now-embedded framework plugin is
-   still registered alongside `android-foundation`'s own embedded row), or `installed_plugins.json`
-   still registers one of the 7 removed plugin names, print a line telling the user to uninstall it:
-   `/plugin uninstall <name>@agentic-sdlc`. `/sdlc:doctor` never writes `installed_plugins.json` or
-   `settings.json` itself — those are harness-owned, and the consumer's, not this repo's.
+   **Also report (advisory only, never a file rewrite):** this marketplace ships exactly two
+   plugins — `sdlc` and `android-foundation`. Any OTHER `installed_plugins.json` key whose
+   marketplace segment is `@agentic-sdlc` is a stale registration, and there are two kinds, with
+   different remedies:
+
+   - **A retired plugin of ours** — one of the 7 removed names (`retrofit-plugin`, `ktor-plugin`,
+     `room-plugin`, `datastore-proto-plugin`, `dagger-plugin`, `koin-plugin`, `workmanager-plugin`,
+     ADR-0026), or anything `manifests.mjs` reports in `shadowed_frameworks` (a stale standalone
+     install registered alongside `android-foundation`'s own embedded row). Print:
+     `/plugin uninstall <name>@agentic-sdlc`.
+   - **A foreign plugin this marketplace used to re-declare** — `superpowers` or
+     `security-guidance` (ADR-0028). These were never ours to ship; the old entries cloned them
+     into our namespace and shadowed the user's real install. Print the remedy **in this order**,
+     and say why the order matters — uninstalling first leaves the user with no superpowers at all,
+     silently downgrading every `MANDATORY — invoke superpowers:*` row to best-effort:
+
+     ```
+     /plugin install superpowers@claude-plugins-official   # install the replacement FIRST
+     /plugin uninstall superpowers@agentic-sdlc            # only then remove ours
+     ```
+
+     Nothing renames — `superpowers:<skill>` is the same id from either marketplace — so there is
+     **no** config migration to offer here and `migrate apply` must not be invoked for it. If a
+     same-named install from another marketplace is already registered, say so and print only the
+     uninstall line.
+
+   `/sdlc:doctor` never writes `installed_plugins.json` or `settings.json` itself — those are
+   harness-owned, and the consumer's, not this repo's.
 
 4. **Read cost baseline (if present).** Try `<repo>/docs/cost-baseline.md`. If it has a fenced JSON block tagged `summary` (e.g. ```` ```json summary ````) parse and extract `avg_cost_per_medium_run_usd`, `p90_cost_per_medium_run_usd`, `cache_hit_ratio`, `runs_aggregated`. Otherwise show the raw "not yet baselined" notice.
 
@@ -107,6 +129,11 @@ Agent names / skill ids in this project's config:
 Stale plugin installs (advisory — uninstall yourself, /sdlc:doctor does not write installed_plugins.json):
   ⚠️ retrofit-plugin@agentic-sdlc is still registered; its framework is now embedded in android-foundation.
      Run: /plugin uninstall retrofit-plugin@agentic-sdlc
+  ⚠️ superpowers@agentic-sdlc is still registered; this marketplace never authored it and no longer lists it.
+     Install the replacement FIRST — uninstalling first leaves you with no superpowers at all:
+       /plugin install superpowers@claude-plugins-official
+       /plugin uninstall superpowers@agentic-sdlc
+     Nothing renames (superpowers:<skill> is the same id either way), so no config migration is needed.
 
 Cost baseline (docs/cost-baseline.md, last updated 2026-05-04, 22 runs):
   avg medium-run: $1.62
@@ -166,6 +193,16 @@ If a section is absent (no baseline file, no missing deps, etc.) say so explicit
     "applied": false
   },
   "shadowed_frameworks": [],
+  "stale_plugin_installs": [
+    {
+      "install_key": "superpowers@agentic-sdlc",
+      "kind": "foreign",
+      "remedy": [
+        "/plugin install superpowers@claude-plugins-official",
+        "/plugin uninstall superpowers@agentic-sdlc"
+      ]
+    }
+  ],
   "cost_baseline": {
     "available": true,
     "runs_aggregated": 22,

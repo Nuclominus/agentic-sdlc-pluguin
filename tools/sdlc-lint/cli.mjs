@@ -10,6 +10,7 @@ import { rollupWorkspace } from "./lib/rollup.mjs";
 import { checkReadDiscipline } from "./lib/read-discipline.mjs";
 import { checkPluginPaths } from "./lib/plugin-paths.mjs";
 import { checkNestedManifest } from "./lib/nested-manifest.mjs";
+import { checkMarketplaceSurface } from "./lib/marketplace-surface.mjs";
 import { checkStackUniqueness } from "./lib/stack-uniqueness.mjs";
 import { checkMachineValues } from "./lib/machine-values.mjs";
 import { checkAgentTools } from "./lib/agent-tools.mjs";
@@ -81,6 +82,19 @@ function printNestedManifest(results) {
     console.log(`nested-manifest: ${results.length === 0 ? "clean" : `${results.length} violation(s)`}`);
   }
   return results.length ? 1 : 0;
+}
+
+// checkMarketplaceSurface returns one row PER ENTRY (ADR-0028), so it reports a pass count the
+// way printSchema does rather than a bare violation list — "2/2 local" is the useful signal.
+function printMarketplaceSurface(results) {
+  const failed = results.filter(r => !r.ok);
+  if (jsonOut) {
+    console.log(JSON.stringify({ command: "marketplace-surface", checked: results.length, failed: failed.length, failures: failed }));
+  } else {
+    for (const r of failed) console.error(`✗ ${r.file}\n    ${r.errors.join("\n    ")}`);
+    console.log(`marketplace-surface: ${results.length - failed.length}/${results.length} entries are local plugins`);
+  }
+  return failed.length ? 1 : 0;
 }
 
 // checkStackUniqueness returns ONLY violations (ADR-0026 stack collisions) — same "violations
@@ -314,6 +328,7 @@ function runAll() {
     printReadDiscipline(checkReadDiscipline(root)),
     printPluginPaths(checkPluginPaths(root)),
     printNestedManifest(checkNestedManifest(root)),
+    printMarketplaceSurface(checkMarketplaceSurface(root)),
     printStackUniqueness(checkStackUniqueness(root)),
     printMachineValues(checkMachineValues(root)),
     printAgentTools(checkAgentTools(root)),
@@ -327,7 +342,7 @@ function runAll() {
 }
 
 const VERBS = ["schema", "cycles", "detect", "resume", "report", "rollup", "read-discipline",
-  "plugin-paths", "nested-manifest", "stack-uniqueness", "machine-values", "agent-tools", "roster", "compliance", "start-window", "all"];
+  "plugin-paths", "nested-manifest", "marketplace-surface", "stack-uniqueness", "machine-values", "agent-tools", "roster", "compliance", "start-window", "all"];
 
 let code = 0;
 switch (cmd) {
@@ -336,6 +351,7 @@ switch (cmd) {
   case "read-discipline": code = printReadDiscipline(checkReadDiscipline(root)); break;
   case "plugin-paths": code = printPluginPaths(checkPluginPaths(root)); break;
   case "nested-manifest": code = printNestedManifest(checkNestedManifest(root)); break;
+  case "marketplace-surface": code = printMarketplaceSurface(checkMarketplaceSurface(root)); break;
   case "stack-uniqueness": code = printStackUniqueness(checkStackUniqueness(root)); break;
   case "machine-values": code = printMachineValues(checkMachineValues(root)); break;
   case "agent-tools": code = printAgentTools(checkAgentTools(root)); break;
@@ -384,10 +400,11 @@ switch (cmd) {
     // Even the help path owes a JSON consumer an envelope — `--json` must never leave stdout
     // unparseable, whatever the exit code (#126).
     if (jsonOut) { console.log(JSON.stringify({ command: "help", ok: true, verbs: VERBS })); break; }
-    console.log("Usage: sdlc-lint <schema|cycles|detect|resume|report|rollup|read-discipline|plugin-paths|nested-manifest|stack-uniqueness|machine-values|agent-tools|roster|compliance|start-window|all> [--json]");
+    console.log("Usage: sdlc-lint <schema|cycles|detect|resume|report|rollup|read-discipline|plugin-paths|nested-manifest|marketplace-surface|stack-uniqueness|machine-values|agent-tools|roster|compliance|start-window|all> [--json]");
     console.log("  read-discipline   E2: contract present in the stable prefix; no re-read phrasing in agents");
     console.log("  plugin-paths      #70: no home-anchored ~/.claude paths in shipped plugin text");
     console.log("  nested-manifest   ADR-0026: no manifest.yaml below a plugin root (tree-vs-installed trap)");
+    console.log("  marketplace-surface ADR-0028: every marketplace.json entry is a local ./plugins/<name> we actually own");
     console.log("  stack-uniqueness  ADR-0026: every foundation/embedded/standalone `stack` id is unique repo-wide");
     console.log("  machine-values    H3: no prose computing a value a machine already writes");
     console.log("  agent-tools       ADR-0018: every agent declares tools; none may dispatch agents; reviewers hold no Edit");

@@ -48,7 +48,7 @@
     },
     "dependencies": {
       "type": "array",
-      "description": "Native Claude Code dependencies — array of plugin names from the same marketplace, resolved at install time.",
+      "description": "Native Claude Code install-time dependencies: plugins that must be installed AND enabled for this one to function. Claude Code itself also accepts \"name@marketplace\" strings and {name, marketplace, version, sha} objects (cross-marketplace, transitive, auto-enabling); this marketplace restricts itself by policy to bare same-marketplace names, which is what the pattern below enforces. An OPTIONAL, degradable dependency belongs in runtime-dependencies.json with policy: warn instead — a native dependency cannot be optional (ADR-0028).",
       "items": {
         "type": "string",
         "pattern": "^[a-z][a-z0-9-]*$"
