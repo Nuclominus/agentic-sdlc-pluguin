@@ -146,8 +146,14 @@ set** is then resolved *under* the winning foundation:
 - After the foundation winners are known, Step **0b-frameworks** asks each winning foundation to resolve
   its own libraries: it takes the `kind: framework` manifests, keeps those whose `enriches_aspect` is in
   that foundation's `hosts_aspects`, and detects each via the foundation's `framework_detection` search.
-  Matches go into `ADDITIVE_PROFILES`, subject to the `frameworks.enable/disable` override in
-  `.claude/sdlc.local.yaml`.
+  Matches go into `ADDITIVE_PROFILES`. A project may **suppress** one it detected via
+  `frameworks.disable` in `.claude/sdlc.local.yaml`
+  ([[decisions/ADR-0027-suppression-is-configurable-activation-is-not]]): the id is fed into
+  `resolveStack` as an input to attachment, so a suppressed framework never joins `ADDITIVE_PROFILES`
+  and therefore contributes no `convention_skills`, no phase injection and no `role_expertise` path.
+  There is **no `frameworks.enable`** — one was documented from `1.13.0` to `3.0.0` and read by
+  nothing (#197, #198); activation follows the build, because the build is ground truth about which
+  libraries the project uses.
 - A framework whose functional category no winning foundation hosts is never considered — **no hosting
   foundation ⇒ no frameworks**, structurally. A framework manifest that declares agents-per-phase (or a
   workflow, or `hosts_aspects`) is a **HALT** error.
