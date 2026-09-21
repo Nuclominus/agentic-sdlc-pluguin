@@ -8,23 +8,6 @@
   },
   "plugins": [
     {
-      "name": "superpowers",
-      "source": {
-        "source": "url",
-        "url": "https://github.com/obra/superpowers.git"
-      },
-      "description": "Optional runtime dependency. Richer reasoning in BA (brainstorming), QA (test-driven-development), and architect agents (verification-before-completion). Pipeline degrades gracefully without it."
-    },
-    {
-      "name": "security-guidance",
-      "source": {
-        "source": "git-subdir",
-        "url": "https://github.com/anthropics/claude-plugins-official.git",
-        "path": "plugins/security-guidance"
-      },
-      "description": "Optional external dependency (official Anthropic). Hooks-based in-session security review. Pipeline runs without it; the security phase still does a full mobile (MASVS) review."
-    },
-    {
       "name": "sdlc",
       "source": "./plugins/sdlc",
       "description": "Platform-agnostic SDLC orchestrator with stack-provider auto-discovery. Provides the pipeline-orchestrator skill (generic phases, review-loops, parallel groups, workflow discovery across plugins, file_glob/nested detection) plus the whole 12-agent roster (ADR-0021): BA Opus/high, developer/reviewer/tester/qa-engineer Sonnet/medium with iteration caps, security-analyst Opus/high read-only, document-writer Haiku/low, debugger read-only, devops, cicd, aar-analyst, session-recorder. Foundations supply per-role expertise (role_expertise) that is rendered into each agent's stable prefix. Commands: /sdlc:start, /sdlc:doctor, /sdlc:list-stacks, /sdlc:batch, /sdlc:security-init."

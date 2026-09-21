@@ -4,6 +4,47 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+### Changed
+
+- **`superpowers` and `security-guidance` are no longer entries of this marketplace** ([#200],
+  ADR-0028). `marketplace.json` re-declared both as plugins of `agentic-sdlc` — `superpowers` with a
+  `url` source pointing at `obra/superpowers.git`, `security-guidance` with a `git-subdir` source
+  into `anthropics/claude-plugins-official`. Claude Code takes such an entry literally and clones
+  the foreign repository into **our** namespace, registering it as `<name>@agentic-sdlc`. The result
+  was a second install of software we never authored: `superpowers@agentic-sdlc` alongside whatever
+  the user installed themselves, and `security-guidance` present twice, once under each marketplace.
+  Both entries are removed; the marketplace now lists only the two plugins this repo owns.
+
+  Nothing about resolution changes, because it was never marketplace-dependent: `deps.mjs` keys
+  skills on the bare plugin name, so **any** install of superpowers satisfies the declared
+  dependency, and every mandate is a `superpowers:<skill>` id that is identical from any source.
+  `install_command` now names a recommended source rather than a fictional one — the id was
+  previously spelled `superpowers@superpowers` (both `runtime-dependencies.json` files) and
+  `superpowers@superpowers-marketplace` (`docs/INSTALLATION.md`), and **both were wrong**: obra's
+  marketplace is actually named `superpowers-dev`. All of it now reads
+  `superpowers@claude-plugins-official`.
+
+  **Migration — install first, uninstall second.** The other order leaves you with no superpowers at
+  all in between, silently downgrading every `MANDATORY — invoke superpowers:*` row to best-effort:
+
+  ```bash
+  /plugin marketplace add anthropics/claude-plugins-official
+  /plugin install superpowers@claude-plugins-official   # replacement FIRST
+  /sdlc:doctor                                          # confirm ✅ available
+  /plugin uninstall superpowers@agentic-sdlc            # only then remove ours
+  /plugin uninstall security-guidance@agentic-sdlc      # if still registered
+  ```
+
+  Nothing renames — `superpowers:brainstorming` is the same id from either marketplace — so there is
+  no config migration to run. The official entry is pinned to obra commit `b36e0829` (v6.3.0) while
+  ours tracked HEAD, so you may step back one minor version; every skill this marketplace declares
+  exists at that pin. For HEAD instead, add `obra/superpowers` and install
+  `superpowers@superpowers-dev`.
+
+  `/sdlc:doctor` reports a leftover `@agentic-sdlc` copy as a stale install with the ordered remedy,
+  and a new lint rule (`sdlc-lint marketplace-surface`) fails any future entry whose source is not a
+  local `./plugins/<name>`, so the defect cannot return.
+
 ### Fixed
 
 - **`frameworks.disable` works again** ([#197], ADR-0027). `.claude/sdlc.local.yaml` documented
@@ -35,6 +76,7 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
   to be ignored in complete silence — which is how a dead `frameworks:` block read as honoured for
   seven releases.
 
+[#200]: https://github.com/Nuclominus/agentic-sdlc-pluguin/issues/200
 [#197]: https://github.com/Nuclominus/agentic-sdlc-pluguin/issues/197
 
 

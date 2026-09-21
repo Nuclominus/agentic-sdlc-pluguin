@@ -22,7 +22,7 @@ sdlc/
 ├── tools/{resolve,run,usage,report,rollup,   # shipped runtime, called by the orchestrator
 │          migrate,aar}/
 ├── hooks/{hooks.json,enforce-agent-model.sh}
-├── runtime-dependencies.json                # declares superpowers (policy: warn)
+├── runtime-dependencies.json                # declares superpowers (external, warn)
 └── agents/  (the whole 12-agent roster)
 ```
 
@@ -103,7 +103,9 @@ This plugin ships `hooks/enforce-agent-model.sh` (registered in `hooks/hooks.jso
 
 ## Dependency preflight
 
-Declares `obra/superpowers` with `policy: warn`: if absent, the pipeline still runs but with reduced rigor in the BA/QA/Security phases. The check runs once at the start of `/sdlc:start` and is cached.
+Declares `superpowers` (external, `policy: warn`): if absent, the pipeline still runs but with reduced rigor in the BA/QA/Security phases. The check runs once at the start of `/sdlc:start` and is cached.
+
+The dependency is resolved **by plugin name, not by marketplace** (`tools/resolve/deps.mjs` `pluginNameOf`), so `superpowers@claude-plugins-official`, `superpowers@superpowers-dev` or a user-level `skills/` copy all satisfy it — `install_command` names the recommended source only. This marketplace does not redistribute superpowers as an entry of its own (ADR-0028).
 
 ---
 

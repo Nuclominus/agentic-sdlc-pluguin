@@ -34,12 +34,27 @@ channel never sees work-in-progress.
 
 ### 3. Optional dependencies
 
+Both live in the **official Anthropic marketplace** — this one does not redistribute them:
+
+```bash
+/plugin marketplace add anthropics/claude-plugins-official
+
+# superpowers — brainstorming for BA, TDD for QA, verification-before-completion
+# for architects. The pipeline degrades gracefully without it.
+/plugin install superpowers@claude-plugins-official
+
+# security-guidance — hooks-based in-session security review. The MASVS security
+# phase runs fully without it.
+/plugin install security-guidance@claude-plugins-official
+```
+
+The preflight resolves these **by plugin name, not by marketplace**, so any install counts. If you
+want superpowers at obra's HEAD rather than the official marketplace's pinned commit, use its own
+marketplace instead — note the name is `superpowers-dev`:
+
 ```bash
 /plugin marketplace add obra/superpowers
-/plugin install superpowers@superpowers-marketplace
-
-/plugin marketplace add anthropics/claude-plugins-official
-/plugin install security-guidance@claude-plugins-official
+/plugin install superpowers@superpowers-dev
 ```
 
 ### 4. Verify
@@ -47,7 +62,7 @@ channel never sees work-in-progress.
 ```bash
 /sdlc:doctor
 # → Stack profiles: vanilla(0), android(300)
-# → superpowers: ✅ installed
+# → superpowers: ✅ available (superpowers@claude-plugins-official)
 # → Android CLI: ⚠️ not found (optional — pipeline runs without it)
 
 /sdlc:list-stacks
@@ -80,6 +95,29 @@ it never edits `installed_plugins.json` or `settings.json`, which belong to the 
 so it breaks nothing, but nothing needs it either. Their conventions now live in
 `android-foundation` and activate on the same dependency detection as before. Full steps:
 [README → Upgrading](../README.md).
+
+**Coming from an install made before `3.0.1`:** this marketplace used to re-declare `superpowers`
+and `security-guidance` as entries of its own, so Claude Code cloned them into **our** namespace and
+registered them as `superpowers@agentic-sdlc` / `security-guidance@agentic-sdlc` — a second copy of
+a plugin we never authored, shadowing the one you installed yourself. Both entries are gone
+(ADR-0028). **Install the replacement before uninstalling ours** — the other order leaves you with
+no superpowers at all in between, and every `MANDATORY — invoke superpowers:*` row silently
+downgrades to best-effort:
+
+```bash
+/plugin marketplace add anthropics/claude-plugins-official
+/plugin install superpowers@claude-plugins-official     # 1. replacement FIRST
+/sdlc:doctor                                            # 2. confirm ✅ available
+/plugin marketplace update agentic-sdlc
+/plugin uninstall superpowers@agentic-sdlc              # 3. only then remove ours
+/plugin uninstall security-guidance@agentic-sdlc        #    (if still registered)
+/sdlc:doctor                                            # 4. advisory should be gone
+```
+
+Nothing renames — `superpowers:brainstorming` is the same skill id from either marketplace — so no
+`.claude/sdlc.local.yaml` row changes and there is no config migration to run. The official entry is
+pinned to obra commit `b36e0829` (v6.3.0) while the old entry tracked HEAD, so you may step back one
+minor version; every skill this marketplace declares exists at that pin.
 
 ---
 

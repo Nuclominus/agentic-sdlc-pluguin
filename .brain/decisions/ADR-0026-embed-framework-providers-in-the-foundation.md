@@ -83,6 +83,10 @@ unreachable going forward, not just avoided this once.
 - Marketplace surface: 9 install entries (`sdlc`, `android-foundation`, 7 `*-plugin`) → 3
   (`sdlc`, `android-foundation`, plus the two optional external dependencies `superpowers` and
   `security-guidance`).
+  **Amended by [[decisions/ADR-0028-an-external-dependency-is-never-a-marketplace-entry]]:** the
+  surface is **2**, not 3. `superpowers` and `security-guidance` were never ours to list, and
+  counting them as install entries of this marketplace is precisely what produced the
+  `superpowers@agentic-sdlc` clone.
 - **Granularity loss (Edge case 4):** disabling `android-foundation` now disables all 7 embedded
   frameworks at once; they were previously independently disableable via `enabledPlugins`. The
   `frameworks.disable` override in `sdlc.local.yaml` is the only remaining per-framework lever.
@@ -100,5 +104,6 @@ unreachable going forward, not just avoided this once.
   see `.brain/planning/c3-embed-framework-providers.md`.
 
 ## Related
+- Amended by: [[decisions/ADR-0028-an-external-dependency-is-never-a-marketplace-entry]]
 - Supersedes ADR-0002 (Framework Provider Pattern).
 - Implemented by # (filled in when the PR is opened — documentation phase).
