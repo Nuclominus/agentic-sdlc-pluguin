@@ -17,6 +17,15 @@ List every `manifest.yaml` profile registered in installed plugins. Shows which 
 2. For each manifest found:
    - `Read` / parse the YAML.
    - Read the fields (`kind`, `stack`, `priority`, `detect`, `enriches_aspect`, `hosts_aspects`).
+   - **Expand a foundation's embedded `frameworks:` array (ADR-0026).** Since the framework
+     plugins were folded into their hosting foundation there are **no standalone
+     `kind: framework` manifests left in this marketplace** — every framework provider is a row
+     under a foundation's `frameworks:` key, and a command that only looked for `kind: framework`
+     documents would list none at all. Treat each row as a framework record: `stack`,
+     `enriches_aspect`, `dependency`. A row is *active* when the hosting foundation won, its
+     `enriches_aspect` is in that foundation's `hosts_aspects`, and its `dependency` coordinate is
+     found in one of the foundation's `framework_detection` paths (version catalog first, then
+     module build files).
    - For `kind: foundation`, evaluate `detect` rules against the current working directory:
      - `detect.any: ["*"]` → always matches.
      - `detect.all: [...]` → all sub-rules must match.
