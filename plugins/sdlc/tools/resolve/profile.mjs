@@ -503,7 +503,16 @@ export function parseFrameworkOverrides(local) {
     warnings.push("WARN: frameworks.disable must be a list of stack ids — ignored");
     return empty;
   }
-  return { disable: raw.disable.filter((s) => typeof s === "string" && s !== ""), warnings };
+  // Named, not dropped in silence. `frameworks:` was documented as a mapping with `enable` and
+  // `disable` for seven releases, so `- room: true` is the mistake a user actually makes — and
+  // dropping it quietly leaves that framework's guidance in every prompt with nothing said,
+  // which is the exact failure this change exists to remove, one level further down.
+  const disable = [];
+  raw.disable.forEach((entry, i) => {
+    if (typeof entry === "string" && entry !== "") disable.push(entry);
+    else warnings.push(`WARN: frameworks.disable[${i}] is not a stack id (${JSON.stringify(entry)}) — ignored; write a plain list, e.g. disable: [ktor]`);
+  });
+  return { disable, warnings };
 }
 
 /**

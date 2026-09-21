@@ -104,15 +104,21 @@ A **framework** is a row in its hosting foundation's `manifest.yaml` `frameworks
 - **Enriches existing phases.** It contributes a convention skill, `development` + `security` phase-prompt injections, ProGuard/R8 keep rules, and (optionally) post-checks — all merged into the run by the orchestrator's existing profile-merge.
 - **Auto-detects** from the Gradle version catalog / build files; the foundation hosting its category consumes its guidance through that phase's existing agents — only when the library is present.
 
-Toggle frameworks per project in `.claude/sdlc.local.yaml`:
+Suppress one per project in `.claude/sdlc.local.yaml`, by `stack` id (ADR-0027):
 
 ```yaml
 frameworks:
-  enable: [retrofit]    # force-on even if detection missed it
-  disable: [dagger]     # suppress even if detected
+  disable: [dagger]     # suppress even though its dependency IS present
 ```
 
-Toggling is by `stack` id, unaffected by the merge — `enable`/`disable` keyed exactly as before.
+Suppression is applied where attachment is decided, so a disabled framework contributes nothing —
+no convention skill, no phase injection, no `role_expertise` rules. The run says so: a
+`suppressed:` row in the active-profiles banner and `stack.suppressed_profiles` in the plan.
+
+There is **no `frameworks.enable`**. One was documented from `1.13.0` to `3.0.0` and read by
+nothing (#197); under ADR-0026 a framework is a row keyed to a dependency coordinate, so forcing
+one on would inject guidance for a library the project does not use. To get a framework's guidance,
+add its dependency. See [Configuration](CONFIGURATION.md#framework-activation).
 
 The boundary: **pinned house rules** (Coil3, Kermit, KSP, `@Serializable` routes, DataStore, Play Billing) stay in the foundation as non-negotiables; **detect-don't-impose libraries** (Retrofit, Room, Dagger/Hilt) become `frameworks:` rows. `android-foundation`'s own array is the reference implementation.
 

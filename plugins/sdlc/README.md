@@ -74,7 +74,9 @@ cap, so the run's reported cost would stop being its real cost.
 `sdlc-lint agent-tools` enforces this in CI across `plugins/*/agents/*.md` — a declared non-empty
 `tools:`, no dispatch tool, no `Edit` on a reviewing agent, and a present `description:`. It covers
 shipped agents only: a project-local agent under `.claude/agents/` that omits `tools:` still
-inherits everything, and `sdlc.local.yaml` can bind one to a phase via `agents_per_phase`. See
+inherits everything. It cannot be bound to a phase from `sdlc.local.yaml`: since ADR-0021 the only
+`agents_per_phase` map in the marketplace is `plugins/sdlc/manifest.yaml`'s, and an
+`agents_per_phase` key in a project's config is reported as unknown (ADR-0027). See
 [ADR-0018](../../.brain/decisions/ADR-0018-reviewers-do-not-write-code.md).
 
 ---

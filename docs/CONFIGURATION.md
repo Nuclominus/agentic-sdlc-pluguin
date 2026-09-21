@@ -91,6 +91,8 @@ frameworks:
 - Listing a framework that did not detect is a silent no-op; you may name one pre-emptively.
 - A name **no installed framework declares** is reported:
   `WARN: frameworks.disable 'ktorr' — no installed framework declares that stack id — ignored`.
+- So is a malformed entry. `disable` is a plain list of ids; writing `- ktor: true` (the shape the
+  pre-3.0 docs implied) names the offending index rather than dropping it quietly.
 
 ### There is no `frameworks.enable`
 

@@ -193,8 +193,8 @@ test("the stack banner degrades to em-dashes rather than fabricating aspects", (
 // manifest, so force-activating one whose dependency is absent injects guidance for a library
 // the project does not use.
 
-test("frameworks.disable is parsed; non-strings are dropped rather than passed on", () => {
-  const r = parseFrameworkOverrides({ frameworks: { disable: ["ktor", 7, "", "room"] } });
+test("frameworks.disable is parsed; well-formed entries survive a malformed neighbour", () => {
+  const r = parseFrameworkOverrides({ frameworks: { disable: ["ktor", "room"] } });
   assert.deepEqual(r.disable, ["ktor", "room"]);
   assert.deepEqual(r.warnings, []);
 });
@@ -205,6 +205,17 @@ test("frameworks.enable is rejected with a warning naming what to do instead", (
   assert.equal(r.warnings.length, 1);
   assert.match(r.warnings[0], /^WARN: frameworks\.enable is not supported/);
   assert.match(r.warnings[0], /dependency/, "the warning has to say why, or it reads as a bug");
+});
+
+test("a malformed entry INSIDE disable is named, not dropped in silence", () => {
+  // `frameworks: {enable: …, disable: …}` was documented as a mapping for seven releases, so
+  // `- room: true` is the mistake a user actually makes. Dropping it quietly leaves Room's
+  // guidance in every prompt with nothing said — the failure mode this whole change exists
+  // to remove, reproduced one level down.
+  const r = parseFrameworkOverrides({ frameworks: { disable: ["ktor", { room: true }, 7] } });
+  assert.deepEqual(r.disable, ["ktor"], "the well-formed entries still apply");
+  assert.equal(r.warnings.length, 2, "one line per entry, so the user can see WHICH one");
+  assert.ok(r.warnings.every((w) => /^WARN: frameworks\.disable\[\d\] is not a stack id/.test(w)), JSON.stringify(r.warnings));
 });
 
 test("a malformed frameworks block warns and suppresses nothing", () => {
