@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-09-21 | #198 | `fix` | — | [[changes/2026-09-21-PR-198-restore-frameworks-disable-and-end-the-unknown-key-silence]] |
 | 2026-09-21 | #195 | `docs` | — | [[changes/2026-09-21-PR-195-upgrade-guide-for-3-0-0-and-drop-a-config-key-that-does-not]] |
 | 2026-09-21 | #193 | `chore` | — | [[changes/2026-09-21-PR-193-prepare-the-3-0-0-release-notes-and-bump-sdlc]] |
 | 2026-09-21 | #190 | `feat` | — | [[changes/2026-09-21-PR-190-embed-framework-providers]] |
