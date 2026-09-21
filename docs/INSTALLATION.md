@@ -60,6 +60,29 @@ channel never sees work-in-progress.
 # → Detects android, auto-selects android-feature, runs the DAG, creates a PR
 ```
 
+## Updating an existing install
+
+```bash
+/plugin marketplace update agentic-sdlc   # pulls the latest commit of the branch you pinned
+/sdlc:doctor                              # reports anything your config still names that no longer ships
+```
+
+`/sdlc:doctor` is the whole migration story. This marketplace ships **no runtime aliases** — a
+renamed agent (ADR-0021) or a renamed Skill id (ADR-0026) is renamed once, and a config row naming
+the old spelling silently targets nothing. Doctor lists every such row across
+`.claude/sdlc.local.yaml` and `.claude/model.local.json` and rewrites it **only after you approve**;
+it never edits `installed_plugins.json` or `settings.json`, which belong to the harness.
+
+**Coming from `2.x`:** the seven framework plugins (`retrofit-plugin`, `ktor-plugin`, `room-plugin`,
+`datastore-proto-plugin`, `dagger-plugin`, `koin-plugin`, `workmanager-plugin`) were merged into
+`android-foundation` in `3.0.0` and no longer exist. Uninstall each one you still have
+(`/plugin uninstall <name>@agentic-sdlc`) — a stale copy is reported as shadowed rather than used,
+so it breaks nothing, but nothing needs it either. Their conventions now live in
+`android-foundation` and activate on the same dependency detection as before. Full steps:
+[README → Upgrading](../README.md).
+
+---
+
 ## Requirements
 
 - Claude Code (latest).

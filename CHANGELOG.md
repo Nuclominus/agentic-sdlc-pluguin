@@ -20,10 +20,9 @@ activation is unaffected: `retrofit` still activates only when Retrofit is detec
 when Ktor is detected, and so on — no unconditional injection, no two providers of one aspect
 (network / persistence / di) activating together.
 
-**Stack ids are preserved; skill ids are renamed once, with no alias layer.** `additive_profiles`
-telemetry and `frameworks.enable/disable` keys in `.claude/sdlc.local.yaml` keep their existing
-`stack` ids (`retrofit`, `ktor`, `room`, `datastore-proto`, `dagger`, `koin`, `workmanager`) — no
-action needed there. The skill namespace breaks: `retrofit-plugin:retrofit-conventions` →
+**Stack ids are preserved; skill ids are renamed once, with no alias layer.** The `stack` ids
+(`retrofit`, `ktor`, `room`, `datastore-proto`, `dagger`, `koin`, `workmanager`) are unchanged, so
+`additive_profiles` telemetry stays comparable across the upgrade — no action needed there. The skill namespace breaks: `retrofit-plugin:retrofit-conventions` →
 `android-foundation:retrofit-conventions` (×7, including the divergent
 `dagger-plugin:hilt-conventions` → `android-foundation:hilt-conventions`).
 
