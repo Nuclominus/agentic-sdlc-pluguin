@@ -1,7 +1,7 @@
 ---
 max_turns: 12
 timeout_seconds: 300
-allowed_tools: [Skill, "Bash(node:*)", "Bash(jq:*)"]
+allowed_tools: [Skill, Read, "Bash(node:*)", "Bash(jq:*)"]
 model: sonnet
 runs: 3
 ---

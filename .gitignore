@@ -12,3 +12,12 @@ plugins/*/evals/results/
 bench/archive/*.tar.gz
 bench/archive-headless/*.tar.gz
 bench/campaign.log
+# Local Claude state (worktrees, settings, caches) stays out of the repo. Note the `/*`: git
+# will not descend into an excluded DIRECTORY, so `.claude/` + `!.claude/rules/` silently fails
+# to re-include anything — the contents must be excluded instead.
+.claude/*
+# …the shared rule files ARE the repo's contract: CLAUDE.md @-includes them, and a clone that
+# lacks them loses the rule with no error. Keep them tracked.
+!.claude/rules/
+!.claude/commands/
+plugins/sdlc/evals/results/

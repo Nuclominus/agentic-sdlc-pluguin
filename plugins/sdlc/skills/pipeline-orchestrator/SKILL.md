@@ -258,6 +258,21 @@ mode, the single `cap_estimate` JSON line) as the last entry of `prints[]`. Echo
 create no workspace, dispatch no agent, run no post-pipeline check, write no telemetry. A dry run is
 a successful preview — nothing ran, so there is nothing to record.
 
+**STOP applies to the numbers too — do not re-price the plan in your own words.** Echoing
+`prints[]` discharges the obligation; the sentence *after* the preview is where the rule is
+actually lost. Attach no figure of your own to it: no "the real expected cost is closer to ~$X",
+no subtotal that nets out a `(gated)` phase, no adjusted worst case, no percentage, no phase count
+you arrived at yourself. The preview already carries every number it is allowed to carry —
+`Estimated cost:` states the estimate, `(worst-case …)` states its upper bound, `(gated)` marks
+each phase that may not run, and `Cap:` states the verdict. A second figure printed under the first
+does not add nuance: it contradicts a machine value (`MACHINE-VALUES.md`) with arithmetic the
+reader cannot check, and being the more precise-sounding one, it is the number they will quote
+back. Measured in `evals/02-nl-preview` (2026-09-20): a run echoed the preview verbatim, then
+closed with *"the real expected cost is likely closer to ~$4.21"* — a figure the resolver never
+produced. Explaining what the preview *means* is welcome and costs nothing — "remediation only
+dispatches if security reports High/Critical" restates the list the user just read. Explaining it
+with a new number is the defect.
+
 `cap_estimate` (`within` | `exceeds`) is a verdict on the *pre-run estimate*. It is deliberately not
 `cap_status`, which Step 5 records for what enforcement actually did.
 
