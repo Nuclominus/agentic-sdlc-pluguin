@@ -27,6 +27,8 @@ It is also where a project catches up with an agent rename. The marketplace ship
 
 3. **Locate active stack profiles.** Reuse the detection logic in `tools/resolve/manifests.mjs` + `detect.mjs` (`resolveStack`): `Glob {PLUGIN_CACHE_ROOT}/**/manifest.yaml`, parse each, split by `kind`, evaluate `kind: foundation` detect rules against the current project. Identify the primary profile that would be selected.
 
+   **Pass the project's `frameworks.disable` through** (ADR-0027). Read `<project>/.claude/sdlc.local.yaml`; a framework whose `stack` id is listed there is detected and then held back, so `resolveStack` must be called with `disableFrameworks` and the report must show the same set the pipeline will. A diagnostic command that prints `➕ frameworks: ktor (additive)` while `/sdlc:start` prints `suppressed: ktor (frameworks.disable)` sends the user after a problem that does not exist — and this is the command they run precisely to find out what the pipeline sees.
+
 3b. **Probe host capability.** Run `uname -s -m` for the OS/arch, then best-effort probe the host toolchains relevant to installed stack plugins — never fail, just report version or `not found`. Suggested probes (skip any that don't apply to the installed plugins): `node --version`, `java -version`, `./gradlew --version` (if a wrapper exists), `swift --version`, `xcodebuild -version`, `android --version`. This surfaces capability-gated checks up front (e.g. iOS lint/build needs macOS + Xcode; those post-pipeline checks SKIP rather than fail off-host).
 
 3c. **Check this project's config for stale agent names and stale skill ids.** Run:
@@ -87,6 +89,7 @@ Dependencies (from runtime-dependencies.json):
 Stack profiles:
   🎯 active: android (priority=300, from android-foundation/manifest.yaml)
   ➕ frameworks: retrofit (additive)
+  ➖ suppressed: ktor (detected, held back by .claude/sdlc.local.yaml frameworks.disable)
   also installed: vanilla (priority=0)
 
 Host capability:

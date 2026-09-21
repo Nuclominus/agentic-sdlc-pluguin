@@ -2,6 +2,7 @@
 
 > One note per architecture decision. Newest first.
 
+- [[decisions/ADR-0027-suppression-is-configurable-activation-is-not]]
 - [[decisions/ADR-0026-embed-framework-providers-in-the-foundation]]
 - [[decisions/ADR-0025-a-branch-switch-is-a-file-operation]]
 - [[decisions/ADR-0024-naming-a-recipe-is-an-explicit-request]]

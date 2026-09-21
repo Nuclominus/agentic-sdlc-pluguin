@@ -4,6 +4,40 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`frameworks.disable` works again** ([#197], ADR-0027). `.claude/sdlc.local.yaml` documented
+  `frameworks.enable` / `frameworks.disable` as the way to override framework auto-detection. Both
+  were orchestrator prose and both were lost in `05ecdb6` (#121) when resolution moved into
+  `tools/resolve/`; no code read either key from `1.13.0` through `3.0.0`. `disable` is restored —
+  and applied in `resolveStack`, where attachment is decided, so a suppressed framework contributes
+  no phase injection, no convention skill and no `role_expertise` rules rather than being unpicked
+  afterwards. This is the supported answer to the case ADR-0026 made sharp: a project mid-migration
+  carrying both Ktor and Retrofit (or Dagger and Koin, or Room and DataStore-Proto) otherwise gets
+  both sets of guidance in every prompt, with removing the dependency as the only way out.
+
+  ```yaml
+  frameworks:
+    disable: [ktor]
+  ```
+
+  The run reports it: a `suppressed: ktor (frameworks.disable)` row in the active-profiles banner
+  and `stack.suppressed_profiles` in the plan and telemetry — a framework held back and one never
+  detected are no longer indistinguishable. A name no installed framework declares warns.
+
+- **`frameworks.enable` is not coming back**, and now says so. Under ADR-0026 a framework is a row
+  in its foundation's own manifest keyed to a dependency coordinate, so force-activating one whose
+  dependency is absent means injecting guidance for a library the project does not use. A stale
+  `enable:` block warns and names the remedy instead of doing nothing quietly.
+
+- **An unknown top-level key in `sdlc.local.yaml` is no longer silent** ([#197]). Every key nothing
+  reads now produces one warning per run, listing the supported set. A typo like `skip_phase:` used
+  to be ignored in complete silence — which is how a dead `frameworks:` block read as honoured for
+  seven releases.
+
+[#197]: https://github.com/Nuclominus/agentic-sdlc-pluguin/issues/197
+
+
 ## [3.0.0] — 2026-09-21
 
 `android-foundation` `2.0.2` → `3.0.0`, `sdlc` `2.4.1` → `2.5.0`, marketplace `2.0.0` → `3.0.0`.

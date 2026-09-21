@@ -39,6 +39,10 @@ One-time project setup. Detects the platform(s), writes a starter local-override
    # skip_phases:
    #   - security
 
+   # frameworks:                           # suppress a framework the resolver DID detect
+   #   disable: [ktor]                     # (mid-migration: two providers on one aspect).
+   #                                       # There is no `enable` — activation follows the build.
+
    # extensions:                           # per-agent Skill mapping — no plugin edits needed
    #   skills:
    #     - skill: "superpowers:test-driven-development"

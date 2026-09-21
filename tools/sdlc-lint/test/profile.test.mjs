@@ -11,6 +11,7 @@ import {
   mergeProfiles, applyLocalOverrides, parseCostCaps, parseExtensionSkills,
   parseModelOverrides, renderOverridesPrint, renderModelPrint, renderStackPrint,
   mergeRoleExpertise, renderRoleExpertiseBlock, renderSkillsBlock,
+  parseFrameworkOverrides, KNOWN_LOCAL_KEYS,
 } from "../../../plugins/sdlc/tools/resolve/profile.mjs";
 
 const vanilla = {
@@ -181,6 +182,81 @@ test("the stack banner degrades to em-dashes rather than fabricating aspects", (
   assert.match(out, /forced via --stack: yes/);
   assert.equal(renderStackPrint({ foundation: null }), null, "no winning foundation, no banner");
   assert.equal(renderStackPrint(null), null);
+});
+
+// ---- `frameworks:` and the unknown-key silence (issue #197) --------------------------------
+//
+// Two halves of one bug. `frameworks.enable/disable` was documented from v1.13.0 to v3.0.0 and
+// read by nothing, and an unknown top-level key produced no diagnostic at all — so the config
+// looked honoured. `disable` is restored (applied in resolveStack, where attachment is decided);
+// `enable` is deliberately NOT: after ADR-0026 a framework is a row in a foundation's own
+// manifest, so force-activating one whose dependency is absent injects guidance for a library
+// the project does not use.
+
+test("frameworks.disable is parsed; well-formed entries survive a malformed neighbour", () => {
+  const r = parseFrameworkOverrides({ frameworks: { disable: ["ktor", "room"] } });
+  assert.deepEqual(r.disable, ["ktor", "room"]);
+  assert.deepEqual(r.warnings, []);
+});
+
+test("frameworks.enable is rejected with a warning naming what to do instead", () => {
+  const r = parseFrameworkOverrides({ frameworks: { enable: ["ktor"], disable: ["room"] } });
+  assert.deepEqual(r.disable, ["room"], "the supported half still applies");
+  assert.equal(r.warnings.length, 1);
+  assert.match(r.warnings[0], /^WARN: frameworks\.enable is not supported/);
+  assert.match(r.warnings[0], /dependency/, "the warning has to say why, or it reads as a bug");
+});
+
+test("a malformed entry INSIDE disable is named, not dropped in silence", () => {
+  // `frameworks: {enable: …, disable: …}` was documented as a mapping for seven releases, so
+  // `- room: true` is the mistake a user actually makes. Dropping it quietly leaves Room's
+  // guidance in every prompt with nothing said — the failure mode this whole change exists
+  // to remove, reproduced one level down.
+  const r = parseFrameworkOverrides({ frameworks: { disable: ["ktor", { room: true }, 7] } });
+  assert.deepEqual(r.disable, ["ktor"], "the well-formed entries still apply");
+  assert.equal(r.warnings.length, 2, "one line per entry, so the user can see WHICH one");
+  assert.ok(r.warnings.every((w) => /^WARN: frameworks\.disable\[\d\] is not a stack id/.test(w)), JSON.stringify(r.warnings));
+});
+
+test("a malformed frameworks block warns and suppresses nothing", () => {
+  for (const bad of [{ frameworks: ["ktor"] }, { frameworks: "ktor" }, { frameworks: { disable: "ktor" } }]) {
+    const r = parseFrameworkOverrides(bad);
+    assert.deepEqual(r.disable, [], `${JSON.stringify(bad)} must not suppress anything`);
+    assert.equal(r.warnings.length, 1, `${JSON.stringify(bad)} must say so`);
+  }
+});
+
+test("no frameworks key at all is silent", () => {
+  assert.deepEqual(parseFrameworkOverrides({ skip_phases: ["security"] }), { disable: [], warnings: [] });
+  assert.deepEqual(parseFrameworkOverrides(null), { disable: [], warnings: [] });
+});
+
+test("an unknown top-level key in sdlc.local.yaml is reported, never silently ignored", () => {
+  const { profile } = merged();
+  const r = applyLocalOverrides(profile, { skip_phase: ["security"] });
+  assert.equal(r.warnings.length, 1);
+  assert.match(r.warnings[0], /unknown key 'skip_phase'/);
+  assert.match(r.warnings[0], /skip_phases/, "the supported names are listed, so a typo is self-correcting");
+});
+
+test("every key the resolver actually reads is in the whitelist", () => {
+  // `active_workflow` and `frameworks` are consumed by plan.mjs, not by applyLocalOverrides:
+  // a whitelist that only knew this function's own keys would warn about both on every run.
+  for (const k of ["post_pipeline_checks", "heal_checks", "phase_command_overrides", "extra_phase_prompts",
+                   "skip_phases", "convention_skills_extra", "extensions", "cost_caps",
+                   "active_workflow", "frameworks"]) {
+    assert.ok(KNOWN_LOCAL_KEYS.has(k), `${k} is read somewhere — warning about it would be a false alarm`);
+  }
+  const { profile } = merged();
+  const full = Object.fromEntries([...KNOWN_LOCAL_KEYS].map((k) => [k, null]));
+  const r = applyLocalOverrides(profile, full);
+  assert.deepEqual(r.warnings.filter((w) => /unknown key/.test(w)), [], "no supported key may warn");
+});
+
+test("the stack banner names a suppressed framework, and stays silent when none was", () => {
+  const base = { foundation: "android", priority: 100, source: "android-foundation/manifest.yaml", aspects: ["mobile"], additive: ["retrofit"], forced: false };
+  assert.doesNotMatch(renderStackPrint(base), /suppressed/, "a banner row for an empty list is noise");
+  assert.match(renderStackPrint({ ...base, suppressed: ["ktor"] }), /suppressed: ktor \(frameworks\.disable\)/);
 });
 
 // ---- ADR-0021: agents live in the core; foundations carry expertise -------------------------
