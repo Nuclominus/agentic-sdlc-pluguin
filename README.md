@@ -32,11 +32,31 @@ follow it instead of the development branch. Omit the suffix to track `develop` 
 
 Full install, optional dependencies, and requirements → [`docs/INSTALLATION.md`](docs/INSTALLATION.md).
 
-> **Upgrading from `1.x`?** `2.0.0` retired the eleven `android-*` agents in favour of a single
-> platform-neutral roster, and ships **no runtime aliases**. Update every plugin, then run
-> `/sdlc:doctor` — it lists any config entry naming a retired agent and rewrites it after you
-> approve. Nothing breaks if you skip it, but those entries stop taking effect. Details and the
-> full rename table: [`CHANGELOG.md`](CHANGELOG.md#200--2026-09-08).
+> **Upgrading from `2.x`?** `3.0.0` merged the seven additive framework plugins into
+> `android-foundation`. `retrofit-plugin`, `ktor-plugin`, `room-plugin`, `datastore-proto-plugin`,
+> `dagger-plugin`, `koin-plugin` and `workmanager-plugin` **no longer exist** — each is now a row in
+> `android-foundation`'s `frameworks:` array, activating on the same `dependency` detection as
+> before. Three steps:
+>
+> 1. **Update, then uninstall the seven.** `/plugin marketplace update agentic-sdlc`, then
+>    `/plugin uninstall <name>@agentic-sdlc` for each one still registered. A stale copy does not
+>    break a run — the resolver reports it as shadowed and prefers the foundation's own row — but it
+>    is dead weight.
+> 2. **Run `/sdlc:doctor`.** Skill ids moved into the `android-foundation:` namespace
+>    (`retrofit-plugin:retrofit-conventions` → `android-foundation:retrofit-conventions`, and note
+>    the divergent `dagger-plugin:hilt-conventions` → `android-foundation:hilt-conventions`). There
+>    are **no runtime aliases**, so a `.claude/sdlc.local.yaml` row naming an old id targets nothing.
+>    Doctor lists every stale id and rewrites it once you approve.
+> 3. **Nothing else changes.** `stack` ids are untouched, so `additive_profiles` telemetry stays
+>    comparable, and framework activation is still automatic — detected from your build files, with
+>    no list to maintain.
+>
+> Details: [`CHANGELOG.md`](CHANGELOG.md#300--2026-09-21).
+
+> **Upgrading from `1.x`?** Do the `2.0.0` step first: it retired the eleven `android-*` agents in
+> favour of a single platform-neutral roster, also with no runtime aliases. `/sdlc:doctor` migrates
+> agent names and skill ids in the same pass, so one run covers both hops. Rename table:
+> [`CHANGELOG.md`](CHANGELOG.md#200--2026-09-08).
 
 ---
 

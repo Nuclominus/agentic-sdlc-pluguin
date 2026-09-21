@@ -47,10 +47,25 @@ fully-qualified Skill ids (`<plugin>:<skill>`) to the agents that should invoke 
   `node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs expertise --role <name>`.
 - `agents: "all"` targets every agent. An extension skill whose plugin is not installed is
   automatically downgraded to best-effort `recommended` — a missing optional skill never blocks a run.
-- **Agent names are used exactly as written.** Nothing translates a renamed agent at runtime
-  (ADR-0021), so a row naming an agent this marketplace no longer ships targets nothing. Every run
-  reports such a row, and **`/sdlc:doctor`** finds them across both config files and rewrites them
-  in place once you approve. The same applies to `agents{}` keys in `.claude/model.local.json`.
+- **Agent names and Skill ids are used exactly as written.** Nothing translates a renamed agent
+  (ADR-0021) or a renamed Skill id (ADR-0026) at runtime, so a row naming something this
+  marketplace no longer ships targets nothing. Every run reports such a row, and **`/sdlc:doctor`**
+  finds them across both config files and rewrites them in place once you approve — reading two
+  rename tables, one for bare agent names and one for fully-qualified `<plugin>:<skill>` ids. The
+  same applies to `agents{}` keys in `.claude/model.local.json`. The `3.0.0` upgrade renamed all
+  seven framework convention skills into the `android-foundation:` namespace, so a project carrying
+  such a row needs exactly one doctor run.
+
+## Framework activation is automatic
+
+There is no configuration key for it. A framework listed in a foundation's `frameworks:` array
+(ADR-0026) activates when the resolver detects its `dependency` in your build files — the version
+catalog first, then module build files — and stays silent otherwise. There is no `enable` / `disable`
+override in `sdlc.local.yaml`: the supported keys are exactly the ones shown above
+(`post_pipeline_checks`, `phase_command_overrides`, `convention_skills_extra`, `skip_phases`,
+`extra_phase_prompts`, `extensions`, plus `cost_caps` and `heal_checks`). To stop a framework's
+guidance from appearing, remove the dependency from the project — the detection follows the build,
+not a list you maintain.
 
 Run **`/sdlc:extension`** to author these mappings step-by-step (it discovers installed agents/skills,
 validates your picks, and merges idempotently), or **`/sdlc:extension --list`** to review the current
