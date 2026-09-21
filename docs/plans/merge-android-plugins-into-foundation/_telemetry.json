@@ -1,0 +1,555 @@
+{
+  "task_slug": "merge-android-plugins-into-foundation",
+  "workflow": "default",
+  "stack": "vanilla",
+  "primary_profile": "vanilla",
+  "priority": 0,
+  "aspects": [],
+  "additive_profiles": [],
+  "expertise_block_agents": [],
+  "profile_source": "sdlc/manifest.yaml",
+  "narrative_language": "en",
+  "headless_mode": false,
+  "model_enforcement_corrections": 0,
+  "phases": [
+    {
+      "phase": "business_analysis",
+      "aspect": null,
+      "agent": "business-analyst",
+      "model": "claude-opus-5",
+      "status": "completed",
+      "agent_id": "ad841ebf50183f373",
+      "subagent_tokens": 100560,
+      "usage_source": "transcript",
+      "input_tokens": 36,
+      "output_tokens": 2447,
+      "cached_input_tokens": 1077247,
+      "cache_creation_tokens": 98504,
+      "billed_tokens": 1178234,
+      "turns": 18,
+      "peak_prefix_tokens": 97900,
+      "cache_pressure": true,
+      "cost_usd": 1.22,
+      "compact_summary_chars": 4480,
+      "compact_handoff_violation": true,
+      "output_file": "docs/plans/merge-android-plugins-into-foundation/01-business-analysis.md",
+      "completed_at": "2026-09-20T18:03:00Z",
+      "origin": "fresh"
+    },
+    {
+      "phase": "development",
+      "aspect": "vanilla",
+      "agent": "developer",
+      "model": "claude-sonnet-5",
+      "status": "completed",
+      "agent_id": [
+        "a2e80e00d5c2dd7ee",
+        "ad75f7034d5e32567",
+        "a9c028bcb41c4166d"
+      ],
+      "subagent_tokens": 534260,
+      "usage_source": "transcript",
+      "input_tokens": 636,
+      "output_tokens": 68421,
+      "cached_input_tokens": 60542983,
+      "cache_creation_tokens": 521528,
+      "billed_tokens": 61133568,
+      "turns": 318,
+      "peak_prefix_tokens": 342472,
+      "cache_pressure": true,
+      "cost_usd": 14.1,
+      "compact_summary_chars": 2380,
+      "compact_handoff_violation": false,
+      "heal_attempts_used": 0,
+      "heal_status": "skipped",
+      "output_file": "docs/plans/merge-android-plugins-into-foundation/02-development-vanilla.md",
+      "completed_at": "2026-09-20T19:35:00Z",
+      "origin": "fresh"
+    },
+    {
+      "phase": "qa",
+      "aspect": null,
+      "agent": "qa-engineer",
+      "model": "claude-sonnet-5",
+      "status": "completed",
+      "agent_id": "a32f7511e25b0c13b",
+      "qa_iterations_used": 1,
+      "qa_status": "completed",
+      "subagent_tokens": 66730,
+      "usage_source": "transcript",
+      "input_tokens": 60,
+      "output_tokens": 1649,
+      "cached_input_tokens": 1448642,
+      "cache_creation_tokens": 59440,
+      "billed_tokens": 1509791,
+      "turns": 30,
+      "peak_prefix_tokens": 65780,
+      "cache_pressure": false,
+      "cost_usd": 0.45,
+      "compact_summary_chars": 1180,
+      "compact_handoff_violation": false,
+      "heal_attempts_used": 0,
+      "heal_status": "skipped",
+      "output_file": "docs/plans/merge-android-plugins-into-foundation/03-qa.md",
+      "completed_at": "2026-09-20T19:44:00Z",
+      "origin": "fresh"
+    },
+    {
+      "phase": "remediation",
+      "aspect": null,
+      "status": "skipped",
+      "completed_at": "2026-09-20T19:44:30Z",
+      "origin": "fresh"
+    },
+    {
+      "phase": "documentation",
+      "aspect": null,
+      "agent": "document-writer",
+      "model": "claude-haiku-4-5-20251001",
+      "status": "completed",
+      "agent_id": "a2543fd856c819899",
+      "subagent_tokens": 56702,
+      "usage_source": "transcript",
+      "input_tokens": 166,
+      "output_tokens": 74,
+      "cached_input_tokens": 814439,
+      "cache_creation_tokens": 55809,
+      "billed_tokens": 870488,
+      "turns": 20,
+      "peak_prefix_tokens": 55787,
+      "cache_pressure": false,
+      "cost_usd": 0.15,
+      "compact_summary_chars": 2050,
+      "compact_handoff_violation": false,
+      "output_file": "docs/plans/merge-android-plugins-into-foundation/05-pr.md",
+      "completed_at": "2026-09-20T19:52:00Z",
+      "origin": "fresh"
+    }
+  ],
+  "skip_rules_applied": [
+    {
+      "rule": "lightweight-no-db",
+      "phase_skipped": "security",
+      "reason": "LOC_TOUCHED=0, no migrations, no security-sensitive paths"
+    }
+  ],
+  "post_pipeline_checks": [],
+  "total_subagent_tokens": 758252,
+  "total_input_tokens": 898,
+  "total_output_tokens": 72591,
+  "total_cached_input_tokens": 63883311,
+  "total_cache_creation_tokens": 735281,
+  "total_cost_usd": 21.14,
+  "cost_basis": "transcript",
+  "orchestration_overhead": {
+    "cost_usd": 5.22,
+    "main_loop": {
+      "model": "claude-opus-5",
+      "input_tokens": 88,
+      "output_tokens": 45270,
+      "cached_input_tokens": 6440874,
+      "cache_creation_tokens": 87153,
+      "turns": 44,
+      "cost_usd": 5.22
+    },
+    "nested_subagents": {
+      "model": null,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cached_input_tokens": 0,
+      "cache_creation_tokens": 0,
+      "cache_write_5m_tokens": 0,
+      "cache_write_1h_tokens": 0,
+      "billed_tokens": 0,
+      "turns": 0,
+      "peak_prefix_tokens": 0,
+      "cost_usd": null,
+      "unpriced_models": 0
+    }
+  },
+  "cache_hit_ratio": 1,
+  "cost_cap_usd": 16,
+  "cost_cap_source": "recipe",
+  "cap_status": "within",
+  "deps_preflight": {
+    "superpowers": {
+      "status": "available",
+      "missing_skills": []
+    },
+    "frontend-design": {
+      "status": "available",
+      "missing_skills": []
+    }
+  },
+  "touched_files": [
+    {
+      "status": "M",
+      "path": ".brain/architecture/manifest-and-aspects.md"
+    },
+    {
+      "status": "M",
+      "path": ".brain/architecture/stack-provider-pattern.md"
+    },
+    {
+      "status": "M",
+      "path": ".brain/components/android-foundation.md"
+    },
+    {
+      "status": "M",
+      "path": ".brain/components/dagger-plugin.md"
+    },
+    {
+      "status": "M",
+      "path": ".brain/components/datastore-proto-plugin.md"
+    },
+    {
+      "status": "M",
+      "path": ".brain/components/koin-plugin.md"
+    },
+    {
+      "status": "M",
+      "path": ".brain/components/ktor-plugin.md"
+    },
+    {
+      "status": "M",
+      "path": ".brain/components/retrofit-plugin.md"
+    },
+    {
+      "status": "M",
+      "path": ".brain/components/room-plugin.md"
+    },
+    {
+      "status": "M",
+      "path": ".brain/components/workmanager-plugin.md"
+    },
+    {
+      "status": "M",
+      "path": ".brain/decisions/ADR-0002-framework-provider-pattern.md"
+    },
+    {
+      "status": "A",
+      "path": ".brain/decisions/ADR-0026-embed-framework-providers-in-the-foundation.md"
+    },
+    {
+      "status": "M",
+      "path": ".brain/decisions/_moc-decisions.md"
+    },
+    {
+      "status": "M",
+      "path": ".brain/planning/_moc-planning.md"
+    },
+    {
+      "status": "A",
+      "path": ".brain/planning/c3-embed-framework-providers.md"
+    },
+    {
+      "status": "M",
+      "path": ".claude-plugin/marketplace.json"
+    },
+    {
+      "status": "M",
+      "path": "CHANGELOG.md"
+    },
+    {
+      "status": "M",
+      "path": "CONTRIBUTING.md"
+    },
+    {
+      "status": "M",
+      "path": "README.md"
+    },
+    {
+      "status": "M",
+      "path": "docs/COST-AND-MODELS.md"
+    },
+    {
+      "status": "M",
+      "path": "docs/INSTALLATION.md"
+    },
+    {
+      "status": "M",
+      "path": "docs/WORKFLOW.md"
+    },
+    {
+      "status": "A",
+      "path": "docs/plans/merge-android-plugins-into-foundation/01-business-analysis.md"
+    },
+    {
+      "status": "A",
+      "path": "docs/plans/merge-android-plugins-into-foundation/02-development-plan-vanilla.md"
+    },
+    {
+      "status": "A",
+      "path": "docs/plans/merge-android-plugins-into-foundation/02-development-vanilla.md"
+    },
+    {
+      "status": "A",
+      "path": "docs/plans/merge-android-plugins-into-foundation/03-qa.md"
+    },
+    {
+      "status": "A",
+      "path": "docs/plans/merge-android-plugins-into-foundation/_brief.md"
+    },
+    {
+      "status": "M",
+      "path": "plugins/android-foundation/.claude-plugin/plugin.json"
+    },
+    {
+      "status": "M",
+      "path": "plugins/android-foundation/README.md"
+    },
+    {
+      "status": "M",
+      "path": "plugins/android-foundation/manifest.yaml"
+    },
+    {
+      "status": "R",
+      "path": "plugins/android-foundation/rules/snippets/datastore-proguard.md"
+    },
+    {
+      "status": "R",
+      "path": "plugins/android-foundation/rules/snippets/hilt-proguard.md"
+    },
+    {
+      "status": "R",
+      "path": "plugins/android-foundation/rules/snippets/koin-proguard.md"
+    },
+    {
+      "status": "R",
+      "path": "plugins/android-foundation/rules/snippets/ktor-proguard.md"
+    },
+    {
+      "status": "R",
+      "path": "plugins/android-foundation/rules/snippets/retrofit-proguard.md"
+    },
+    {
+      "status": "R",
+      "path": "plugins/android-foundation/rules/snippets/room-proguard.md"
+    },
+    {
+      "status": "R",
+      "path": "plugins/android-foundation/rules/snippets/workmanager-proguard.md"
+    },
+    {
+      "status": "R",
+      "path": "plugins/android-foundation/skills/datastore-conventions/SKILL.md"
+    },
+    {
+      "status": "R",
+      "path": "plugins/android-foundation/skills/hilt-conventions/SKILL.md"
+    },
+    {
+      "status": "R",
+      "path": "plugins/android-foundation/skills/koin-conventions/SKILL.md"
+    },
+    {
+      "status": "R",
+      "path": "plugins/android-foundation/skills/ktor-conventions/SKILL.md"
+    },
+    {
+      "status": "R",
+      "path": "plugins/android-foundation/skills/retrofit-conventions/SKILL.md"
+    },
+    {
+      "status": "R",
+      "path": "plugins/android-foundation/skills/room-conventions/SKILL.md"
+    },
+    {
+      "status": "R",
+      "path": "plugins/android-foundation/skills/workmanager-conventions/SKILL.md"
+    },
+    {
+      "status": "D",
+      "path": "plugins/dagger-plugin/.claude-plugin/plugin.json"
+    },
+    {
+      "status": "D",
+      "path": "plugins/dagger-plugin/README.md"
+    },
+    {
+      "status": "D",
+      "path": "plugins/dagger-plugin/manifest.yaml"
+    },
+    {
+      "status": "D",
+      "path": "plugins/dagger-plugin/runtime-dependencies.json"
+    },
+    {
+      "status": "D",
+      "path": "plugins/datastore-proto-plugin/.claude-plugin/plugin.json"
+    },
+    {
+      "status": "D",
+      "path": "plugins/datastore-proto-plugin/README.md"
+    },
+    {
+      "status": "D",
+      "path": "plugins/datastore-proto-plugin/manifest.yaml"
+    },
+    {
+      "status": "D",
+      "path": "plugins/datastore-proto-plugin/runtime-dependencies.json"
+    },
+    {
+      "status": "D",
+      "path": "plugins/koin-plugin/.claude-plugin/plugin.json"
+    },
+    {
+      "status": "D",
+      "path": "plugins/koin-plugin/README.md"
+    },
+    {
+      "status": "D",
+      "path": "plugins/koin-plugin/manifest.yaml"
+    },
+    {
+      "status": "D",
+      "path": "plugins/koin-plugin/runtime-dependencies.json"
+    },
+    {
+      "status": "D",
+      "path": "plugins/ktor-plugin/.claude-plugin/plugin.json"
+    },
+    {
+      "status": "D",
+      "path": "plugins/ktor-plugin/README.md"
+    },
+    {
+      "status": "D",
+      "path": "plugins/ktor-plugin/manifest.yaml"
+    },
+    {
+      "status": "D",
+      "path": "plugins/ktor-plugin/runtime-dependencies.json"
+    },
+    {
+      "status": "D",
+      "path": "plugins/retrofit-plugin/.claude-plugin/plugin.json"
+    },
+    {
+      "status": "D",
+      "path": "plugins/retrofit-plugin/README.md"
+    },
+    {
+      "status": "D",
+      "path": "plugins/retrofit-plugin/manifest.yaml"
+    },
+    {
+      "status": "D",
+      "path": "plugins/retrofit-plugin/runtime-dependencies.json"
+    },
+    {
+      "status": "D",
+      "path": "plugins/room-plugin/.claude-plugin/plugin.json"
+    },
+    {
+      "status": "D",
+      "path": "plugins/room-plugin/README.md"
+    },
+    {
+      "status": "D",
+      "path": "plugins/room-plugin/manifest.yaml"
+    },
+    {
+      "status": "D",
+      "path": "plugins/room-plugin/runtime-dependencies.json"
+    },
+    {
+      "status": "M",
+      "path": "plugins/sdlc/agents/security-analyst.md"
+    },
+    {
+      "status": "M",
+      "path": "plugins/sdlc/commands/doctor.md"
+    },
+    {
+      "status": "M",
+      "path": "plugins/sdlc/commands/security-init.md"
+    },
+    {
+      "status": "A",
+      "path": "plugins/sdlc/config/plugin-migrations.json"
+    },
+    {
+      "status": "M",
+      "path": "plugins/sdlc/skills/create-pluguin/SKILL.md"
+    },
+    {
+      "status": "M",
+      "path": "plugins/sdlc/tools/migrate/cli.mjs"
+    },
+    {
+      "status": "M",
+      "path": "plugins/sdlc/tools/migrate/migrate.mjs"
+    },
+    {
+      "status": "M",
+      "path": "plugins/sdlc/tools/resolve/manifests.mjs"
+    },
+    {
+      "status": "M",
+      "path": "plugins/sdlc/tools/resolve/plan.mjs"
+    },
+    {
+      "status": "D",
+      "path": "plugins/workmanager-plugin/.claude-plugin/plugin.json"
+    },
+    {
+      "status": "D",
+      "path": "plugins/workmanager-plugin/README.md"
+    },
+    {
+      "status": "D",
+      "path": "plugins/workmanager-plugin/manifest.yaml"
+    },
+    {
+      "status": "D",
+      "path": "plugins/workmanager-plugin/runtime-dependencies.json"
+    },
+    {
+      "status": "M",
+      "path": "schemas/manifest.schema.json"
+    },
+    {
+      "status": "M",
+      "path": "tools/brain-sync/lib/classify.mjs"
+    },
+    {
+      "status": "M",
+      "path": "tools/brain-sync/test/classify.test.mjs"
+    },
+    {
+      "status": "M",
+      "path": "tools/sdlc-lint/cli.mjs"
+    },
+    {
+      "status": "A",
+      "path": "tools/sdlc-lint/lib/nested-manifest.mjs"
+    },
+    {
+      "status": "A",
+      "path": "tools/sdlc-lint/lib/stack-uniqueness.mjs"
+    },
+    {
+      "status": "M",
+      "path": "tools/sdlc-lint/test/manifests.test.mjs"
+    },
+    {
+      "status": "M",
+      "path": "tools/sdlc-lint/test/migrate.test.mjs"
+    },
+    {
+      "status": "A",
+      "path": "tools/sdlc-lint/test/nested-manifest.test.mjs"
+    },
+    {
+      "status": "A",
+      "path": "tools/sdlc-lint/test/stack-uniqueness.test.mjs"
+    }
+  ],
+  "started_at": "2026-09-20T17:59:17Z",
+  "completed_at": "2026-09-20T19:50:52Z",
+  "wall_clock_seconds": 6695,
+  "plugin_version": "2.4.1",
+  "sealed_by": "orchestrator"
+}

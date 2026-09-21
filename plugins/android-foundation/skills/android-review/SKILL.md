@@ -49,6 +49,37 @@ When the vault is absent, review against the codebase's own established patterns
 - Missing `private` / `internal` on non-public API surface.
 - Magic strings instead of sealed types / enums.
 
+### 3a. Duplication (DRY)
+- Flag when two or more functions/methods in the same class share **~60-70%+ of their structure
+  or logic** — same setup, same control-flow shape, same cleanup/teardown — differing only in a
+  small, isolable part. Require extracting the shared structure into a private helper that takes
+  the differing part as a parameter: a lambda/function reference for a differing
+  expression/statement, a plain parameter for a differing value, a strategy/interface or sealed
+  type dispatched with `when` for a differing multi-step behavior, or a generic type parameter for
+  a differing type.
+- The extraction must preserve behavior exactly (timing, error handling, nullability, side-effect
+  order) — verify against a diff, not from memory. Comments explaining the now-shared part can be
+  dropped; comments unique to one variant belong next to that variant.
+- Below ~60-70% overlap, don't force it — rule of three still applies; a helper with more
+  parameters than shared logic is worse than the duplication.
+
+  ```kotlin
+  // Before — ~80% identical
+  fun saveUser(user: User) {
+      log("start save"); validate(user); db.insert("users", user.toRow()); log("done save")
+  }
+  fun saveOrder(order: Order) {
+      log("start save"); validate(order); db.insert("orders", order.toRow()); log("done save")
+  }
+
+  // After — variant part (table name + row mapper) passed in
+  private fun <T> saveEntity(table: String, entity: T, toRow: (T) -> Row) {
+      log("start save"); validate(entity); db.insert(table, toRow(entity)); log("done save")
+  }
+  fun saveUser(user: User) = saveEntity("users", user, User::toRow)
+  fun saveOrder(order: Order) = saveEntity("orders", order, Order::toRow)
+  ```
+
 ### 4. UI patterns (if the project uses Compose)
 - Screen split: stateful wrapper → stateless Content.
 - No suspend calls in composable bodies.
@@ -117,6 +148,7 @@ For a non-Compose UI, review against the project's own UI conventions instead.
 
 - [ ] No `!!` operator
 - [ ] State uses `val` only
+- [ ] No ~60-70%+ function duplication within a class left unextracted (see § Duplication (DRY))
 - [ ] No suspend calls in composables (if Compose)
 - [ ] `collectAsStateWithLifecycle()` used (if Compose)
 - [ ] Stable / `@Immutable` composable params (if Compose)

@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SDLC run — merge-android-plugins-into-foundation</title>
+<style>
+:root{
+--bg:#f4f5f8;--card:#fff;--line:#e6e8f0;--track:#edeff4;
+--ink:#191c24;--ink2:#3d4250;--muted:#6b7180;--faint:#9aa0b2;
+--accent:#4a5bc4;--accent-hover:#38489f;--accent-soft:#eef1fd;--accent-border:#d4daf6;
+--chip:#eef0f5;--surface2:#f7f8fb;
+--green:#2f9e5f;--green-bg:#e9f5ee;--green-line:#c8e6d4;
+--warn:#b3801d;--warn-bg:#fbf3df;--warn-line:#eddcb4;--warn-ink:#8a6a1c;
+--red:#d4534b;--red-bg:#fbe9e7;
+--font:'IBM Plex Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+--mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace}
+@media(prefers-color-scheme:dark){:root{
+--bg:#101116;--card:#1a1c22;--line:#2b2e37;--track:#262932;
+--ink:#e8e9ee;--ink2:#c9ccd6;--muted:#9aa0b2;--faint:#6f7484;
+--accent:#93a3f5;--accent-hover:#b4c0fa;--accent-soft:#232945;--accent-border:#39406b;
+--chip:#262932;--surface2:#20232b;
+--green:#5fd68f;--green-bg:#1c2b23;--green-line:#2c473a;
+--warn:#e3b355;--warn-bg:#2b2416;--warn-line:#4a3c1c;--warn-ink:#e3c884;
+--red:#f08078;--red-bg:#392120}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--font);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:40px 24px 80px}
+h1,h2{margin:0}code{font:12px/1.4 var(--mono)}
+.mono{font-family:var(--mono)}.num{text-align:right;font-variant-numeric:tabular-nums}
+a{color:var(--accent);text-decoration:none}a:hover{color:var(--accent-hover);text-decoration:underline}
+
+/* hero */
+.hero{background:#191c24;color:#f2f3f7;border-radius:14px;padding:32px 36px;display:flex;flex-direction:column;gap:14px}
+.hero-top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.hero-eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.12em;color:#9aa3c0}
+.hero h1{font-family:var(--mono);font-size:30px;font-weight:700;letter-spacing:-.01em;word-break:break-word}
+.chips{display:flex;gap:8px;flex-wrap:wrap;font-family:var(--mono);font-size:12px}
+.chip{background:rgba(255,255,255,.08);padding:3px 10px;border-radius:6px;color:#c6cbdc}
+.hero-meta{display:flex;gap:24px;flex-wrap:wrap;color:#9aa3c0;font-size:13px;font-family:var(--mono)}
+.hero-meta b{color:#f2f3f7;font-weight:600}
+.pills{display:flex;gap:8px;flex-wrap:wrap}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:3px 12px;border-radius:99px;background:rgba(255,255,255,.08);color:#c6cbdc}
+.pill i{width:7px;height:7px;border-radius:50%;background:currentColor}
+.pill-ok{background:var(--green-bg);color:var(--green)}
+.pill-warn{background:var(--warn-bg);color:var(--warn)}
+.pill-bad{background:var(--red-bg);color:var(--red)}
+.pill-accent{background:var(--accent);color:#fff}
+.pill-neutral{background:rgba(255,255,255,.08);color:#c6cbdc}
+
+/* kpis */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:20px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.tv{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums}.tv.good{color:var(--green)}.tv.warn{color:var(--warn)}
+.tl{color:var(--muted);font-size:12px;margin-top:2px}.ts{color:var(--faint);font-size:11px;margin-top:4px}
+
+/* generic card */
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:26px 28px;margin-top:20px}
+.card h2{font-size:17px;font-weight:600}
+.lead{margin:4px 0 18px;color:var(--muted);font-size:13px}
+.lead b{color:var(--ink)}
+.note{color:var(--muted);font-size:12px;margin:12px 0 0}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px}
+.cols>.card{margin-top:0}
+
+/* cost share */
+.share-bar{display:flex;height:34px;border-radius:8px;overflow:hidden;font-size:0}
+.share-seg{height:100%}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;font-size:12px;color:var(--muted)}
+.legend-item{display:inline-flex;align-items:center;gap:6px}
+.swatch{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+
+/* timeline */
+.timeline{display:flex;flex-direction:column}
+.tl-row{display:grid;grid-template-columns:44px 1fr 260px;gap:16px;align-items:start;padding-bottom:22px}
+.tl-rail{display:flex;flex-direction:column;align-items:center;align-self:stretch}
+.tl-node{width:30px;height:30px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;font-weight:600;border:1px solid var(--accent-border);flex-shrink:0}
+.tl-node.ghost{background:var(--chip);color:var(--muted);border-color:var(--line);font-family:var(--font);margin:0 auto}
+.tl-line{width:2px;flex:1;background:var(--line);margin-top:4px}
+.tl-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.tl-name{font-weight:600;font-size:15px}
+.tl-agent{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.tl-detail{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin-top:4px}
+.tl-metrics{display:flex;flex-direction:column;gap:7px;padding-top:2px}
+.metric{display:grid;grid-template-columns:64px 1fr 52px;gap:8px;align-items:center;font-size:11px;color:var(--faint)}
+.metric .track{height:8px;background:var(--track);border-radius:4px;overflow:hidden;position:relative}
+.metric .track i{display:block;height:100%;border-radius:4px}
+.metric .thr{position:absolute;top:-2px;bottom:-2px;left:40%;width:1.5px;background:var(--warn);opacity:.6}
+.metric-val{text-align:right;font-family:var(--mono);color:var(--ink);font-weight:600}
+.tl-foot{display:grid;grid-template-columns:44px 1fr 260px;gap:16px;align-items:center;border-top:1px dashed var(--line);padding-top:16px;margin-top:2px}
+.tl-foot .metric-val.big{font-size:14px}
+.badge{display:inline-block;font-size:11px;font-weight:600;color:var(--muted);background:var(--chip);padding:1px 8px;border-radius:5px}
+.badge-warn{display:inline-block;font-size:11px;font-weight:600;color:var(--warn);background:var(--warn-bg);padding:1px 8px;border-radius:5px}
+.model-pill{font-family:var(--mono);font-size:11px;padding:1px 8px;border-radius:5px;background:var(--chip);color:var(--muted)}
+.model-pill.m-opus{background:var(--accent-soft);color:var(--accent)}
+.model-pill.m-haiku{background:var(--green-bg);color:var(--green)}
+.model-pill.m-fable{background:var(--surface2);color:var(--ink2)}
+
+/* cost by model */
+.cm-list{display:flex;flex-direction:column;gap:14px}
+.cm-top{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px}
+.cm-top .mono{font-family:var(--mono)}.cm-top b{font-variant-numeric:tabular-nums}
+.cm-track{height:10px;background:var(--track);border-radius:5px;overflow:hidden}
+.cm-track i{display:block;height:100%;border-radius:5px}
+.cm-detail{font-size:11px;color:var(--faint);margin-top:4px;font-family:var(--mono)}
+
+/* cache economics */
+.cache-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cache-tile{background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.cache-tile.good{background:var(--green-bg);border-color:var(--green-line)}
+.cval{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums}
+.cache-tile.good .cval{color:var(--green)}
+.clbl{font-size:11.5px;color:var(--muted)}
+.callout{margin-top:16px;background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--warn-ink);line-height:1.5}
+
+/* signals + deps */
+.sig,.deps{margin:0;padding-left:18px}.sig li,.deps li{margin:3px 0}
+
+/* post-checks */
+table.checks{width:100%;border-collapse:collapse;font-size:13px}
+table.checks th{text-align:left;padding:8px 10px;color:var(--faint);font-weight:500;border-bottom:1px solid var(--line)}
+table.checks td{padding:9px 10px;border-bottom:1px solid var(--track)}
+table.checks .w36{width:36px}table.checks .w60{width:60px}
+.ck-ok{color:var(--green);font-weight:700}.ck-bad{color:var(--red);font-weight:700}.ck-skip{color:var(--faint)}
+details{margin-top:12px}summary{cursor:pointer;color:var(--muted);font-size:13px}
+pre{background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:10px;overflow:auto;font:12px/1.5 var(--mono)}
+
+/* touched files */
+.tf-head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:6px}
+.tf-count{color:var(--faint);font-weight:500}
+.tf-pills{display:flex;gap:8px;font-size:12px;font-weight:600}
+.tf-pills .pill{padding:2px 10px}
+.tf-dist{display:flex;height:8px;border-radius:4px;overflow:hidden;margin:8px 0 20px}
+.tf-dist i{display:block;height:100%}
+.tf-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px 32px;font-family:var(--mono);font-size:12px}
+.tf-dir{color:var(--muted);font-size:11px;letter-spacing:.04em;margin-bottom:6px;font-weight:600}
+.tf-files{display:flex;flex-direction:column;gap:3px}
+.tf-file{display:flex;gap:8px;align-items:baseline}
+.tf-name{color:var(--ink2);word-break:break-all}
+.st{width:14px;font-weight:700;flex-shrink:0}
+.st-A{color:var(--green)}.st-M{color:var(--warn)}.st-D{color:var(--red)}.st-R{color:var(--accent)}.st-C{color:var(--accent)}
+
+/* artifacts */
+.arts{display:flex;gap:8px;flex-wrap:wrap;font-family:var(--mono);font-size:12px}
+.art{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 12px}
+.art:hover{background:var(--accent-soft);border-color:var(--accent-border);text-decoration:none}
+
+.foot{margin-top:32px;color:var(--faint);font-size:12px;text-align:center;font-family:var(--mono)}
+
+@media(max-width:760px){
+.wrap{padding:24px 14px 60px}
+.hero{padding:24px 20px}.hero h1{font-size:24px}
+.cols{grid-template-columns:1fr}
+.tl-row,.tl-foot{grid-template-columns:1fr;gap:8px}
+.tl-rail{display:none}
+.tl-foot .tl-node{display:none}
+.tf-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body><main class="wrap">
+<header class="hero">
+<div class="hero-top">
+<div class="hero-eyebrow">SDLC PIPELINE RUN · 2026-09-20</div>
+<div class="pills"><span class="pill pill-ok"><i></i>Completed</span><span class="pill pill-neutral">4 / 5 phases passed</span></div>
+</div>
+<h1>merge-android-plugins-into-foundation</h1>
+<div class="chips"><span class="chip">vanilla</span></div>
+<div class="hero-meta"><span>17:59:17Z → 19:50:52Z</span><span>wall clock <b>1 h 51 m 35 s</b></span><span>1 QA iteration(s)</span><span>0 model corrections</span></div>
+</header>
+<section class="kpis"><div class="tile"><div class="tv">$21.14</div><div class="tl">Total cost</div><div class="ts">$16.00 cap · within · orch $5.22</div></div><div class="tile"><div class="tv">64.7M</div><div class="tl">Billed tokens</div><div class="ts">64,692,081 total</div></div><div class="tile"><div class="tv">72,591</div><div class="tl">Output tokens</div><div class="ts">0.11% of billed</div></div><div class="tile"><div class="tv good">100%</div><div class="tl">Cache hit</div><div class="ts">63.9M read from cache</div></div><div class="tile"><div class="tv">5</div><div class="tl">Phases</div></div><div class="tile"><div class="tv">0</div><div class="tl">Model corrections</div></div><div class="tile"><div class="tv">91</div><div class="tl">Files touched</div><div class="ts">12 added · 51 modified · 28 deleted</div></div></section>
+<section class="card"><h2>Where the money went</h2>
+<p class="lead">Orchestration overhead accounts for <b>$5.22 — 25%</b> of total spend; the 4 work phase(s) together cost $15.92.</p>
+<div class="share-bar"><div class="share-seg" title="business_analysis $1.22" style="width:5.77%;background:#6a7ce2"></div><div class="share-seg" title="development · vanilla $14.10" style="width:66.70%;background:var(--accent)"></div><div class="share-seg" title="qa $0.45" style="width:2.13%;background:#8d9bee"></div><div class="share-seg" title="documentation $0.15" style="width:0.71%;background:#a9b5f4"></div><div class="share-seg" title="orchestration $5.22" style="width:24.69%;background:repeating-linear-gradient(-45deg,#c8ccd6 0 6px,#d8dbe3 6px 12px)"></div></div>
+<div class="legend"><span class="legend-item"><span class="swatch" style="background:var(--accent)"></span>development · vanilla $14.10</span><span class="legend-item"><span class="swatch" style="background:repeating-linear-gradient(-45deg,#c8ccd6 0 6px,#d8dbe3 6px 12px)"></span>orchestration $5.22</span><span class="legend-item"><span class="swatch" style="background:#6a7ce2"></span>business_analysis $1.22</span><span class="legend-item"><span class="swatch" style="background:#8d9bee"></span>qa $0.45</span><span class="legend-item"><span class="swatch" style="background:#a9b5f4"></span>documentation $0.15</span></div></section>
+<section class="card"><h2>Phase timeline</h2>
+<p class="lead">Cost bars are relative to the most expensive phase; peak-context bars are per-turn against the 80k cache-pressure threshold (dashed marker).</p>
+<div class="timeline"><div class="tl-row">
+<div class="tl-rail"><div class="tl-node">01</div><div class="tl-line"></div></div>
+<div><div class="tl-head"><span class="tl-name">business_analysis</span><span class="tl-agent">business-analyst</span><span class="model-pill m-opus">claude-opus-5</span><span class="badge-warn">high cache pressure</span></div>
+<div class="tl-detail">1,178,234 billed · in 36 · out 2.4k · cache-r 1.1M · cache-w 99k · 60k/turn</div></div>
+<div class="tl-metrics"><div class="metric"><span>cost</span><div class="track"><i style="width:9%;background:var(--accent)"></i></div><span class="metric-val">$1.22</span></div><div class="metric"><span>peak ctx</span><div class="track"><i style="width:49%;background:var(--warn)"></i><b class="thr"></b></div><span class="metric-val" style="color:var(--warn)">98k</span></div></div>
+</div>
+<div class="tl-row">
+<div class="tl-rail"><div class="tl-node">02</div><div class="tl-line"></div></div>
+<div><div class="tl-head"><span class="tl-name">development · vanilla</span><span class="tl-agent">developer</span><span class="model-pill m-sonnet">claude-sonnet-5</span><span class="badge-warn">high cache pressure</span></div>
+<div class="tl-detail">61,133,568 billed · in 636 · out 68k · cache-r 60.5M · cache-w 522k · 190k/turn</div></div>
+<div class="tl-metrics"><div class="metric"><span>cost</span><div class="track"><i style="width:100%;background:var(--accent)"></i></div><span class="metric-val">$14.10</span></div><div class="metric"><span>peak ctx</span><div class="track"><i style="width:100%;background:var(--warn)"></i><b class="thr"></b></div><span class="metric-val" style="color:var(--warn)">342k</span></div></div>
+</div>
+<div class="tl-row">
+<div class="tl-rail"><div class="tl-node">03</div><div class="tl-line"></div></div>
+<div><div class="tl-head"><span class="tl-name">qa</span><span class="tl-agent">qa-engineer</span><span class="model-pill m-sonnet">claude-sonnet-5</span></div>
+<div class="tl-detail">1,509,791 billed · in 60 · out 1.6k · cache-r 1.4M · cache-w 59k · 48k/turn · 1 iteration(s)</div></div>
+<div class="tl-metrics"><div class="metric"><span>cost</span><div class="track"><i style="width:3%;background:var(--accent)"></i></div><span class="metric-val">$0.45</span></div><div class="metric"><span>peak ctx</span><div class="track"><i style="width:33%;background:#7fc99a"></i><b class="thr"></b></div><span class="metric-val" style="color:var(--muted)">66k</span></div></div>
+</div>
+<div class="tl-row">
+<div class="tl-rail"><div class="tl-node">04</div><div class="tl-line"></div></div>
+<div><div class="tl-head"><span class="tl-name">remediation</span><span class="tl-agent">—</span></div>
+<div class="tl-detail">0 aggregate tokens</div></div>
+<div class="tl-metrics"><div class="metric"><span>cost</span><div class="track"><i style="width:0%;background:var(--accent)"></i></div><span class="metric-val">—</span></div></div>
+</div>
+<div class="tl-row">
+<div class="tl-rail"><div class="tl-node">05</div></div>
+<div><div class="tl-head"><span class="tl-name">documentation</span><span class="tl-agent">document-writer</span><span class="model-pill m-haiku">claude-haiku-4-5-20251001</span></div>
+<div class="tl-detail">870,488 billed · in 166 · out 74 · cache-r 814k · cache-w 56k · 41k/turn</div></div>
+<div class="tl-metrics"><div class="metric"><span>cost</span><div class="track"><i style="width:1%;background:var(--accent)"></i></div><span class="metric-val">$0.15</span></div><div class="metric"><span>peak ctx</span><div class="track"><i style="width:28%;background:#7fc99a"></i><b class="thr"></b></div><span class="metric-val" style="color:var(--muted)">56k</span></div></div>
+</div></div><div class="tl-foot">
+<div class="tl-node ghost">⚙</div>
+<div><span class="tl-name">orchestration</span> <span class="badge">overhead</span>
+<div class="tl-detail"><code>claude-opus-5</code> · main-loop + nested · 6,573,385 billed tokens</div></div>
+<div class="metric-val big">$5.22</div>
+</div></section>
+<div class="cols"><section class="card"><h2>Cost by model</h2><div class="cm-list"><div class="cm-row"><div class="cm-top"><span class="mono">claude-sonnet-5</span><b>$14.55</b></div><div class="cm-track"><i style="width:100%;background:var(--ink)"></i></div><div class="cm-detail">in 696 · cache-r 62.0M · cache-w 581k · out 70k</div></div><div class="cm-row"><div class="cm-top"><span class="mono">claude-opus-5</span><b>$6.44</b></div><div class="cm-track"><i style="width:44%;background:var(--accent)"></i></div><div class="cm-detail">in 124 · cache-r 7.5M · cache-w 186k · out 48k</div></div><div class="cm-row"><div class="cm-top"><span class="mono">claude-haiku-4-5-20251001</span><b>$0.15</b></div><div class="cm-track"><i style="width:1%;background:#8d9bee"></i></div><div class="cm-detail">in 166 · cache-r 814k · cache-w 56k · out 74</div></div></div><p class="note">Cost partial — 1 phase(s) unpriced (aggregate-only usage, no transcript to split).</p></section><section class="card"><h2>Cache economics</h2><p class="lead">100% of context tokens were served from prompt cache — fresh input was just 898 of 64.7M billed.</p><div class="cache-grid"><div class="cache-tile good"><div class="cval">63.9M</div><div class="clbl">cache read</div></div><div class="cache-tile"><div class="cval">735k</div><div class="clbl">cache write</div></div><div class="cache-tile"><div class="cval">898</div><div class="clbl">fresh input</div></div><div class="cache-tile"><div class="cval">73k</div><div class="clbl">output</div></div></div><div class="callout"><b>2 of 5 phase(s)</b> ran above the 80k cache-pressure threshold — <b>development</b> peaked at <b>342k</b> tokens per turn. Consider tighter context trimming in the heaviest phases.</div></section></div>
+<section class="card"><h2>Signals</h2><ul class="sig"><li>QA: completed (1 iteration(s))</li><li>Skipped <b>security</b> — lightweight-no-db</li><li>High cache-pressure: <b>business_analysis</b> (peak 98k &gt; 80k)</li><li>High cache-pressure: <b>development</b> (peak 342k &gt; 80k)</li></ul></section>
+<section class="card">
+<div class="tf-head"><h2>Touched files <span class="tf-count">· 91</span></h2>
+<div class="tf-pills"><span class="pill pill-ok">12 added</span><span class="pill pill-warn">51 modified</span><span class="pill pill-bad">28 deleted</span></div></div>
+<div class="tf-dist"><i style="width:13.2%;background:#3fb871"></i><i style="width:56.0%;background:#e0b13e"></i><i style="width:30.8%;background:#e0645c"></i></div>
+<div class="tf-grid"><div class="tf-group"><div class="tf-dir">.</div><div class="tf-files"><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">CHANGELOG.md</span></div><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">CONTRIBUTING.md</span></div><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">README.md</span></div></div></div><div class="tf-group"><div class="tf-dir">.brain/architecture</div><div class="tf-files"><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">manifest-and-aspects.md</span></div><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">stack-provider-pattern.md</span></div></div></div><div class="tf-group"><div class="tf-dir">.brain/components</div><div class="tf-files"><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">android-foundation.md</span></div><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">dagger-plugin.md</span></div><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">datastore-proto-plugin.md</span></div><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">koin-plugin.md</span></div><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">ktor-plugin.md</span></div><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">retrofit-plugin.md</span></div><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">room-plugin.md</span></div><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">workmanager-plugin.md</span></div></div></div><div class="tf-group"><div class="tf-dir">.brain/decisions</div><div class="tf-files"><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">ADR-0002-framework-provider-pattern.md</span></div><div class="tf-file"><span class="st st-A">A</span><span class="tf-name">ADR-0026-embed-framework-providers-in-the-foundation.md</span></div><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">_moc-decisions.md</span></div></div></div><div class="tf-group"><div class="tf-dir">.brain/planning</div><div class="tf-files"><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">_moc-planning.md</span></div><div class="tf-file"><span class="st st-A">A</span><span class="tf-name">c3-embed-framework-providers.md</span></div></div></div><div class="tf-group"><div class="tf-dir">.claude-plugin</div><div class="tf-files"><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">marketplace.json</span></div></div></div><div class="tf-group"><div class="tf-dir">docs</div><div class="tf-files"><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">COST-AND-MODELS.md</span></div><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">INSTALLATION.md</span></div><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">WORKFLOW.md</span></div></div></div><div class="tf-group"><div class="tf-dir">docs/plans/merge-android-plugins-into-foundation</div><div class="tf-files"><div class="tf-file"><span class="st st-A">A</span><span class="tf-name">01-business-analysis.md</span></div><div class="tf-file"><span class="st st-A">A</span><span class="tf-name">02-development-plan-vanilla.md</span></div><div class="tf-file"><span class="st st-A">A</span><span class="tf-name">02-development-vanilla.md</span></div><div class="tf-file"><span class="st st-A">A</span><span class="tf-name">03-qa.md</span></div><div class="tf-file"><span class="st st-A">A</span><span class="tf-name">_brief.md</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/android-foundation</div><div class="tf-files"><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">README.md</span></div><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">manifest.yaml</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/android-foundation/.claude-plugin</div><div class="tf-files"><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">plugin.json</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/android-foundation/rules/snippets</div><div class="tf-files"><div class="tf-file"><span class="st st-R">R</span><span class="tf-name">datastore-proguard.md</span></div><div class="tf-file"><span class="st st-R">R</span><span class="tf-name">hilt-proguard.md</span></div><div class="tf-file"><span class="st st-R">R</span><span class="tf-name">koin-proguard.md</span></div><div class="tf-file"><span class="st st-R">R</span><span class="tf-name">ktor-proguard.md</span></div><div class="tf-file"><span class="st st-R">R</span><span class="tf-name">retrofit-proguard.md</span></div><div class="tf-file"><span class="st st-R">R</span><span class="tf-name">room-proguard.md</span></div><div class="tf-file"><span class="st st-R">R</span><span class="tf-name">workmanager-proguard.md</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/android-foundation/skills/datastore-conventions</div><div class="tf-files"><div class="tf-file"><span class="st st-R">R</span><span class="tf-name">SKILL.md</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/android-foundation/skills/hilt-conventions</div><div class="tf-files"><div class="tf-file"><span class="st st-R">R</span><span class="tf-name">SKILL.md</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/android-foundation/skills/koin-conventions</div><div class="tf-files"><div class="tf-file"><span class="st st-R">R</span><span class="tf-name">SKILL.md</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/android-foundation/skills/ktor-conventions</div><div class="tf-files"><div class="tf-file"><span class="st st-R">R</span><span class="tf-name">SKILL.md</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/android-foundation/skills/retrofit-conventions</div><div class="tf-files"><div class="tf-file"><span class="st st-R">R</span><span class="tf-name">SKILL.md</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/android-foundation/skills/room-conventions</div><div class="tf-files"><div class="tf-file"><span class="st st-R">R</span><span class="tf-name">SKILL.md</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/android-foundation/skills/workmanager-conventions</div><div class="tf-files"><div class="tf-file"><span class="st st-R">R</span><span class="tf-name">SKILL.md</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/dagger-plugin</div><div class="tf-files"><div class="tf-file"><span class="st st-D">D</span><span class="tf-name">README.md</span></div><div class="tf-file"><span class="st st-D">D</span><span class="tf-name">manifest.yaml</span></div><div class="tf-file"><span class="st st-D">D</span><span class="tf-name">runtime-dependencies.json</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/dagger-plugin/.claude-plugin</div><div class="tf-files"><div class="tf-file"><span class="st st-D">D</span><span class="tf-name">plugin.json</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/datastore-proto-plugin</div><div class="tf-files"><div class="tf-file"><span class="st st-D">D</span><span class="tf-name">README.md</span></div><div class="tf-file"><span class="st st-D">D</span><span class="tf-name">manifest.yaml</span></div><div class="tf-file"><span class="st st-D">D</span><span class="tf-name">runtime-dependencies.json</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/datastore-proto-plugin/.claude-plugin</div><div class="tf-files"><div class="tf-file"><span class="st st-D">D</span><span class="tf-name">plugin.json</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/koin-plugin</div><div class="tf-files"><div class="tf-file"><span class="st st-D">D</span><span class="tf-name">README.md</span></div><div class="tf-file"><span class="st st-D">D</span><span class="tf-name">manifest.yaml</span></div><div class="tf-file"><span class="st st-D">D</span><span class="tf-name">runtime-dependencies.json</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/koin-plugin/.claude-plugin</div><div class="tf-files"><div class="tf-file"><span class="st st-D">D</span><span class="tf-name">plugin.json</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/ktor-plugin</div><div class="tf-files"><div class="tf-file"><span class="st st-D">D</span><span class="tf-name">README.md</span></div><div class="tf-file"><span class="st st-D">D</span><span class="tf-name">manifest.yaml</span></div><div class="tf-file"><span class="st st-D">D</span><span class="tf-name">runtime-dependencies.json</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/ktor-plugin/.claude-plugin</div><div class="tf-files"><div class="tf-file"><span class="st st-D">D</span><span class="tf-name">plugin.json</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/retrofit-plugin</div><div class="tf-files"><div class="tf-file"><span class="st st-D">D</span><span class="tf-name">README.md</span></div><div class="tf-file"><span class="st st-D">D</span><span class="tf-name">manifest.yaml</span></div><div class="tf-file"><span class="st st-D">D</span><span class="tf-name">runtime-dependencies.json</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/retrofit-plugin/.claude-plugin</div><div class="tf-files"><div class="tf-file"><span class="st st-D">D</span><span class="tf-name">plugin.json</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/room-plugin</div><div class="tf-files"><div class="tf-file"><span class="st st-D">D</span><span class="tf-name">README.md</span></div><div class="tf-file"><span class="st st-D">D</span><span class="tf-name">manifest.yaml</span></div><div class="tf-file"><span class="st st-D">D</span><span class="tf-name">runtime-dependencies.json</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/room-plugin/.claude-plugin</div><div class="tf-files"><div class="tf-file"><span class="st st-D">D</span><span class="tf-name">plugin.json</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/sdlc/agents</div><div class="tf-files"><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">security-analyst.md</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/sdlc/commands</div><div class="tf-files"><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">doctor.md</span></div><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">security-init.md</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/sdlc/config</div><div class="tf-files"><div class="tf-file"><span class="st st-A">A</span><span class="tf-name">plugin-migrations.json</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/sdlc/skills/create-pluguin</div><div class="tf-files"><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">SKILL.md</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/sdlc/tools/migrate</div><div class="tf-files"><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">cli.mjs</span></div><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">migrate.mjs</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/sdlc/tools/resolve</div><div class="tf-files"><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">manifests.mjs</span></div><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">plan.mjs</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/workmanager-plugin</div><div class="tf-files"><div class="tf-file"><span class="st st-D">D</span><span class="tf-name">README.md</span></div><div class="tf-file"><span class="st st-D">D</span><span class="tf-name">manifest.yaml</span></div><div class="tf-file"><span class="st st-D">D</span><span class="tf-name">runtime-dependencies.json</span></div></div></div><div class="tf-group"><div class="tf-dir">plugins/workmanager-plugin/.claude-plugin</div><div class="tf-files"><div class="tf-file"><span class="st st-D">D</span><span class="tf-name">plugin.json</span></div></div></div><div class="tf-group"><div class="tf-dir">schemas</div><div class="tf-files"><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">manifest.schema.json</span></div></div></div><div class="tf-group"><div class="tf-dir">tools/brain-sync/lib</div><div class="tf-files"><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">classify.mjs</span></div></div></div><div class="tf-group"><div class="tf-dir">tools/brain-sync/test</div><div class="tf-files"><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">classify.test.mjs</span></div></div></div><div class="tf-group"><div class="tf-dir">tools/sdlc-lint</div><div class="tf-files"><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">cli.mjs</span></div></div></div><div class="tf-group"><div class="tf-dir">tools/sdlc-lint/lib</div><div class="tf-files"><div class="tf-file"><span class="st st-A">A</span><span class="tf-name">nested-manifest.mjs</span></div><div class="tf-file"><span class="st st-A">A</span><span class="tf-name">stack-uniqueness.mjs</span></div></div></div><div class="tf-group"><div class="tf-dir">tools/sdlc-lint/test</div><div class="tf-files"><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">manifests.test.mjs</span></div><div class="tf-file"><span class="st st-M">M</span><span class="tf-name">migrate.test.mjs</span></div><div class="tf-file"><span class="st st-A">A</span><span class="tf-name">nested-manifest.test.mjs</span></div><div class="tf-file"><span class="st st-A">A</span><span class="tf-name">stack-uniqueness.test.mjs</span></div></div></div></div></section>
+<section class="card"><h2>Dependency preflight</h2><ul class="deps"><li><code>superpowers</code>: available</li><li><code>frontend-design</code>: available</li></ul></section>
+<section class="card"><h2>Artifacts</h2><div class="arts"><a class="art" href="01-business-analysis.md">01-business-analysis.md</a><a class="art" href="02-development-plan-vanilla.md">02-development-plan-vanilla.md</a><a class="art" href="02-development-vanilla.md">02-development-vanilla.md</a><a class="art" href="03-qa.md">03-qa.md</a><a class="art" href="05-pr.md">05-pr.md</a><a class="art" href="_telemetry.json">_telemetry.json</a></div></section>
+<footer class="foot">Generated from _telemetry.json · 2026-09-20T19:50:52Z</footer>
+</main></body>
+</html>
