@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Nuclominus/Agentic-SDLC-Pluguin/schemas/manifest.schema.json",
   "title": "SDLC Plugin Manifest",
-  "description": "Schema for plugins/<name>/manifest.yaml — the machine-read declarative profile the pipeline-orchestrator consumes (human docs live in the plugin README.md). `kind: foundation` is a stack provider that owns platform aspects and drives phases; `kind: framework` is an additive library provider that enriches existing phases. The aspect enums ($defs.platformAspect / functionalAspect) MIRROR plugins/sdlc/config/aspects.yaml — keep them in sync.",
+  "description": "Schema for plugins/<name>/manifest.yaml — the machine-read declarative profile the pipeline-orchestrator consumes (human docs live in the plugin README.md). `kind: foundation` is a stack provider that owns platform aspects and drives phases; `kind: framework` is an additive library provider that enriches existing phases. A foundation may also declare `frameworks` (ADR-0026): an array of embedded framework rows the resolver synthesizes into ordinary framework records at load time, so a foundation can host its own additive libraries without a separate installed plugin per library. The aspect enums ($defs.platformAspect / functionalAspect) MIRROR plugins/sdlc/config/aspects.yaml — keep them in sync.",
   "type": "object",
   "required": [
     "kind",
@@ -127,6 +127,30 @@
       "if": {
         "properties": {
           "kind": {
+            "const": "framework"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "frameworks"
+              ]
+            }
+          ]
+        },
+        "description": "ADR-0026: `frameworks` is a foundation-only array. A framework manifest never hosts other frameworks."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
             "const": "foundation"
           },
           "stack": {
@@ -242,6 +266,13 @@
           "uniqueItems": true
         }
       ]
+    },
+    "frameworks": {
+      "type": "array",
+      "description": "Foundation only (ADR-0026): embedded framework rows, one per additive library this foundation hosts directly instead of via a separate installed plugin. The resolver's `classify()` synthesizes one ordinary `kind: framework` record per row (in both tree and installed loader modes), so downstream consumers (`detect.mjs`, `plan.mjs`) are unaffected. `stack` must be unique across all rows and must not collide with any foundation's own `stack` id — enforced by `tools/sdlc-lint`'s `stack-uniqueness` verb (a computed cross-item key is awkward to express in JSON Schema directly). An EMPTY array is deliberately legal: a foundation hosting no frameworks yet is a normal state (a freshly scaffolded one, or a platform nobody has written a row for), and `classify()` maps it to zero synthesized records. Rejecting `[]` would only teach authors to delete the key and rediscover it later.",
+      "items": {
+        "$ref": "#/$defs/frameworkRow"
+      }
     },
     "workflow": {
       "type": "string",
@@ -470,6 +501,99 @@
     }
   },
   "$defs": {
+    "frameworkRow": {
+      "type": "object",
+      "description": "One embedded framework (ADR-0026) inside a foundation's `frameworks` array. A row never carries `kind` itself — the resolver's synthesizer adds `kind: framework` to the record it builds from this row. Same required/forbidden shape as a standalone framework manifest, minus `kind`.",
+      "required": [
+        "stack",
+        "enriches_aspect",
+        "dependency"
+      ],
+      "additionalProperties": false,
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "workflow"
+            ]
+          },
+          {
+            "required": [
+              "framework_detection"
+            ]
+          },
+          {
+            "required": [
+              "hosts_aspects"
+            ]
+          },
+          {
+            "required": [
+              "agents_per_phase"
+            ]
+          },
+          {
+            "required": [
+              "on_demand_agents"
+            ]
+          },
+          {
+            "required": [
+              "aar_analyst"
+            ]
+          },
+          {
+            "required": [
+              "detect"
+            ]
+          },
+          {
+            "required": [
+              "aspects"
+            ]
+          },
+          {
+            "required": [
+              "role_expertise"
+            ]
+          },
+          {
+            "required": [
+              "frameworks"
+            ]
+          }
+        ]
+      },
+      "properties": {
+        "stack": {
+          "$ref": "#/properties/stack"
+        },
+        "priority": {
+          "$ref": "#/properties/priority"
+        },
+        "enriches_aspect": {
+          "$ref": "#/properties/enriches_aspect"
+        },
+        "dependency": {
+          "$ref": "#/properties/dependency"
+        },
+        "convention_skills": {
+          "$ref": "#/properties/convention_skills"
+        },
+        "extra_phases": {
+          "$ref": "#/properties/extra_phases"
+        },
+        "pre_phase_commands": {
+          "$ref": "#/properties/pre_phase_commands"
+        },
+        "phase_injections": {
+          "$ref": "#/properties/phase_injections"
+        },
+        "post_pipeline_checks": {
+          "$ref": "#/properties/post_pipeline_checks"
+        }
+      }
+    },
     "coreRole": {
       "description": "The agent roster the CORE plugin ships (plugins/sdlc/agents/*.md) — the only roles a `role_expertise` block may address (ADR-0021). MIRRORS the values of plugins/sdlc/manifest.yaml `agents_per_phase` ∪ `on_demand_agents` — keep them in sync.",
       "enum": [

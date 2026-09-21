@@ -14,11 +14,13 @@ There are now two kinds of plugin:
   (`kind: foundation`), select the workflow recipe, and ship the platform **expertise** the core roster
   consumes: `role_expertise` per core role, skills, rules and hooks. They ship **no agents**
   (ADR-0021 — `plugins/sdlc/agents/` is the only `agents/` directory in the marketplace).
-- **Additive framework providers** (like `retrofit-plugin`) — register a framework library via
-  `manifest.yaml` (`kind: framework`, same schema). They are **enrich-only**: they
-  contribute a convention skill + phase-prompt injections + ProGuard keep rules + post-checks, ship
-  **no agents**, and own **no phases**. The orchestrator auto-detects them and merges their
-  enrichments into the active flow.
+- **Additive frameworks** (ADR-0026 — e.g. Retrofit, Ktor, Room, Proto DataStore, Dagger/Hilt,
+  Koin, WorkManager) — a row in the hosting foundation's own `manifest.yaml` `frameworks:` array,
+  not a separate installed plugin. Each row is **enrich-only**: it contributes a convention skill +
+  phase-prompt injections + ProGuard keep rules + post-checks, and owns **no phases**. The
+  resolver synthesizes an ordinary `kind: framework` record from the row at load time
+  (`plugins/sdlc/tools/resolve/manifests.mjs`), so the orchestrator auto-detects and merges it into
+  the active flow exactly as it would a standalone framework manifest.
 
 ## Adding or changing a stack-provider plugin
 
@@ -72,50 +74,56 @@ plugin-root variable would resolve to the wrong plugin — so a foundation's `ru
 it. `agents_per_phase`, `on_demand_agents` and `aar_analyst` are rejected by the schema on any
 foundation but the core's own `stack: vanilla` profile.
 
-## Adding or changing an additive framework plugin
+## Adding or changing an additive framework (ADR-0026)
 
-An additive framework provider also registers itself without editing the core. It contains:
+A framework attaches as a **row inside its hosting foundation's own `manifest.yaml`** — no new
+plugin directory, no new `.claude-plugin/plugin.json`. Its assets land under the FOUNDATION's own
+tree:
 
 ```
-<framework>-plugin/
-├── .claude-plugin/plugin.json   ← dependencies: ["sdlc"]  ← no sibling-plugin dep
-├── manifest.yaml                 ← kind: framework — enriches_aspect, dependency (validates against schemas/manifest.schema.json)
-├── skills/<name>/SKILL.md        ← convention skill (defer to the aspect's conventions, don't restate)
-└── rules/snippets/               ← phase-prompt injections + ProGuard keep rules
+<foundation>/
+├── manifest.yaml                       ← append a row to its `frameworks:` array (validates against schemas/manifest.schema.json)
+├── skills/<name>-conventions/SKILL.md  ← convention skill (defer to the aspect's conventions, don't restate)
+└── rules/snippets/                     ← phase-prompt injections + ProGuard keep rules
 ```
 
-### `manifest.yaml` example (`kind: framework`)
+### `frameworks:` row example — appended to `android-foundation/manifest.yaml`
 
 ```yaml
-kind: framework
-stack: room
-priority: 150
-enriches_aspect: persistence     # functional category — a foundation hosting `persistence` resolves me
-dependency: androidx.room        # just name the library — the foundation declares WHERE to look
-convention_skills:
-  - room-plugin:room-conventions
-phase_injections:
-  development: |
-    Room present: @Dao methods are suspend/Flow; …
-  security: |
-    Room: parameterize all @Query; no string concatenation; …
-post_pipeline_checks: []
+frameworks:
+  # … existing rows …
+  - stack: room
+    priority: 150
+    enriches_aspect: persistence     # functional category — a foundation hosting `persistence` resolves me
+    dependency: androidx.room        # just name the library — the foundation declares WHERE to look
+    convention_skills:
+      - android-foundation:room-conventions
+    phase_injections:
+      development: |
+        Room present: @Dao methods are suspend/Flow; …
+      security: |
+        Room: parameterize all @Query; no string concatenation; …
+    post_pipeline_checks: []
 ```
 
-> **The plugin only names the dependency; the FOUNDATION owns where to look.** A framework provider
-> declares `dependency: <coordinate>` (e.g. `androidx.room` or `com.squareup.retrofit2`) and ships **no**
-> detection rules. The foundation that hosts its `enriches_aspect` category declares the search order via
-> `framework_detection` — for Android Foundation: **version-catalog first** (`gradle/libs.versions.toml`),
-> then module build files (`**/build.gradle*`, gitignore-aware). The orchestrator executes that search,
-> so each plugin stays trivial. `dependency` may be a list (matches if any coordinate is found). A
-> hand-written `detect:` block remains available as an escape hatch for frameworks not identified by a
-> single Maven coordinate.
+> **The row only names the dependency; the FOUNDATION owns where to look.** A row declares
+> `dependency: <coordinate>` (e.g. `androidx.room` or `com.squareup.retrofit2`) and ships **no**
+> detection rules of its own. The foundation that hosts its `enriches_aspect` category declares the
+> search order via its own `framework_detection` — for Android Foundation: **version-catalog first**
+> (`gradle/libs.versions.toml`), then module build files (`**/build.gradle*`, gitignore-aware). The
+> orchestrator executes that search, so each row stays trivial. `dependency` may be a list (matches
+> if any coordinate is found). A hand-written `detect:` block remains available as an escape hatch
+> for a framework not identified by a single Maven coordinate.
 
-> Framework manifests (`kind: framework`) **must not** declare `agents_per_phase`, `workflow`,
-> `hosts_aspects`, or `framework_detection` — the schema and the orchestrator both reject it.
-> Since ADR-0021 the schema rejects `agents_per_phase` / `on_demand_agents` / `aar_analyst` on a
-> **foundation** too: the roster is the core's. `retrofit-plugin` is the reference implementation for
-> a framework; `android-foundation` for a stack provider.
+> A row **must not** declare `kind` (the resolver's synthesizer in `manifests.mjs` adds
+> `kind: framework` to the record it builds from the row), `agents_per_phase`, `workflow`,
+> `hosts_aspects`, `framework_detection`, `detect`, `aspects`, `role_expertise`, or `frameworks` —
+> the schema rejects all of them on a `frameworks:` row. Since ADR-0021 the schema also rejects
+> `agents_per_phase` / `on_demand_agents` / `aar_analyst` on a **foundation**: the roster is the
+> core's. `android-foundation`'s own `frameworks:` array (Retrofit, Ktor, Room, Proto DataStore,
+> Dagger/Hilt, Koin, WorkManager) is the reference implementation for an embedded framework;
+> `android-foundation` itself for a stack provider. A row's `stack` must be unique across every
+> row in every foundation and across every foundation's own `stack` id (`tools/sdlc-lint`).
 
 ## Verifying plugins locally
 

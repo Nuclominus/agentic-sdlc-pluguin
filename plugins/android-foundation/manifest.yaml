@@ -32,6 +32,202 @@ framework_detection:
   - "**/build.gradle.kts"
   - "**/build.gradle"
 
+# ADR-0026: the 7 additive Android framework providers, embedded directly (each was previously
+# its own installed plugin — retrofit-plugin, ktor-plugin, room-plugin, datastore-proto-plugin,
+# dagger-plugin, koin-plugin, workmanager-plugin — superseding ADR-0002's per-plugin split). The
+# resolver's `classify()` (plugins/sdlc/tools/resolve/manifests.mjs) synthesizes one ordinary
+# `kind: framework` record per row, in both tree and installed loader modes, so conditional
+# activation (FR-1) and stack-id stability (FR-4) are unaffected: `stack`, `enriches_aspect` and
+# `dependency` behave exactly as they did as standalone manifests. Only the plugin/skill-id
+# NAMESPACE changed (`<name>-plugin:<name>-conventions` -> `android-foundation:<name>-conventions`).
+# `phase_injections.security` snippet paths below are relative to THIS file's own directory,
+# matching where `rules/snippets/*-proguard.md` now live (moved alongside this manifest).
+frameworks:
+  - stack: retrofit
+    priority: 150                       # documentational for frameworks — they never win an aspect
+    enriches_aspect: network           # functional category; a foundation hosting `network` resolves me
+    dependency: com.squareup.retrofit2 # the foundation declares WHERE to look; the orchestrator executes
+    convention_skills:
+      - android-foundation:retrofit-conventions
+    phase_injections:
+      development: |
+        Retrofit/OkHttp is present. Service interfaces expose `suspend` functions for one-shot calls and
+        `Flow` for streams — never blocking `Call<T>.execute()`. Centralize a single OkHttpClient (timeouts,
+        auth interceptor, and a logging interceptor gated on BuildConfig.DEBUG only). Pin a single converter
+        (kotlinx-serialization preferred per house style). Map HTTP/transport errors (HttpException, IOException)
+        to domain Results at the repository boundary — never leak Response/HttpException above the data layer.
+        See the android-foundation:retrofit-conventions skill; layer principles stay with the hosting
+        foundation's data-layer conventions (do not restate them).
+      security: |
+        Retrofit/OkHttp (MASVS-NETWORK): all base URLs MUST be HTTPS — no cleartext traffic; configure
+        certificate or public-key pinning where the threat model requires it. The logging interceptor must be
+        DEBUG-gated and must never log Authorization headers, cookies, or request/response bodies in release.
+        Apply the R8/ProGuard keep rules in rules/snippets/retrofit-proguard.md when the
+        project ships R8.
+    post_pipeline_checks: []
+
+  - stack: ktor
+    priority: 150                       # documentational for frameworks — they never win an aspect
+    enriches_aspect: network           # functional category; a foundation hosting `network` resolves me
+    dependency: io.ktor                # covers ktor-client-core/engine/content-negotiation/serialization; the foundation declares WHERE to look
+    convention_skills:
+      - android-foundation:ktor-conventions
+    phase_injections:
+      development: |
+        Ktor client is present. Build **one** long-lived `HttpClient` with an explicit engine
+        (OkHttp/Android/CIO) and reuse it — do not new-up a client per request; `close()` it with its owner's
+        lifecycle. Install `ContentNegotiation` with kotlinx-serialization `json(...)`, `HttpTimeout`
+        (request/connect/socket), and `Logging` **gated on debug builds only** at a level that never emits
+        headers/bodies in release. Use `expectSuccess = true` and/or an `HttpResponseValidator` to turn
+        non-2xx into exceptions. Request functions are `suspend` and return DTOs or a domain `Result`; map
+        `ClientRequestException` (4xx), `ServerResponseException` (5xx), `ResponseException`, and
+        `IOException` to domain Results at the repository boundary — never leak Ktor types (`HttpResponse`,
+        exceptions) above the data layer. See the android-foundation:ktor-conventions skill; layer principles stay
+        with the hosting foundation's data-layer conventions (do not restate them).
+      security: |
+        Ktor (MASVS-NETWORK): all base URLs MUST be HTTPS — no cleartext; configure certificate/public-key
+        pinning where the threat model requires it (engine-level, e.g. OkHttp `CertificatePinner`). The
+        `Logging` plugin must be DEBUG-gated and must never log `Authorization` headers, cookies, tokens, or
+        request/response bodies in release. Do not disable TLS verification or install trust-all managers.
+        Apply the R8/ProGuard keep rules in rules/snippets/ktor-proguard.md when the project
+        ships R8 (Ktor engine reflection + kotlinx.serialization).
+    post_pipeline_checks: []
+
+  - stack: room
+    priority: 150                       # documentational for frameworks — they never win an aspect
+    enriches_aspect: persistence       # functional category; a foundation hosting `persistence` resolves me
+    dependency: androidx.room          # the foundation declares WHERE to look; the orchestrator executes
+    convention_skills:
+      - android-foundation:room-conventions
+    phase_injections:
+      development: |
+        Room is present. `@Dao` methods are `suspend` for one-shot reads/writes and return `Flow<T>` for
+        observable queries — never blocking calls on the main thread. Use `@Transaction` for multi-statement
+        atomic operations and for `@Relation` reads. Generate the compiler with KSP (not KAPT). Provide
+        explicit `Migration` objects and keep `exportSchema = true`; do NOT ship
+        `fallbackToDestructiveMigration()` in release. Keep Room `@Entity` types in the data layer and map
+        them to domain models at the repository boundary — never expose entities upward. See the
+        android-foundation:room-conventions skill; layer principles stay with the hosting foundation's data-layer
+        conventions (do not restate them).
+      security: |
+        Room (MASVS-STORAGE): every query MUST be parameterized — use `@Query` bind parameters (`:arg`) or
+        `SupportSQLiteQuery` bind args for `@RawQuery`; never concatenate untrusted input into SQL. Sensitive
+        data at rest (tokens, credentials, PII) must not sit in a plaintext database — use an encrypted store
+        (e.g. SQLCipher) or field-level encryption and coordinate the trust boundary with security-analyst.
+        Keep `exportSchema = true` for auditable migrations; never log query contents containing PII. Apply
+        the R8/ProGuard keep rules in rules/snippets/room-proguard.md when the project ships R8.
+    post_pipeline_checks: []
+
+  - stack: datastore-proto
+    priority: 150                       # documentational for frameworks — they never win an aspect
+    enriches_aspect: persistence       # functional category; a foundation hosting `persistence` resolves me
+    dependency: androidx.datastore     # covers datastore/datastore-core; the foundation declares WHERE to look
+    convention_skills:
+      - android-foundation:datastore-conventions
+    phase_injections:
+      development: |
+        Proto DataStore is present. Create exactly **one** `DataStore<T>` instance per file — expose it as a
+        singleton (the `dataStore` delegate at file scope, or a DI singleton); never construct two for the
+        same file (it throws). Define a typed `Serializer<T>` with an explicit `defaultValue` and
+        `readFrom`/`writeTo` (kotlinx-serialization is the house serializer). Read state as `data: Flow<T>`
+        and write with atomic `updateData { current -> … }` (read-modify-write) — never partial blocking
+        writes. Handle corruption with a `ReplaceFileCorruptionHandler`; migrate legacy prefs with
+        `SharedPreferencesMigration`/`DataMigration`. DataStore manages its own IO dispatcher — don't wrap it.
+        Keep the proto/state type in the data layer and map to domain at the repository boundary. See the
+        android-foundation:datastore-conventions skill; layer principles stay with the hosting
+        foundation's data-layer conventions (do not restate them).
+      security: |
+        Proto DataStore (MASVS-STORAGE): the backing file is **plaintext on disk** — never persist secrets,
+        tokens, or PII unencrypted. Encrypt sensitive fields (Keystore-backed) or keep them in secure storage
+        and persist only non-sensitive state here. Do not log the deserialized value if it can contain PII.
+        Apply the R8/ProGuard keep rules in rules/snippets/datastore-proguard.md when
+        the project ships R8 (keep the serializer / protobuf-javalite types).
+    post_pipeline_checks: []
+
+  - stack: dagger
+    priority: 150                       # documentational for frameworks — they never win an aspect
+    enriches_aspect: di                # functional category; a foundation hosting `di` resolves me
+    dependency: com.google.dagger      # covers plain Dagger and Hilt; the foundation declares WHERE to look
+    convention_skills:
+      - android-foundation:hilt-conventions
+    phase_injections:
+      development: |
+        Dagger/Hilt is present. Prefer constructor injection with `@Inject`; reserve field injection for
+        framework entry points (`@AndroidEntryPoint` Activities/Fragments/Services, `@HiltAndroidApp`
+        Application). ViewModels use `@HiltViewModel` + an `@Inject constructor`. Bindings live in `@Module`
+        + `@InstallIn(<component>)`; prefer `@Binds` for interface→impl, `@Provides` only for types you do not
+        own. Scope deliberately (`@Singleton`, `@ActivityRetainedScoped`, `@ViewModelScoped`) — do not make
+        everything `@Singleton`. Expose dispatchers via qualifiers (e.g. `@IoDispatcher`) per the hosting
+        foundation's data-layer conventions. Generate hilt-compiler with KSP, not KAPT. See the
+        android-foundation:hilt-conventions skill.
+      security: |
+        Dagger/Hilt: do not keep security-sensitive material (decrypted keys, tokens, plaintext credentials)
+        in long-lived `@Singleton` graphs longer than needed — scope it to the narrowest lifetime and clear it.
+        Be deliberate with `@EntryPoint` / `EntryPointAccessors`: they bypass normal injection and can expose
+        internal bindings — only expose what is required. Apply the R8/ProGuard keep rules in
+        rules/snippets/hilt-proguard.md when the project ships R8.
+    post_pipeline_checks: []
+
+  - stack: koin
+    priority: 150                       # documentational for frameworks — they never win an aspect
+    enriches_aspect: di                # functional category; a foundation hosting `di` resolves me
+    dependency: io.insert-koin         # covers koin-core/koin-android/koin-androidx-compose; the foundation declares WHERE to look
+    convention_skills:
+      - android-foundation:koin-conventions
+    phase_injections:
+      development: |
+        Koin is present. Declare bindings in the `module { }` DSL — `single` for singletons, `factory` for
+        new-each-time, `viewModel`/`viewModelOf` for ViewModels; resolve dependencies through constructor
+        parameters with `get()`, not by pulling from the container inside classes. Start the graph once in
+        `Application` via `startKoin { androidContext(this@App); modules(appModule, …) }`. In Compose, obtain
+        ViewModels with `koinViewModel()` and dependencies with `koinInject()`; do NOT make domain/data
+        classes implement `KoinComponent` to service-locate — inject through constructors so they stay
+        framework-agnostic and testable. Scope deliberately (`scope<T> { scoped { … } }`) instead of making
+        everything `single`. Organize modules by feature and compose them; expose dispatchers via
+        named/typed qualifiers per the hosting foundation's data-layer conventions. See the
+        android-foundation:koin-conventions skill; layer/DI principles stay with the hosting foundation's
+        conventions (do not restate them).
+      security: |
+        Koin: do not hold security-sensitive material (decrypted keys, tokens, plaintext credentials) in
+        long-lived `single` definitions longer than needed — prefer `factory`/`scoped` for the narrowest
+        lifetime and clear it. Keep the `KoinComponent` service-locator escape hatch out of security-
+        sensitive code paths (it bypasses explicit wiring and hides what a class can reach). Koin core is
+        runtime/reflection-light and needs no special R8 keep rules; if the project uses Koin Annotations
+        (KSP), apply the notes in rules/snippets/koin-proguard.md.
+    post_pipeline_checks: []
+
+  - stack: workmanager
+    priority: 150                       # documentational for frameworks — they never win an aspect
+    enriches_aspect: background         # functional category; a foundation hosting `background` resolves me
+    dependency: androidx.work           # covers work-runtime(-ktx)/work-testing; the foundation declares WHERE to look
+    convention_skills:
+      - android-foundation:workmanager-conventions
+    phase_injections:
+      development: |
+        WorkManager is present. Model deferrable, guaranteed background work as Workers — prefer
+        `CoroutineWorker` (suspend `doWork()`) over the threaded `Worker`; never block or spawn your own
+        threads inside a worker. Enqueue **unique** work (`enqueueUniqueWork` / `enqueueUniquePeriodicWork`
+        with an explicit `ExistingWorkPolicy`/`ExistingPeriodicWorkPolicy`) to avoid duplicate chains; give
+        every request meaningful `Constraints` (network/charging/battery) and a `setBackoffCriteria` policy.
+        Keep `doWork()` **idempotent** — it can re-run — and return `Result.retry()` for transient failures,
+        `Result.failure()` for permanent ones, `Result.success()` only when done. Pass only small,
+        non-sensitive identifiers via `inputData` (it is persisted in WorkManager's DB and size-limited);
+        load the real data inside the worker. Inject dependencies through a `WorkerFactory` (the DI aspect's
+        factory when a DI framework is present) — never construct repositories inside a worker. Observe state
+        with the `WorkInfo` `Flow` APIs from the ViewModel; never block on `getWorkInfos*().get()`.
+        Layer/DI/concurrency principles stay with the hosting foundation's conventions (do not restate them).
+        See the android-foundation:workmanager-conventions skill.
+      security: |
+        WorkManager (MASVS-STORAGE / MASVS-PLATFORM): `inputData` and worker tags are persisted UNENCRYPTED
+        in WorkManager's internal database — never put secrets, tokens, or PII there; pass an opaque id and
+        load sensitive material inside the worker from secure storage. Expedited/foreground workers that post
+        a notification must not leak PII in the notification, and on Android 14+ must declare the correct
+        `foregroundServiceType`. Do not add `RECEIVE_BOOT_COMPLETED`, wake-lock, or exported components unless
+        the work genuinely requires them. Apply the R8/ProGuard keep rules in
+        rules/snippets/workmanager-proguard.md when the project ships R8 and relies on the
+        default WorkerFactory (reflective Worker instantiation).
+    post_pipeline_checks: []
+
 # Android expertise, per CORE role (ADR-0021). Keys are agent names from plugins/sdlc/manifest.yaml,
 # NOT phase names: `developer` serves both development and remediation, and debugger/devops/cicd/
 # aar-analyst have no phase at all. `invariants` rides in every turn's stable prefix, so it is capped

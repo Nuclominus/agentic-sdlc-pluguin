@@ -37,8 +37,8 @@ flowchart LR
       AAG["role_expertise per core role<br/>invariants + rule paths + mandatory skills<br/>(no agents)"]
       AWF["android-feature / android-bugfix workflows"]
     end
-    subgraph RET["retrofit-plugin (additive framework provider)"]
-      RFM["manifest.yaml<br/>kind: framework"]
+    subgraph RET["android-foundation's frameworks: array (ADR-0026)"]
+      RFM["frameworks: [ {stack: retrofit, ...}, ... ]<br/>synthesized into kind: framework records"]
       RSK["convention skill + phase injections<br/>+ ProGuard keep rules (no agents, no phases)"]
     end
     AST -. registers .-> ORC
@@ -53,32 +53,34 @@ A **stack provider** **registers** itself by shipping a `manifest.yaml` (`kind: 
 phase→agent map + default workflow) and, optionally, its own `workflows/`. The core discovers everything by
 globbing `**/manifest.yaml` and `**/workflows/*.yaml` — it is never edited to add a stack.
 
-**Additive framework providers** (e.g. `retrofit-plugin`) ship a `manifest.yaml` with `kind: framework`
-instead. They are auto-detected from the Gradle version catalog / build files, collected into the
+**Additive frameworks** (ADR-0026 — e.g. Retrofit, Ktor, Room, Proto DataStore, Dagger/Hilt, Koin,
+WorkManager) are rows in their hosting foundation's own `manifest.yaml` `frameworks:` array, not
+separate installed plugins. The resolver synthesizes one `kind: framework` record per row at load
+time. They are auto-detected from the Gradle version catalog / build files, collected into the
 orchestrator's `ADDITIVE_PROFILES` set, and feed their convention-skills + phase injections into the
-profile merge. They are **enrich-only** — they ship no agents and own no phases, and are excluded from
+profile merge. They are **enrich-only** — they carry no agents and own no phases, and are excluded from
 per-aspect winner resolution and `PRIMARY_PROFILE` selection.
 
 ### Key principles
 
 1. **Core never changes.** Pipeline logic lives exclusively in `pipeline-orchestrator/SKILL.md`. It has zero knowledge of any platform, library, security standard, or workflow recipe.
 2. **The foundation registers itself** via `manifest.yaml` (`kind: foundation`) — it declares auto-detection rules, priority, an optional default workflow, convention skills, and `role_expertise` per core role. It declares **no agents and no phase bindings**: since ADR-0021 the roster and the only `agents_per_phase` map in the marketplace live in `plugins/sdlc/manifest.yaml`, and the schema rejects those keys on any other foundation.
-3. **Framework plugins attach additively** via `manifest.yaml` (`kind: framework`). They enrich existing phases (convention skill + dev/security injections + ProGuard) and ship **no agents** — they never win an aspect or own a phase. The core picks the foundation, then **delegates** framework discovery to it: the foundation collects every `kind: framework` manifest whose `enriches_aspect` (a functional category like `network`/`persistence`/`di`) is in its `hosts_aspects`, and detects them via its own `framework_detection`. Frameworks point *up* to a category, never sideways at a plugin.
-4. **Priority wins.** When multiple foundations match, the highest priority takes over. Framework manifests do not compete.
+3. **Frameworks attach additively** as `frameworks:` rows (ADR-0026) inside their hosting foundation's own `manifest.yaml` — the resolver synthesizes each row into an ordinary `kind: framework` record, in both loader modes, so the rest of the pipeline is unaffected by the row-vs-standalone-manifest distinction. They enrich existing phases (convention skill + dev/security injections + ProGuard) and carry **no agents** — they never win an aspect or own a phase. The core picks the foundation, then **delegates** framework discovery to it: the foundation collects every synthesized `kind: framework` record whose `enriches_aspect` (a functional category like `network`/`persistence`/`di`) is in its `hosts_aspects`, and detects them via its own `framework_detection`. Frameworks point *up* to a category, never sideways at a plugin.
+4. **Priority wins.** When multiple foundations match, the highest priority takes over. Framework records do not compete.
 5. **Everything is discovered, not hardcoded.** Manifests (`**/manifest.yaml`, split by `kind`), workflows (`**/workflows/*.yaml`), and runtime dependencies (`**/runtime-dependencies.json`) are globbed across all installed plugins.
 
 ### Stack Priority Table
 
-Stack providers (foundations) detect by project structure (`detect`); framework providers just name a `dependency` and point at a functional category via `enriches_aspect`. The foundation hosting that category (`hosts_aspects`) declares where to search (`framework_detection`: catalog first, then build files) and the orchestrator executes it.
+Stack providers (foundations) detect by project structure (`detect`); framework rows just name a `dependency` and point at a functional category via `enriches_aspect`. The foundation hosting that category (`hosts_aspects`) declares where to search (`framework_detection`: catalog first, then build files) and the orchestrator executes it.
 
-| Priority | Plugin              | Aspects | Detect / dependency                                                 |
-| -------- | ------------------- | ------- | ------------------------------------------------------------------- |
-| 0        | `vanilla` (sdlc)    | —       | `*` (always matches)                                                |
-| 300      | `android-foundation`| android | `(settings.gradle.kts OR settings.gradle)` **AND** `**/*.kt`        |
-| additive | `retrofit-plugin`   | —       | `dependency: com.squareup.retrofit2`                                |
-| additive | `room-plugin`       | —       | `dependency: androidx.room`                                         |
-| additive | `dagger-plugin`     | —       | `dependency: com.google.dagger` (Dagger + Hilt)                     |
-| additive | `workmanager-plugin`| —       | `dependency: androidx.work`                                         |
+| Priority | Plugin / row (ADR-0026)        | Aspects | Detect / dependency                                                 |
+| -------- | ------------------------------ | ------- | ------------------------------------------------------------------- |
+| 0        | `vanilla` (sdlc)                | —       | `*` (always matches)                                                |
+| 300      | `android-foundation`            | android | `(settings.gradle.kts OR settings.gradle)` **AND** `**/*.kt`        |
+| additive | `retrofit` (embedded row)       | —       | `dependency: com.squareup.retrofit2`                                |
+| additive | `room` (embedded row)           | —       | `dependency: androidx.room`                                         |
+| additive | `dagger` (embedded row)         | —       | `dependency: com.google.dagger` (Dagger + Hilt)                     |
+| additive | `workmanager` (embedded row)    | —       | `dependency: androidx.work`                                         |
 
 ### Detection rules
 
@@ -91,14 +93,14 @@ A profile's `detect` block supports four rule types, freely nestable via `any` /
 | `file_glob: <pattern>` | ≥1 file matches the glob (variable-named / nested artifacts — module-level build files, monorepo subtrees) |
 | `any: [...]` / `all: [...]` | nested OR / AND (recursive) |
 
-This is why projects auto-detect with **no `--stack=` flag** — and why framework plugins activate automatically when their library appears in the build.
+This is why projects auto-detect with **no `--stack=` flag** — and why embedded frameworks activate automatically when their library appears in the build.
 
-### Framework Provider Pattern (additive profiles)
+### Framework Provider Pattern (additive profiles, ADR-0026)
 
-A **framework plugin** ships a `manifest.yaml` with `kind: framework`. Unlike a foundation, it:
+A **framework** is a row in its hosting foundation's `manifest.yaml` `frameworks:` array — the resolver synthesizes it into a `kind: framework` record with the exact shape a standalone framework manifest used to have. Unlike a foundation, it:
 
 - **Owns no aspect and no agents.** It is excluded from per-aspect winner resolution and from PRIMARY_PROFILE selection — it cannot drive a phase.
-- **Decorates a functional category, not a plugin.** It declares `enriches_aspect: <network|persistence|di|ui|background|analytics|architecture>` and depends on **no** sibling plugin (its `plugin.json → dependencies` lists only `sdlc`). It is never considered unless a winning foundation's `hosts_aspects` includes that category — so any foundation hosting it satisfies the contract, and frameworks stay true peers, never referencing another plugin's skill id directly.
+- **Decorates a functional category, not a plugin.** It declares `enriches_aspect: <network|persistence|di|ui|background|analytics|architecture>` and names no sibling plugin — it lives inside its hosting foundation's own manifest. It is never considered unless that foundation's `hosts_aspects` includes the category.
 - **Enriches existing phases.** It contributes a convention skill, `development` + `security` phase-prompt injections, ProGuard/R8 keep rules, and (optionally) post-checks — all merged into the run by the orchestrator's existing profile-merge.
 - **Auto-detects** from the Gradle version catalog / build files; the foundation hosting its category consumes its guidance through that phase's existing agents — only when the library is present.
 
@@ -110,7 +112,9 @@ frameworks:
   disable: [dagger]     # suppress even if detected
 ```
 
-The boundary: **pinned house rules** (Coil3, Kermit, KSP, `@Serializable` routes, DataStore, Play Billing) stay in the foundation as non-negotiables; **detect-don't-impose libraries** (Retrofit, Room, Dagger/Hilt) become framework plugins. `retrofit-plugin` is the reference implementation.
+Toggling is by `stack` id, unaffected by the merge — `enable`/`disable` keyed exactly as before.
+
+The boundary: **pinned house rules** (Coil3, Kermit, KSP, `@Serializable` routes, DataStore, Play Billing) stay in the foundation as non-negotiables; **detect-don't-impose libraries** (Retrofit, Room, Dagger/Hilt) become `frameworks:` rows. `android-foundation`'s own array is the reference implementation.
 
 > Authoring a foundation or framework plugin — including `manifest.yaml` examples and schema
 > validation — is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md). Deeper architecture depth
@@ -196,7 +200,7 @@ the security agent classifies and prescribes, the development agent applies.
 
 ### Framework enrichment (additive)
 
-When a framework plugin's library is detected, its guidance joins the run without changing the pipeline shape. Example: on a project using Retrofit, `retrofit-plugin` adds its `retrofit-conventions` skill to the development phase and injects networking + TLS guidance into the `developer` and `security-analyst` prompts. No extra agent, no extra phase — the existing agents simply receive richer, library-specific instructions. Multiple frameworks compose: their injections concatenate deterministically.
+When an embedded framework's library is detected, its guidance joins the run without changing the pipeline shape. Example: on a project using Retrofit, the `retrofit` row adds its `android-foundation:retrofit-conventions` skill to the development phase and injects networking + TLS guidance into the `developer` and `security-analyst` prompts. No extra agent, no extra phase — the existing agents simply receive richer, library-specific instructions. Multiple frameworks compose: their injections concatenate deterministically.
 
 ## 3b. Project-local recipes & built-in intents
 

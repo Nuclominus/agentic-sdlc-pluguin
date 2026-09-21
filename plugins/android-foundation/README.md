@@ -1,6 +1,6 @@
 # android-foundation
 
-Android Foundation — the centerpiece Android (Kotlin + Gradle) stack provider for the Agentic SDLC marketplace. Its `manifest.yaml` (`kind: foundation`) registers the `android` profile (platform aspect `android`, priority 300) and contributes the Android **expertise** the core roster consumes: a per-role `role_expertise` block, nine extracted skills, house rules and hooks (ADR-0021 — the agents themselves live in `sdlc`). It carries the pinned house rules and **hosts** detect-don't-impose libraries (Retrofit→`network`, Room→`persistence`, Dagger/Hilt→`di`) via `hosts_aspects: all` + `framework_detection`; those attach as **additive framework plugins**. For the Stack Provider Pattern, the Framework Provider Pattern, and shared mechanisms, see the [root README](../../README.md).
+Android Foundation — the centerpiece Android (Kotlin + Gradle) stack provider for the Agentic SDLC marketplace. Its `manifest.yaml` (`kind: foundation`) registers the `android` profile (platform aspect `android`, priority 300) and contributes the Android **expertise** the core roster consumes: a per-role `role_expertise` block, nine extracted skills, house rules and hooks (ADR-0021 — the agents themselves live in `sdlc`). It carries the pinned house rules and **embeds** detect-don't-impose libraries (Retrofit/Ktor→`network`, Room/Proto DataStore→`persistence`, Dagger-Hilt/Koin→`di`, WorkManager→`background`) directly via its own `frameworks:` array (ADR-0026) — each row conditionally activates via `enriches_aspect` + `dependency`, no separate plugin. For the Stack Provider Pattern, the Framework Provider Pattern, and shared mechanisms, see the [root README](../../README.md).
 
 ---
 
@@ -61,8 +61,9 @@ the same from `node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs expertise --role
 | `aar-analyst` | `/sdlc:aar` | — | What to audit an Android run against; workflow scope only |
 
 Convention skills (`android-compose-ui`, `android-architecture`, `android-data`, `android-navigation`)
-are declared separately under `convention_skills` and reach the development phase as before; framework
-plugins (Hilt, Retrofit, Room, …) add their own `phase_injections` on top.
+are declared separately under `convention_skills` and reach the development phase as before; the 7
+embedded frameworks (Hilt, Retrofit, Ktor, Room, Proto DataStore, Koin, WorkManager — ADR-0026) each
+add their own `phase_injections` on top, from their row in this manifest's `frameworks:` array.
 
 ### Who may write code
 

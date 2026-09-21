@@ -9,6 +9,8 @@ import { renderReportFile } from "./lib/report.mjs";
 import { rollupWorkspace } from "./lib/rollup.mjs";
 import { checkReadDiscipline } from "./lib/read-discipline.mjs";
 import { checkPluginPaths } from "./lib/plugin-paths.mjs";
+import { checkNestedManifest } from "./lib/nested-manifest.mjs";
+import { checkStackUniqueness } from "./lib/stack-uniqueness.mjs";
 import { checkMachineValues } from "./lib/machine-values.mjs";
 import { checkAgentTools } from "./lib/agent-tools.mjs";
 import { checkRoster } from "./lib/roster.mjs";
@@ -67,6 +69,30 @@ function printPluginPaths(results) {
     console.log(`plugin-paths: ${results.length - failed.length}/${results.length} clean`);
   }
   return failed.some(r => r.tool_error) ? 2 : failed.length ? 1 : 0;
+}
+
+// checkNestedManifest returns ONLY violations (edge case 3, ADR-0026) — there is no "checked N,
+// M passed" count to report, just a list that should be empty.
+function printNestedManifest(results) {
+  if (jsonOut) {
+    console.log(JSON.stringify({ command: "nested-manifest", failed: results.length, failures: results }));
+  } else {
+    for (const r of results) console.error(`✗ ${r.file}\n    ${r.errors.join("\n    ")}`);
+    console.log(`nested-manifest: ${results.length === 0 ? "clean" : `${results.length} violation(s)`}`);
+  }
+  return results.length ? 1 : 0;
+}
+
+// checkStackUniqueness returns ONLY violations (ADR-0026 stack collisions) — same "violations
+// only" shape as printNestedManifest, no "checked N, M passed" count to report.
+function printStackUniqueness(results) {
+  if (jsonOut) {
+    console.log(JSON.stringify({ command: "stack-uniqueness", failed: results.length, failures: results }));
+  } else {
+    for (const r of results) console.error(`✗ ${r.file}\n    ${r.errors.join("\n    ")}`);
+    console.log(`stack-uniqueness: ${results.length === 0 ? "clean" : `${results.length} violation(s)`}`);
+  }
+  return results.length ? 1 : 0;
 }
 
 function printAgentTools(results) {
@@ -287,6 +313,8 @@ function runAll() {
     printCycles(checkAllWorkflows(root)),
     printReadDiscipline(checkReadDiscipline(root)),
     printPluginPaths(checkPluginPaths(root)),
+    printNestedManifest(checkNestedManifest(root)),
+    printStackUniqueness(checkStackUniqueness(root)),
     printMachineValues(checkMachineValues(root)),
     printAgentTools(checkAgentTools(root)),
     printRoster(checkRoster(root)),
@@ -299,7 +327,7 @@ function runAll() {
 }
 
 const VERBS = ["schema", "cycles", "detect", "resume", "report", "rollup", "read-discipline",
-  "plugin-paths", "machine-values", "agent-tools", "roster", "compliance", "start-window", "all"];
+  "plugin-paths", "nested-manifest", "stack-uniqueness", "machine-values", "agent-tools", "roster", "compliance", "start-window", "all"];
 
 let code = 0;
 switch (cmd) {
@@ -307,6 +335,8 @@ switch (cmd) {
   case "cycles": code = printCycles(checkAllWorkflows(root)); break;
   case "read-discipline": code = printReadDiscipline(checkReadDiscipline(root)); break;
   case "plugin-paths": code = printPluginPaths(checkPluginPaths(root)); break;
+  case "nested-manifest": code = printNestedManifest(checkNestedManifest(root)); break;
+  case "stack-uniqueness": code = printStackUniqueness(checkStackUniqueness(root)); break;
   case "machine-values": code = printMachineValues(checkMachineValues(root)); break;
   case "agent-tools": code = printAgentTools(checkAgentTools(root)); break;
   case "roster": code = printRoster(checkRoster(root)); break;
@@ -354,9 +384,11 @@ switch (cmd) {
     // Even the help path owes a JSON consumer an envelope — `--json` must never leave stdout
     // unparseable, whatever the exit code (#126).
     if (jsonOut) { console.log(JSON.stringify({ command: "help", ok: true, verbs: VERBS })); break; }
-    console.log("Usage: sdlc-lint <schema|cycles|detect|resume|report|rollup|read-discipline|plugin-paths|machine-values|agent-tools|roster|compliance|start-window|all> [--json]");
+    console.log("Usage: sdlc-lint <schema|cycles|detect|resume|report|rollup|read-discipline|plugin-paths|nested-manifest|stack-uniqueness|machine-values|agent-tools|roster|compliance|start-window|all> [--json]");
     console.log("  read-discipline   E2: contract present in the stable prefix; no re-read phrasing in agents");
     console.log("  plugin-paths      #70: no home-anchored ~/.claude paths in shipped plugin text");
+    console.log("  nested-manifest   ADR-0026: no manifest.yaml below a plugin root (tree-vs-installed trap)");
+    console.log("  stack-uniqueness  ADR-0026: every foundation/embedded/standalone `stack` id is unique repo-wide");
     console.log("  machine-values    H3: no prose computing a value a machine already writes");
     console.log("  agent-tools       ADR-0018: every agent declares tools; none may dispatch agents; reviewers hold no Edit");
     console.log("  roster            ADR-0021: core binds every phase to a shipped agent; role_expertise keys/rules/skills resolve; expertise slot present");

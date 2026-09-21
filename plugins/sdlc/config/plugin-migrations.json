@@ -1,0 +1,61 @@
+{
+  "_comment": "Plugin/skill-id renames across marketplace versions — the data /sdlc:doctor migrates a project's config with (parallel to agent-migrations.json, but keyed on a `plugin:skill` id rather than a bare agent name, since the token shape differs). THIS IS NOT A RUNTIME ALIAS TABLE: nothing resolves an id through it at dispatch or prompt assembly. It exists so a rename is a one-time, visible, approved edit to the user's own files. `skill_renames` maps the OLD fully-qualified `plugin:skill` id to the NEW one.",
+  "migrations": [
+    {
+      "plugin": "retrofit-plugin",
+      "since": "sdlc@3.0.0",
+      "reason": "ADR-0026 — the 7 additive Android framework plugins were embedded into android-foundation's manifest.yaml `frameworks:` array; their skills moved under android-foundation's own skill namespace.",
+      "skill_renames": {
+        "retrofit-plugin:retrofit-conventions": "android-foundation:retrofit-conventions"
+      }
+    },
+    {
+      "plugin": "ktor-plugin",
+      "since": "sdlc@3.0.0",
+      "reason": "ADR-0026 — embedded into android-foundation.",
+      "skill_renames": {
+        "ktor-plugin:ktor-conventions": "android-foundation:ktor-conventions"
+      }
+    },
+    {
+      "plugin": "room-plugin",
+      "since": "sdlc@3.0.0",
+      "reason": "ADR-0026 — embedded into android-foundation.",
+      "skill_renames": {
+        "room-plugin:room-conventions": "android-foundation:room-conventions"
+      }
+    },
+    {
+      "plugin": "datastore-proto-plugin",
+      "since": "sdlc@3.0.0",
+      "reason": "ADR-0026 — embedded into android-foundation.",
+      "skill_renames": {
+        "datastore-proto-plugin:datastore-conventions": "android-foundation:datastore-conventions"
+      }
+    },
+    {
+      "plugin": "dagger-plugin",
+      "since": "sdlc@3.0.0",
+      "reason": "ADR-0026 — embedded into android-foundation. The one divergent case: plugin name and skill name were never the same (dagger-plugin ships the hilt-conventions skill).",
+      "skill_renames": {
+        "dagger-plugin:hilt-conventions": "android-foundation:hilt-conventions"
+      }
+    },
+    {
+      "plugin": "koin-plugin",
+      "since": "sdlc@3.0.0",
+      "reason": "ADR-0026 — embedded into android-foundation.",
+      "skill_renames": {
+        "koin-plugin:koin-conventions": "android-foundation:koin-conventions"
+      }
+    },
+    {
+      "plugin": "workmanager-plugin",
+      "since": "sdlc@3.0.0",
+      "reason": "ADR-0026 — embedded into android-foundation.",
+      "skill_renames": {
+        "workmanager-plugin:workmanager-conventions": "android-foundation:workmanager-conventions"
+      }
+    }
+  ]
+}
