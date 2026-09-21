@@ -18,7 +18,7 @@ function write(file, content) {
 }
 
 /** A consumer machine: config dir + one installed plugin + a git project. */
-function world({ localYaml = null, modelJson = null, recipe = null, roleExpertise = false } = {}) {
+function world({ localYaml = null, modelJson = null, recipe = null, roleExpertise = false, frameworks = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "sdlc-plan-"));
   const cfg = join(dir, "cfg");
   const plug = join(dir, "cache", "demo", "1.0.0");
@@ -34,6 +34,20 @@ function world({ localYaml = null, modelJson = null, recipe = null, roleExpertis
     "detect:",
     "  file_exists: marker.txt",
     "hosts_aspects: all",
+    // ADR-0026: two providers contesting one aspect, both coordinates present — the mid-migration
+    // shape `frameworks.disable` exists for (issue #197).
+    ...(frameworks ? [
+      "framework_detection: [\"deps.txt\"]",
+      "frameworks:",
+      "  - stack: alpha",
+      "    enriches_aspect: network",
+      "    dependency: com.example:alpha",
+      "    phase_injections: { development: \"ALPHA RULES\" }",
+      "  - stack: beta",
+      "    enriches_aspect: network",
+      "    dependency: com.example:beta",
+      "    phase_injections: { development: \"BETA RULES\" }",
+    ] : []),
     ...(roleExpertise ? [
       // ADR-0021 shape: the foundation binds NO agents; it declares expertise per core role.
       "role_expertise:",
@@ -116,6 +130,7 @@ function world({ localYaml = null, modelJson = null, recipe = null, roleExpertis
   });
 
   write(join(proj, "marker.txt"), "detect me\n");
+  if (frameworks) write(join(proj, "deps.txt"), "com.example:alpha:1.0\ncom.example:beta:1.0\n");
   if (localYaml) write(join(proj, ".claude", "sdlc.local.yaml"), localYaml);
   if (modelJson) write(join(proj, ".claude", "model.local.json"), modelJson);
 
@@ -827,4 +842,57 @@ test("a slug that is a path, not a run name, is refused", () => {
   assert.equal(r.slug, null);
   assert.equal(r.done.size, 0);
   assert.ok(r.warnings.some((w) => /not a run slug/.test(w)));
+});
+
+// ---- issue #197: `frameworks.disable` reaches detection, and an unknown key is not silent ----
+
+test("frameworks.disable suppresses a detected framework end to end, injection and all", () => {
+  const w = world({ frameworks: true, localYaml: "frameworks:\n  disable: [beta]\n" });
+  try {
+    const r = resolvePlan({ cwd: w.proj, args: "--dry-run", env: w.env });
+    assert.equal(r.halt, null, r.halt ?? "");
+    assert.deepEqual(r.plan.stack.additive_profiles, ["alpha"]);
+    assert.deepEqual(r.plan.stack.suppressed_profiles, ["beta"], "telemetry must be able to tell a suppression from a non-detection");
+    // The point of suppressing at attachment: the framework's guidance never reaches a prompt.
+    const dev = r.plan.profile.phase_prompts_injection.development ?? "";
+    assert.match(dev, /ALPHA RULES/);
+    assert.doesNotMatch(dev, /BETA RULES/, "a suppressed framework must not enrich any phase");
+    assert.ok(r.prints.some((x) => /suppressed: beta \(frameworks\.disable\)/.test(x)), "the banner has to say detection was overridden");
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("without the override both contesting frameworks still attach", () => {
+  const w = world({ frameworks: true });
+  try {
+    const r = resolvePlan({ cwd: w.proj, args: "--dry-run", env: w.env });
+    assert.deepEqual(r.plan.stack.additive_profiles, ["alpha", "beta"], "detection-only behaviour is unchanged");
+    assert.deepEqual(r.plan.stack.suppressed_profiles, []);
+    assert.ok(!r.prints.some((x) => /suppressed/.test(x)));
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("a disable naming nothing installed warns instead of failing quietly", () => {
+  const w = world({ frameworks: true, localYaml: "frameworks:\n  disable: [gamma]\n" });
+  try {
+    const r = resolvePlan({ cwd: w.proj, args: "--dry-run", env: w.env });
+    assert.deepEqual(r.plan.stack.additive_profiles, ["alpha", "beta"]);
+    assert.ok(r.warnings.some((x) => /frameworks\.disable 'gamma'/.test(x)), `got ${JSON.stringify(r.warnings)}`);
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("a stale frameworks.enable block is reported rather than read as honoured", () => {
+  const w = world({ frameworks: true, localYaml: "frameworks:\n  enable: [gamma]\n  disable: [beta]\n" });
+  try {
+    const r = resolvePlan({ cwd: w.proj, args: "--dry-run", env: w.env });
+    assert.deepEqual(r.plan.stack.additive_profiles, ["alpha"], "the supported half still applies");
+    assert.ok(r.warnings.some((x) => /frameworks\.enable is not supported/.test(x)));
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("an unknown top-level key in a real sdlc.local.yaml warns on every run", () => {
+  const w = world({ localYaml: "skip_phase:\n  - security\n" });
+  try {
+    const r = resolvePlan({ cwd: w.proj, args: "--dry-run", env: w.env });
+    assert.ok(r.warnings.some((x) => /unknown key 'skip_phase'/.test(x)), `got ${JSON.stringify(r.warnings)}`);
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });

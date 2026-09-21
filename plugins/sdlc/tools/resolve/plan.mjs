@@ -16,7 +16,7 @@ import { resolveStack } from "./detect.mjs";
 import { preflight } from "./deps.mjs";
 import { computeDiffSignals, applySkipRules, renderSkipPrint } from "./skiprules.mjs";
 import {
-  mergeProfiles, applyLocalOverrides, parseModelOverrides, renderOverridesPrint, renderModelPrint, renderStackPrint,
+  mergeProfiles, applyLocalOverrides, parseFrameworkOverrides, parseModelOverrides, renderOverridesPrint, renderModelPrint, renderStackPrint,
   mergeRoleExpertise, renderRoleExpertiseBlock, renderSkillsBlock,
 } from "./profile.mjs";
 import { discoverRecipes, resolveWorkflowName, locateRecipe, validateWorkflow, normalizePhases, validateAcyclic, buildResolvedPhases, renderWorkflowPrint, availableNames } from "./workflow.mjs";
@@ -214,9 +214,33 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   const deps = preflight({ configDir, projectRoot: cwd, installs, enabled, headless, force: flag(args, "--force-preflight"), skills: opt(args, "--skills") });
   prints.push(...deps.prints);
 
+  // ---- Step 1b's file, read EARLY
+  //
+  // It is parsed here rather than beside `applyLocalOverrides` below because one of its keys —
+  // `frameworks.disable` — is an input to detection, not to the profile merge. Suppressing a
+  // framework has to prevent attachment (issue #197); a post-hoc filter over `additive` would
+  // leave its `role_expertise` path, its `convention_skills` and its phase injection already
+  // merged. One read, two consumers.
+  const localPath = join(cwd, ".claude", "sdlc.local.yaml");
+  let local = null;
+  if (existsSync(localPath)) {
+    local = readYaml(localPath);
+    if (local?.__error) {
+      warn(`⚠️ Failed to parse .claude/sdlc.local.yaml: ${local.__error}. Continuing with plugin defaults.`);
+      local = null;
+    }
+  }
+  const frameworkOverrides = parseFrameworkOverrides(local);
+  warnAll(frameworkOverrides.warnings);
+
   // ---- Step 0b: detection (`--stack=NAME` skips it, per 0b-2)
   const forcedStack = opt(args, "--stack");
-  const stack = resolveStack(cwd, manifests, { forceStack: forcedStack });
+  const stack = resolveStack(cwd, manifests, { forceStack: forcedStack, disableFrameworks: frameworkOverrides.disable });
+  // A name that matches no installed framework suppressed nothing and would otherwise be the
+  // same silence #197 was about — the config looks honoured while doing nothing at all.
+  for (const name of stack.disable_unknown ?? []) {
+    warn(`WARN: frameworks.disable '${name}' — no installed framework declares that stack id — ignored`);
+  }
   if (stack.forced_unresolved) {
     const known = stack.known_stacks.length ? stack.known_stacks.join(", ") : "none installed";
     return {
@@ -247,15 +271,6 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
     ...(Array.isArray(vanilla?.on_demand_agents) ? vanilla.on_demand_agents : []),
   ]);
 
-  const localPath = join(cwd, ".claude", "sdlc.local.yaml");
-  let local = null;
-  if (existsSync(localPath)) {
-    local = readYaml(localPath);
-    if (local?.__error) {
-      warn(`⚠️ Failed to parse .claude/sdlc.local.yaml: ${local.__error}. Continuing with plugin defaults.`);
-      local = null;
-    }
-  }
   const overridden = applyLocalOverrides(base, local, {
     availableSkills: deps.available_skills,
     unavailablePlugins: deps.flags,
@@ -432,6 +447,10 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
       primary_profile: stack.foundation,
       priority: stack.priority,
       additive_profiles: stack.additive,
+      // Detected, then held back by `frameworks.disable`. Distinct from simply absent from
+      // `additive_profiles`: a run that suppressed a framework and one whose dependency was
+      // never there resolve to the same additive list, and telemetry has to tell them apart.
+      suppressed_profiles: stack.suppressed ?? [],
       aspects: stack.aspects ?? [],
       // The manifest that decided this run's agents. It was previously derived from
       // `located.recipe.origin` — the WORKFLOW recipe's provenance, a different thing

@@ -77,3 +77,84 @@ test("a development checkout without an install key falls back to the containing
   const dev = { foundations: [{ file: "/dev/plugins/my-foundation/manifest.yaml", doc: { stack: "x", detect: "*" } }], frameworks: [] };
   assert.equal(resolveStack("/tmp", dev, {}).source, "my-foundation/manifest.yaml");
 });
+
+// ---- `frameworks.disable` from .claude/sdlc.local.yaml (issue #197) ---------------------
+//
+// The key was orchestrator prose (Step 0b-frameworks) until #121 moved resolution into this
+// module and did not carry it across. It shipped documented-but-dead from v1.13.0 to v3.0.0.
+// These tests are the contract: suppression PREVENTS attachment here, where attachment is
+// decided — it is not a post-hoc filter over `additive`, because a framework that never
+// attached also never contributed a `role_expertise` path or a `convention_skills` row.
+
+const HOSTING = {
+  foundations: [
+    { file: "/c/m/android-foundation/3.0.0/manifest.yaml", key: "android-foundation@m", doc: {
+      kind: "foundation", stack: "android", priority: 100, aspects: ["mobile"], detect: "*",
+      hosts_aspects: "all", framework_detection: ["deps.txt"],
+    } },
+  ],
+  frameworks: [
+    { file: "/c/m/android-foundation/3.0.0/manifest.yaml", doc: { kind: "framework", stack: "ktor", enriches_aspect: "network", dependency: "io.ktor:ktor-client-core" } },
+    { file: "/c/m/android-foundation/3.0.0/manifest.yaml", doc: { kind: "framework", stack: "retrofit", enriches_aspect: "network", dependency: "com.squareup.retrofit2:retrofit" } },
+  ],
+};
+
+/** A project carrying BOTH network coordinates — the mid-migration case ADR-0026 made sharp. */
+function bothNetworkLibs() {
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-fw-"));
+  writeFileSync(join(dir, "deps.txt"), "io.ktor:ktor-client-core:3.0.0\ncom.squareup.retrofit2:retrofit:2.11.0\n");
+  return dir;
+}
+
+test("both contesting frameworks attach when nothing suppresses them", () => {
+  const dir = bothNetworkLibs();
+  try {
+    assert.deepEqual(resolveStack(dir, HOSTING, {}).additive, ["ktor", "retrofit"]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("frameworks.disable suppresses a framework whose dependency IS present", () => {
+  const dir = bothNetworkLibs();
+  try {
+    const r = resolveStack(dir, HOSTING, { disableFrameworks: ["ktor"] });
+    assert.deepEqual(r.additive, ["retrofit"], "the disabled framework must not attach");
+    assert.deepEqual(r.suppressed, ["ktor"], "what was suppressed is reportable — the user overrode detection");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("disabling every framework leaves the foundation itself untouched", () => {
+  const dir = bothNetworkLibs();
+  try {
+    const r = resolveStack(dir, HOSTING, { disableFrameworks: ["ktor", "retrofit"] });
+    assert.equal(r.foundation, "android", "suppression is scoped to frameworks, never the winner");
+    assert.deepEqual(r.additive, []);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("disabling a framework that did not detect is a silent no-op, not a warning", () => {
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-fw-"));
+  try {
+    writeFileSync(join(dir, "deps.txt"), "com.squareup.retrofit2:retrofit:2.11.0\n");
+    const r = resolveStack(dir, HOSTING, { disableFrameworks: ["ktor"] });
+    assert.deepEqual(r.additive, ["retrofit"]);
+    assert.deepEqual(r.suppressed, [], "nothing was suppressed — pre-emptively listing a name is legitimate");
+    assert.deepEqual(r.disable_unknown, [], "'ktor' is an installed framework; it simply did not detect");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a disabled name no installed framework declares is reported, not silently ignored", () => {
+  const dir = bothNetworkLibs();
+  try {
+    const r = resolveStack(dir, HOSTING, { disableFrameworks: ["ktorr"] });
+    assert.deepEqual(r.additive, ["ktor", "retrofit"]);
+    assert.deepEqual(r.disable_unknown, ["ktorr"], "a typo that silently does nothing is the worse half of #197");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("suppression survives --stack, which overrides the foundation and not the frameworks", () => {
+  const dir = bothNetworkLibs();
+  try {
+    const r = resolveStack(dir, HOSTING, { forceStack: "android", disableFrameworks: ["ktor"] });
+    assert.deepEqual(r.additive, ["retrofit"]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

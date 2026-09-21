@@ -214,7 +214,7 @@ that status is available to a wrapper script, but it is not the hosting session'
 | `roots.*` | `CONFIG_DIR`, `PLUGIN_CACHE_ROOT`, `SDLC_PLUGIN_ROOT` | every later plugin read |
 | `deps_preflight` | `CONTEXT.deps_preflight` | Step 5 telemetry |
 | `availability_flags` | `CONTEXT.{plugin}_unavailable` | Step 3b-1 `availability_flags:` trailer |
-| `stack.*` | `CONTEXT.primary_profile`, `priority`, `aspects`, `additive_profiles`, `profile_source` | Step 3, Step 5 |
+| `stack.*` | `CONTEXT.primary_profile`, `priority`, `aspects`, `additive_profiles`, `suppressed_profiles`, `profile_source` | Step 3, Step 5 |
 | `skip_rules.applied` | `CONTEXT.skip_rules_applied[]` *(**Step 0c**)* | Step 4 skip reporting, Step 5 |
 | `workflow.name` | `CONTEXT.active_workflow` | Step 5 |
 | `workflow.autoselected` | `CONTEXT.workflow_autoselected` | Step 1d-2 preview |
@@ -1393,6 +1393,7 @@ their checkpoints, not lost). Then write `docs/plans/{task_slug}/_telemetry.json
   "priority": 300,
   "aspects": ["android"],
   "additive_profiles": ["retrofit"],
+  "suppressed_profiles": "<copy CONTEXT.suppressed_profiles — frameworks this project DETECTED and then held back with `frameworks.disable`. Usually []. Record it: a run that suppressed one and a run whose dependency was never there resolve to the same additive_profiles, and only this field tells the two apart when a rollup compares them>",
   "expertise_block_agents": "<copy CONTEXT.expertise_block_agents — same key, same array, no transformation. The agents the resolver rendered a Stack expertise block for; `sdlc-lint compliance` uses it as the denominator for 3b-1a-expertise-block>",
   "profile_source": "android-foundation/manifest.yaml",
   "narrative_language": "uk",
