@@ -4,9 +4,9 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
-## [3.0.0] — 2026-09-20
+## [3.0.0] — 2026-09-21
 
-`android-foundation` `2.0.2` → `3.0.0`, marketplace `2.0.0` → `3.0.0`.
+`android-foundation` `2.0.2` → `3.0.0`, `sdlc` `2.4.1` → `2.5.0`, marketplace `2.0.0` → `3.0.0`.
 
 ### ⚠️ BREAKING CHANGES — `2.*` → `3.*`
 
@@ -34,13 +34,68 @@ approve. If `installed_plugins.json` still registers one of the 7 removed plugin
 advisory to uninstall it (`/plugin uninstall <name>@agentic-sdlc`) rather than writing that
 harness-owned file itself.
 
-**The marketplace shrinks from 9 entries to 3** (`sdlc`, `android-foundation`, plus the two optional
-external dependencies `superpowers` and `security-guidance`) — 7 `*-plugin` entries removed from
-`.claude-plugin/marketplace.json`.
+**The marketplace shrinks from 11 entries to 4** (`sdlc`, `android-foundation`, plus the two
+optional external dependencies `superpowers` and `security-guidance`) — 7 `*-plugin` entries removed
+from `.claude-plugin/marketplace.json`.
 
 **`sdlc:create-pluguin`'s "framework" branch now scaffolds an embedded row**, not a standalone
 plugin directory: it asks which foundation hosts the new framework and appends to that
 foundation's own `frameworks:` array. The "foundation" branch is unchanged.
+
+### Added
+
+- **An eval suite for the orchestrator's `--dry-run` flow** (`plugins/sdlc/evals/`, #177), now nine
+  cases. The `claude plugin eval` grant is load-bearing: no skill declares `allowed-tools`, so
+  without it `resolve/cli.mjs` never runs and every case scores 0 in *both* arms — which reads as a
+  suite that measures nothing rather than as a misconfiguration. The ninth case (#189) covers
+  prose naming a recipe nobody installed, asserting both that the warning fires and that nothing
+  else does — no agent dispatch, no phase banner, no workspace.
+- **Two structural lint verbs**, both wired into `sdlc-lint all` and therefore into CI:
+  `nested-manifest` fails on any `manifest.yaml` below a plugin root (the tree-vs-installed trap
+  ADR-0026 closes, made unrepeatable), and `stack-uniqueness` rejects a `stack` id declared twice —
+  across a foundation's own id, its embedded rows, and any standalone framework.
+- **A Duplication (DRY) section in the `android-review` skill** — an extraction threshold
+  (~60-70% shared structure), the four ways to parameterise the differing part, a worked Kotlin
+  example, and a checklist row.
+- **ADR-0025 — a branch switch is a file operation** (#183), mirroring the agent-memory lesson into
+  the vault per ADR-0013.
+
+### Fixed
+
+- **A path-loaded plugin now discovers its own manifest, recipes and dependencies** (#166, #174,
+  closes #164 / #173). Cross-plugin discovery keys off `installed_plugins.json`, so a plugin loaded
+  from a *path* — `claude --plugin-dir`, `claude plugin eval`, any development checkout — was
+  invisible to itself: every run halted at Step 0 with `Workflow 'default' not found. Available:
+  (none)` while `default.yaml` sat next to the code printing the halt. A populated cache masks this
+  completely, which is why it survived normal use.
+- **A recipe named in prose resolves that recipe** (#178, closes #176). "Would the **docs-only**
+  workflow fit under its cost cap?" resolved `default` — 6 phases, `~$4.38`, cap `$16.00` — and
+  answered a cap question about a pipeline nobody asked about. Both sets of figures are real, which
+  is exactly what made the substitution invisible.
+- **Naming a recipe that is not installed now warns and names the substitution** (#181, closes
+  #180, completing ADR-0024). `--workflow=mobile-release` halts with exit 1; the same name in prose
+  silently resolved `default` under a different cap and said nothing.
+- **The orchestrator answers preview requests** (#167, closes #165). Its trigger surface named only
+  "run the pipeline" — nothing covered *preview*, *dry run*, *cost estimate* or *what would it do*,
+  and `Do NOT use for: read-only questions` actively pushed away from the read-only half of the
+  command's own documented surface.
+- **`--resume --dry-run` previews the cost to finish, not to redo** (#171, closes #168). It priced
+  every phase as if about to be dispatched, printed no `⏩` rows, and returned a cap verdict for
+  work already done — `EXCEEDS` against a remaining cost of nearly zero.
+
+### Changed
+
+- **A change note's Summary is enrichable too** (#186). `.claude/rules/second-brain.md` said to
+  enrich only the prose *below* the auto Summary, while the vault had never worked that way. The
+  rule and the practice it governed contradicted each other; this resolves it in favour of the
+  practice — only the frontmatter and `changes/_moc-changes.md` stay machine-owned.
+- **A dry run must not re-price the plan in the model's own words.** Echoing `prints[]` discharges
+  the obligation; the sentence *after* the preview is where it was lost. Measured in
+  `evals/02-nl-preview`: a run echoed the preview verbatim, then closed with a cost figure the
+  resolver never produced. A second, more precise-sounding number contradicts a machine value and
+  is the one a reader quotes back.
+- **README and `docs/` brought back in line** (#162). Five files still described the pre-ADR-0021
+  topology — in the places a reader lands first.
 
 ## [2.0.0] — 2026-09-08
 
