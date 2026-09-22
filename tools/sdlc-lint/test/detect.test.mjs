@@ -78,7 +78,7 @@ test("a development checkout without an install key falls back to the containing
   assert.equal(resolveStack("/tmp", dev, {}).source, "my-foundation/manifest.yaml");
 });
 
-// ---- `frameworks.disable` from .claude/sdlc.local.yaml (issue #197) ---------------------
+// ---- `frameworks.disable` from .sdlc/sdlc.local.yaml (issue #197) ---------------------
 //
 // The key was orchestrator prose (Step 0b-frameworks) until #121 moved resolution into this
 // module and did not carry it across. It shipped documented-but-dead from v1.13.0 to v3.0.0.

@@ -45,7 +45,7 @@ Full install, optional dependencies, and requirements → [`docs/INSTALLATION.md
 > 2. **Run `/sdlc:doctor`.** Skill ids moved into the `android-foundation:` namespace
 >    (`retrofit-plugin:retrofit-conventions` → `android-foundation:retrofit-conventions`, and note
 >    the divergent `dagger-plugin:hilt-conventions` → `android-foundation:hilt-conventions`). There
->    are **no runtime aliases**, so a `.claude/sdlc.local.yaml` row naming an old id targets nothing.
+>    are **no runtime aliases**, so a `.sdlc/sdlc.local.yaml` row naming an old id targets nothing.
 >    Doctor lists every stale id and rewrites it once you approve.
 > 3. **Nothing else changes.** `stack` ids are untouched, so `additive_profiles` telemetry stays
 >    comparable, and framework activation is still automatic — detected from your build files, with
@@ -87,7 +87,7 @@ The README is the front door; each topic has a focused page under [`docs/`](docs
 | 🎬 **End-to-end run** — a full Android pipeline, phase by phase | [`docs/WALKTHROUGH.md`](docs/WALKTHROUGH.md) |
 | 🧭 **Workflow recipes** — built-in recipes, control-flow shapes, auto-selection, custom & project-local recipes | [`docs/RECIPES.md`](docs/RECIPES.md) |
 | 💰 **Cost & models** — model-tier enforcement, `model`+`effort`, dry-run & caps, reports/rollup/AAR | [`docs/COST-AND-MODELS.md`](docs/COST-AND-MODELS.md) |
-| ⚙️ **Configuration** — `.claude/sdlc.local.yaml` overrides + Project Extension Manifest | [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) |
+| ⚙️ **Configuration** — `.sdlc/sdlc.local.yaml` overrides + Project Extension Manifest | [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) |
 | 📦 **Installation** — step-by-step install, optional deps, requirements | [`docs/INSTALLATION.md`](docs/INSTALLATION.md) |
 | 🤝 **Contributing** — authoring a foundation or framework plugin | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 
@@ -119,7 +119,7 @@ The full board — every track, status and landing PR — is generated from the 
 
 | Command                         | Purpose                                                            |
 | ------------------------------- | ------------------------------------------------------------------ |
-| `/sdlc:init`                    | Detect platform(s), scaffold `.claude/sdlc.local.yaml`, optionally seed `CLAUDE.md` |
+| `/sdlc:init`                    | Detect platform(s), scaffold `.sdlc/sdlc.local.yaml`, optionally seed `CLAUDE.md` |
 | `/sdlc:extension [--list]`      | Author the Project Extension Manifest step-by-step (per-agent Skill mappings)       |
 | `/sdlc:start "feature"`         | Run the pipeline (auto-selects the profile's workflow)             |
 | `/sdlc:batch "task1" "task2"`   | Run pipelines in parallel for multiple tasks (isolated worktrees)  |

@@ -49,7 +49,7 @@ a parallel member is a bare string and cannot carry control flow — `security` 
 
 ## Workflow selection precedence
 
-`--workflow=NAME` > `.claude/sdlc.local.yaml active_workflow` > **match-based auto-selection** > the PRIMARY profile's declared `workflow:` > `default`.
+`--workflow=NAME` > `.sdlc/sdlc.local.yaml active_workflow` > **match-based auto-selection** > the PRIMARY profile's declared `workflow:` > `default`.
 
 ```bash
 /sdlc:start "Add dark mode"                            # android profile → android-feature (auto)
@@ -86,14 +86,14 @@ Place a YAML file under any plugin's `workflows/`. Names must be unique across t
 A project may ship its own recipes without editing any plugin. Drop a YAML file at:
 
 ```text
-<project>/.claude/sdlc-workflows/<name>.yaml
+<project>/.sdlc/sdlc-workflows/<name>.yaml
 ```
 
 These are discovered with **highest precedence**: a project recipe **shadows** any plugin recipe of the same name (intentional per-project override — not an ambiguity halt; only two *plugins* colliding on a name halts). They validate against the same [`schemas/workflow.schema.json`](../schemas/workflow.schema.json). Author one interactively:
 
 ```bash
-/sdlc:workflow-config                # step-by-step: name, phases, match, caps → writes .claude/sdlc-workflows/<name>.yaml
+/sdlc:workflow-config                # step-by-step: name, phases, match, caps → writes .sdlc/sdlc-workflows/<name>.yaml
 /sdlc:workflow-config --list         # list project recipes + which plugin recipes they shadow
 ```
 
-Selection precedence with a project recipe: `--workflow=NAME` resolves the name, then the resolver prefers `<project>/.claude/sdlc-workflows/NAME.yaml` over any plugin's `workflows/NAME.yaml`.
+Selection precedence with a project recipe: `--workflow=NAME` resolves the name, then the resolver prefers `<project>/.sdlc/sdlc-workflows/NAME.yaml` over any plugin's `workflows/NAME.yaml`.

@@ -1,0 +1,161 @@
+// Stack detection and framework attachment — the CANONICAL implementation, SHIPPED
+// inside the sdlc plugin so the consumer resolving a run gets the same code CI tests.
+//
+// Ported verbatim in semantics from tools/sdlc-lint/lib/detect.mjs, which now re-exports
+// this module (the template is lib/resume.mjs -> tools/run/reentry.mjs). Two things
+// changed and nothing else:
+//
+//   1. `tinyglobby` is gone — see ./fsglob.mjs for why the plugin cannot have dependencies.
+//   2. An unreadable file is skipped rather than thrown on. Detection runs against whatever
+//      the consumer's checkout contains; one EACCES must not abort a pipeline. The lint
+//      never hit this because it only ever ran over fixtures.
+//
+// This module holds NO YAML knowledge and reads no manifests. It consumes already-parsed
+// `{ file, doc }` records, which is what keeps it dependency-free — parsing is the caller's
+// problem, and a deliberately separate one.
+
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { anyFile, iterFiles } from "./fsglob.mjs";
+
+function readOrNull(file) {
+  try { return readFileSync(file, "utf8"); } catch { return null; }
+}
+
+/**
+ * Evaluate one `detect:` rule against a project root.
+ *
+ * Grammar (closed, and deliberately not an expression language):
+ *   "*"                             always true
+ *   { file_exists: <path> }
+ *   { file_glob: <glob> }
+ *   { file_contains: { path, pattern } }
+ *   { any: [ …rules ] }             OR
+ *   { all: [ …rules ] }             AND
+ * Anything else is false, never an error — a manifest with a typo must fail to detect
+ * rather than abort every run in the marketplace.
+ */
+export function evalRule(rule, root) {
+  if (rule === "*") return true;
+  if (rule == null || typeof rule !== "object") return false;
+  if ("file_exists" in rule) return existsSync(join(root, rule.file_exists));
+  if ("file_glob" in rule) return anyFile(root, rule.file_glob);
+  if ("file_contains" in rule) {
+    const { path, pattern } = rule.file_contains;
+    let re;
+    try { re = new RegExp(pattern); } catch { return false; }
+    for (const f of iterFiles(root, path)) {
+      const text = readOrNull(f);
+      if (text !== null && re.test(text)) return true;
+    }
+    return false;
+  }
+  if ("any" in rule) return Array.isArray(rule.any) && rule.any.some((r) => evalRule(r, root));
+  if ("all" in rule) return Array.isArray(rule.all) && rule.all.every((r) => evalRule(r, root));
+  return false;
+}
+
+/**
+ * Is `coordinate` present anywhere the foundation says to look?
+ *
+ * The foundation owns the WHERE (`framework_detection`), the framework owns the WHAT
+ * (`dependency`). Order matters and is the manifest's: the version catalog is authoritative,
+ * module build files are the fallback. Substring, not parse — a coordinate is a coordinate
+ * whether it appears in a catalog alias or an inline dependency line.
+ */
+function dependencyPresent(root, paths, coordinate) {
+  if (!coordinate) return false;
+  for (const p of paths) {
+    for (const f of iterFiles(root, p)) {
+      const text = readOrNull(f);
+      if (text !== null && text.includes(coordinate)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * "which plugin's manifest is this" — `android-foundation/manifest.yaml`.
+ *
+ * Prefers the install key (`<plugin>@<marketplace>`); a development checkout has none, and
+ * there the directory holding the manifest IS the plugin name.
+ */
+function sourceLabel(record) {
+  if (!record) return null;
+  const name = record.key ? String(record.key).split("@")[0] : String(record.file ?? "").split("/").slice(-2)[0];
+  return name ? `${name}/manifest.yaml` : (record.file ?? null);
+}
+
+/**
+ * The winning foundation for a project, plus the frameworks that attach to it.
+ *
+ * Highest `priority` among foundations whose `detect` matches. A framework attaches when
+ * the winner hosts its `enriches_aspect` AND its coordinate is found. `additive` is sorted
+ * so the result is stable across filesystem ordering — telemetry compares against it.
+ *
+ * `forceStack` is Step 0b's `--stack=NAME`: *"restrict foundation candidates to manifests
+ * whose `stack` matches NAME and skip auto-detect."* Detection is skipped entirely, not
+ * merely filtered — that is the point of the flag, which exists so a user can override a
+ * wrong (or tied) detection. A NAME no manifest declares resolves to nothing and is
+ * reported as `forced_unresolved`; the caller must halt rather than fall through to
+ * vanilla, because a forced flag that silently picks something else is worse than absent.
+ *
+ * `disableFrameworks` is the project's `frameworks.disable` (issue #197). It is applied HERE,
+ * where attachment is decided, and not as a filter over the returned `additive`: a framework
+ * that never attached also never contributed a `role_expertise` path, a `convention_skills`
+ * row or a phase injection, and unpicking those downstream is three chances to miss one. Two
+ * providers may contest one aspect since ADR-0026 (Ktor vs Retrofit, Room vs DataStore-Proto),
+ * so a project mid-migration carries both coordinates and needs to silence one WITHOUT
+ * removing the dependency from its build. Suppression is scoped to frameworks; it can never
+ * unseat the winning foundation. Names that match no installed framework come back as
+ * `disable_unknown` for the caller to report — a typo that does nothing quietly is the same
+ * silence this issue is about.
+ */
+export function resolveStack(evalRoot, { foundations, frameworks }, { forceStack = null, disableFrameworks = [] } = {}) {
+  const disabled = new Set((disableFrameworks || []).filter((s) => typeof s === "string"));
+  const knownFrameworks = new Set((frameworks || []).map((f) => f.doc?.stack).filter(Boolean));
+  const disable_unknown = [...disabled].filter((s) => !knownFrameworks.has(s)).sort();
+  const candidates = forceStack
+    ? (foundations || []).filter((f) => f.doc.stack === forceStack)
+    : (foundations || []).filter((f) => evalRule(f.doc.detect, evalRoot));
+  const winner = [...candidates].sort((a, b) => (b.doc.priority ?? 0) - (a.doc.priority ?? 0))[0];
+  if (!winner) {
+    return {
+      foundation: null, priority: null, additive: [], suppressed: [], disable_unknown, source: null,
+      forced: Boolean(forceStack),
+      forced_unresolved: forceStack && !winner ? forceStack : null,
+      known_stacks: (foundations || []).map((f) => f.doc?.stack).filter(Boolean).sort(),
+    };
+  }
+
+  const hosts = winner.doc.hosts_aspects;
+  const paths = winner.doc.framework_detection ?? [];
+  const additive = [];
+  const suppressed = [];
+  for (const fw of frameworks || []) {
+    const hosted = hosts === "all" || (Array.isArray(hosts) && hosts.includes(fw.doc.enriches_aspect));
+    if (!hosted || !dependencyPresent(evalRoot, paths, fw.doc.dependency)) continue;
+    // `suppressed` records only what WOULD have attached. Listing a framework that never
+    // detected would report an override that overrode nothing, and pre-emptively naming one
+    // (before the dependency lands) is a legitimate thing to write in the config.
+    if (disabled.has(fw.doc.stack)) suppressed.push(fw.doc.stack);
+    else additive.push(fw.doc.stack);
+  }
+  return {
+    foundation: winner.doc.stack,
+    priority: winner.doc.priority ?? 0,
+    additive: additive.sort(),
+    suppressed: suppressed.sort(),
+    disable_unknown,
+    // Where the winning profile came from. Telemetry has always documented `profile_source`
+    // as a manifest path ("android-foundation/manifest.yaml"), and it is the only field that
+    // answers "which installed plugin decided this run's agents". The install `key` is what
+    // names the plugin: an installed manifest lives at `<cache>/<market>/<plugin>/<version>/
+    // manifest.yaml`, so the last two path segments would read "1.7.0/manifest.yaml".
+    source: sourceLabel(winner),
+    source_file: winner.file ?? null,
+    aspects: Array.isArray(winner.doc.aspects) ? winner.doc.aspects : [],
+    forced: Boolean(forceStack),
+    forced_unresolved: null,
+  };
+}

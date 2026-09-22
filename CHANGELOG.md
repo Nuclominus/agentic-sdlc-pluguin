@@ -4,6 +4,31 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+### ⚠️ BREAKING — this project's SDLC files moved to `.sdlc/` (ADR-0030)
+
+A project's own SDLC configuration lived in `<project>/.claude/`, which is Claude Code's directory.
+That was untidy while Claude Code was the only host and wrong once the pipeline ran on others. Four
+things move:
+
+| from | to |
+|---|---|
+| `.claude/sdlc.local.yaml` | `.sdlc/sdlc.local.yaml` |
+| `.claude/model.local.json` | `.sdlc/model.local.json` |
+| `.claude/sdlc-workflows/` | `.sdlc/sdlc-workflows/` |
+| `.claude/sdlc-lessons.md` | `.sdlc/sdlc-lessons.md` |
+
+One directory, not one per host: the content is host-neutral, so a per-host copy would be the same
+fact in two places. `.claude/settings.json` and `.claude/skills/` are NOT ours and do not move —
+each host's own project paths are declared per host instead.
+
+**Nothing reads the old location.** There is no alias layer, deliberately (ADR-0021 §5). But the old
+location is not ignored either: every run names each file left behind and says it is not being
+read, so a cost cap that stopped capping cannot pass unnoticed.
+
+**To migrate:** run `/sdlc:doctor` and approve the move. It relocates first, then rewrites any stale
+agent names, and never overwrites a file already at the destination. Or move them by hand:
+`mkdir -p .sdlc && git mv .claude/sdlc.local.yaml .sdlc/`.
+
 ### Changed
 
 - **`superpowers` and `security-guidance` are no longer entries of this marketplace** ([#200],
@@ -196,7 +221,7 @@ per core role: invariants, rule paths and mandatory skills, rendered into each a
 | `android-qa` | `qa-engineer` | | | |
 
 **There are no runtime aliases.** An agent name is used exactly as written — the key in
-`.claude/model.local.json`, the name dispatched, the `role_expertise` key and the file on disk are
+`.sdlc/model.local.json`, the name dispatched, the `role_expertise` key and the file on disk are
 one string. A first cut of this release did keep the old names alive by rewriting them in three
 places; review found six defects in that layer, every one a disagreement between two copies of the
 same map. The layer was removed rather than repaired.
@@ -611,7 +636,7 @@ fire, and introduces the stable `@release` install channel.
 ### Added
 
 - **Per-project cost-cap override (#86).** An optional `cost_caps` key in
-  `<project>/.claude/sdlc.local.yaml` retunes — or switches off — a shipped recipe's cap without
+  `<project>/.sdlc/sdlc.local.yaml` retunes — or switches off — a shipped recipe's cap without
   shadowing the whole recipe: an exact recipe name wins over a `"*"` fallback, and an explicit
   `null` means uncapped in that project. Parsed in Step 1b, applied in Step 1d-0, recorded as
   `cost_cap_source` in telemetry and labelled in the HTML report.
@@ -912,7 +937,7 @@ Only the `sdlc` plugin changed; other plugins remain at `1.1.0`.
 
 ### Added
 
-- **Project-local model tier overrides `<project>/.claude/model.local.json`.** A project can reassign
+- **Project-local model tier overrides `<project>/.sdlc/model.local.json`.** A project can reassign
   which tier each SDLC agent dispatches on — a `default` for all agents plus a per-agent `agents{}` map
   (`opus | sonnet | haiku | fable`). Resolution is `agents[<bare-name>] → default → agent .md
   frontmatter → sonnet`, applied identically by the `enforce-agent-model.sh` hook (so overrides are not
@@ -920,7 +945,7 @@ Only the `sdlc` plugin changed; other plugins remain at `1.1.0`.
   `schemas/model-local.schema.json`. Fail-open: a missing/malformed file or invalid tier falls back to
   the built-in frontmatter tiers. The registry stays the SSOT for tag→model_id+pricing — this only
   changes which tag an agent uses.
-- **`/sdlc:model-config` command.** Interactive authoring of `.claude/model.local.json`: sources valid
+- **`/sdlc:model-config` command.** Interactive authoring of `.sdlc/model.local.json`: sources valid
   tiers from the registry, sets a project-wide default first, then optional per-agent overrides; merges
   idempotently and never clobbers existing config.
 
@@ -1013,7 +1038,7 @@ Android-only restructure: the marketplace drops iOS and reorganizes the Android 
   provider. The orchestrator collects additive profiles into an `ADDITIVE_PROFILES` set, merges their
   enrichments into the active flow, and **excludes** them from per-aspect winner resolution and
   `PRIMARY_PROFILE` selection (additive profiles never become the primary stack).
-- `frameworks.enable` / `frameworks.disable` override in `.claude/sdlc.local.yaml` — force a framework
+- `frameworks.enable` / `frameworks.disable` override in `.sdlc/sdlc.local.yaml` — force a framework
   profile on or off, overriding auto-detection.
 - **`dependency`-based framework detection** — a framework plugin only **names** its library
   (`dependency: <coordinate>`); the orchestrator owns the search strategy: version catalog

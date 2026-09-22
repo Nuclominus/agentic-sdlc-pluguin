@@ -85,7 +85,7 @@ marketplace instead — note the name is `superpowers-dev`:
 `/sdlc:doctor` is the whole migration story. This marketplace ships **no runtime aliases** — a
 renamed agent (ADR-0021) or a renamed Skill id (ADR-0026) is renamed once, and a config row naming
 the old spelling silently targets nothing. Doctor lists every such row across
-`.claude/sdlc.local.yaml` and `.claude/model.local.json` and rewrites it **only after you approve**;
+`.sdlc/sdlc.local.yaml` and `.sdlc/model.local.json` and rewrites it **only after you approve**;
 it never edits `installed_plugins.json` or `settings.json`, which belong to the harness.
 
 **Coming from `2.x`:** the seven framework plugins (`retrofit-plugin`, `ktor-plugin`, `room-plugin`,
@@ -115,7 +115,7 @@ downgrades to best-effort:
 ```
 
 Nothing renames — `superpowers:brainstorming` is the same skill id from either marketplace — so no
-`.claude/sdlc.local.yaml` row changes and there is no config migration to run. The official entry is
+`.sdlc/sdlc.local.yaml` row changes and there is no config migration to run. The official entry is
 pinned to obra commit `b36e0829` (v6.3.0) while the old entry tracked HEAD, so you may step back one
 minor version; every skill this marketplace declares exists at that pin.
 

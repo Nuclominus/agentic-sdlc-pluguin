@@ -104,7 +104,7 @@ A **framework** is a row in its hosting foundation's `manifest.yaml` `frameworks
 - **Enriches existing phases.** It contributes a convention skill, `development` + `security` phase-prompt injections, ProGuard/R8 keep rules, and (optionally) post-checks — all merged into the run by the orchestrator's existing profile-merge.
 - **Auto-detects** from the Gradle version catalog / build files; the foundation hosting its category consumes its guidance through that phase's existing agents — only when the library is present.
 
-Suppress one per project in `.claude/sdlc.local.yaml`, by `stack` id (ADR-0027):
+Suppress one per project in `.sdlc/sdlc.local.yaml`, by `stack` id (ADR-0027):
 
 ```yaml
 frameworks:
@@ -210,7 +210,7 @@ When an embedded framework's library is detected, its guidance joins the run wit
 
 ## 3b. Project-local recipes & built-in intents
 
-Recipe discovery reads **two sources**, project-local first: `<project>/.claude/sdlc-workflows/<name>.yaml`
+Recipe discovery reads **two sources**, project-local first: `<project>/.sdlc/sdlc-workflows/<name>.yaml`
 takes **highest precedence** and **shadows** a plugin recipe of the same name (intentional override — not
 an ambiguity halt; only two *plugins* colliding on a name halts). Project recipes validate against the same
 `schemas/workflow.schema.json`; author them with `/sdlc:workflow-config`.

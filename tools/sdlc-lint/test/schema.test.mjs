@@ -351,7 +351,7 @@ test("every shipped workflow recipe declares a cost cap", () => {
   // Step 3d-cap gate entirely. Until this was fixed, 8 of 11 shipped recipes were ungated,
   // including `default` (what runs when nothing else matches) and every android-* recipe, which
   // measured $3.02-$9.67 of phase spend per run. Project-local recipes under
-  // .claude/sdlc-workflows/ may still opt out; shipped ones may not.
+  // .sdlc/sdlc-workflows/ may still opt out; shipped ones may not.
   const files = recipeFiles();
   assert.ok(files.length >= 11, `expected the full recipe set, found ${files.length}`);
   const uncapped = files.filter((f) => typeof recipe(f).caps?.max_total_cost_usd !== "number");

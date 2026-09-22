@@ -23,9 +23,9 @@ enforced_tier() {  # $1 = hook stdout, $2 = requested model
 mk_project() {  # $1 = model.local.json contents (or "NONE")  → echoes project dir
     local d; d=$(mktemp -d)
     TMPDIRS+=("$d")
-    mkdir -p "$d/.claude" "$d/plugins/sdlc/agents"
+    mkdir -p "$d/.sdlc" "$d/plugins/sdlc/agents"
     printf -- '---\nname: developer\nmodel: sonnet\n---\nbody\n' > "$d/plugins/sdlc/agents/developer.md"
-    [ "$1" != "NONE" ] && printf '%s' "$1" > "$d/.claude/model.local.json"
+    [ "$1" != "NONE" ] && printf '%s' "$1" > "$d/.sdlc/model.local.json"
     printf '%s' "$d"
 }
 

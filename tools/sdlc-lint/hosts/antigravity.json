@@ -1,0 +1,145 @@
+{
+  "host": "antigravity",
+  "cli": "agy",
+  "_comment": "Host descriptor for Antigravity CLI. Every entry under `native`, `package`, `models` and `telemetry` was observed on a live CLI, not read from docs — the docs disagree with the binary in two places (see `native`). Re-verify and bump `verified_on` when the CLI minor moves.",
+  "verified_on": {
+    "cli_version": "1.1.28",
+    "date": "2026-09-09",
+    "method": "agy plugin validate + agy plugin install + agy models, against a probe tree built from unmodified plugins/sdlc",
+    "_recheck_comment": "First re-verification after a CLI bump (1.1.27 -> 1.1.28). `agy plugin validate dist/antigravity/plugins/sdlc` reports the same six lines (3 skills, 12 agents, 11 commands converted to skills, 1 hook, mcpServers skipped), so `native` still holds. `agy models` grew two older Flash generations (gemini-3.7-flash-*, gemini-3.6-flash-*); every id `models.map` emits still exists, so the map is unchanged. Nothing in this descriptor moved — recorded so the next reader knows the version was checked, not assumed."
+  },
+
+  "native": {
+    "_comment": "What the host does for us, so the emitter must NOT. Both entries observed: `agy plugin validate` on an unmodified agents/skills/commands/hooks tree reported `commands: 11 processed (converted to skills)`, and every installed file was byte-identical to its source (diff clean on agents/reviewer.md). This is why the Antigravity target is a repackager, not a translator.",
+    "commands_to_skills": true,
+    "agent_frontmatter_passthrough": true,
+    "flat_agent_files": true
+  },
+
+  "_plugins_comment": "No `plugins` list: absent means EVERY plugin in the marketplace (any plugins/*/ carrying a manifest.yaml). Phase 1 shipped `[\"sdlc\"]` deliberately — the core alone exercises the whole pipeline on the vanilla profile, so the foundations were schedule rather than risk. Phase 3 widened it, and an explicit list of all nine would have been a second spelling of \"every plugin\" that a tenth plugin could silently contradict. A new plugin therefore ships here automatically, and the gate is not this field: `emit` fails loudly if the plugin cannot be rendered, and `emit --check` fails CI if dist/ was not regenerated. Re-introduce this key only for a real exclusion, on the host that needs it.",
+
+  "package": {
+    "_comment": "The whole structural transform is two moves. Antigravity looks for plugin.json and hooks.json at the PLUGIN ROOT; Claude Code keeps them at .claude-plugin/plugin.json and hooks/hooks.json. `agy plugin validate <dir>` fails with `missing plugin.json` until the first move, and reports `hooks: skipped (not found)` until the second.",
+    "moves": [
+      { "from": ".claude-plugin/plugin.json", "to": "plugin.json" },
+      { "from": "hooks/hooks.json", "to": "hooks.json" }
+    ],
+    "command_prefix": "sdlc-",
+    "_command_prefix_comment": "The host converts commands to skills, but the skill NAME comes from the filename — so `commands/start.md` would register as a global `/start`, alongside `/init`, `/report` and `/doctor`. Claude Code namespaces these as `/sdlc:start`; here the namespace has to be in the name. Renaming the file is the whole change: the body is untouched."
+  },
+
+  "models": {
+    "_comment": "Antigravity model ids embed reasoning effort in the id itself (`agy models`: gemini-3.8-flash-high|medium|low, gemini-3.1-pro-high|low), so the tier+effort PAIR maps to one string. That is why `effort:` is not a dropped field on this host: it is half the key. Pro is the strong family, Flash the fast one; with only two families, sonnet/low and haiku/low necessarily collapse onto one id.",
+    "key": "tier+effort",
+    "map": {
+      "opus/high": "gemini-3.1-pro-high",
+      "opus/medium": "gemini-3.1-pro-high",
+      "opus/low": "gemini-3.1-pro-low",
+      "sonnet/high": "gemini-3.8-flash-high",
+      "sonnet/medium": "gemini-3.8-flash-medium",
+      "sonnet/low": "gemini-3.8-flash-low",
+      "haiku/high": "gemini-3.8-flash-medium",
+      "haiku/medium": "gemini-3.8-flash-medium",
+      "haiku/low": "gemini-3.8-flash-low",
+      "fable/high": "gemini-3.1-pro-high",
+      "fable/medium": "gemini-3.1-pro-high",
+      "fable/low": "gemini-3.1-pro-low"
+    },
+    "alternatives_not_used": {
+      "_comment": "`agy models` also lists these. Not used: availability varies by plan, and one model family per host keeps the mapping legible.",
+      "seen": ["claude-sonnet-4-6", "claude-opus-4-6-thinking", "gpt-oss-120b-medium"]
+    }
+  },
+
+  "hook_events": {
+    "supported": ["PreToolUse", "PostToolUse", "PreInvocation", "PostInvocation", "Stop"],
+    "unsupported": ["SessionStart", "SubagentStop", "SubagentStart", "SessionEnd", "PreCompact", "PostCompact", "UserPromptSubmit", "PermissionRequest", "Interrupt"]
+  },
+
+  "dispatch": {
+    "_comment": "Observed on a live two-subagent run (conversation 9a5ccef4, 81s). This is the shape the orchestrator's 3c overlay must speak.",
+    "tool": "invoke_subagent",
+    "parallel": true,
+    "model_arg": false,
+    "_model_arg_comment": "The dispatch call carries NO model argument: each emitted agent file already holds its resolved model, baked from tier+effort at build time (see models.key and drop_hooks/enforce-agent-model.sh). Rides into the package's config/host.json, because the consequence is not cosmetic — a project's .sdlc/model.local.json has no mechanism to take effect here, and a preview that showed those tiers anyway would name a model the run will not dispatch. ADR-0029 \u00a74: state the gap, never substitute for it.",
+    "retrieval_tool": null,
+    "retrieval_model": "reactive-push",
+    "retrieval_note": "There is no wait/retrieve call. A finished subagent pushes its message into the parent's context and execution resumes on its own — closer to Claude Code's inline Agent result than to Codex's spawn_agent + wait_agent. An overlay that adds a retrieval step here would be waiting for something that already arrived.",
+    "compact_summary_returned": true,
+    "subagent_cwd_caveat": "Subagents also write into ${GEMINI_CONFIG_DIR:-$HOME/.gemini}/antigravity-cli/scratch/ alongside the parent's cwd — both probe files appeared in BOTH places on the spike. Deliverable paths handed to a phase must therefore be ABSOLUTE, or the orchestrator's 3d Glob verification can look in one directory while the agent wrote to the other."
+  },
+
+  "hooks": {
+    "_comment": "MEASURED on agy 1.2.0 (2026-09-22) with a throwaway probe plugin whose hook commands dumped env, cwd and stdin, run with --log-file. (1) The plugin hooks.json shape is NOT Claude Code's: `{\"<name>\": {\"<Event>\": [{type, command, timeout, matcher?}]}}` — flat handlers per event under one naming key. A Claude-shaped file passes `agy plugin validate` (`hooks: 1 processed`) and is then rejected at runtime: `hooks.go: failed to parse hooks for plugin at …: invalid hook \"hooks\": command hook must specify 'command'` — every hook in it is silently dead. superpowers' shipped hooks fail the same way. So this package's hooks never fired before this was measured; the Phase 1 run sealed itself at Step 6, not via the Stop net. (2) A hook command runs with cwd = the plugin's install directory (also stated in the binary's bundled docs), and `${PLUGIN_ROOT}`, `${CLAUDE_PLUGIN_ROOT}` and `${PLUGIN_DATA}` all expand EMPTY — no such variable in the env, no template expansion — so command_root is the cwd and the reference is removed. (3) Stop, PreInvocation and PostInvocation fired; PreToolUse/PostToolUse did NOT fire in print mode on two attempts (a file read, then a `run_command`) even with matcher \"*\". (4) The Stop payload (stdin JSON) carries artifactDirectoryPath, conversationId, error, executionNum, fullyIdle, modelName, terminationReason, transcriptPath and workspacePaths — and workspacePaths was [] with no cwd/project field, so a Stop hook cannot find the project it ran for. (5) Matchers name TOOLS in this host's vocabulary (run_command, view_file, browser_*), not Claude Code's (Bash, Edit, Write); no map is declared because none was measured.",
+    "shape": "named",
+    "command_root": "cwd",
+    "tool_names": null,
+    "tool_hooks_fire_in_print_mode": false,
+    "stop_payload_names_project": false,
+    "measured_on": { "cli_version": "1.2.0", "date": "2026-09-22" }
+  },
+  "drop_hooks": [
+    {
+      "script": "seal-run.sh",
+      "reason": "Stop fires (measured on 1.2.0), but its payload names no project — workspacePaths is [] and there is no cwd field — and the command runs inside the plugin directory, so seal-stale would look for docs/plans under the plugin and seal nothing. The run seals itself at Step 6 (sealed_by: orchestrator); there is no Stop-time net on this host until it tells a hook where it ran."
+    },
+    {
+      "script": "format-on-stop.sh",
+      "reason": "Stop fires, but its payload names no project and the command runs inside the plugin directory (measured on 1.2.0), so there is no project tree to format."
+    },
+    {
+      "script": "guard-paths.sh",
+      "reason": "PreToolUse was not observed to fire in print mode on 1.2.0 (two attempts, matcher *), and the matcher names Claude Code's Edit|Write where this host has other tool names and no measured map — registered, it would guard nothing while reading as coverage."
+    },
+    {
+      "script": "git-guard.sh",
+      "reason": "PreToolUse was not observed to fire in print mode on 1.2.0 (two attempts, matcher *), and the matcher names Claude Code's Bash where this host spells the tool run_command and no map is measured — registered, it would guard nothing while reading as coverage."
+    },
+    {
+      "script": "kotlin-guard.sh",
+      "reason": "PostToolUse was not observed to fire in print mode on 1.2.0 (two attempts, matcher *), and the matcher names Claude Code's Edit|Write where this host has other tool names and no measured map — registered, it would guard nothing while reading as coverage."
+    },
+    {
+      "script": "enforce-agent-model.sh",
+      "reason": "Enforces the tier by rewriting the dispatch through the PreToolUse `updatedInput` envelope, which this host does not document, and matches on the tool name `Agent`, which this host does not have. Superseded at emit time: the tier is baked into each agent's `model:` (see models.map), which is enforcement by construction rather than by hook."
+    }
+  ],
+
+  "telemetry": {
+    "_comment": "`agy -p --output-format json` returns a per-run envelope carrying usage directly, so this host may need no transcript parser at all (Phase 4). Observed through a pipe on a non-TTY on 1.1.27 — antigravity-cli#76 (silent stdout drop) did NOT reproduce with --output-format json.",
+    "mode": "run-envelope",
+    "usage_fields": ["input_tokens", "output_tokens", "thinking_tokens", "cache_read_tokens", "total_tokens"],
+    "aggregate_note": "The envelope's usage looks aggregate rather than parent-only: a single-turn run that dispatched two subagents reported cache_read_tokens 418022, far past what one turn reads. Per-subagent attribution is therefore NOT available from this envelope, and `num_turns: 1` counts only the parent. Phase 4 must establish whether per-phase cost can be attributed at all here, or whether this host prices per RUN.",
+    "never_gate_on": ["status", "exit_code"],
+    "never_gate_reason": "A run that produced nothing and had an action auto-denied still reported status SUCCESS with an empty response and a populated denied_actions[]. Gate on _telemetry.json on disk (ADR-0015)."
+  },
+
+  "validate": { "command": ["agy", "plugin", "validate"], "zero_tokens": true },
+
+  "discovery": {
+    "_comment": "Written into the emitted package's config/host.json so the shipped resolver can find sibling plugins without guessing. Without it, `cli.mjs` run out of an Antigravity install resolved its own root to a Claude Code cache copy — the same cross-tree mixing as issue #70. Workspace paths come first: a project-local plugin should win over a globally installed one.",
+    "_config_dir_env_comment": "MEASURED ON 1.1.28: `agy` honours this variable NOWHERE. With GEMINI_CONFIG_DIR pointed at an empty directory, `agy plugin install` still installed under $HOME/.gemini/config/plugins and `agy plugin list` still listed the plugins there. It is kept in this descriptor because the resolver searches the env-named directory AND the default (a superset, see roots.mjs) rather than one instead of the other, so it costs one stat and starts working for free if a later CLI honours it. Two consequences: a throwaway-config CI job cannot isolate an `agy plugin install`, and the install is global — the merge caveat below applies to the developer's real config dir.",
+    "config_dir_env": "GEMINI_CONFIG_DIR",
+    "config_dir_default": ".gemini",
+    "workspace_plugin_subdirs": [".agents/plugins"],
+    "_workspace_skill_comment": "Where THIS host loads project-local skills from. Taken from the binary's own bundled docs: `<workspace>/.agents/skills/<name>/SKILL.md` or `_agents/skills/<name>/SKILL.md`. It is emphatically NOT `<project>/.claude/skills`, which the shared resolver had hardcoded: on this host that directory counts skills the CLI will never load (so a mandated skill reads as satisfied when it is not) while missing the ones it does load.",
+    "workspace_skill_subdirs": [".agents/skills", "_agents/skills"],
+    "_project_settings_comment": "Which PROJECT files carry the enabled/disabled plugin map. Deliberately EMPTY here. The shared resolver read <project>/.claude/settings.json, which is Claude Code's own file: a plugin the developer disabled in Claude Code was then silently dropped from detection on Antigravity, in a project that may not even use Claude Code. This host records enablement in its own config, not in a project file, so the honest answer is none rather than someone else's.",
+    "project_settings_files": [],
+    "plugin_search_subdirs": ["config/plugins", "antigravity-cli/plugins"]
+  },
+
+  "install": {
+    "command": ["agy", "plugin", "install"],
+    "roots": [
+      "$PWD/.agents/plugins",
+      "${GEMINI_CONFIG_DIR:-$HOME/.gemini}/config/plugins",
+      "${GEMINI_CONFIG_DIR:-$HOME/.gemini}/antigravity-cli/plugins"
+    ],
+    "observed_install_root": "${GEMINI_CONFIG_DIR:-$HOME/.gemini}/config/plugins",
+    "merges_not_replaces": true,
+    "merge_caveat": "`agy plugin install` MERGES into an existing install of the same name rather than replacing it. After renaming the command files, a reinstall reported `commands: 22 processed` — the 11 old unprefixed files were still there beside the 11 new ones. Uninstall first when file names change, or the install carries orphans the emitter would never produce. Same failure the emit --check orphan axis exists to catch, one layer out."
+  },
+
+  "drops": []
+}

@@ -1,0 +1,98 @@
+# yaml-language-server: $schema=../../../../schemas/models.schema.json
+#
+# Model registry — Claude Code.
+#
+# One file per DISPATCHER (ADR-0029 decision 7, amended): `tier -> model id` is host
+# knowledge and lives in the host descriptor; `model id -> price` is provider knowledge
+# and lives here. The files are disjoint — Claude prices and Gemini prices are different
+# facts, not two copies of one — so splitting them duplicates nothing, while keeping them
+# together shipped every package a price list it could never use plus tiers that do not
+# exist at its runtime.
+#
+# `tag` is the short alias used in agent `.md` frontmatter (`model: <tag>`) and in
+# `.sdlc/model.local.json`. `model_id` is the real provider string, used both to invoke
+# the model and for telemetry. `pricing` is USD per million tokens and is authoritative
+# for cost accounting — the pipeline reads it from here and never restates a rate
+# elsewhere. A model with no `pricing` yields `cost_usd: null`, never 0.
+#
+# To bump a model or its price, edit it HERE. README, PLUGIN-PATHS.md and the
+# orchestrator link to this file rather than repeating it.
+
+provider: anthropic
+
+# Tags the pipeline actually dispatches, and that hooks/enforce-agent-model.sh validates.
+# That hook keeps its own mirrored `is_valid_tier` list — keep the two in sync.
+pipeline_tiers: [opus, sonnet, haiku, fable]
+
+# Prompt-cache CREATION priced relative to the model's input rate (Anthropic standard:
+# 5-minute TTL = 1.25x, 1-hour TTL = 2x). usage.mjs multiplies the per-turn
+# ephemeral_5m/ephemeral_1h cache-creation split by these.
+cache_write_multipliers:
+  ephemeral_5m: 1.25
+  ephemeral_1h: 2.0
+
+# Per-dispatch token baselines for the Step 1d-1 dry-run cost preview ONLY — never for
+# billing or the cost cap, which use transcript-derived actuals (ADR-0005/0011). Derived
+# from the median of 56 transcript-priced phases across 10 real runs, excluding
+# `development` (see its phase multiplier in SKILL.md 1d-1).
+#
+# Note the shape: uncached `input` is negligible while `cache_read` dominates — a phase is
+# a multi-turn agent loop that re-reads its whole prefix every turn. The pre-2026-07
+# baseline (35k input, 60% cached, single call) did not model that at all and so
+# under-reported real cost by 6-10x. Re-derive when the roster or prompt sizes move
+# materially.
+estimation_baselines:
+  opus:   { input: 30,  cache_read: 670000, cache_write: 93000, output: 1125 }
+  sonnet: { input: 25,  cache_read: 725000, cache_write: 73000, output: 1230 }
+  haiku:  { input: 195, cache_read: 820000, cache_write: 51000, output: 30 }
+  # No fable run has been measured; it inherits the opus token shape and is priced at its
+  # own registry rates.
+  fable:  { input: 30,  cache_read: 670000, cache_write: 93000, output: 1125 }
+
+models:
+  # ── dispatched tiers ──────────────────────────────────────────────────────────
+  - tag: opus
+    model_id: claude-opus-5
+    pricing: { input: 5.0, cached_input: 0.5, output: 25.0 }
+  - tag: sonnet
+    model_id: claude-sonnet-5
+    pricing: { input: 2.0, cached_input: 0.2, output: 10.0 }
+  - tag: haiku
+    model_id: claude-haiku-4-5-20251001
+    pricing: { input: 1.0, cached_input: 0.1, output: 5.0 }
+  # Note the cached_input: 0.25, not the 10%-of-input the other families use. The
+  # `-5` predecessors below are at 1.0 — that difference is real, not a typo.
+  - tag: fable
+    model_id: claude-fable-5-1
+    pricing: { input: 10.0, cached_input: 0.25, output: 50.0 }
+
+  # ── reference / pin-only ──────────────────────────────────────────────────────
+  # Never dispatched by tag. They exist so telemetry can price a model string an older
+  # run RECORDED, which is why removing one silently un-prices history.
+  - tag: fable-5
+    model_id: claude-fable-5
+    pricing: { input: 10.0, cached_input: 1.0, output: 50.0 }
+  - tag: opus-4-8
+    model_id: claude-opus-4-8
+    pricing: { input: 5.0, cached_input: 0.5, output: 25.0 }
+  - tag: opus-4-7
+    model_id: claude-opus-4-7
+    pricing: { input: 5.0, cached_input: 0.5, output: 25.0 }
+  - tag: opus-4-6
+    model_id: claude-opus-4-6
+    pricing: { input: 5.0, cached_input: 0.5, output: 25.0 }
+  - tag: opus-4-5
+    model_id: claude-opus-4-5
+    pricing: { input: 5.0, cached_input: 0.5, output: 25.0 }
+  - tag: sonnet-4-6
+    model_id: claude-sonnet-4-6
+    pricing: { input: 3.0, cached_input: 0.3, output: 15.0 }
+  - tag: sonnet-4-5
+    model_id: claude-sonnet-4-5
+    pricing: { input: 3.0, cached_input: 0.3, output: 15.0 }
+  - tag: mythos
+    model_id: claude-mythos-5-1
+    pricing: { input: 10.0, cached_input: 0.25, output: 50.0 }
+  - tag: mythos-5
+    model_id: claude-mythos-5
+    pricing: { input: 10.0, cached_input: 1.0, output: 50.0 }

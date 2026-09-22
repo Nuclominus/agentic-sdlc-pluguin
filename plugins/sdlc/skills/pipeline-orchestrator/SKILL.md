@@ -534,7 +534,7 @@ The prompt MUST be assembled in this exact order so the stable prefix (everythin
 
 {role_expertise_block — the "Stack expertise for <role> (<stack>):" block, EFFECTIVE_PROFILE.prompt_blocks[agent].expertise pasted VERBATIM; OMITTED ENTIRELY when null — see 3b-1a}
 
-{sdlc_lessons_block — see 3b-1b; OMITTED ENTIRELY when .claude/sdlc-lessons.md is absent or empty}
+{sdlc_lessons_block — see 3b-1b; OMITTED ENTIRELY when .sdlc/sdlc-lessons.md is absent or empty}
 
 Convention skills to consider invoking: {convention_skills (sorted, deterministic)}
 
@@ -712,13 +712,13 @@ since: 2026-09-07
 
 **3b-1b. Build the `sdlc_lessons_block`** (AAR lessons injection).
 
-Once at session start, read `.claude/sdlc-lessons.md` if it exists.
+Once at session start, read `.sdlc/sdlc-lessons.md` if it exists.
 
 - If it is present and non-empty, the block is:
 
   ```
   Lessons learned (from prior AAR cycles, project-curated):
-  {verbatim contents of .claude/sdlc-lessons.md}
+  {verbatim contents of .sdlc/sdlc-lessons.md}
   ```
 
 - If the file is **absent or empty (whitespace-only)**, the block is the empty
@@ -727,7 +727,7 @@ Once at session start, read `.claude/sdlc-lessons.md` if it exists.
 
 This block lives in the **stable prefix** (not the per-call trailer): it is read
 once and is identical across every phase of the run, so it qualifies for prompt
-caching. It is invalidated only by an edit to `.claude/sdlc-lessons.md` (i.e. a
+caching. It is invalidated only by an edit to `.sdlc/sdlc-lessons.md` (i.e. a
 `/sdlc:aar` apply), which is acceptable. Hold the read result in
 `CONTEXT.sdlc_lessons_block` and reuse it for every phase — do NOT re-read per
 phase.
@@ -745,7 +745,7 @@ Examples:
 
 This is a contract with the user. Do not skip.
 
-**3b-3. Resolve model (project override → frontmatter)** — before spawning, resolve `{model_tier}` by precedence (first hit wins): `CONTEXT.model_overrides.agents[<bare>]` where `<bare>` is the agent name after the last `:` (e.g. `sdlc:developer` → `developer`) → `CONTEXT.model_overrides.default` → the `model:` YAML field from the agent's `.md` file (`plugins/**/agents/{agent_name}.md`; once a stack profile carries no agents of its own, that is always `{SDLC_PLUGIN_ROOT}/agents/`) → `sonnet`. Agent names are never translated: the key in `model.local.json`, the name dispatched and the file on disk are one string (ADR-0021), and a key matching no agent is reported by the resolve command rather than remapped. An override value that is not a valid tier (`opus|sonnet|haiku|fable`) is skipped with an inline warning and resolution falls through to the next source. The `enforce-agent-model.sh` hook applies this SAME override, so the resolved tier is not reverted at dispatch. This resolved tier (the SHORT name: `opus` / `sonnet` / `haiku` / `fable`) is what you print in 3b-2 AND pass verbatim to `Agent()` in 3c. The `Agent` tool's `model` parameter accepts the short tier ONLY — passing a full model ID raises `InputValidationError`. The tier→model-ID mapping is resolved from the model registry (`plugins/sdlc/config/models.json`) and is used ONLY for telemetry/cost accounting in 3d-1, never for dispatch. If the file is missing or the field is absent, warn inline and fall back to `sonnet`.
+**3b-3. Resolve model (project override → frontmatter)** — before spawning, resolve `{model_tier}` by precedence (first hit wins): `CONTEXT.model_overrides.agents[<bare>]` where `<bare>` is the agent name after the last `:` (e.g. `sdlc:developer` → `developer`) → `CONTEXT.model_overrides.default` → the `model:` YAML field from the agent's `.md` file (`plugins/**/agents/{agent_name}.md`; once a stack profile carries no agents of its own, that is always `{SDLC_PLUGIN_ROOT}/agents/`) → `sonnet`. Agent names are never translated: the key in `model.local.json`, the name dispatched and the file on disk are one string (ADR-0021), and a key matching no agent is reported by the resolve command rather than remapped. An override value that is not a valid tier (`opus|sonnet|haiku|fable`) is skipped with an inline warning and resolution falls through to the next source. The `enforce-agent-model.sh` hook applies this SAME override, so the resolved tier is not reverted at dispatch. This resolved tier (the SHORT name: `opus` / `sonnet` / `haiku` / `fable`) is what you print in 3b-2 AND pass verbatim to `Agent()` in 3c. The `Agent` tool's `model` parameter accepts the short tier ONLY — passing a full model ID raises `InputValidationError`. The tier→model-ID mapping is resolved from the model registry (`{SDLC_PLUGIN_ROOT}/config/models/{host}.yaml`, 3d-0) and is used ONLY for telemetry/cost accounting in 3d-1, never for dispatch. If the file is missing or the field is absent, warn inline and fall back to `sonnet`.
 
 **3b-special. Development phase two-pass execution**
 
@@ -886,10 +886,10 @@ diverge from the crashed one's partial work.
 
 **3d. Save the COMPACT summary** returned by the agent to `CONTEXT.{phase}_output`. Verify the agent also wrote the detailed file to `docs/plans/{task_slug}/0X-{phase}.md` (use `Glob` to check). If the file is missing, ask the agent again to write it before proceeding.
 
-**3d-0. Load the model registry** (once per run) — read the tag→model-ID map from the single source of truth:
+**3d-0. Load the model registry** (once per run) — read the tag→model-ID map from the single source of truth. There is one registry per dispatcher; `{host}` is `plan.roots.host` from Step 0 (`claude` unless the package declares otherwise):
 
 ```
-MODELS = parse(Read("{SDLC_PLUGIN_ROOT}/config/models.json"))   # { pipeline_tiers: [...], models: [ { tag, model_id, pricing: { input, cached_input, output } }, ... ] }
+MODELS = parse(Read("{SDLC_PLUGIN_ROOT}/config/models/{host}.yaml"))   # { provider, pipeline_tiers?: [...], models: [ { tag, model_id, pricing: { input, cached_input, output } }, ... ] }
 ```
 
 Resolve a tier to its concrete model ID via the `models[]` entry whose `tag` equals the declared tier. This registry is the single source of truth for model IDs **and pricing** — never hardcode either here.
@@ -1553,7 +1553,7 @@ The remaining keys ARE yours — they are decisions the run made, not measuremen
   (resolved in Step 0 — never assume `origin/main`; neither downstream project uses that name).
   On any git error, **omit the key** (never fabricate). Consumed by the HTML report (Step 5b).
 
-> The split `input/output/cached` counts come from each phase's subagent transcript, read by 3d-1b and again by Step 5b's `finish`, and carry `usage_source: "transcript"`. What 3d-1 records off the envelope is only the aggregate `subagent_tokens` (`usage_source: "subagent_aggregate"`), or nothing at all (`"pending"`) — never an estimate.
+> The split `input/output/cached` counts come from each phase's subagent transcript, read by 3d-1b and again by Step 5b's `finish`, and carry `usage_source: "transcript"`. What 3d-1 records instead is defined in 3d-1 and not restated here — the one rule that holds everywhere is that it is transcribed, never estimated.
 
 Print the final summary to the user:
 
@@ -1664,10 +1664,11 @@ cardinality: once-per-run
 since: 2026-07-06
 ```
 
-Dispatch via the `Agent` tool:
-- `subagent_type`: `session-recorder` (the neutral core agent; not a workflow phase, so it takes no
+Dispatch a subagent **exactly as in 3c** — the dispatch mechanics live there and are not restated
+here — with:
+- agent: `session-recorder` (the neutral core agent; not a workflow phase, so it takes no
   `agents_per_phase` binding).
-- `model`: `haiku` (resolve through `.claude/model.local.json` like any other agent).
+- model tier: `haiku`, resolved through 3b-3 like any other agent.
 - `description`: `"Close SDLC session — journal entry for {task_slug}"`.
 - `prompt` (per-call context): `task_slug`, `journal_path: docs/plans/_journal.md`,
   `telemetry_path: docs/plans/{task_slug}/_telemetry.json`.
@@ -1948,7 +1949,7 @@ Hard rules:
 - The stable prefix's `convention_skills` list MUST be sorted deterministically — never insertion-ordered.
 - The `role_expertise_block` and `skills_block` (3b-1a) are pasted VERBATIM from `EFFECTIVE_PROFILE.prompt_blocks[agent]` — never hand-rendered — and OMITTED entirely when `null`; never emit an empty header. They are invalidated only by edits to a manifest's `role_expertise`, to `sdlc.local.yaml`, or by install/uninstall of a referenced skill's plugin, which is acceptable.
 - The `sdlc_lessons_block` (3b-1b) is the VERBATIM contents of
-  `.claude/sdlc-lessons.md`, read ONCE at session start, byte-identical across
+  `.sdlc/sdlc-lessons.md`, read ONCE at session start, byte-identical across
   all phases, and OMITTED entirely (no header) when the file is absent or
   empty. Never splice it into the per-call trailer, and never re-read it per
   phase. It is invalidated only by an edit to that file — acceptable.

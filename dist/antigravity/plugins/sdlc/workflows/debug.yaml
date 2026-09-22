@@ -1,0 +1,23 @@
+name: debug
+description: >
+  Generic diagnose-fix-verify pipeline: the read-only debugger finds the root cause and
+  prescribes the fix, the developer applies it, then QA verifies. Use for crashes,
+  regressions, and root-cause investigations that end in a code change.
+match:
+  arguments_pattern: "\\bdebug\\b|\\bcrash\\b|\\bregression\\b|\\broot.?cause\\b"
+caps:
+  # Measured basis (method: analysis.yaml): per-phase p90 debugging $0.52 + development $5.41 +
+  # qa $1.48 = $7.41. Cap = 7.41 * 1.2 = $8.892, rounded up to $9.00.
+  #
+  # The `debugging` phase is cheap because it is read-only and prescriptive — it ends at a
+  # `FIX_PRESCRIPTION`, not at an edit. It does NOT make `development` cheaper: the developer
+  # still applies and verifies the fix, so do not size this recipe as "small".
+  max_total_cost_usd: 9.00
+phases:
+  - debugging
+  - name: development
+    heal:
+      max_attempts: 2
+  - name: qa
+    heal:
+      max_attempts: 2

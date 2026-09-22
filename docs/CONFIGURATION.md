@@ -1,6 +1,6 @@
 # ⚙️ Configuration & Local Overrides
 
-Adapt the pipeline to a project **without editing any plugin**, via a `.claude/sdlc.local.yaml` at
+Adapt the pipeline to a project **without editing any plugin**, via a `.sdlc/sdlc.local.yaml` at
 the project root.
 
 > See also: [Workflow Recipes](RECIPES.md) for project-local workflow files, and
@@ -55,7 +55,7 @@ fully-qualified Skill ids (`<plugin>:<skill>`) to the agents that should invoke 
   marketplace no longer ships targets nothing. Every run reports such a row, and **`/sdlc:doctor`**
   finds them across both config files and rewrites them in place once you approve — reading two
   rename tables, one for bare agent names and one for fully-qualified `<plugin>:<skill>` ids. The
-  same applies to `agents{}` keys in `.claude/model.local.json`. The `3.0.0` upgrade renamed all
+  same applies to `agents{}` keys in `.sdlc/model.local.json`. The `3.0.0` upgrade renamed all
   seven framework convention skills into the `android-foundation:` namespace, so a project carrying
   such a row needs exactly one doctor run.
 
@@ -107,7 +107,7 @@ quietly.
 Every top-level key in `sdlc.local.yaml` that nothing reads produces one line per run:
 
 ```
-WARN: .claude/sdlc.local.yaml: unknown key 'skip_phase' — ignored. Supported: active_workflow, …
+WARN: .sdlc/sdlc.local.yaml: unknown key 'skip_phase' — ignored. Supported: active_workflow, …
 ```
 
 A typo used to be ignored in complete silence, which is how a dead `frameworks:` block read as

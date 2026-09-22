@@ -1,0 +1,12 @@
+{
+  "emitter_version": 1,
+  "host": "antigravity",
+  "host_descriptor_sha": "94aa7a0491aded412568ea005709dab731c129564cf56045bab07315b6a4581f",
+  "host_cli_version": "1.1.28",
+  "plugins": [
+    "android-foundation",
+    "sdlc"
+  ],
+  "files": 229,
+  "regenerate": "node tools/sdlc-lint/cli.mjs emit --host antigravity"
+}

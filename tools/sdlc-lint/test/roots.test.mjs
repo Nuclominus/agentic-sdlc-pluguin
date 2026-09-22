@@ -50,8 +50,8 @@ test("without it, the installed registry answers — not a version sort over the
   try {
     const real = join(dir, "cache", "sdlc", "1.16.0");
     const stale = join(dir, "cache", "sdlc", "9.9.9");
-    write(join(real, "config", "models.json"), {});
-    write(join(stale, "config", "models.json"), {});
+    write(join(real, "config", "models", "claude.yaml"), {});
+    write(join(stale, "config", "models", "claude.yaml"), {});
     write(join(dir, "plugins", "installed_plugins.json"), {
       version: 2,
       plugins: { "sdlc@m": [{ scope: "user", installPath: real, version: "1.16.0" }] },
@@ -66,7 +66,7 @@ test("the cache is the last resort, picks the newest, and flags the ambiguity", 
   const dir = scratch();
   try {
     for (const v of ["1.9.0", "1.10.0", "1.10.1"]) {
-      write(join(dir, "plugins", "cache", "mkt", "sdlc", v, "config", "models.json"), {});
+      write(join(dir, "plugins", "cache", "mkt", "sdlc", v, "config", "models", "claude.yaml"), {});
     }
     const r = resolveSdlcRoot(dir, {}, null);
     assert.equal(r.source, "cache-newest");
@@ -75,7 +75,7 @@ test("the cache is the last resort, picks the newest, and flags the ambiguity", 
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("a cached directory without config/models.json is not a candidate", () => {
+test("a cached directory without the registry is not a candidate", () => {
   const dir = scratch();
   try {
     mkdirSync(join(dir, "plugins", "cache", "mkt", "sdlc", "1.0.0"), { recursive: true });
@@ -165,7 +165,7 @@ test("the self root answers for SDLC_PLUGIN_ROOT when the consumer has no copy a
   const dir = scratch();
   try {
     const self = join(dir, "checkout", "plugins", "sdlc");
-    write(join(self, "config", "models.json"), {});
+    write(join(self, "config", "models", "claude.yaml"), {});
     const r = resolveSdlcRoot(dir, {}, self);
     assert.equal(r.value, self);
     assert.equal(r.source, "self", "the provenance says the answer came from the module's location");
@@ -178,8 +178,8 @@ test("a registered install outranks the self root", () => {
   try {
     const installed = join(dir, "cache", "sdlc", "1.16.0");
     const self = join(dir, "checkout", "plugins", "sdlc");
-    write(join(installed, "config", "models.json"), {});
-    write(join(self, "config", "models.json"), {});
+    write(join(installed, "config", "models", "claude.yaml"), {});
+    write(join(self, "config", "models", "claude.yaml"), {});
     write(join(dir, "plugins", "installed_plugins.json"), {
       version: 2,
       plugins: { "sdlc@m": [{ scope: "user", installPath: installed, version: "1.16.0" }] },
@@ -205,8 +205,8 @@ test("resolveRoots carries the self root through with its provenance", () => {
   const dir = scratch();
   try {
     const self = join(dir, "checkout", "plugins", "sdlc");
-    write(join(self, "config", "models.json"), {});
-    const r = resolveRoots({ HOME: dir, CLAUDE_CONFIG_DIR: join(dir, "cfg") }, self);
+    write(join(self, "config", "models", "claude.yaml"), {});
+    const r = resolveRoots({ HOME: dir, CLAUDE_CONFIG_DIR: join(dir, "cfg") }, dir, self);
     assert.equal(r.sdlc_plugin_root, self);
     assert.equal(r.sources.sdlc_plugin_root, "self");
   } finally { rmSync(dir, { recursive: true, force: true }); }

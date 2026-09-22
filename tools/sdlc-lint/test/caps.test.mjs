@@ -9,9 +9,10 @@ import {
   resolveCostCap, renderCapOverridePrint, priceBaseline, resolveTier, expandRows,
   estimate, capVerdict, renderDryRun, renderHeadlessDryRun,
 } from "../../../plugins/sdlc/tools/resolve/caps.mjs";
+import { parseYaml } from "../../../plugins/sdlc/tools/resolve/yaml.mjs";
 
 const REPO = new URL("../../../", import.meta.url).pathname;
-const registry = JSON.parse(readFileSync(join(REPO, "plugins", "sdlc", "config", "models.json"), "utf8"));
+const registry = parseYaml(readFileSync(join(REPO, "plugins", "sdlc", "config", "models", "claude.yaml"), "utf8"));
 
 const AGENTS = {
   business_analysis: "business-analyst",
@@ -179,6 +180,116 @@ test("the cap verdict is computed from expected_total, and no cap is always WITH
   const over = capVerdict(9.5, 8);
   assert.equal(over.cap_estimate, "exceeds");
   assert.match(over.verdict, /EXCEEDS by \$1\.50/);
+});
+
+// ---------------------------------------- ADR-0012 in the pre-run estimate
+
+/** A registry with prices but no estimation_baselines — Antigravity's shape. */
+const UNPRICED = { models: registry.models, pipeline_tiers: registry.pipeline_tiers };
+
+test("a run nothing can price gets no cap verdict and no $0.00", () => {
+  // The defect: a row with no baseline priced to null, contributed 0 to the
+  // total, and the total then rendered `~$0.00` under `Cap: $19.75 → WITHIN` —
+  // a cap verdict on a run nothing had priced, which is exactly what ADR-0012
+  // forbids. $0.00 and "unknown" are different claims and must not share a
+  // rendering.
+  const rows = expandRows([{ name: "development" }, { name: "documentation" }], { agentsPerPhase: AGENTS });
+  const est = estimate(rows, UNPRICED);
+  assert.equal(est.fully_priced, false);
+  assert.equal(est.priced_rows, 0);
+
+  const out = renderDryRun({ estimate: est, slots: 2, stack: "android", workflow: "w", cap: 19.75 });
+  assert.match(out, /Estimated cost: unavailable/);
+  assert.ok(!/~\$0\.00/.test(out), "an unpriced phase must not render as free");
+  assert.match(out, /Cap: \$19\.75 {2}→ unverified/);
+  assert.ok(!/WITHIN/.test(out), "a verdict was rendered for a run nothing priced");
+});
+
+test("a resumed row on an unpriced tier is neither dispatched nor unpriced", () => {
+  // Review of the develop merge: `unpriced` was counted before `resumed` was checked, so two
+  // done phases on a tier this host cannot price were subtracted from a dispatched count that
+  // never held them — priced_rows went to -1 and the one phase that WOULD run, priced, rendered
+  // as "Estimated cost: unavailable" with no cap verdict.
+  const half = { ...registry, estimation_baselines: { opus: registry.estimation_baselines.opus } };
+  const rows = expandRows([{ name: "development" }, { name: "documentation" }, { name: "business_analysis" }], {
+    agentsPerPhase: AGENTS,
+    frontmatterTiers: { developer: "haiku", "document-writer": "haiku", "business-analyst": "opus" },
+    resumedDone: new Set(["development-android", "documentation"]),
+  });
+  const est = estimate(rows, half);
+  assert.equal(est.unpriced, 0, "a resumed row is not an unpriced dispatch");
+  assert.equal(est.priced_rows, 1);
+  assert.equal(est.fully_priced, true);
+  assert.ok(est.rows.filter((r) => r.resumed).every((r) => r.est === 0 && !r.unpriced));
+  const out = renderDryRun({ estimate: est, slots: 3, stack: "android", workflow: "w", cap: 999 });
+  assert.match(out, /Estimated cost: ~\$/, "the phase that will run is priced, so the run is");
+  assert.match(out, /Cap: \$999\.00 {2}→ WITHIN/);
+});
+
+test("an unpriced headless estimate is null, never 0, and never says within", () => {
+  // This line is what CI gates on: `estimated_cost_usd: 0` plus
+  // `cap_estimate: "within"` would pass an unpriced run as inside budget.
+  const rows = expandRows([{ name: "documentation" }], { agentsPerPhase: AGENTS });
+  const line = JSON.parse(renderHeadlessDryRun({
+    estimate: estimate(rows, UNPRICED), slots: 1, workflow: "w", cap: 19.75,
+  }));
+  assert.equal(line.estimated_cost_usd, null);
+  assert.equal(line.worst_case_usd, null);
+  assert.equal(line.cap_estimate, "unverified");
+  assert.equal(line.unpriced_phases, 1);
+  assert.equal(line.estimate_is_lower_bound, false);
+});
+
+test("a partial estimate keeps EXCEEDS and loses WITHIN", () => {
+  // The asymmetry: with any row unpriced the total is a lower bound. WITHIN is
+  // unsupportable from a floor; EXCEEDS still holds, because a floor already
+  // over the cap means the real number is over it too. Going silent about both
+  // would throw away the verdict that is still sound.
+  const half = { ...registry, estimation_baselines: { opus: registry.estimation_baselines.opus } };
+  const rows = expandRows([{ name: "business_analysis" }, { name: "documentation" }], {
+    agentsPerPhase: AGENTS,
+    frontmatterTiers: { "business-analyst": "opus", "document-writer": "haiku" },
+  });
+  const est = estimate(rows, half);
+  assert.ok(est.unpriced > 0 && est.priced_rows > 0, "the fixture must be genuinely partial");
+
+  assert.equal(capVerdict(est.expected_total, 999, { unpriced: est.unpriced, priced: est.priced_rows }).cap_estimate, "unverified");
+  assert.equal(capVerdict(est.expected_total, 0.000001, { unpriced: est.unpriced, priced: est.priced_rows }).cap_estimate, "exceeds");
+
+  const out = renderDryRun({ estimate: est, slots: 2, stack: "android", workflow: "w", cap: 999 });
+  assert.match(out, /Estimated cost: ≥ /, "a floor must be labelled as a floor");
+  assert.match(out, /phase\(s\) unpriced/);
+});
+
+test("the phase header never contradicts the list it introduces", () => {
+  // `slots` counts recipe entries, the rows count dispatches, and a parallel
+  // group is one of the former and two of the latter — so `Phases (7):` sat
+  // above eight numbered rows, in the block a reader uses to decide whether to
+  // spend money. Both numbers are real; the header names both when they differ.
+  const phases = [{ name: "development" }, { parallel: ["security", "test"] }];
+  const rows = expandRows(phases, { agentsPerPhase: AGENTS });
+  const est = estimate(rows, registry);
+  assert.equal(rows.length, 3, "the parallel group fans out to two dispatches");
+
+  const out = renderDryRun({ estimate: est, slots: phases.length, stack: "s", workflow: "w", cap: 99 });
+  assert.match(out, /Phases \(2\) · 3 dispatches/);
+  // The last row's number must not exceed a count the header states alone.
+  assert.match(out, /^ {3}3\. /m);
+
+  // When they agree, the header stays short — no noise for the common case.
+  const flat = [{ name: "development" }];
+  const flatEst = estimate(expandRows(flat, { agentsPerPhase: AGENTS }), registry);
+  assert.match(renderDryRun({ estimate: flatEst, slots: 1, stack: "s", workflow: "w", cap: 99 }), /Phases \(1\):/);
+});
+
+test("a fully priced run is unaffected by the unpriced machinery", () => {
+  // Claude Code prices every tier, so none of the above may change its output.
+  const rows = expandRows([{ name: "documentation" }], { agentsPerPhase: AGENTS });
+  const est = estimate(rows, registry);
+  assert.equal(est.unpriced, 0);
+  assert.equal(est.fully_priced, true);
+  assert.equal(capVerdict(est.expected_total, 999, { unpriced: 0, priced: est.priced_rows }).cap_estimate, "within");
+  assert.match(renderDryRun({ estimate: est, slots: 1, stack: "android", workflow: "w", cap: 999 }), /Cap: \$999\.00 {2}→ WITHIN/);
 });
 
 test("the dry-run block prints flags concatenated and names an inactive heal honestly", () => {

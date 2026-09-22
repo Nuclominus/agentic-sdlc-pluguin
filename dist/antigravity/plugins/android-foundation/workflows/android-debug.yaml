@@ -1,0 +1,33 @@
+name: android-debug
+description: >
+  Android fix-and-verify pipeline that wires the on-demand debugger into the
+  DAG: Debugger (root cause) -> Developer (fix) -> Reviewer (loops back to Developer,
+  max 2) -> Tester. The `debugging` phase maps to debugger via the android
+  foundation manifest's agents_per_phase. Note: on an Android project both `debug`
+  and `android-debug` match the same arguments; `android-debug` sets `match.priority: 10`
+  so it deterministically wins the auto-select tie-break over the generic `debug` recipe.
+match:
+  arguments_pattern: "\\bdebug\\b|\\bcrash\\b|\\bregression\\b|\\broot.?cause\\b"
+  priority: 10
+caps:
+  # Measured basis (method: analysis.yaml): per-phase p90 debugging $0.52 + development $5.41 +
+  # review $0.95 + test $2.21 = $9.09. Cap = 9.09 * 1.2 = $10.908, rounded up to $11.00.
+  # Two observed runs of this shape cost $3.74 and $2.25, so the cap sits ~3x above real usage —
+  # intentional, since a cap exists to stop a runaway, not to budget an ordinary run.
+  #
+  # Auto-select note: the priority: 10 above is what wins the tie against the generic `debug`
+  # recipe. Priority is compared BEFORE caps in the tie-break order, so adding a cap here (and to
+  # debug.yaml) does not disturb that resolution.
+  max_total_cost_usd: 11.00
+phases:
+  - debugging
+  - name: development
+    heal:
+      max_attempts: 2
+  - name: review
+    loop:
+      return_to: development
+      max_rounds: 2
+  - name: test
+    heal:
+      max_attempts: 2

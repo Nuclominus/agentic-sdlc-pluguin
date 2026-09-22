@@ -1,0 +1,23 @@
+{
+  "name": "android-foundation",
+  "version": "3.0.0",
+  "description": "Android Foundation — the centerpiece Android (Kotlin + Gradle) stack provider (kind: foundation, priority 300). Ships NO agents (ADR-0021): the roster lives in the sdlc core; this plugin declares role_expertise for 11 core roles plus 20 skills — requirements, review, MASVS security, testing, E2E, docs/vault, debugging, build-release, CI, Compose/architecture/data/Navigation, and 7 embedded framework-conventions skills (ADR-0026: Retrofit, Ktor, Room, Proto DataStore, Hilt, Koin, WorkManager), activated per project. Checks: detekt + unit tests + compile-check.",
+  "author": {
+    "name": "Nuclominus",
+    "url": "https://github.com/Nuclominus"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/Nuclominus/Agentic-SDLC-Pluguin",
+  "keywords": [
+    "android",
+    "kotlin",
+    "jetpack-compose",
+    "gradle",
+    "mobile",
+    "sdlc",
+    "stack-provider"
+  ],
+  "dependencies": [
+    "sdlc"
+  ]
+}

@@ -1,0 +1,36 @@
+name: android-bugfix
+description: >
+  Android bug-fix gate. Run debugger first (on-demand, for root cause), then:
+  Developer -> Reviewer (loops back to Developer, max 3) -> [Security || Tester] -> QA.
+caps:
+  # Measured basis (method: analysis.yaml): per-phase p90 development $5.41 + review $0.95 +
+  # security $0.40 + test $2.21 + qa $1.48 = $10.45. Cap = 10.45 * 1.2 = $12.54, rounded up to
+  # $12.75.
+  #
+  # The review loop (max_rounds: 3) is deliberately NOT multiplied in. Six observed runs of the
+  # loop-bearing android-feature shape topped out at $9.67 — below even the un-multiplied sum —
+  # so folding in max_rounds would produce a cap no runaway could ever reach, which is the same
+  # as having no cap at all.
+  #
+  # `remediation` is gated on security's Critical/High counts, entering base_total at
+  # 0.5 × $5.41 = $2.71 — a full development dispatch when it fires. 10.45 + 2.71 = $13.16;
+  # × 1.2 = $15.792, rounded up to $16.00.
+  max_total_cost_usd: 16.00
+phases:
+  - name: development
+    heal:
+      max_attempts: 2
+  - name: review
+    loop:
+      return_to: development
+      max_rounds: 3
+  - parallel: [security, test]
+  - name: remediation
+    gate:
+      after: [security]
+      min_severity: high
+    heal:
+      max_attempts: 2
+  - name: qa
+    heal:
+      max_attempts: 2

@@ -1,0 +1,58 @@
+# yaml-language-server: $schema=../../../../schemas/models.schema.json
+#
+# Model registry — Antigravity CLI (`agy`).
+#
+# There is no `pipeline_tiers` here, and that absence is the point. On this host nothing
+# is dispatched by tag: the emitter bakes the resolved model into each agent file at build
+# time, because Antigravity model ids embed the reasoning effort (`agy models`:
+# gemini-3.8-flash-medium, gemini-3.1-pro-high), so the tier+effort PAIR maps to one
+# string. The tier -> id map that produces these lives in
+# tools/sdlc-lint/hosts/antigravity.json; what lives here is only id -> price.
+#
+# `estimation_baselines` and `cache_write_multipliers` are absent for the same reason plus
+# one more: both are Anthropic-shaped (the 1.25x/2x cache-write multipliers are an
+# Anthropic pricing rule, and the baselines were measured on Claude phases). Inventing
+# equivalents would be fabricating numbers, so the dry-run preview simply reports no
+# estimate on this host rather than a made-up one.
+#
+# Rates read from https://ai.google.dev/gemini-api/docs/pricing on 2026-09-09.
+
+provider: google
+
+models:
+  # ── Gemini 3.1 Pro ────────────────────────────────────────────────────────────
+  # $2.00 in / $0.20 cached / $12.00 out — for prompts <= 200K tokens.
+  #
+  # ABOVE 200K Google charges $4.00 / $0.40 / $18.00, which this registry cannot
+  # express: it has one rate per model, not a prompt-size tier. That is not
+  # hypothetical — real phases have exceeded a 200K prefix — so a run priced from
+  # these numbers UNDER-reports. Do not enable cost on this host until the tier is
+  # representable (Track J Phase 4).
+  #
+  # Cache STORAGE ($4.50 per MTok per hour) is not modelled at all.
+  #
+  # Effort does not change the token price, so -high and -low are identical rates.
+  # They are separate entries because pricing is looked up by the exact model string
+  # telemetry recorded, and the existing id normalizers are Anthropic-shaped.
+  - tag: gemini-3.1-pro-high
+    model_id: gemini-3.1-pro-high
+    pricing: { input: 2.0, cached_input: 0.2, output: 12.0 }
+  - tag: gemini-3.1-pro-low
+    model_id: gemini-3.1-pro-low
+    pricing: { input: 2.0, cached_input: 0.2, output: 12.0 }
+
+  # ── Gemini 3.8 Flash ──────────────────────────────────────────────────────────
+  # $0.75 in / $0.075 cached / $3.75 out — INTRODUCTORY, through 2026-12-31.
+  # From 2027-01-01 these double to $1.50 / $0.15 / $7.50. Update them then, or every
+  # Antigravity run after that date is priced at half of what it cost.
+  #
+  # Cache storage: $0.50 per MTok per hour through 2026-12-31, $1.00 after. Not modelled.
+  - tag: gemini-3.8-flash-high
+    model_id: gemini-3.8-flash-high
+    pricing: { input: 0.75, cached_input: 0.075, output: 3.75 }
+  - tag: gemini-3.8-flash-medium
+    model_id: gemini-3.8-flash-medium
+    pricing: { input: 0.75, cached_input: 0.075, output: 3.75 }
+  - tag: gemini-3.8-flash-low
+    model_id: gemini-3.8-flash-low
+    pricing: { input: 0.75, cached_input: 0.075, output: 3.75 }

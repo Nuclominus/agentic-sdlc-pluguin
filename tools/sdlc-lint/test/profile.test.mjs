@@ -400,7 +400,7 @@ test("renderSkillsBlock: role skills and matching extension rows, deduped, manda
     ],
   });
   assert.equal(block, [
-    "Skills for this role (from the active stack profile and this project's .claude/sdlc.local.yaml):",
+    "Skills for this role (from the active stack profile and this project's .sdlc/sdlc.local.yaml):",
     "- MANDATORY — invoke `acme:alpha`. Do not skip; this project requires it.",
     "- MANDATORY — invoke `superpowers:test-driven-development` — before the first edit. Do not skip; this project requires it.",
     "- RECOMMENDED — consider invoking `acme:zed`.",
@@ -427,7 +427,7 @@ test("renderSkillsBlock downgrades a role skill whose plugin is not installed, e
     warnings,
   });
   assert.equal(block, [
-    "Skills for this role (from the active stack profile and this project's .claude/sdlc.local.yaml):",
+    "Skills for this role (from the active stack profile and this project's .sdlc/sdlc.local.yaml):",
     "- MANDATORY — invoke `superpowers:test-driven-development` — before the first edit. Do not skip; this project requires it.",
     "- RECOMMENDED — consider invoking `frontend-design:frontend-design` — before a Compose screen (skill not installed — best-effort).",
   ].join("\n"));
@@ -563,6 +563,6 @@ test("a model override keyed by an agent that does not exist is dropped and repo
   assert.deepEqual(r.overrides, { default: "sonnet", agents: { developer: "haiku" } },
     "an unknown key is a no-op entry, not a corrupt file — unlike a bad tier it must not fail the whole map closed");
   assert.equal(r.warnings.length, 1);
-  assert.match(r.warnings[0], /^WARN: \.claude\/model\.local\.json names unknown agent 'android-ba'/);
+  assert.match(r.warnings[0], /^WARN: \.sdlc\/model\.local\.json names unknown agent 'android-ba'/);
   assert.match(r.warnings[0], /run \/sdlc:doctor/);
 });

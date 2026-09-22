@@ -131,7 +131,7 @@ detect:
   any: ["*"]
 `,
   // Found by this gate on a real .gitlab-ci.yml: a plain scalar continuing over more-indented
-  // lines. Ordinary YAML, and just as writable in .claude/sdlc.local.yaml — the parser threw
+  // lines. Ordinary YAML, and just as writable in .sdlc/sdlc.local.yaml — the parser threw
   // on it before this case existed.
   "multi-line plain scalar in a sequence": `
 script:
@@ -181,8 +181,8 @@ test("optional: a real project's SDLC config, when SDLC_PARITY_PROJECTS names on
   let checked = 0;
   for (const root of roots) {
     const candidates = [
-      join(root, ".claude", "sdlc.local.yaml"),
-      ...walkYaml(join(root, ".claude", "sdlc-workflows")),
+      join(root, ".sdlc", "sdlc.local.yaml"),
+      ...walkYaml(join(root, ".sdlc", "sdlc-workflows")),
     ];
     for (const f of candidates) {
       if (!existsSync(f) || !statSync(f).isFile()) continue;

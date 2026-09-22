@@ -1,0 +1,26 @@
+{
+  "collapse-filter": false,
+  "search": "",
+  "showTags": true,
+  "showAttachments": false,
+  "hideUnresolved": false,
+  "showOrphans": true,
+  "collapse-color-groups": false,
+  "colorGroups": [
+    { "query": "tag:#layer/ui", "color": { "a": 1, "rgb": 2201331 } },
+    { "query": "tag:#layer/domain", "color": { "a": 1, "rgb": 5025616 } },
+    { "query": "tag:#layer/data", "color": { "a": 1, "rgb": 16750592 } },
+    { "query": "tag:#status/deprecated", "color": { "a": 1, "rgb": 14431557 } }
+  ],
+  "collapse-display": false,
+  "showArrow": true,
+  "textFadeMultiplier": 0,
+  "nodeSizeMultiplier": 1,
+  "lineSizeMultiplier": 1,
+  "collapse-forces": false,
+  "centerStrength": 0.5,
+  "repelStrength": 10,
+  "linkStrength": 1,
+  "linkDistance": 250,
+  "scale": 1
+}

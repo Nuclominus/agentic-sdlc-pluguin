@@ -1,0 +1,29 @@
+name: bugfix
+description: Fix a known bug — skip business analysis, run development through documentation.
+match:
+  arguments_pattern: "\\bfix(es|ed)?\\b|\\bbug\\b|\\bissue\\b"
+  loc_touched_max: 500
+caps:
+  # Measured basis (see analysis.yaml for the full method):
+  # per-phase p90 development $5.41 + qa $1.48 + security $0.40 + documentation $0.21 = $7.50.
+  # Base = $7.50. Identical phase list to hotfix.yaml, hence the identical cap.
+  #
+  # `remediation` is gated (dispatched only when security reports Critical/High), so it enters
+  # base_total at 0.5 x est(development) = 0.5 x $5.41 = $2.71 — a full development dispatch when
+  # it fires. 7.50 + 2.71 = $10.21; * 1.2 = $12.252, rounded up to $12.50.
+  max_total_cost_usd: 12.50
+phases:
+  - name: development
+    heal:
+      max_attempts: 2
+  - name: qa
+    heal:
+      max_attempts: 2
+  - security
+  - name: remediation
+    gate:
+      after: [security]
+      min_severity: high
+    heal:
+      max_attempts: 2
+  - documentation
