@@ -93,42 +93,45 @@ export function rewriteAgent(text, host) {
 }
 
 /**
- * Filter a hooks config down to the events a host actually fires.
+ * Render a hooks config for a host, on what was MEASURED about that host's hooks.
  *
- * A hook registered on an event the host does not have is not inert-but-harmless:
- * it reads as coverage that does not exist. Dropping it here makes the loss
- * explicit in the emit report, which is what `emit --check`'s declared-drops axis
- * then holds us to.
+ * The descriptor's `hooks` block says what the probe found (hosts/<host>.json): the file
+ * shape the host parses, where a hook command runs and what it can interpolate, and whether
+ * matchers can be spelled in its tool names. Every hook this cannot honour is dropped with the
+ * reason stated, so `emit --check`'s declared-drops axis holds us to it — a hook registered on
+ * an event the host does not fire, or in a shape it rejects, is not inert-but-harmless: it
+ * reads as coverage that does not exist.
  *
- * @param {string} text  raw hooks.json
+ * @param {string} text        raw hooks.json (Claude Code shape)
  * @param {object} host
- * @returns {{ ok: boolean, json: object|null, dropped: string[], error: string|null }}
+ * @param {string} pluginName  the name a "named" shape keys the file on
+ * @returns {{ ok: boolean, json: object|null, dropped: object[], warnings: string[], error: string|null }}
  */
-export function rewriteHooks(text, host) {
+export function rewriteHooks(text, host, pluginName = "plugin") {
   let parsed;
-  try { parsed = JSON.parse(text); } catch (e) { return { ok: false, json: null, dropped: [], error: `unparseable hooks.json: ${e.message}` }; }
+  try { parsed = JSON.parse(text); } catch (e) { return { ok: false, json: null, dropped: [], warnings: [], error: `unparseable hooks.json: ${e.message}` }; }
 
   const supported = new Set(host?.hook_events?.supported ?? []);
   const dropScripts = host?.drop_hooks ?? [];
-  // The variable a hook command may interpolate for the plugin's own root. The
-  // authored commands say `${CLAUDE_PLUGIN_ROOT}`; a host that sets another name
-  // gets it rewritten. A host on which this has not been MEASURED keeps the
-  // command as authored — a repackager transforms nothing on a guess (ADR-0029
-  // §3) — and the gap is WARNED, in the emit report and in INSTALL.md, until
-  // someone measures it: if the variable is unset there, the command expands to
-  // `bash "/hooks/x.sh"` and fails on every event with nothing gating it.
-  const rootVar = host?.hook_env?.plugin_root_var ?? null;
+  const spec = host?.hooks ?? {};
+  // Where `${CLAUDE_PLUGIN_ROOT}` resolves for a hook command on this host: "cwd" when the host
+  // runs the command inside the plugin directory and sets no variable (Antigravity, measured),
+  // a variable name when it sets one (Codex documents CLAUDE_PLUGIN_ROOT itself), or null when
+  // nobody has measured it — then the command ships as authored and the gap is WARNED, because a
+  // repackager transforms nothing on a guess (ADR-0029 §3) and an unset variable makes the
+  // command `bash "/hooks/x.sh"`, which fails on every event with nothing gating it.
+  const commandRoot = spec.command_root ?? null;
+  const toolNames = spec.tool_names ?? null;
   const ROOT_REF = "${CLAUDE_PLUGIN_ROOT}";
-  const warnings = [];
   const events = parsed?.hooks ?? {};
   const kept = {};
   const dropped = [];
+  const warnings = [];
 
   /** The handler scripts a group registers, by basename — what a drop actually costs. */
+  const scriptOf = (cmd) => (String(cmd ?? "").match(/([\w.-]+\.sh)/) ?? [])[1] ?? String(cmd ?? "");
   const scriptsOf = (groups) => [...new Set((Array.isArray(groups) ? groups : [])
-    .flatMap((g) => g.hooks ?? [])
-    .map((h) => (String(h.command ?? "").match(/([\w.-]+\.sh)/) ?? [])[1])
-    .filter(Boolean))];
+    .flatMap((g) => g.hooks ?? []).map((h) => scriptOf(h.command)).filter(Boolean))];
 
   for (const [event, groups] of Object.entries(events)) {
     if (!supported.has(event)) {
@@ -144,33 +147,78 @@ export function rewriteHooks(text, host) {
       continue;
     }
 
-    // A matcher group survives only if at least one of its handlers does. An
-    // empty group left behind would register the event for nothing, and read as
-    // coverage that isn't there.
     const keptGroups = [];
     for (const group of Array.isArray(groups) ? groups : []) {
-      const handlers = (group.hooks ?? []).filter((h) => {
-        const hit = dropScripts.find((d) => typeof h.command === "string" && h.command.includes(d.script));
-        if (hit) dropped.push({ what: `${event}:${hit.script}`, reason: hit.reason });
-        return !hit;
-      });
-      const usable = [];
-      for (const h of handlers) {
-        const cmd = String(h.command ?? "");
-        if (!cmd.includes(ROOT_REF)) { usable.push(h); continue; }
-        if (rootVar) { usable.push({ ...h, command: cmd.replaceAll(ROOT_REF, `\${${rootVar}}`) }); continue; }
-        const script = (cmd.match(/([\w.-]+\.sh)/) ?? [])[1] ?? cmd;
-        usable.push(h);
-        warnings.push(`${event}:${script} interpolates ${ROOT_REF}, and whether host ${host.host} sets that variable for a hook command`
-          + ` is unmeasured (hook_env.plugin_root_var is null) — kept as authored; if it is unset there, the command expands to`
-          + ` \`bash "/hooks/${script}"\` and fails silently on every ${event}`);
+      // A matcher names TOOLS, in the host's own vocabulary. Claude Code's `Bash`, `Edit`,
+      // `Write` are not this host's names; without a measured map the group cannot be
+      // spelled, and a matcher that matches nothing is a guard that guards nothing.
+      let matcher = group.matcher ?? null;
+      if (matcher && matcher !== "*" && matcher !== "") {
+        const names = matcher.split("|");
+        const unmapped = toolNames ? names.filter((n) => !toolNames[n]) : names;
+        if (unmapped.length) {
+          for (const script of scriptsOf([group])) {
+            dropped.push({
+              what: `${event}:${script}`,
+              reason: `its matcher names Claude Code tool(s) ${unmapped.join(", ")}, which host ${host.host} spells differently`
+                + (toolNames ? " and its tool-name map does not cover" : " and declares no tool-name map for")
+                + " — registered, it would guard nothing while reading as coverage",
+            });
+          }
+          continue;
+        }
+        matcher = names.map((n) => toolNames[n]).join("|");
       }
-      if (usable.length) keptGroups.push({ ...group, hooks: usable });
+
+      const usable = [];
+      for (const h of group.hooks ?? []) {
+        const hit = dropScripts.find((d) => typeof h.command === "string" && h.command.includes(d.script));
+        if (hit) { dropped.push({ what: `${event}:${hit.script}`, reason: hit.reason }); continue; }
+        let cmd = String(h.command ?? "");
+        if (cmd.includes(ROOT_REF)) {
+          if (commandRoot === "cwd") cmd = cmd.replaceAll(`${ROOT_REF}/`, "").replaceAll(ROOT_REF, ".");
+          else if (commandRoot) cmd = cmd.replaceAll(ROOT_REF, `\${${commandRoot}}`);
+          else {
+            warnings.push(`${event}:${scriptOf(cmd)} interpolates ${ROOT_REF}, and whether host ${host.host} sets that variable for a hook command`
+              + ` is unmeasured (hooks.command_root is null) — kept as authored; if it is unset there, the command expands to`
+              + ` \`bash "/hooks/${scriptOf(cmd)}"\` and fails silently on every ${event}`);
+          }
+        }
+        usable.push({ ...h, command: cmd });
+      }
+      if (usable.length) keptGroups.push({ ...group, ...(matcher != null ? { matcher } : {}), hooks: usable });
     }
     if (keptGroups.length) kept[event] = keptGroups;
     else dropped.push({ what: `${event} (empty)`, reason: `every handler on ${event} was dropped, so the event registration goes with them` });
   }
-  return { ok: true, json: { ...parsed, hooks: kept }, dropped, warnings, error: null };
+
+  if (Object.keys(kept).length === 0) {
+    // Nothing survives: no file. An empty registration is the same false coverage, one level up.
+    dropped.push({ what: "(file)", reason: "no hook survives on this host, so no hooks.json is emitted" });
+    return { ok: true, json: null, dropped, warnings, error: null };
+  }
+  const json = spec.shape === "named" ? namedHooks(pluginName, kept) : { ...parsed, hooks: kept };
+  return { ok: true, json, dropped, warnings, error: null };
+}
+
+/**
+ * The hooks.json shape Antigravity parses (measured on 1.2.0): one top-level key naming the
+ * hook set, then flat handlers per event — `{ "<name>": { "<Event>": [{type, command, timeout,
+ * matcher?}] } }`. Claude Code's matcher GROUPS are what its parser trips on ("invalid hook
+ * \"hooks\": command hook must specify 'command'"), so the group's matcher moves onto each of
+ * its handlers. Only the fields the host is known to read are emitted.
+ */
+function namedHooks(name, kept) {
+  const out = {};
+  for (const [event, groups] of Object.entries(kept)) {
+    out[event] = groups.flatMap((g) => (g.hooks ?? []).map((h) => ({
+      type: h.type ?? "command",
+      command: h.command,
+      ...(h.timeout != null ? { timeout: h.timeout } : {}),
+      ...(g.matcher ? { matcher: g.matcher } : {}),
+    })));
+  }
+  return { [name]: out };
 }
 
 /**
@@ -291,11 +339,11 @@ export function emitPlugin(root, pluginName, host) {
     const abs = join(src, from);
     if (!existsSync(abs)) continue;             // not every plugin ships hooks
     if (posix.basename(to) === "hooks.json") {
-      const r = rewriteHooks(readFileSync(abs, "utf8"), host);
+      const r = rewriteHooks(readFileSync(abs, "utf8"), host, pluginName);
       if (!r.ok) { errors.push(`${pluginName}/${from}: ${r.error}`); continue; }
       for (const d of r.dropped) drops.push({ path: `${from}#${d.what}`, reason: d.reason });
       for (const w of r.warnings) warnings.push(`${from}: ${w}`);
-      outputs.set(posix.join(outDir, to), { kind: "rewrite", content: JSON.stringify(r.json, null, 2) + "\n" });
+      if (r.json) outputs.set(posix.join(outDir, to), { kind: "rewrite", content: JSON.stringify(r.json, null, 2) + "\n" });
     } else {
       outputs.set(posix.join(outDir, to), { kind: "copy", from: posix.join("plugins", pluginName, from) });
     }

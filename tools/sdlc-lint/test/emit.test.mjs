@@ -127,9 +127,10 @@ test("a hook on an event the host does not fire is dropped with a reason", () =>
   const src = JSON.stringify({ hooks: { SessionStart: [{ hooks: [{ type: "command", command: "bash x.sh" }] }] } });
   const r = rewriteHooks(src, ANTIGRAVITY);
   assert.ok(r.ok);
-  assert.deepEqual(r.json.hooks, {});
-  assert.equal(r.dropped.length, 1);
+  assert.equal(r.json, null, "nothing survives, so no file");
+  assert.equal(r.dropped.length, 2);
   assert.match(r.dropped[0].reason, /does not fire the SessionStart/);
+  assert.equal(r.dropped[1].what, "(file)");
 });
 
 test("a dropped handler takes its now-empty event registration with it", () => {
@@ -139,15 +140,32 @@ test("a dropped handler takes its now-empty event registration with it", () => {
   });
   const r = rewriteHooks(src, ANTIGRAVITY);
   assert.ok(r.ok);
-  assert.deepEqual(Object.keys(r.json.hooks), []);
+  assert.equal(r.json, null);
   assert.ok(r.dropped.some((d) => d.what.includes("enforce-agent-model.sh")));
+  assert.ok(r.dropped.some((d) => d.what === "PreToolUse (empty)"));
 });
 
-test("a supported event with a surviving handler is kept intact", () => {
-  const src = JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: "command", command: "bash seal-run.sh" }] }] } });
-  const r = rewriteHooks(src, ANTIGRAVITY);
-  assert.deepEqual(r.json.hooks.Stop[0].hooks.length, 1);
+test("a surviving handler is rendered in the host's named shape, rooted at its cwd", () => {
+  // Measured on agy 1.2.0: the host parses `{"<name>": {"<Event>": [handler…]}}` and rejects
+  // Claude Code's matcher groups; a hook command runs in the plugin directory and
+  // `${CLAUDE_PLUGIN_ROOT}` expands to nothing there.
+  const src = JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: "command", command: 'bash "${CLAUDE_PLUGIN_ROOT}/hooks/keep-me.sh"', timeout: 10, description: "d" }] }] } });
+  const r = rewriteHooks(src, ANTIGRAVITY, "sdlc");
+  assert.ok(r.ok);
+  assert.deepEqual(r.json, { sdlc: { Stop: [{ type: "command", command: 'bash "hooks/keep-me.sh"', timeout: 10 }] } });
   assert.deepEqual(r.dropped, []);
+  assert.deepEqual(r.warnings, []);
+});
+
+test("a matcher in Claude Code's tool names is dropped until the host's names are measured", () => {
+  const src = JSON.stringify({ hooks: { PreToolUse: [{ matcher: "Edit|Write", hooks: [{ type: "command", command: "bash keep-me.sh" }] }] } });
+  const r = rewriteHooks(src, ANTIGRAVITY, "x");
+  assert.equal(r.json, null);
+  assert.ok(r.dropped.some((d) => d.what === "PreToolUse:keep-me.sh" && /Edit, Write/.test(d.reason)));
+
+  const mapped = { ...ANTIGRAVITY, hooks: { ...ANTIGRAVITY.hooks, tool_names: { Edit: "edit_file", Write: "write_file" } } };
+  const m = rewriteHooks(src, mapped, "x");
+  assert.equal(m.json.x.PreToolUse[0].matcher, "edit_file|write_file");
 });
 
 test("unparseable hooks.json is a tool error, not a silent empty config", () => {
@@ -162,9 +180,14 @@ test("the plan moves the manifest and the hooks config to the plugin root", () =
   // validate` says `missing plugin.json` / `hooks: skipped` otherwise.
   const { outputs } = emitPlugin(REPO, "sdlc", ANTIGRAVITY);
   assert.ok(outputs.has("dist/antigravity/plugins/sdlc/plugin.json"));
-  assert.ok(outputs.has("dist/antigravity/plugins/sdlc/hooks.json"));
   assert.equal(outputs.has("dist/antigravity/plugins/sdlc/.claude-plugin/plugin.json"), false);
   assert.equal(outputs.has("dist/antigravity/plugins/sdlc/hooks/hooks.json"), false);
+  // hooks.json lands at the root too — when a hook survives. On the measured descriptor none
+  // does (see "ships no hooks.json"), so the move is asserted on a host that keeps one.
+  const keeps = { ...ANTIGRAVITY, drop_hooks: [] };
+  const kept = emitPlugin(REPO, "sdlc", keeps).outputs;
+  assert.ok(kept.has("dist/antigravity/plugins/sdlc/hooks.json"));
+  assert.equal(kept.has("dist/antigravity/plugins/sdlc/hooks/hooks.json"), false);
 });
 
 test("commands are carried verbatim — the host converts them itself", () => {
@@ -610,7 +633,7 @@ test("a dropped hook event names the script that stops running", () => {
   });
   const r = rewriteHooks(hooks, ANTIGRAVITY);
   assert.ok(r.ok);
-  assert.equal(r.dropped.length, 1);
+  assert.equal(r.dropped.length, 2, "the event, then the file nothing is left in");
   assert.match(r.dropped[0].reason, /android-cli-check\.sh never runs/);
 });
 
@@ -783,30 +806,31 @@ test("with no env override the config dir reports the default, not the variable 
 
 // ------------------------------------------- review of #202: the pre-existing findings
 
-test("a hook command that needs the plugin root is kept and warned until the host names the variable", () => {
-  // The authored Stop hook says `bash "${CLAUDE_PLUGIN_ROOT}/hooks/seal-run.sh"`. Whether agy
-  // sets that variable for a hook command is unmeasured. A repackager does not transform on a
-  // guess (ADR-0029 §3), so the hook ships as authored — and the gap is stated, because if the
-  // variable is unset the command expands to `bash "/hooks/seal-run.sh"` and nothing gates a
-  // hook failure.
-  const src = JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: "command", command: 'bash "${CLAUDE_PLUGIN_ROOT}/hooks/seal-run.sh"' }] }] } });
-  const r = rewriteHooks(src, ANTIGRAVITY);
-  assert.ok(r.ok);
-  assert.equal(r.json.hooks.Stop[0].hooks[0].command, 'bash "${CLAUDE_PLUGIN_ROOT}/hooks/seal-run.sh"', "kept as authored");
-  assert.deepEqual(r.dropped, []);
+test("an unmeasured command root keeps the hook as authored and warns; a named variable rewrites it", () => {
+  const src = JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: "command", command: 'bash "${CLAUDE_PLUGIN_ROOT}/hooks/keep-me.sh"' }] }] } });
+  const unmeasured = { ...ANTIGRAVITY, hooks: { ...ANTIGRAVITY.hooks, command_root: null } };
+  const r = rewriteHooks(src, unmeasured, "x");
+  assert.equal(r.json.x.Stop[0].command, 'bash "${CLAUDE_PLUGIN_ROOT}/hooks/keep-me.sh"', "kept as authored — a repackager does not transform on a guess");
   assert.equal(r.warnings.length, 1);
-  assert.match(r.warnings[0], /Stop:seal-run\.sh .*plugin_root_var is null/);
+  assert.match(r.warnings[0], /Stop:keep-me\.sh .*command_root is null/);
 
-  const measured = { ...ANTIGRAVITY, hook_env: { plugin_root_var: "GEMINI_PLUGIN_ROOT" } };
-  const m = rewriteHooks(src, measured);
-  assert.equal(m.json.hooks.Stop[0].hooks[0].command, 'bash "${GEMINI_PLUGIN_ROOT}/hooks/seal-run.sh"');
+  const named = { ...ANTIGRAVITY, hooks: { ...ANTIGRAVITY.hooks, command_root: "GEMINI_PLUGIN_ROOT" } };
+  const m = rewriteHooks(src, named, "x");
+  assert.equal(m.json.x.Stop[0].command, 'bash "${GEMINI_PLUGIN_ROOT}/hooks/keep-me.sh"');
   assert.deepEqual(m.warnings, []);
+});
 
+test("the Antigravity package ships no hooks.json, and INSTALL.md says why for each script", () => {
+  // Every shipped hook was measured dead or unrunnable on 1.2.0 (hosts/antigravity.json `hooks`).
   const all = emitAll(REPO, ANTIGRAVITY);
-  assert.ok(all.warnings.some((w) => /^sdlc\/hooks\/hooks\.json: Stop:seal-run\.sh/.test(w)), "the plan carries it");
+  assert.deepEqual(all.warnings, [], "nothing is left on an unmeasured assumption");
+  assert.equal(all.outputs.has("dist/antigravity/plugins/sdlc/hooks.json"), false);
+  assert.equal(all.outputs.has("dist/antigravity/plugins/android-foundation/hooks.json"), false);
   const install = all.outputs.get("dist/antigravity/INSTALL.md").content;
-  assert.match(install, /unmeasured assumption/);
-  assert.match(install, /seal-run\.sh/);
+  for (const script of ["seal-run.sh", "format-on-stop.sh", "guard-paths.sh", "git-guard.sh", "kotlin-guard.sh"]) {
+    assert.match(install, new RegExp(script), `INSTALL.md must name ${script}`);
+  }
+  assert.match(install, /names no project/);
 });
 
 test("rewriting an agent keeps the blank lines around the keys and leaves the body alone", () => {

@@ -69,11 +69,36 @@
     "subagent_cwd_caveat": "Subagents also write into ${GEMINI_CONFIG_DIR:-$HOME/.gemini}/antigravity-cli/scratch/ alongside the parent's cwd — both probe files appeared in BOTH places on the spike. Deliverable paths handed to a phase must therefore be ABSOLUTE, or the orchestrator's 3d Glob verification can look in one directory while the agent wrote to the other."
   },
 
-  "hook_env": {
-    "_comment": "The variable a hook COMMAND may interpolate for the plugin's own root. The authored hooks.json says `bash \"${CLAUDE_PLUGIN_ROOT}/hooks/seal-run.sh\"`. Whether this host sets that variable — or any — in a hook's environment is NOT measured (J1 'still open'), so it is null: the emitter keeps every such hook as authored (a repackager transforms nothing on a guess, ADR-0029 §3) and WARNS, on every emit and check and in INSTALL.md, that if the variable is unset the command expands to `bash \"/hooks/seal-run.sh\"` and fails silently. Measure it, set the name here (`CLAUDE_PLUGIN_ROOT` itself if the host aliases it, as Codex documents), re-emit, and the warning goes.",
-    "plugin_root_var": null
+  "hooks": {
+    "_comment": "MEASURED on agy 1.2.0 (2026-09-22) with a throwaway probe plugin whose hook commands dumped env, cwd and stdin, run with --log-file. (1) The plugin hooks.json shape is NOT Claude Code's: `{\"<name>\": {\"<Event>\": [{type, command, timeout, matcher?}]}}` — flat handlers per event under one naming key. A Claude-shaped file passes `agy plugin validate` (`hooks: 1 processed`) and is then rejected at runtime: `hooks.go: failed to parse hooks for plugin at …: invalid hook \"hooks\": command hook must specify 'command'` — every hook in it is silently dead. superpowers' shipped hooks fail the same way. So this package's hooks never fired before this was measured; the Phase 1 run sealed itself at Step 6, not via the Stop net. (2) A hook command runs with cwd = the plugin's install directory (also stated in the binary's bundled docs), and `${PLUGIN_ROOT}`, `${CLAUDE_PLUGIN_ROOT}` and `${PLUGIN_DATA}` all expand EMPTY — no such variable in the env, no template expansion — so command_root is the cwd and the reference is removed. (3) Stop, PreInvocation and PostInvocation fired; PreToolUse/PostToolUse did NOT fire in print mode on two attempts (a file read, then a `run_command`) even with matcher \"*\". (4) The Stop payload (stdin JSON) carries artifactDirectoryPath, conversationId, error, executionNum, fullyIdle, modelName, terminationReason, transcriptPath and workspacePaths — and workspacePaths was [] with no cwd/project field, so a Stop hook cannot find the project it ran for. (5) Matchers name TOOLS in this host's vocabulary (run_command, view_file, browser_*), not Claude Code's (Bash, Edit, Write); no map is declared because none was measured.",
+    "shape": "named",
+    "command_root": "cwd",
+    "tool_names": null,
+    "tool_hooks_fire_in_print_mode": false,
+    "stop_payload_names_project": false,
+    "measured_on": { "cli_version": "1.2.0", "date": "2026-09-22" }
   },
   "drop_hooks": [
+    {
+      "script": "seal-run.sh",
+      "reason": "Stop fires (measured on 1.2.0), but its payload names no project — workspacePaths is [] and there is no cwd field — and the command runs inside the plugin directory, so seal-stale would look for docs/plans under the plugin and seal nothing. The run seals itself at Step 6 (sealed_by: orchestrator); there is no Stop-time net on this host until it tells a hook where it ran."
+    },
+    {
+      "script": "format-on-stop.sh",
+      "reason": "Stop fires, but its payload names no project and the command runs inside the plugin directory (measured on 1.2.0), so there is no project tree to format."
+    },
+    {
+      "script": "guard-paths.sh",
+      "reason": "PreToolUse was not observed to fire in print mode on 1.2.0 (two attempts, matcher *), and the matcher names Claude Code's Edit|Write where this host has other tool names and no measured map — registered, it would guard nothing while reading as coverage."
+    },
+    {
+      "script": "git-guard.sh",
+      "reason": "PreToolUse was not observed to fire in print mode on 1.2.0 (two attempts, matcher *), and the matcher names Claude Code's Bash where this host spells the tool run_command and no map is measured — registered, it would guard nothing while reading as coverage."
+    },
+    {
+      "script": "kotlin-guard.sh",
+      "reason": "PostToolUse was not observed to fire in print mode on 1.2.0 (two attempts, matcher *), and the matcher names Claude Code's Edit|Write where this host has other tool names and no measured map — registered, it would guard nothing while reading as coverage."
+    },
     {
       "script": "enforce-agent-model.sh",
       "reason": "Enforces the tier by rewriting the dispatch through the PreToolUse `updatedInput` envelope, which this host does not document, and matches on the tool name `Agent`, which this host does not have. Superseded at emit time: the tier is baked into each agent's `model:` (see models.map), which is enforcement by construction rather than by hook."

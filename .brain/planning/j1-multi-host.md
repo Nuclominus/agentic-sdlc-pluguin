@@ -33,6 +33,9 @@ not use, so every id it emits still exists.
 | Is `status` trustworthy? | **No, in both directions.** A run that produced nothing and had an action auto-denied reported `status: "SUCCESS"` with an empty `response`; the full pipeline run, which completed and sealed, reported `status: "ERROR"` because it hit `--print-timeout` while composing its closing message (898 s against a 15 m limit). Gate on `_telemetry.json`, never on `status` or exit code. |
 | Print-mode timeout | Set it well past the pipeline's own wall clock: the sealed run took 539 s but `agy` stayed up 898 s finishing Step 6 and its final response. |
 | Is `GEMINI_CONFIG_DIR` honoured? | **Nowhere.** Pointed at an empty directory, `agy plugin install` still installed under `$HOME/.gemini/config/plugins` and `agy plugin list` still listed from there. So an install cannot be isolated to a throwaway config dir, and every install is global. |
+| Do plugin hooks run? (measured 2026-09-22 on 1.2.0) | **Not from a Claude-shaped `hooks.json`.** `agy plugin validate` says `hooks: 1 processed`; at runtime `hooks.go` logs `failed to parse hooks for plugin …: invalid hook "hooks": command hook must specify 'command'` and registers nothing — every hook this package shipped, and superpowers', was dead. The shape it parses is `{"<name>": {"<Event>": [{type, command, timeout, matcher?}]}}`. A plugin also has to be `agy plugin enable`d; `install` alone leaves it out of `config.json`'s `plugins` map. |
+| What a hook command sees | cwd = the plugin's install directory (also in the bundled docs). `${PLUGIN_ROOT}`, `${CLAUDE_PLUGIN_ROOT}`, `${PLUGIN_DATA}` expand to nothing — no variable, no template. stdin is a JSON payload; for Stop: `artifactDirectoryPath, conversationId, error, executionNum, fullyIdle, modelName, terminationReason, transcriptPath, workspacePaths` — `workspacePaths` was `[]`, no cwd/project field. Hooks load only in a **trusted** folder (`trustedFolders.json`); a project under `/private/tmp` got none. |
+| Which events fired | Stop, PreInvocation, PostInvocation. PreToolUse/PostToolUse did **not** fire in print mode on two attempts (a file read, a `run_command`) with matcher `*`. Matchers name this host's tools (`run_command`, `view_file`, `browser_*`). |
 | Project instruction file | Both `GEMINI.md` and `AGENTS.md`, read hierarchically from the directory they sit in downward, deduplicated, no frontmatter support. Found in the binary's own bundled docs — zero tokens. `AGENTS.md` is therefore the seeding target: it is the one spelling that also works on Codex. |
 
 **Codex CLI** — not yet probed; the CLI is not installed locally, which is Phase 2's first
@@ -66,6 +69,13 @@ run below) never conflicted at all. What did conflict was one seam and one delet
   [[decisions/ADR-0030-the-project-sdlc-directory-is-ours]].
 - `tools/migrate` runs the `.claude/` → `.sdlc/` relocation before develop's agent-name and skill-id
   renames, as ADR-0030 §4 requires. `sdlc-lint all` clean, 835/835 tests, `brain check` clean.
+- **Hooks, measured the same day** (rows above): the emitted `hooks.json` had never registered a
+  hook. The emitter now renders the host's named shape, strips `${CLAUDE_PLUGIN_ROOT}` to the cwd
+  it measured, and drops — with the measured reason each — the five scripts this host cannot run:
+  `seal-run.sh` and `format-on-stop.sh` (no project in the Stop payload), `guard-paths.sh`,
+  `git-guard.sh`, `kotlin-guard.sh` (tool hooks unobserved in print mode; matchers in Claude
+  Code's tool names). The Antigravity package therefore ships **no** `hooks.json`, and says so in
+  `INSTALL.md`. Still open: whether tool hooks fire in the TUI, and the host's tool-name map.
 
 **Phase 1 is met.** A full vanilla pipeline ran end to end on `agy` 1.1.27 against a plain-Node
 fixture (2026-09-09, slug `add-a-healthz-endpoint-that-returns-200`, 539 s sealed wall clock):
@@ -294,13 +304,6 @@ paths handed to a phase must be absolute on this host.**
 
 ## Still open
 
-- Whether `${CLAUDE_PLUGIN_ROOT}`, or any plugin-root variable, is set for a hook command here — the
-  `Stop`/`seal-run.sh` hook and all four `android-foundation` guard hooks depend on it. Until
-  measured, the descriptor says so (`hook_env.plugin_root_var: null`), the hooks ship as authored,
-  and every `emit` / `emit --check` and the package's `INSTALL.md` carry the warning that an unset
-  variable makes each of them `bash "/hooks/<x>.sh"` — a silent failure. `agy` 1.2.0 is installed
-  locally; a probe plugin whose hook dumps its environment would settle it in one run. Then name
-  the variable in the descriptor and re-emit.
 - Whether `agy plugin import claude` makes even the two file moves unnecessary.
 - Whether per-phase cost can be attributed at all: the run envelope's `usage` looks aggregate
   (`cache_read_tokens: 418022` on a `num_turns: 1` run that dispatched two subagents), so this host
