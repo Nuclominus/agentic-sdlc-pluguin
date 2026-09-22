@@ -93,12 +93,12 @@ Stack profiles:
   also installed: vanilla (0)
 
 Wrote:
-  ✅ .sdlc/sdlc.local.yaml  (starter template)
-  ⏭️  CLAUDE.md                (not requested — pass --seed-claude-md)
+  ✅ .sdlc/sdlc.local.yaml     (starter template)
+  ⏭️  <CLAUDE.md or AGENTS.md>  (not requested — pass --seed-claude-md)
 
 Next:
   sdlc:doctor                 # verify deps + host capability
-  /sdlc:extension              # (optional) attach per-agent Skills to the pipeline
+  /sdlc:extension              # (optional, Claude Code only for now) attach per-agent Skills to the pipeline
   run the pipeline for "Add a settings screen with a dark-mode toggle"
 ```
 

@@ -30,10 +30,12 @@ nothing. Doctor finds those, shows them, and rewrites/moves them **only after yo
 
 ## What this skill does
 
-0. **Resolve the plugin roots.** Run the resolver's Step 0 to get `{SDLC_PLUGIN_ROOT}`,
-   `{PLUGIN_CACHE_ROOT}` and `{CONFIG_DIR}`. Every path below uses them — a literal `~` would read
-   the operator's home instead of the active config dir. Print the resolved `{PLUGIN_CACHE_ROOT}` in
-   the report; it is the first thing to check when a run picks an unexpected stack.
+0. **Resolve the plugin roots.** Run `plugins/sdlc/PLUGIN-PATHS.md` to get `{SDLC_PLUGIN_ROOT}`,
+   `{PLUGIN_CACHE_ROOT}` and `{CONFIG_DIR}` — the lightweight path-resolution snippet, not the
+   pipeline orchestrator's Step 0 (that one plans a whole pipeline run and needs a feature
+   description this skill doesn't have). Every path below uses them — a literal `~` would read the
+   operator's home instead of the active config dir. Print the resolved `{PLUGIN_CACHE_ROOT}` in the
+   report; it is the first thing to check when a run picks an unexpected stack.
 
 1. **Locate the runtime dependencies file.** Try these paths in order, take the first that exists:
    - `{SDLC_PLUGIN_ROOT}/runtime-dependencies.json`
@@ -151,6 +153,13 @@ Dependencies (from runtime-dependencies.json):
     status: ✅ available
     skills: test-driven-development, verification-before-completion
 
+  acme-internal >=2.0.0 [policy=block]
+    status: ❌ missing
+    missing skills: code-style, internal-api-style
+    install:
+      /plugin marketplace add acme/internal-tools
+      /plugin install acme-internal@acme-internal-tools
+
 Stack profiles:
   🎯 active: android (priority=300, from android-foundation/manifest.yaml)
   ➕ frameworks: retrofit (additive)
@@ -169,6 +178,7 @@ Agent names / skill ids in this project's config:
   ⚠️ 2 agent name(s), 1 skill id(s) stale — they currently target nothing:
      .sdlc/sdlc.local.yaml extensions.skills[0].agents: android-developer → developer
      .sdlc/model.local.json agents: android-ba → business-analyst
+     .sdlc/sdlc.local.yaml extensions.skills[1].skill: retrofit-plugin:retrofit-conventions → android-foundation:retrofit-conventions
   Fix available: this skill will rewrite them in place if you approve.
 
 Cost baseline (docs/cost-baseline.md, last updated 2026-05-04, 22 runs):
@@ -183,6 +193,85 @@ Heads-up:
 
 If a section is absent (no baseline file, no missing deps, etc.) say so explicitly with one line —
 never silently omit a section.
+
+## JSON output format (`--json`)
+
+```json
+{
+  "deps_preflight": {
+    "superpowers": {
+      "status": "available",
+      "policy": "warn",
+      "missing_skills": []
+    },
+    "acme-internal": {
+      "status": "missing",
+      "policy": "block",
+      "missing_skills": ["code-style", "internal-api-style"],
+      "install_command": [
+        "/plugin marketplace add acme/internal-tools",
+        "/plugin install acme-internal@acme-internal-tools"
+      ]
+    }
+  },
+  "stack": {
+    "active_profile": "android",
+    "primary_priority": 300,
+    "all_installed": ["vanilla", "android"],
+    "active_frameworks": ["retrofit"]
+  },
+  "host": {
+    "os": "Linux",
+    "arch": "x86_64",
+    "toolchains": {
+      "node": "v20.11.0",
+      "java": "17.0.10",
+      "gradlew": "8.7",
+      "android": null
+    }
+  },
+  "config_location": {
+    "stale": 1,
+    "legacy_location": [
+      { "from": ".claude/sdlc.local.yaml", "to": ".sdlc/sdlc.local.yaml", "conflict": false }
+    ],
+    "applied": false
+  },
+  "agent_names": {
+    "stale": 3,
+    "findings": [
+      { "file": ".sdlc/sdlc.local.yaml", "where": "extensions.skills[0].agents", "from": "android-developer", "to": "developer", "kind": "agent" },
+      { "file": ".sdlc/model.local.json", "where": "agents", "from": "android-ba", "to": "business-analyst", "kind": "agent" },
+      { "file": ".sdlc/sdlc.local.yaml", "where": "extensions.skills[1].skill", "from": "retrofit-plugin:retrofit-conventions", "to": "android-foundation:retrofit-conventions", "kind": "skill" }
+    ],
+    "applied": false
+  },
+  "shadowed_frameworks": [],
+  "stale_plugin_installs": [
+    {
+      "install_key": "superpowers@agentic-sdlc",
+      "kind": "foreign",
+      "remedy": [
+        "/plugin install superpowers@claude-plugins-official",
+        "/plugin uninstall superpowers@agentic-sdlc"
+      ]
+    }
+  ],
+  "cost_baseline": {
+    "available": true,
+    "runs_aggregated": 22,
+    "avg_cost_per_medium_run_usd": 1.62,
+    "p90_cost_per_medium_run_usd": 2.31,
+    "cache_hit_ratio": 0.61,
+    "last_updated": "2026-05-04"
+  },
+  "would_abort_pipeline": true
+}
+```
+
+`would_abort_pipeline` is `true` iff any dependency with `policy=block` is missing. This is the
+shape a CI/automation caller should anchor field names to — the field set does not change run to
+run even when a section above it is empty (e.g. `legacy_location: []`, `findings: []`).
 
 ## Hard rules
 
@@ -208,4 +297,5 @@ never silently omit a section.
   version, or still lives in the pre-rename location, before a run silently drops those entries.
 - After installing or updating a stack plugin — verify external dep wiring still resolves.
 - Before kicking off a long pipeline run — confirm it won't abort on a `block`-policy dependency.
+- In CI / automation — `--json` gives a machine-checkable health report.
 - When a cost regression is suspected — compare current `cost_baseline` against historical values.
