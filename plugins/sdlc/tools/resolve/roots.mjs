@@ -191,6 +191,10 @@ export function resolveRoots(env = process.env, cwd = process.cwd(), self = self
       // per-element default.
       workspace_skill_dirs: (declared.workspace_skill_subdirs ?? []).map((s) => join(cwd, s)),
       project_settings_files: (declared.project_settings_files ?? []).map((s) => join(cwd, s)),
+      // The spelling of a command on this host, for a warning that names one. A package emitted
+      // before this existed keeps the Claude spelling, which is the wrong one — stated rather than
+      // guessed, since the descriptor is the only place that knows.
+      command_prefix: declared.command_prefix ?? "sdlc:",
       sources: {
         // Name the variable only when it actually supplied the value. Reporting
         // `GEMINI_CONFIG_DIR` for a path that came from $HOME/.gemini is a
@@ -221,6 +225,7 @@ export function resolveRoots(env = process.env, cwd = process.cwd(), self = self
     // same place.
     workspace_skill_dirs: [join(cwd, ".claude", "skills")],
     project_settings_files: [join(cwd, ".claude", "settings.json"), join(cwd, ".claude", "settings.local.json")],
+    command_prefix: "sdlc:",
     sources: { config_dir: config.source, sdlc_plugin_root: sdlc.source },
     sdlc_version: sdlc.version ?? null,
     sdlc_ambiguous: sdlc.ambiguous === true,

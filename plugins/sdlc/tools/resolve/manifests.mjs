@@ -308,12 +308,19 @@ export function withPathLoadedEnabled(enabled, installs) {
  * local path is in no cache and no installed_plugins.json, and must still work. They arrive
  * through `mergePathLoaded`, which is also what keeps a path load from doubling a plugin the
  * cache already carries.
+ *
+ * A caller that has already built the installs map and the enablement map — `resolveProfile`
+ * does, and on a declared host its map also carries the roots the host's own search paths
+ * yielded, keyed and enabled by the HOST's rules — passes both in, so detection and every
+ * other consumer read one view. Re-deriving them here from the registry alone is how a plugin
+ * disabled in the host's settings stayed detected as the active stack while its recipes,
+ * skills and dependencies were dropped.
  */
-export function loadInstalledManifests({ configDir, projectRoot, extraRoots = [] } = {}) {
+export function loadInstalledManifests({ configDir, projectRoot, extraRoots = [], installs: given = null, enabled: givenEnabled = null } = {}) {
   const cfg = configDir ?? defaultConfigDir();
   const { installs: registered, conflicts, file: installsFile, present } = readInstalledPlugins({ configDir: cfg });
-  const installs = mergePathLoaded(registered, extraRoots);
-  const enabled = withPathLoadedEnabled(readEnabledPlugins({ configDir: cfg, projectRoot }), installs);
+  const installs = given ?? mergePathLoaded(registered, extraRoots);
+  const enabled = givenEnabled ?? withPathLoadedEnabled(readEnabledPlugins({ configDir: cfg, projectRoot }), installs);
 
   const records = [];
   const skipped = [];

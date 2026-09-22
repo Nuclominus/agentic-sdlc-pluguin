@@ -161,7 +161,7 @@ function hostPluginRoots(roots) {
  * defect: the cost cap, the skill mappings and the agent bindings would simply
  * stop applying, and the run would look normal. So the old location is not read,
  * it is NOTICED, and the run says so. Detection only; the move belongs to
- * `/sdlc-doctor`, which asks first.
+ * the doctor command, which asks first.
  */
 const LEGACY_PROJECT_ENTRIES = ["sdlc.local.yaml", "model.local.json", "sdlc-workflows", "sdlc-lessons.md"];
 function legacyProjectFiles(cwd) {
@@ -372,9 +372,11 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
       + ` Ignored: ${c.others.join(", ")}`);
   }
 
+  // One view for every consumer: the map built above (registry, path loads, host roots) and
+  // its enablement go in as-is, so detection cannot disagree with recipes, skills or deps.
   const manifests = mode === "tree"
     ? loadManifestsFromTree(cwd)
-    : loadInstalledManifests({ configDir, projectRoot: cwd, extraRoots: [...extraRoots, ...hostRoots] });
+    : loadInstalledManifests({ configDir, projectRoot: cwd, installs, enabled });
   for (const s of manifests.skipped ?? []) warn(`WARN: ${s.key} ships a manifest but is disabled — not considered for detection`);
   for (const e of manifests.errors ?? []) warn(`WARN: unreadable manifest ${e.file}: ${e.error}`);
   for (const sf of manifests.shadowed_frameworks ?? []) {
@@ -405,7 +407,7 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   if (stale.length) {
     warn(`WARN: ${stale.length} SDLC config file(s) still in the old location and NOT read: ${stale.join(", ")}.`
       + ` They moved to ${PROJECT_DIR}/ — the marketplace no longer keeps its files in another tool's directory.`
-      + " Run /sdlc-doctor to move them (it asks first). Until then this run uses plugin defaults for anything they set.");
+      + ` Run /${roots.command_prefix}doctor to move them (it asks first). Until then this run uses plugin defaults for anything they set.`);
   }
 
   const localPath = join(cwd, PROJECT_DIR, "sdlc.local.yaml");
@@ -514,7 +516,7 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   warnAll([...new Set(blockWarnings)]);
 
   return {
-    prints, warnings, halt: null, headless, roots, installs, enabled, manifests, deps, stack, local, hostRoots,
+    prints, warnings, halt: null, headless, roots, installs, enabled, manifests, deps, stack, local,
     primary, vanilla, additive, effective, models,
     role_expertise: expertise.role_expertise, prompt_blocks: promptBlocks, known_agents: blockAgents,
     profile_dir: primaryRecord?.file ? dirname(primaryRecord.file) : null,
@@ -564,7 +566,7 @@ export function resolveExpertise({ cwd = process.cwd(), args = "", env = process
  */
 export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env, mode = "installed" } = {}) {
   const resolved = resolveProfile({ cwd, args, env, mode });
-  const { prints, warnings, headless, roots, installs, enabled, deps, stack, local, effective, models, hostRoots } = resolved;
+  const { prints, warnings, headless, roots, installs, enabled, deps, stack, local, effective, models } = resolved;
   if (resolved.halt) return { plan: null, prints, warnings, halt: resolved.halt };
   /** Record a diagnostic in both channels — see the note above. */
   const warn = (msg) => { warnings.push(msg); prints.push(msg); };
@@ -575,7 +577,7 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
   if (signals.degraded) warn(`WARN: skip-rule signals unavailable (${signals.reason ?? "git"}) — no rule will fire`);
 
   // ---- Step 1c: workflow
-  const recipes = discoverRecipes({ projectRoot: cwd, installs, enabled, extraRoots: hostRoots });
+  const recipes = discoverRecipes({ projectRoot: cwd, installs, enabled });
   const resolvedName = resolveWorkflowName({
     args,
     activeWorkflow: local?.active_workflow ?? null,

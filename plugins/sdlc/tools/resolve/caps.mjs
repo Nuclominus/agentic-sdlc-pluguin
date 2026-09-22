@@ -146,8 +146,11 @@ export function expandRows(phases, { agentsPerPhase = {}, aspects = [], modelOve
 export function estimate(rows, registry, { healEnabled = false } = {}) {
   const priced = rows.map((row) => {
     const base = priceBaseline(registry, row.tier);
-    if (base == null) return { ...row, est: null, unpriced: true };
+    // A resumed row costs nothing to redo whether or not its tier is priced, and it must not
+    // count as unpriced: `priced_rows` is over DISPATCHED rows, and subtracting a resumed row
+    // from that count drove it to zero while the one phase that would run was priced.
     if (row.resumed) return { ...row, est: 0, raw: base };
+    if (base == null) return { ...row, est: null, unpriced: true };
     let est = base;
     if (row.phase === "development") est *= DEV_MULTIPLIER;
     if (row.gate) est *= GATE_WEIGHT;

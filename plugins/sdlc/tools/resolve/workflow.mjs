@@ -34,28 +34,20 @@ function readRecipe(file, origin, key = null) {
  * Every recipe this consumer can select — project-local first, then one entry per installed
  * and enabled plugin that ships a `workflows/` directory.
  */
-export function discoverRecipes({ projectRoot, installs = new Map(), enabled = {}, extraRoots = [] } = {}) {
+export function discoverRecipes({ projectRoot, installs = new Map(), enabled = {} } = {}) {
   const recipes = [];
-  const seen = new Set();
-  const add = (f, scope, key) => {
-    if (f.includes("/test-fixtures/") || seen.has(f)) return;
-    seen.add(f);
-    recipes.push(readRecipe(f, scope, key));
-  };
-
   if (projectRoot) {
-    for (const f of yamlFiles(join(projectRoot, PROJECT_DIR, "sdlc-workflows"))) add(f, "project");
+    for (const f of yamlFiles(join(projectRoot, PROJECT_DIR, "sdlc-workflows"))) recipes.push(readRecipe(f, "project"));
   }
+  // One map for every host: on Claude Code it is the registry plus any path load; on a declared
+  // host `resolveProfile` has already folded the package search paths into it, so a package's
+  // own recipes arrive here under the same enablement rule as everything else.
   for (const [key, info] of installs) {
     if (enabled[key] === false) continue;
-    for (const f of yamlFiles(join(info.installPath, "workflows"))) add(f, "plugin", key);
-  }
-  // Hosts with no installed-plugins registry (everything but Claude Code) supply
-  // their plugin roots directly — the same seam `loadInstalledManifests` uses for
-  // development checkouts. Without it a package ships its recipes and then
-  // reports `Available: (none)`.
-  for (const root of extraRoots) {
-    for (const f of yamlFiles(join(root, "workflows"))) add(f, "plugin", null);
+    for (const f of yamlFiles(join(info.installPath, "workflows"))) {
+      if (f.includes("/test-fixtures/")) continue;
+      recipes.push(readRecipe(f, "plugin", key));
+    }
   }
   return recipes;
 }

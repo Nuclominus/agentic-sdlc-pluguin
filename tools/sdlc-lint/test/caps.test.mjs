@@ -205,6 +205,27 @@ test("a run nothing can price gets no cap verdict and no $0.00", () => {
   assert.ok(!/WITHIN/.test(out), "a verdict was rendered for a run nothing priced");
 });
 
+test("a resumed row on an unpriced tier is neither dispatched nor unpriced", () => {
+  // Review of the develop merge: `unpriced` was counted before `resumed` was checked, so two
+  // done phases on a tier this host cannot price were subtracted from a dispatched count that
+  // never held them — priced_rows went to -1 and the one phase that WOULD run, priced, rendered
+  // as "Estimated cost: unavailable" with no cap verdict.
+  const half = { ...registry, estimation_baselines: { opus: registry.estimation_baselines.opus } };
+  const rows = expandRows([{ name: "development" }, { name: "documentation" }, { name: "business_analysis" }], {
+    agentsPerPhase: AGENTS,
+    frontmatterTiers: { developer: "haiku", "document-writer": "haiku", "business-analyst": "opus" },
+    resumedDone: new Set(["development-android", "documentation"]),
+  });
+  const est = estimate(rows, half);
+  assert.equal(est.unpriced, 0, "a resumed row is not an unpriced dispatch");
+  assert.equal(est.priced_rows, 1);
+  assert.equal(est.fully_priced, true);
+  assert.ok(est.rows.filter((r) => r.resumed).every((r) => r.est === 0 && !r.unpriced));
+  const out = renderDryRun({ estimate: est, slots: 3, stack: "android", workflow: "w", cap: 999 });
+  assert.match(out, /Estimated cost: ~\$/, "the phase that will run is priced, so the run is");
+  assert.match(out, /Cap: \$999\.00 {2}→ WITHIN/);
+});
+
 test("an unpriced headless estimate is null, never 0, and never says within", () => {
   // This line is what CI gates on: `estimated_cost_usd: 0` plus
   // `cap_estimate: "within"` would pass an unpriced run as inside budget.

@@ -651,7 +651,7 @@ test("config left in the pre-rename location is reported, not read", () => {
     const hit = warnings.filter((x) => /still in the old location/.test(x));
     assert.equal(hit.length, 1, `the stale file was not reported: ${JSON.stringify(warnings)}`);
     assert.match(hit[0], /\.claude\/sdlc\.local\.yaml/);
-    assert.match(hit[0], /sdlc-doctor/);
+    assert.match(hit[0], /sdlc:doctor/);
     assert.ok(prints.some((x) => /still in the old location/.test(x)), "prints[] is the orchestrator's only obligation");
 
     assert.equal(plan.cost_cap, 20, "the override was read from a location nothing reads any more");

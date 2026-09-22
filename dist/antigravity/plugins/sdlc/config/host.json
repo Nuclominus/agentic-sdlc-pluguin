@@ -17,5 +17,6 @@
     ".agents/skills",
     "_agents/skills"
   ],
-  "project_settings_files": []
+  "project_settings_files": [],
+  "command_prefix": "sdlc-"
 }

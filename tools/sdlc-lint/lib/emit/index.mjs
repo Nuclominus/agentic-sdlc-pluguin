@@ -247,6 +247,9 @@ export function emitPlugin(root, pluginName, host) {
         // these are emitted even when empty rather than omitted.
         workspace_skill_subdirs: host.discovery?.workspace_skill_subdirs ?? [],
         project_settings_files: host.discovery?.project_settings_files ?? [],
+        // How a command is spelled on this host, so a warning that names one
+        // (`/sdlc:doctor` on Claude Code) can name the one that exists here.
+        command_prefix: host.package?.command_prefix ?? null,
       }, null, 2) + "\n",
     });
   }
