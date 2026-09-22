@@ -11,6 +11,27 @@
 // transform we must not write, because a transform we write is a transform that
 // can drift (ADR-0021 §5 — no translation layers).
 //
+// CORRECTED (2026-09-22, measured on agy 1.2.8 with the real sdlc package,
+// not a probe): `validate`'s claim is not true at runtime. Installing the
+// package copies commands/*.md byte-identical, exactly as observed — but
+// `agy -p "/skills"` proves none of them become an invocable skill or slash
+// command. The only entries Antigravity ever exposes for this plugin are the
+// real `skills/*/SKILL.md` directories that already exist in the SSOT
+// (`aar`, `create-pluguin`, `pipeline-orchestrator`, `doctor`, `init`,
+// `list-stacks`, …) — a command with no such skill is dead weight in the
+// installed package, reachable by nothing. There is no host-side
+// command->skill conversion to lean on; the "REPACKAGER, no translation
+// layer" premise above holds for hooks and frontmatter, not for commands. The
+// fix is not a transform in this file — it is authoring a real skill (with a
+// "Use when: user invokes /sdlc:<name>" trigger description, matching the
+// pattern above) for every command whose functionality should exist outside
+// Claude Code, and reducing the Claude-only command to a thin delegator, the
+// way `start`, `aar` and `create-pluguin` already do. Commands with no such
+// skill (`batch`, `extension`, `model-config`, `workflow-config`,
+// `security-init`, `report`) are still emitted and still installed, but are
+// currently unreachable on this host — see ADR-0029 and
+// `.brain/planning/j1-multi-host.md`.
+//
 // Emission is pure: it returns a plan (path -> action), it does not touch disk.
 // cli.mjs writes it; lib/emit/check.mjs compares it against dist/ without
 // writing anything. That split is what lets `emit --check` run in CI while

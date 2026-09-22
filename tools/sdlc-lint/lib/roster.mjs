@@ -184,7 +184,11 @@ export function checkRoster(root = process.cwd()) {
   // `config/agent-migrations.json` is the map FROM those names and the doctor command shows the
   // rename to a user: forbidding them there would forbid the migration itself.
   const RETIRED = /\bandroid-(ba|developer|reviewer|security|tester|qa|docs|debugger|devops|cicd|aar)\b(?!-)/;
-  const EXEMPT = new Set(["plugins/sdlc/config/agent-migrations.json", "plugins/sdlc/commands/doctor.md"]);
+  const EXEMPT = new Set([
+    "plugins/sdlc/config/agent-migrations.json",
+    "plugins/sdlc/commands/doctor.md",
+    "plugins/sdlc/skills/doctor/SKILL.md",
+  ]);
   for (const file of globSync("plugins/**/*.{md,yaml,yml,json,mjs,sh}", { cwd: root, absolute: true })
     .filter((f) => !f.includes("/test-fixtures/") && !f.includes("/node_modules/")).sort()) {
     const rel = relative(root, file);
