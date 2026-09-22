@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-09-22 | #204 | `fix` | — | [[changes/2026-09-22-PR-204-doctor-init-and-list-stacks-are-reachable-on-antigravity]] |
 | 2026-09-21 | #200 | `fix` | — | [[changes/2026-09-21-PR-200-stop-redistributing-superpowers-and-security-guidance-adr-00]] |
 | 2026-09-21 | #198 | `fix` | — | [[changes/2026-09-21-PR-198-restore-frameworks-disable-and-end-the-unknown-key-silence]] |
 | 2026-09-21 | #195 | `docs` | — | [[changes/2026-09-21-PR-195-upgrade-guide-for-3-0-0-and-drop-a-config-key-that-does-not]] |
