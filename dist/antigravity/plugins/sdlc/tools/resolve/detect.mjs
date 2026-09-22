@@ -99,15 +99,29 @@ function sourceLabel(record) {
  * wrong (or tied) detection. A NAME no manifest declares resolves to nothing and is
  * reported as `forced_unresolved`; the caller must halt rather than fall through to
  * vanilla, because a forced flag that silently picks something else is worse than absent.
+ *
+ * `disableFrameworks` is the project's `frameworks.disable` (issue #197). It is applied HERE,
+ * where attachment is decided, and not as a filter over the returned `additive`: a framework
+ * that never attached also never contributed a `role_expertise` path, a `convention_skills`
+ * row or a phase injection, and unpicking those downstream is three chances to miss one. Two
+ * providers may contest one aspect since ADR-0026 (Ktor vs Retrofit, Room vs DataStore-Proto),
+ * so a project mid-migration carries both coordinates and needs to silence one WITHOUT
+ * removing the dependency from its build. Suppression is scoped to frameworks; it can never
+ * unseat the winning foundation. Names that match no installed framework come back as
+ * `disable_unknown` for the caller to report — a typo that does nothing quietly is the same
+ * silence this issue is about.
  */
-export function resolveStack(evalRoot, { foundations, frameworks }, { forceStack = null } = {}) {
+export function resolveStack(evalRoot, { foundations, frameworks }, { forceStack = null, disableFrameworks = [] } = {}) {
+  const disabled = new Set((disableFrameworks || []).filter((s) => typeof s === "string"));
+  const knownFrameworks = new Set((frameworks || []).map((f) => f.doc?.stack).filter(Boolean));
+  const disable_unknown = [...disabled].filter((s) => !knownFrameworks.has(s)).sort();
   const candidates = forceStack
     ? (foundations || []).filter((f) => f.doc.stack === forceStack)
     : (foundations || []).filter((f) => evalRule(f.doc.detect, evalRoot));
   const winner = [...candidates].sort((a, b) => (b.doc.priority ?? 0) - (a.doc.priority ?? 0))[0];
   if (!winner) {
     return {
-      foundation: null, priority: null, additive: [], source: null,
+      foundation: null, priority: null, additive: [], suppressed: [], disable_unknown, source: null,
       forced: Boolean(forceStack),
       forced_unresolved: forceStack && !winner ? forceStack : null,
       known_stacks: (foundations || []).map((f) => f.doc?.stack).filter(Boolean).sort(),
@@ -117,14 +131,22 @@ export function resolveStack(evalRoot, { foundations, frameworks }, { forceStack
   const hosts = winner.doc.hosts_aspects;
   const paths = winner.doc.framework_detection ?? [];
   const additive = [];
+  const suppressed = [];
   for (const fw of frameworks || []) {
     const hosted = hosts === "all" || (Array.isArray(hosts) && hosts.includes(fw.doc.enriches_aspect));
-    if (hosted && dependencyPresent(evalRoot, paths, fw.doc.dependency)) additive.push(fw.doc.stack);
+    if (!hosted || !dependencyPresent(evalRoot, paths, fw.doc.dependency)) continue;
+    // `suppressed` records only what WOULD have attached. Listing a framework that never
+    // detected would report an override that overrode nothing, and pre-emptively naming one
+    // (before the dependency lands) is a legitimate thing to write in the config.
+    if (disabled.has(fw.doc.stack)) suppressed.push(fw.doc.stack);
+    else additive.push(fw.doc.stack);
   }
   return {
     foundation: winner.doc.stack,
     priority: winner.doc.priority ?? 0,
     additive: additive.sort(),
+    suppressed: suppressed.sort(),
+    disable_unknown,
     // Where the winning profile came from. Telemetry has always documented `profile_source`
     // as a manifest path ("android-foundation/manifest.yaml"), and it is the only field that
     // answers "which installed plugin decided this run's agents". The install `key` is what

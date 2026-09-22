@@ -11,14 +11,7 @@ Order does not matter; the core carries the pipeline and the rest add stack know
 
 ```bash
 agy plugin install dist/antigravity/plugins/android-foundation
-agy plugin install dist/antigravity/plugins/dagger-plugin
-agy plugin install dist/antigravity/plugins/datastore-proto-plugin
-agy plugin install dist/antigravity/plugins/koin-plugin
-agy plugin install dist/antigravity/plugins/ktor-plugin
-agy plugin install dist/antigravity/plugins/retrofit-plugin
-agy plugin install dist/antigravity/plugins/room-plugin
 agy plugin install dist/antigravity/plugins/sdlc
-agy plugin install dist/antigravity/plugins/workmanager-plugin
 ```
 
 ## Reinstalling

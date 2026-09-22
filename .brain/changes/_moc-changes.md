@@ -4,6 +4,21 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-09-21 | #200 | `fix` | — | [[changes/2026-09-21-PR-200-stop-redistributing-superpowers-and-security-guidance-adr-00]] |
+| 2026-09-21 | #198 | `fix` | — | [[changes/2026-09-21-PR-198-restore-frameworks-disable-and-end-the-unknown-key-silence]] |
+| 2026-09-21 | #195 | `docs` | — | [[changes/2026-09-21-PR-195-upgrade-guide-for-3-0-0-and-drop-a-config-key-that-does-not]] |
+| 2026-09-21 | #193 | `chore` | — | [[changes/2026-09-21-PR-193-prepare-the-3-0-0-release-notes-and-bump-sdlc]] |
+| 2026-09-21 | #190 | `feat` | — | [[changes/2026-09-21-PR-190-embed-framework-providers]] |
+| 2026-09-21 | #189 | `test` | — | [[changes/2026-09-21-PR-189-a-ninth-case-prose-naming-a-recipe-nobody-installed-180]] |
+| 2026-09-20 | #186 | `docs` | — | [[changes/2026-09-20-PR-186-the-change-note-summary-is-enrichable-too]] |
+| 2026-09-20 | #183 | `docs` | — | [[changes/2026-09-20-PR-183-adr-0025-a-branch-switch-is-a-file-operation]] |
+| 2026-09-20 | #181 | `fix` | — | [[changes/2026-09-20-PR-181-warn-when-prose-names-a-recipe-that-is-not-installed-180]] |
+| 2026-09-20 | #178 | `fix` | — | [[changes/2026-09-20-PR-178-resolve-a-workflow-recipe-named-in-the-request-176]] |
+| 2026-09-20 | #177 | `test` | — | [[changes/2026-09-20-PR-177-an-eval-suite-for-the-orchestrator-s-dry-run-flow]] |
+| 2026-09-20 | #174 | `fix` | — | [[changes/2026-09-20-PR-174-the-self-root-answers-when-the-host-exports-nothing]] |
+| 2026-09-20 | #171 | `fix` | — | [[changes/2026-09-20-PR-171-resume-dry-run-previews-the-cost-to-finish-not-to-redo]] |
+| 2026-09-20 | #167 | `fix` | — | [[changes/2026-09-20-PR-167-fire-on-preview-requests-and-answer-them-with-a-preview]] |
+| 2026-09-20 | #166 | `fix` | — | [[changes/2026-09-20-PR-166-a-path-loaded-plugin-discovers-its-own-manifest-recipes-and]] |
 | 2026-09-08 | #162 | `docs` | — | [[changes/2026-09-08-PR-162-bring-readme-and-docs-back-in-line-with-2-0-0]] |
 | 2026-09-08 | #160 | `chore` | — | [[changes/2026-09-08-PR-160-patch-every-framework-plugin-so-the-adr-0021-rename-ships]] |
 | 2026-09-08 | #158 | `docs` | — | [[changes/2026-09-08-PR-158-lead-the-2-0-entry-with-breaking-changes-compress-the-rest]] |

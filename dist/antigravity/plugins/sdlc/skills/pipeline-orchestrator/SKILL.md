@@ -10,10 +10,28 @@ description: |
   - User invokes /sdlc:start "<feature>"
   - User asks to "run the SDLC pipeline" or "go through the full pipeline"
   - You need to coordinate specialist agents to deliver a complete feature
+  - User asks what the pipeline WOULD do for a named change — a dry run, a preview, the phase
+    list, a cost estimate or a cost-cap verdict, with or without the `--dry-run` flag. The answer
+    is the resolver's, never yours: run Step 0 with `--dry-run` and echo it.
+
+  Every preview trigger below needs a CHANGE named in the request. Without one there is no plan to
+  resolve, and the phrases on their own ("how much would it cost", "which phases") belong to
+  whatever else the user was discussing.
+
+  Trigger words — EN: run the SDLC pipeline, full pipeline, SDLC dry run, preview the pipeline,
+  what would the pipeline do for <change>, which phases would run for <change>, how much would the
+  pipeline cost for <change>, pipeline cost estimate, would <change> fit under the cost cap, don't
+  run it — just show me the phases and the estimate.
+  Trigger words — UA: запусти SDLC пайплайн, повний пайплайн, суха прогонка SDLC, попередній
+  перегляд пайплайна, що зробить пайплайн для <зміни>, які фази будуть для <зміни>, скільки
+  коштуватиме пайплайн для <зміни>, оцінка вартості пайплайна, чи вкладеться <зміна> в ліміт
+  вартості, не запускай — просто покажи фази та оцінку.
 
   Do NOT use for:
   - Trivial single-file edits (just edit directly)
   - Read-only questions about the codebase
+  - Explaining how the pipeline, a recipe or an agent works in general — there is no change to
+    resolve a plan for, so there is no preview to print
   - Casual conversation
 ---
 
@@ -26,6 +44,14 @@ You are the SDLC Pipeline Orchestrator. You coordinate specialist agents to deli
 ## Inputs
 
 - `$ARGUMENTS` — feature description from `/sdlc:start`. May contain `--stack=NAME` override.
+  When this skill is selected from a natural-language request instead of the slash command,
+  `$ARGUMENTS` is **the change the user described, in their own words**, reconstructed into the
+  same one-line brief the slash form would have carried, plus any flag the preview rule below
+  adds. Everything downstream — `task_slug`, `_brief.md`, language detection, the skip-rule
+  `arguments_pattern` — reads `$ARGUMENTS` and cannot tell the two entry paths apart, which is
+  the point. **If the request names no change to resolve a plan for, there is no `$ARGUMENTS`:
+  ask what the change is and stop.** Resolving an empty brief prints a phase list, an estimate
+  and a cap verdict computed from nothing.
 - Current project working directory.
 - Installed plugins under `{PLUGIN_CACHE_ROOT}/**` — resolved in Step 0, never a literal `~`.
 
@@ -43,7 +69,7 @@ Language detection heuristic: if the majority of word characters in `$ARGUMENTS`
 
 The detected language is delivered to each phase agent via the per-call CONTEXT trailer in Step 3b-1 (key: `narrative_language`), NOT as a free-form text suffix on each prompt. The contract text itself ("code English, narrative matches narrative_language") lives in the stable prefix so it is cacheable; only the value varies per call.
 
-This single rule replaces the per-agent bilingual trigger keywords that were used in earlier prototypes — the orchestrator's routing is deterministic (driven by `agents_per_phase` from the active stack profile), so trigger keywords add no value and only consume context.
+This single rule replaces the per-agent bilingual trigger keywords that were used in earlier prototypes — the orchestrator's routing is deterministic (driven by `agents_per_phase` from the active stack profile), so trigger keywords add no value *inside* the run and only consume context. The bilingual list in this skill's own frontmatter is a different thing and stays: that one decides whether the skill is selected at all, which nothing downstream can make deterministic.
 
 ---
 
@@ -71,6 +97,35 @@ node "${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs" plan --json "$ARGUMENTS"
 `$ARGUMENTS` is quoted because it is the user's free text: unquoted, a description containing
 `` ` ``, `$(…)`, `;` or `&&` would execute rather than describe, and a multi-word `--skills "<csv>"`
 would word-split. The command only regex-scans it for flags, so quoting costs nothing.
+
+A request for a **preview** — "dry run", "what would it do", "which phases", "how much would it
+cost", "would it fit under the cap", "don't run it" — appends `--dry-run` **into `$ARGUMENTS`**, if
+the user did not type it, before the command above runs. Into `$ARGUMENTS`, not as a separate argv
+token: Step 1d-2's stop gate is keyed on `$ARGUMENTS` containing the flag, and the resolver accepts
+it either way. A flag that only reaches the resolver prints the preview and leaves the gate's
+condition false — preview announced, agents dispatched anyway. The natural-language and slash
+forms then resolve identically, down to the string the run is derived from.
+
+This matters more than it looks. A preview request that reaches `plan` without the flag does not
+produce a preview — it starts the pipeline. And a preview request that never reaches `plan` at all
+gets answered from the model's own reading of the recipe: the run that opened issue #165 replied
+with a confident eight-phase pipeline including a `test` phase, which `default.yaml` does not
+have. Plausible, wrong, and indistinguishable from a real preview to a reader who does not know the
+recipe. The phase list, the estimate and the cap verdict are machine values (`MACHINE-VALUES.md`);
+recalling any of them — including from this document, which deliberately states none — is not an
+available option.
+
+One thing the reconstruction must **not** drop: if the request **names a workflow recipe** — "the
+docs-only workflow", "run this as a hotfix", "як рецепт refactor" — those words stay in
+`$ARGUMENTS` verbatim. Do not map them to `--workflow=NAME` yourself and do not screen the name
+against a list of your own: tier 1b of `workflows/RESOLVER.md` does that inside the command,
+against the recipes it actually discovered, and it is the only thing that knows the set (a
+platform foundation ships its own). Your job is to not trim the name out while you shorten the
+request into a brief. Trimming it is issue #176: the run asked whether `docs-only` fits under its
+cap, `$ARGUMENTS` arrived as `"Document the growth log screen"`, and the answer came back with
+`default`'s six phases and its cap — both figures real, the substitution invisible. The command
+announces what it resolved (`🧭 Recipe '<name>' named in the request …`) and says so when a name
+matches nothing installed; echoing that is item 1 below.
 
 Then do exactly three things:
 
@@ -159,7 +214,7 @@ that status is available to a wrapper script, but it is not the hosting session'
 | `roots.*` | `CONFIG_DIR`, `PLUGIN_CACHE_ROOT`, `SDLC_PLUGIN_ROOT` | every later plugin read |
 | `deps_preflight` | `CONTEXT.deps_preflight` | Step 5 telemetry |
 | `availability_flags` | `CONTEXT.{plugin}_unavailable` | Step 3b-1 `availability_flags:` trailer |
-| `stack.*` | `CONTEXT.primary_profile`, `priority`, `aspects`, `additive_profiles`, `profile_source` | Step 3, Step 5 |
+| `stack.*` | `CONTEXT.primary_profile`, `priority`, `aspects`, `additive_profiles`, `suppressed_profiles`, `profile_source` | Step 3, Step 5 |
 | `skip_rules.applied` | `CONTEXT.skip_rules_applied[]` *(**Step 0c**)* | Step 4 skip reporting, Step 5 |
 | `workflow.name` | `CONTEXT.active_workflow` | Step 5 |
 | `workflow.autoselected` | `CONTEXT.workflow_autoselected` | Step 1d-2 preview |
@@ -202,6 +257,21 @@ When `$ARGUMENTS` contains `--dry-run` the command emits the resolved-plan previ
 mode, the single `cap_estimate` JSON line) as the last entry of `prints[]`. Echo it and **STOP**:
 create no workspace, dispatch no agent, run no post-pipeline check, write no telemetry. A dry run is
 a successful preview — nothing ran, so there is nothing to record.
+
+**STOP applies to the numbers too — do not re-price the plan in your own words.** Echoing
+`prints[]` discharges the obligation; the sentence *after* the preview is where the rule is
+actually lost. Attach no figure of your own to it: no "the real expected cost is closer to ~$X",
+no subtotal that nets out a `(gated)` phase, no adjusted worst case, no percentage, no phase count
+you arrived at yourself. The preview already carries every number it is allowed to carry —
+`Estimated cost:` states the estimate, `(worst-case …)` states its upper bound, `(gated)` marks
+each phase that may not run, and `Cap:` states the verdict. A second figure printed under the first
+does not add nuance: it contradicts a machine value (`MACHINE-VALUES.md`) with arithmetic the
+reader cannot check, and being the more precise-sounding one, it is the number they will quote
+back. Measured in `evals/02-nl-preview` (2026-09-20): a run echoed the preview verbatim, then
+closed with *"the real expected cost is likely closer to ~$4.21"* — a figure the resolver never
+produced. Explaining what the preview *means* is welcome and costs nothing — "remediation only
+dispatches if security reports High/Critical" restates the list the user just read. Explaining it
+with a new number is the defect.
 
 `cap_estimate` (`within` | `exceeds`) is a verdict on the *pre-run estimate*. It is deliberately not
 `cap_status`, which Step 5 records for what enforcement actually did.
@@ -1363,6 +1433,7 @@ their checkpoints, not lost). Then write `docs/plans/{task_slug}/_telemetry.json
   "priority": 300,
   "aspects": ["android"],
   "additive_profiles": ["retrofit"],
+  "suppressed_profiles": "<copy CONTEXT.suppressed_profiles — frameworks this project DETECTED and then held back with `frameworks.disable`. Usually []. Record it: a run that suppressed one and a run whose dependency was never there resolve to the same additive_profiles, and only this field tells the two apart when a rollup compares them>",
   "expertise_block_agents": "<copy CONTEXT.expertise_block_agents — same key, same array, no transformation. The agents the resolver rendered a Stack expertise block for; `sdlc-lint compliance` uses it as the denominator for 3b-1a-expertise-block>",
   "profile_source": "android-foundation/manifest.yaml",
   "narrative_language": "uk",

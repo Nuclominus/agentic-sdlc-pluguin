@@ -10,17 +10,18 @@
 
 import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { resolveRoots, PROJECT_DIR } from "./roots.mjs";
-import { readInstalledPlugins, readEnabledPlugins, loadInstalledManifests, loadManifestsFromTree } from "./manifests.mjs";
+import { resolveRoots, pathLoadedRoots, selfPluginRoot, registryListsSdlc, PROJECT_DIR } from "./roots.mjs";
+import { readInstalledPlugins, readEnabledPlugins, loadInstalledManifests, loadManifestsFromTree, mergePathLoaded, withPathLoadedEnabled } from "./manifests.mjs";
 import { resolveStack } from "./detect.mjs";
 import { preflight } from "./deps.mjs";
 import { computeDiffSignals, applySkipRules, renderSkipPrint } from "./skiprules.mjs";
 import {
-  mergeProfiles, applyLocalOverrides, parseModelOverrides, renderOverridesPrint, renderModelPrint, renderStackPrint,
+  mergeProfiles, applyLocalOverrides, parseFrameworkOverrides, parseModelOverrides, renderOverridesPrint, renderModelPrint, renderStackPrint,
   mergeRoleExpertise, renderRoleExpertiseBlock, renderSkillsBlock,
 } from "./profile.mjs";
-import { discoverRecipes, resolveWorkflowName, locateRecipe, validateWorkflow, normalizePhases, validateAcyclic, buildResolvedPhases, renderWorkflowPrint } from "./workflow.mjs";
+import { discoverRecipes, resolveWorkflowName, locateRecipe, validateWorkflow, normalizePhases, validateAcyclic, buildResolvedPhases, renderWorkflowPrint, availableNames } from "./workflow.mjs";
 import { resolveCostCap, renderCapOverridePrint, expandRows, estimate, renderDryRun, renderHeadlessDryRun } from "./caps.mjs";
+import { loadCheckpoints, doneUnitIds } from "../run/reentry.mjs";
 import { parseYaml } from "./yaml.mjs";
 
 /**
@@ -188,6 +189,74 @@ function frontmatterTiers(installs, enabled) {
   return tiers;
 }
 
+/** Step 2's slug rule, in code: lowercase, alphanumerics + dashes, max 40 chars. */
+const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40).replace(/-+$/, "");
+
+/**
+ * Flags whose value is a SEPARATE token (`--mode tree`), as `cli.mjs`'s `tokenOpt` reads them.
+ * Their value is not part of the description and must not reach the slug — `--mode tree "Add dark
+ * mode"` otherwise derives `tree-add-dark-mode`, which matches no workspace.
+ */
+const TOKEN_VALUE_FLAGS = ["--mode", "--role", "--skills", "--base-ref", "--workflow"];
+
+/** `$ARGUMENTS` with every flag, flag value and quote stripped — the description Step 2 slugifies. */
+const briefOf = (args) => {
+  let out = String(args);
+  for (const f of TOKEN_VALUE_FLAGS) out = out.replace(new RegExp(`(^|\\s)${f}\\s+\\S+`, "g"), " ");
+  return out.replace(/--[a-z][a-z0-9-]*(=[^\s]*)?/g, " ").replace(/["'`]/g, " ").replace(/\s+/g, " ").trim();
+};
+
+/** A slug is a directory name under docs/plans/ — never a path, never a traversal. */
+const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
+
+/**
+ * Which units a `--resume` would skip, so the preview can price them at $0 (issue #168).
+ *
+ * `commands/start.md` promises "Combine with `--dry-run` to preview what would be skipped", and
+ * the rendering for it has always been there — `⏩` rows, zeroed estimates, resumed rows excluded
+ * from the loop/heal/gate arithmetic. Nothing ever passed `resumedDone`, so every one of those
+ * branches was unreachable and the preview priced a finished run as if it were about to start. On
+ * a run resumed near the end that is not a rounding error: the verdict can read EXCEEDS against a
+ * remaining cost of nearly zero.
+ *
+ * "Done" is NOT redefined here. `loadCheckpoints` + `doneUnitIds` come from tools/run/reentry.mjs,
+ * the same module `--resume` and the H6 seal gate consult; `resolveWorkspace` is the wrong entry
+ * point only because it demands the `_run.json` that a run which has not started has not written.
+ *
+ * The slug is the soft spot, and it is reported rather than guessed around. Step 2 generates it
+ * from `$ARGUMENTS` in prose, so a model's slug and this function's can differ. `--resume=<slug>`
+ * is exact; a bare `--resume` is a reconstruction, and when it finds no checkpoint directory the
+ * preview says so instead of quietly showing a full run.
+ */
+export function resolveResume({ cwd = process.cwd(), args = "" } = {}) {
+  // `(?=\s|$)` rather than a consuming `(\s|$)`: with the latter a trailing `--resume=` cannot
+  // match at all, so an empty slug read as "no resume at all" — no preview, and no warning either.
+  // A silent no-op is the one outcome this function exists to prevent.
+  const m = /(^|\s)--resume(=(\S*))?(?=\s|$)/.exec(String(args));
+  if (!m) return { requested: false, slug: null, done: new Set(), warnings: [] };
+  const warnings = [];
+  const explicit = m[2] !== undefined;
+  const slug = explicit ? m[3] : slugify(briefOf(args));
+  if (!slug) {
+    warnings.push(explicit
+      ? "WARN: --resume=: empty slug — previewing a full run"
+      : "WARN: --resume: no slug given and none derivable from the description — previewing a full run");
+    return { requested: true, slug: null, done: new Set(), warnings };
+  }
+  if (!SLUG_RE.test(slug)) {
+    warnings.push(`WARN: --resume=${slug}: not a run slug (a directory name under docs/plans/) — previewing a full run`);
+    return { requested: true, slug: null, done: new Set(), warnings };
+  }
+  const checkpointDir = join(cwd, "docs", "plans", slug, ".checkpoint");
+  if (!existsSync(checkpointDir)) {
+    warnings.push(`WARN: --resume: no checkpoints at docs/plans/${slug}/.checkpoint — previewing a full run${explicit ? "" : " (slug derived from the description; pass --resume=<slug> if it differs)"}`);
+    return { requested: true, slug, done: new Set(), warnings };
+  }
+  const { units, warnings: cw } = loadCheckpoints(checkpointDir);
+  for (const w of cw) warnings.push(`WARN: --resume: ${w}`);
+  return { requested: true, slug, done: doneUnitIds(units), warnings };
+}
+
 const flag = (args, name) => new RegExp(`(^|\\s)${name}(\\s|=|$)`).test(String(args));
 const opt = (args, name) => (new RegExp(`${name}=([^\\s]+)`).exec(String(args)) ?? [])[1] ?? null;
 
@@ -247,8 +316,20 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   const headless = env.SDLC_NONINTERACTIVE === "true" || env.SDLC_NONINTERACTIVE === "1";
 
   // ---- Step 0: roots
-  const roots = resolveRoots(env, cwd);
+  //
+  // The registry is read BEFORE the self root is offered, because one question governs both
+  // halves of Step 0: does this consumer list a copy of this plugin at all? If it does, the
+  // module's own location is never consulted — not for `config/**` and `tools/**`, and not for
+  // discovery. If it does not, the same self root answers for both, so a run can never price
+  // itself from one tree while executing another's recipe (issue #173, ADR-0023).
+  //
+  // The registry lives in the HOST's config dir, which a declared package names itself, so the
+  // roots are resolved first without the offer and again with it only where the registry is
+  // silent. A declared host never takes the offer: such a package is its own install.
+  let roots = resolveRoots(env, cwd, null);
   const configDir = roots.config_dir;
+  const { installs: registered, conflicts } = readInstalledPlugins({ configDir });
+  if (roots.host === "claude" && !registryListsSdlc(registered)) roots = resolveRoots(env, cwd, selfPluginRoot());
 
   // On a host with no installed_plugins.json registry, discovery is the search
   // paths the running package declares: every immediate child of them that
@@ -256,12 +337,32 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   const { roots: hostRoots, conflicts: hostConflicts } = hostPluginRoots(roots);
 
   // ---- Step 0b inputs: what is installed and enabled
-  const { installs, conflicts } = readInstalledPlugins({ configDir });
+  //
+  // `extraRoots` is the path-load case (issue #164): under `--plugin-dir`, `plugin eval` or any
+  // development checkout this plugin is in no registry, and every discovery below keys off the
+  // registry. Merging the root INTO `installs` is what fixes manifests, recipes, dependencies and
+  // the skill enumeration at once, rather than four times over — see ./manifests.mjs.
+  //
+  // The host does not always export `CLAUDE_PLUGIN_ROOT` — `claude plugin eval` does not (issue
+  // #173) — so the tree this module is executing from is offered as the fallback, and offered
+  // only when Step 0 above actually resolved this plugin's root from that same location.
+  //
+  // A declared host takes no path load at all. Such a package is its own install — it is the
+  // first host root below, and an installed copy of it is shadowed by identity — so a tree named
+  // by `CLAUDE_PLUGIN_ROOT` there is a FOREIGN one: the authored checkout beside a dist/ package,
+  // which is how this repo tests an emitted package. Reading both is the two-copies halt
+  // ADR-0029 records ("Workflow 'default' is ambiguous").
+  const declaredHost = roots.sources.sdlc_plugin_root === "own-package (declared host)";
+  const extraRoots = declaredHost ? [] : pathLoadedRoots(env, roots.sources.sdlc_plugin_root === "self" ? roots.sdlc_plugin_root : null);
+  const installs = mergePathLoaded(registered, extraRoots);
   // Fill the registry a non-Claude host never wrote. Never overwrite: a real
   // entry is the host's own answer and outranks anything inferred from a scan.
   for (const [key, info] of installsFromRoots(hostRoots)) if (!installs.has(key)) installs.set(key, info);
-  const enabled = readEnabledPlugins({ configDir, projectRoot: cwd, projectSettingsFiles: roots.project_settings_files ?? null });
+  const enabled = withPathLoadedEnabled(readEnabledPlugins({ configDir, projectRoot: cwd, projectSettingsFiles: roots.project_settings_files ?? null }), installs);
   for (const c of conflicts) warn(`WARN: ${c.key} is installed at several paths; using the ${c.scope} copy (${c.chosen})`);
+  for (const [key, info] of installs) {
+    for (const p of info.shadows ?? []) warn(`WARN: ${key} is loaded from a path (${info.installPath}); the installed copy at ${p} is not used`);
+  }
   // Same warning for the synthesized registry. The `own package` source is the
   // documented dev-checkout flow rather than a misconfiguration, so it says which
   // it is — a developer running an unreleased branch beside an install should
@@ -273,9 +374,17 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
 
   const manifests = mode === "tree"
     ? loadManifestsFromTree(cwd)
-    : loadInstalledManifests({ configDir, projectRoot: cwd, extraRoots: hostRoots });
+    : loadInstalledManifests({ configDir, projectRoot: cwd, extraRoots: [...extraRoots, ...hostRoots] });
   for (const s of manifests.skipped ?? []) warn(`WARN: ${s.key} ships a manifest but is disabled — not considered for detection`);
   for (const e of manifests.errors ?? []) warn(`WARN: unreadable manifest ${e.file}: ${e.error}`);
+  for (const sf of manifests.shadowed_frameworks ?? []) {
+    // The two reasons need different advice: one is a stale install the user should remove,
+    // the other is a manifest declaring the same `stack` twice. Telling someone to uninstall
+    // a plugin when the real fault is a duplicated row sends them after the wrong file.
+    warn(sf.reason === "duplicate-embedded-row"
+      ? `WARN: ${sf.stack} is declared by more than one embedded framework row; the row in ${sf.file} is not used (${sf.reason}) — a \`stack\` id must be unique across every foundation's \`frameworks:\` array`
+      : `WARN: ${sf.stack} is now embedded in a foundation; the standalone copy at ${sf.file} is not used (${sf.reason})`);
+  }
 
   // ---- Step 0a: dependency preflight
   const deps = preflight({
@@ -285,9 +394,40 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   });
   prints.push(...deps.prints);
 
+  // ---- Step 1b's file, read EARLY
+  //
+  // It is parsed here rather than beside `applyLocalOverrides` below because one of its keys —
+  // `frameworks.disable` — is an input to detection, not to the profile merge. Suppressing a
+  // framework has to prevent attachment (issue #197); a post-hoc filter over `additive` would
+  // leave its `role_expertise` path, its `convention_skills` and its phase injection already
+  // merged. One read, two consumers.
+  const stale = legacyProjectFiles(cwd);
+  if (stale.length) {
+    warn(`WARN: ${stale.length} SDLC config file(s) still in the old location and NOT read: ${stale.join(", ")}.`
+      + ` They moved to ${PROJECT_DIR}/ — the marketplace no longer keeps its files in another tool's directory.`
+      + " Run /sdlc-doctor to move them (it asks first). Until then this run uses plugin defaults for anything they set.");
+  }
+
+  const localPath = join(cwd, PROJECT_DIR, "sdlc.local.yaml");
+  let local = null;
+  if (existsSync(localPath)) {
+    local = readYaml(localPath);
+    if (local?.__error) {
+      warn(`⚠️ Failed to parse ${PROJECT_DIR}/sdlc.local.yaml: ${local.__error}. Continuing with plugin defaults.`);
+      local = null;
+    }
+  }
+  const frameworkOverrides = parseFrameworkOverrides(local);
+  warnAll(frameworkOverrides.warnings);
+
   // ---- Step 0b: detection (`--stack=NAME` skips it, per 0b-2)
   const forcedStack = opt(args, "--stack");
-  const stack = resolveStack(cwd, manifests, { forceStack: forcedStack });
+  const stack = resolveStack(cwd, manifests, { forceStack: forcedStack, disableFrameworks: frameworkOverrides.disable });
+  // A name that matches no installed framework suppressed nothing and would otherwise be the
+  // same silence #197 was about — the config looks honoured while doing nothing at all.
+  for (const name of stack.disable_unknown ?? []) {
+    warn(`WARN: frameworks.disable '${name}' — no installed framework declares that stack id — ignored`);
+  }
   if (stack.forced_unresolved) {
     const known = stack.known_stacks.length ? stack.known_stacks.join(", ") : "none installed";
     return {
@@ -318,22 +458,6 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
     ...(Array.isArray(vanilla?.on_demand_agents) ? vanilla.on_demand_agents : []),
   ]);
 
-  const stale = legacyProjectFiles(cwd);
-  if (stale.length) {
-    warn(`WARN: ${stale.length} SDLC config file(s) still in the old location and NOT read: ${stale.join(", ")}.`
-      + ` They moved to ${PROJECT_DIR}/ — the marketplace no longer keeps its files in another tool's directory.`
-      + " Run /sdlc-doctor to move them (it asks first). Until then this run uses plugin defaults for anything they set.");
-  }
-
-  const localPath = join(cwd, PROJECT_DIR, "sdlc.local.yaml");
-  let local = null;
-  if (existsSync(localPath)) {
-    local = readYaml(localPath);
-    if (local?.__error) {
-      warn(`⚠️ Failed to parse .sdlc/sdlc.local.yaml: ${local.__error}. Continuing with plugin defaults.`);
-      local = null;
-    }
-  }
   const overridden = applyLocalOverrides(base, local, {
     availableSkills: deps.available_skills,
     unavailablePlugins: deps.flags,
@@ -354,7 +478,7 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   // override is INERT, and the honest thing is to say so rather than to preview
   // a tier the run will not dispatch: this file said `business-analyst: opus`
   // while the agent file said `gemini-3.1-pro-high`, which is the same class of
-  // lie as pricing an unpriced run at $0.00. ADR-0022 §4 chose "declare the
+  // lie as pricing an unpriced run at $0.00. ADR-0029 §4 chose "declare the
   // gap" over "build a substitute mechanism" precisely here — dropping the
   // overrides silently would be the other half of the same mistake.
   const overridesInert = roots.model_arg === false
@@ -459,6 +583,7 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
     signals: signals.degraded ? null : signals,
     profileDefault: effective.profile_default_workflow,
   });
+  warnAll(resolvedName.warnings ?? []);
   if (resolvedName.print) prints.push(resolvedName.print);
 
   const located = locateRecipe(resolvedName.name, recipes);
@@ -530,6 +655,10 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
       primary_profile: stack.foundation,
       priority: stack.priority,
       additive_profiles: stack.additive,
+      // Detected, then held back by `frameworks.disable`. Distinct from simply absent from
+      // `additive_profiles`: a run that suppressed a framework and one whose dependency was
+      // never there resolve to the same additive list, and telemetry has to tell them apart.
+      suppressed_profiles: stack.suppressed ?? [],
       aspects: stack.aspects ?? [],
       // The manifest that decided this run's agents. It was previously derived from
       // `located.recipe.origin` — the WORKFLOW recipe's provenance, a different thing
@@ -547,6 +676,10 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
       autoselected: resolvedName.autoselected,
       file: located.recipe.file,
       origin: located.recipe.origin ?? null,
+      // The names a consumer could have asked for. It is what the not-found halt lists, what
+      // tier 1b matches a prose mention against, and the only place the plan says out loud
+      // which recipes this machine actually has.
+      available: availableNames(recipes),
       shadowed: located.shadowed,
       resolved_phases: built.phases,
     },
@@ -590,8 +723,10 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
   // ---- Step 1d-1: the dry-run preview is a rendering of the plan, not a second resolution.
   if (flag(args, "--dry-run")) {
     const tiers = frontmatterTiers(installs, enabled);
-    const rows = expandRows(built.phases, { agentsPerPhase: effective.agents_per_phase, modelOverrides: models.overrides, frontmatterTiers: tiers });
-    // One registry per dispatcher (ADR-0022 decision 7). A host whose file carries no
+    const resume = resolveResume({ cwd, args });
+    warnAll(resume.warnings);
+    const rows = expandRows(built.phases, { agentsPerPhase: effective.agents_per_phase, modelOverrides: models.overrides, frontmatterTiers: tiers, resumedDone: resume.done });
+    // One registry per dispatcher (ADR-0029 decision 7). A host whose file carries no
     // `estimation_baselines` — because none were ever measured there — yields no preview
     // rather than a fabricated one.
     const registryPath = join(roots.sdlc_plugin_root ?? "", "config", "models", `${roots.host ?? "claude"}.yaml`);
@@ -601,17 +736,23 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
     } else {
       const healEnabled = (effective.heal_checks ?? []).length > 0;
       const est = estimate(rows, registry, { healEnabled });
+      // `resumed` reports what the estimate ACTUALLY accounts for, not that the flag was typed. A
+      // --resume whose slug found nothing prices a full run; emitting `resumed: true` beside a
+      // full-run figure would have a CI consumer read one as the other.
+      const anyResumed = est.rows.some((r) => r.resumed);
+      const reenterAt = anyResumed ? (est.rows.find((r) => !r.resumed)?.phase ?? null) : null;
       plan.dry_run = {
-        rows: est.rows.map((r) => ({ phase: r.phase, aspect: r.aspect ?? null, agent: r.agent, tier: r.tier, est: r.est })),
+        rows: est.rows.map((r) => ({ phase: r.phase, aspect: r.aspect ?? null, agent: r.agent, tier: r.tier, est: r.est, resumed: r.resumed === true })),
         expected_total: est.expected_total,
         worst_total: est.worst_total,
+        ...(anyResumed ? { resumed: true, resume_slug: resume.slug, reenter_at: reenterAt } : {}),
       };
       prints.push(headless
-        ? renderHeadlessDryRun({ estimate: est, slots: built.phases.length, workflow: resolvedName.name, cap: cap.cost_cap })
+        ? renderHeadlessDryRun({ estimate: est, slots: built.phases.length, workflow: resolvedName.name, cap: cap.cost_cap, resumed: anyResumed, reenterAt })
         : renderDryRun({
           estimate: est, slots: built.phases.length, stack: stack.foundation, workflow: resolvedName.name,
           autoselected: resolvedName.autoselected, skipRules: skip.applied, cap: cap.cost_cap,
-          healEnabled, healBlocks: rows.filter((r) => r.heal).length,
+          healEnabled, healBlocks: rows.filter((r) => r.heal).length, resume,
         }));
     }
   }

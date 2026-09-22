@@ -50,7 +50,11 @@ is ground truth, so the config dir is derived from it by truncating at `/plugins
 `${CLAUDE_CONFIG_DIR:-$HOME/.claude}` is only the fallback for the case where the harness did not
 export `CLAUDE_PLUGIN_ROOT` (a plugin loaded from a local path rather than the cache); in that case
 `SDLC_PLUGIN_ROOT` is recovered from the cache, `sort -V`-newest so a stale side-by-side version
-loses. If it still comes back empty, fall back to `{PLUGIN_CACHE_ROOT}/**/sdlc/config/<file>` and
+loses. A shell snippet cannot ask where it is running from, so when the cache is empty too — a
+checkout under a host that exports nothing — use the plugin root named by the skill's own
+**Base directory** line, with `/skills/<name>` trimmed off. That is the same last resort
+`selfPluginRoot()` applies in code (ADR-0023), stated for the reader because the shell cannot
+compute it. If it still comes back empty, fall back to `{PLUGIN_CACHE_ROOT}/**/sdlc/config/<file>` and
 say so in the run log rather than silently pricing against an unknown registry.
 
 Hold the three values in `CONTEXT` and substitute them into every subsequent `Glob`/`Read` path.
@@ -76,6 +80,43 @@ the line above:
 ```
 <!-- plugin-paths: ok — <why this one is really home-relative> -->
 ```
+
+---
+
+## The running plugin is also a discovered plugin
+
+The table above splits reads in two, and a plugin's own `manifest.yaml`, `workflows/*.yaml` and
+`runtime-dependencies.json` fall on both sides: they are self-referential facts, read through the
+cross-plugin path because they are the same files a consumer discovers in any other plugin.
+
+That is free while the plugin is installed and fatal when it is not. Under
+`claude --plugin-dir plugins/sdlc`, `claude plugin eval plugins/sdlc` or any development checkout
+the plugin is in no cache and in no `installed_plugins.json`, so registry-keyed discovery finds
+nothing — including itself. The run halts at Step 0 with `Workflow 'default' not found. Available:
+(none)` while `default.yaml` sits next to the code printing it (issue #164).
+
+So: **when `CLAUDE_PLUGIN_ROOT` points OUTSIDE `/plugins/cache/`, that root joins the set of
+installed plugins** (`pathLoadedRoots` in `tools/resolve/roots.mjs`, folded in by
+`mergePathLoaded` in `tools/resolve/manifests.mjs`). Manifests, recipes, dependencies and skills
+are then discovered from it like any other install.
+
+- A root **inside** the cache is not a path load — it is registered already, and offering it twice
+  is how one plugin becomes two foundations of equal priority.
+- A path load **replaces** the registered copy of the same plugin and keeps its key, so the tree
+  being edited wins while `enabledPlugins` and every `plugin:skill` label keep working. The
+  displaced path is reported as a `WARN`.
+- A host may load a plugin and export nothing — `claude plugin eval` does exactly that — so the
+  physical module location (`selfPluginRoot()`) is the **last** resort: it answers only when
+  `CLAUDE_PLUGIN_ROOT` is unset AND `installed_plugins.json` lists no `sdlc@*` at all. It then
+  outranks the `sort -V` cache guess, because a tree that is executing beats a version-number
+  heuristic over copies nobody pointed at. It never outranks the registry, because it names the
+  checkout for every caller, including ones that never loaded the plugin — and "the registry lists
+  it" is the whole test, never "the registry lists it AND that copy is intact": a broken entry is
+  `/sdlc:doctor`'s problem, not a licence to swap in a checkout. A module running from inside
+  `/plugins/cache/` has no self root at all — that copy is the install.
+
+The full argument is [`ADR-0022`](../../.brain/decisions/ADR-0022-a-path-loaded-plugin-is-its-own-install.md),
+amended on the signal by [`ADR-0023`](../../.brain/decisions/ADR-0023-a-silent-host-still-loaded-the-plugin.md).
 
 ---
 

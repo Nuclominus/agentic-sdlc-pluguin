@@ -2,8 +2,15 @@
 
 > One note per architecture decision. Newest first.
 
-- [[decisions/ADR-0023-the-project-sdlc-directory-is-ours]]
-- [[decisions/ADR-0022-one-ssot-emitted-host-packages]]
+- [[decisions/ADR-0030-the-project-sdlc-directory-is-ours]]
+- [[decisions/ADR-0029-one-ssot-emitted-host-packages]]
+- [[decisions/ADR-0028-an-external-dependency-is-never-a-marketplace-entry]]
+- [[decisions/ADR-0027-suppression-is-configurable-activation-is-not]]
+- [[decisions/ADR-0026-embed-framework-providers-in-the-foundation]]
+- [[decisions/ADR-0025-a-branch-switch-is-a-file-operation]]
+- [[decisions/ADR-0024-naming-a-recipe-is-an-explicit-request]]
+- [[decisions/ADR-0023-a-silent-host-still-loaded-the-plugin]]
+- [[decisions/ADR-0022-a-path-loaded-plugin-is-its-own-install]]
 - [[decisions/ADR-0021-agents-live-in-the-core-foundations-carry-expertise]]
 - [[decisions/ADR-0020-logging-lives-in-a-development-artifact]]
 - [[decisions/ADR-0019-the-run-start-is-one-command]]

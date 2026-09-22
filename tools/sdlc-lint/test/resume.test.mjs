@@ -1,9 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveWorkspace, computeReentry } from "../lib/resume.mjs";
+import { loadCheckpoints, doneUnitIds } from "../../../plugins/sdlc/tools/run/reentry.mjs";
 
 const FIX = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
 const resumeFixtures = readdirSync(FIX, { withFileTypes: true })
@@ -56,4 +58,30 @@ test("resolveWorkspace throws a clear error when resolved_phases is not an array
   // runner don't try to resolve this deliberately-malformed workspace.
   const dir = join(FIX, "_malformed-run");
   assert.throws(() => resolveWorkspace(dir), /resolved_phases/);
+});
+
+// Issue #168 — the dry-run preview needs the done set WITHOUT the resolved DAG that
+// resolveWorkspace demands, because at preview time the DAG is the plan being previewed and no
+// _run.json has been written. doneUnitIds keeps "done" a single definition across both callers.
+test("doneUnitIds returns exactly the terminal units", () => {
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-done-"));
+  try {
+    const cp = join(dir, ".checkpoint");
+    mkdirSync(cp, { recursive: true });
+    writeFileSync(join(cp, "business_analysis.json"), JSON.stringify({ status: "completed" }));
+    writeFileSync(join(cp, "security.json"), JSON.stringify({ status: "skipped" }));
+    writeFileSync(join(cp, "development-android.json"), JSON.stringify({ status: "completed" }));
+    writeFileSync(join(cp, "qa.json"), JSON.stringify({ status: "in_progress" }));
+    writeFileSync(join(cp, "development-plan.json"), JSON.stringify({ status: "approved" }));
+    writeFileSync(join(cp, "_run.json"), JSON.stringify({ resolved_phases: [] }));
+    writeFileSync(join(cp, "half.json.tmp"), "{");
+    writeFileSync(join(cp, "broken.json"), "not json");
+    writeFileSync(join(cp, "nostatus.json"), JSON.stringify({ cost_usd: 1 }));
+
+    const { units, warnings } = loadCheckpoints(cp);
+    assert.deepEqual([...doneUnitIds(units)].sort(),
+      ["business_analysis", "development-android", "security"],
+      "completed and skipped only — approved plan passes are NOT done, and _run.json is not a unit");
+    assert.equal(warnings.length, 2, "the unparseable one and the status-less one are each reported");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

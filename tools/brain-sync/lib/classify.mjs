@@ -1,10 +1,12 @@
+// ADR-0026: the additive Android framework plugins (retrofit/ktor/room/datastore-proto/
+// dagger/koin/workmanager) were merged into android-foundation and no longer exist as
+// installed plugins. Removing them here only affects classification of FUTURE PRs —
+// `classify()` is invoked at sync time for a new PR only; existing change notes are static
+// markdown, already rendered, and are unaffected (`pluginsTouched` is never re-run against a
+// historical PR's files during `sync`/`reindex`).
 export const KNOWN_PLUGINS = [
   "sdlc",
   "android-foundation",
-  "retrofit-plugin",
-  "room-plugin",
-  "dagger-plugin",
-  "workmanager-plugin",
 ];
 
 const PREFIX_RE = /^([a-z0-9+-]+)(?:\([^)]*\))?!?:\s*/i;

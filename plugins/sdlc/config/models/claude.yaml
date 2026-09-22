@@ -2,7 +2,7 @@
 #
 # Model registry — Claude Code.
 #
-# One file per DISPATCHER (ADR-0022 decision 7, amended): `tier -> model id` is host
+# One file per DISPATCHER (ADR-0029 decision 7, amended): `tier -> model id` is host
 # knowledge and lives in the host descriptor; `model id -> price` is provider knowledge
 # and lives here. The files are disjoint — Claude prices and Gemini prices are different
 # facts, not two copies of one — so splitting them duplicates nothing, while keeping them

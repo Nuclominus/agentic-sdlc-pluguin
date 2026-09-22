@@ -21,8 +21,12 @@ import { join } from "node:path";
 import { PROJECT_DIR } from "../resolve/roots.mjs";
 
 export const MIGRATIONS_FILE = "config/agent-migrations.json";
-const CONFIG_YAML = ".sdlc/sdlc.local.yaml";
-const CONFIG_JSON = ".sdlc/model.local.json";
+// ADR-0026: a separate data file from MIGRATIONS_FILE because the token shape differs — a
+// fully-qualified `plugin:skill` id, not a bare agent name. Same "data, not code, and never a
+// runtime alias" discipline as the agent-rename file above.
+export const SKILL_MIGRATIONS_FILE = "config/plugin-migrations.json";
+const CONFIG_YAML = `${PROJECT_DIR}/sdlc.local.yaml`;
+const CONFIG_JSON = `${PROJECT_DIR}/model.local.json`;
 
 /**
  * The pre-rename location of this project's SDLC files, and everything that
@@ -53,6 +57,22 @@ export function loadRenames(sdlcPluginRoot) {
   const out = {};
   for (const entry of doc?.migrations ?? []) {
     for (const [from, to] of Object.entries(entry?.renamed ?? {})) {
+      if (typeof from === "string" && typeof to === "string" && from && to) out[from] = to;
+    }
+  }
+  return out;
+}
+
+/**
+ * The merged old→new `plugin:skill` id map from every plugin-migration entry, later entries
+ * winning. Same shape/merge rule as `loadRenames`, keyed on the skill id instead.
+ * @param {string} sdlcPluginRoot the sdlc plugin's own root (where config/ lives)
+ */
+export function loadSkillRenames(sdlcPluginRoot) {
+  const doc = readJson(join(sdlcPluginRoot, SKILL_MIGRATIONS_FILE));
+  const out = {};
+  for (const entry of doc?.migrations ?? []) {
+    for (const [from, to] of Object.entries(entry?.skill_renames ?? {})) {
       if (typeof from === "string" && typeof to === "string" && from && to) out[from] = to;
     }
   }
@@ -102,31 +122,72 @@ function* yamlAgentTokens(text) {
 
 const where = (skillIndex) => (skillIndex >= 0 ? `extensions.skills[${skillIndex}].agents` : "agents");
 
+/** A `skill: <id>` mapping entry — a scalar value, not a sequence item, hence its own line shape. */
+const SKILL_LINE = /^(\s*(?:-\s*)?skill:\s*)(["']?)([^"'#\s]+)(\2\s*(?:#.*)?)$/;
+
 /**
- * Every stale agent name in this project's config, sorted by file then name so a report and a
- * `git diff` read the same way twice.
- * @returns {Array<{file: string, where: string, from: string, to: string, conflict?: boolean}>}
+ * Walk `sdlc.local.yaml` and yield every `extensions.skills[i].skill` id token. Reuses the same
+ * `inSkills`/`skillIndex` tracking as `yamlAgentTokens` (kept separate rather than merged into
+ * that generator because a `skill:` value is a scalar mapping entry, not a block/flow sequence —
+ * a structurally different line shape that would otherwise complicate one generator's contract).
  */
-export function scanConfigs(projectRoot, renames) {
+function* yamlSkillTokens(text) {
+  const lines = text.split("\n");
+  let inSkills = false, skillsIndent = -1, skillIndex = -1;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.trim()) continue;
+    const ind = indentOf(line);
+
+    if (/^\s*skills:\s*$/.test(line)) { inSkills = true; skillsIndent = ind; skillIndex = -1; continue; }
+    if (inSkills && ind <= skillsIndent && !/^\s*-/.test(line)) inSkills = false;
+    if (inSkills && /^\s*-\s*skill:/.test(line)) skillIndex += 1;
+    if (!inSkills) continue;
+
+    const m = SKILL_LINE.exec(line);
+    if (m) yield { line: i, match: m, skillIndex };
+  }
+}
+
+/**
+ * Every stale agent name AND stale `plugin:skill` id in this project's config, sorted by file
+ * then name so a report and a `git diff` read the same way twice. `kind` disambiguates the two
+ * migrations sharing this one report shape (`ADR-0026` added the skill-id half).
+ * @returns {Array<{file: string, where: string, from: string, to: string, kind: "agent"|"skill", conflict?: boolean}>}
+ */
+export function scanConfigs(projectRoot, renames, skillRenames = {}) {
   const found = [];
-  if (!renames || Object.keys(renames).length === 0) return found;
+  const haveAgentRenames = renames && Object.keys(renames).length > 0;
+  const haveSkillRenames = skillRenames && Object.keys(skillRenames).length > 0;
+  if (!haveAgentRenames && !haveSkillRenames) return found;
 
   const yamlPath = join(projectRoot, CONFIG_YAML);
   if (existsSync(yamlPath)) {
     let text; try { text = readFileSync(yamlPath, "utf8"); } catch { text = null; }
     if (text != null) {
-      const seen = new Set();
-      for (const tok of yamlAgentTokens(text)) {
-        const names = tok.kind === "flow"
-          ? tok.match[2].split(",").map((s) => s.trim().replace(/^["']|["']$/g, "")).filter(Boolean)
-          : [tok.match[3]];
-        for (const name of names) {
-          const to = renames[name];
+      if (haveAgentRenames) {
+        const seen = new Set();
+        for (const tok of yamlAgentTokens(text)) {
+          const names = tok.kind === "flow"
+            ? tok.match[2].split(",").map((s) => s.trim().replace(/^["']|["']$/g, "")).filter(Boolean)
+            : [tok.match[3]];
+          for (const name of names) {
+            const to = renames[name];
+            if (!to) continue;
+            const key = `${where(tok.skillIndex)}::${name}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            found.push({ file: CONFIG_YAML, where: where(tok.skillIndex), from: name, to, kind: "agent" });
+          }
+        }
+      }
+      if (haveSkillRenames) {
+        for (const tok of yamlSkillTokens(text)) {
+          const from = tok.match[3];
+          const to = skillRenames[from];
           if (!to) continue;
-          const key = `${where(tok.skillIndex)}::${name}`;
-          if (seen.has(key)) continue;
-          seen.add(key);
-          found.push({ file: CONFIG_YAML, where: where(tok.skillIndex), from: name, to });
+          found.push({ file: CONFIG_YAML, where: `extensions.skills[${tok.skillIndex}].skill`, from, to, kind: "skill" });
         }
       }
     }
@@ -134,11 +195,11 @@ export function scanConfigs(projectRoot, renames) {
 
   const jsonPath = join(projectRoot, CONFIG_JSON);
   const doc = existsSync(jsonPath) ? readJson(jsonPath) : null;
-  if (doc && doc.agents && typeof doc.agents === "object") {
+  if (haveAgentRenames && doc && doc.agents && typeof doc.agents === "object") {
     for (const name of Object.keys(doc.agents)) {
       const to = renames[name];
       if (!to) continue;
-      found.push({ file: CONFIG_JSON, where: "agents", from: name, to, conflict: Object.hasOwn(doc.agents, to) });
+      found.push({ file: CONFIG_JSON, where: "agents", from: name, to, kind: "agent", conflict: Object.hasOwn(doc.agents, to) });
     }
   }
 
@@ -161,16 +222,22 @@ function rewriteYamlLine(line, kind, match, renames) {
   return to ? `${match[1]}${match[2]}${to}${match[4]}` : line;
 }
 
+/** Rewrite one `skill: <id>` line. Returns the line unchanged when nothing applies. */
+function rewriteSkillLine(line, match, skillRenames) {
+  const to = skillRenames[match[3]];
+  return to ? `${match[1]}${match[2]}${to}${match[4]}` : line;
+}
+
 /**
  * Apply the findings to disk. Returns the files actually changed.
  *
- * Idempotent by construction: it rewrites only names still present as rename SOURCES, so a second
- * run over migrated files finds nothing and writes nothing.
+ * Idempotent by construction: it rewrites only names/ids still present as rename SOURCES, so a
+ * second run over migrated files finds nothing and writes nothing.
  */
 export function applyRenames(projectRoot, findings) {
   if (!findings || findings.length === 0) return [];
-  const renames = {};
-  for (const f of findings) renames[f.from] = f.to;
+  const renames = {}, skillRenames = {};
+  for (const f of findings) (f.kind === "skill" ? skillRenames : renames)[f.from] = f.to;
   const changed = [];
 
   if (findings.some((f) => f.file === CONFIG_YAML)) {
@@ -178,9 +245,17 @@ export function applyRenames(projectRoot, findings) {
     const text = readFileSync(path, "utf8");
     const lines = text.split("\n");
     let touched = false;
-    for (const tok of yamlAgentTokens(text)) {
-      const next = rewriteYamlLine(lines[tok.line], tok.kind, tok.match, renames);
-      if (next !== lines[tok.line]) { lines[tok.line] = next; touched = true; }
+    if (Object.keys(renames).length) {
+      for (const tok of yamlAgentTokens(text)) {
+        const next = rewriteYamlLine(lines[tok.line], tok.kind, tok.match, renames);
+        if (next !== lines[tok.line]) { lines[tok.line] = next; touched = true; }
+      }
+    }
+    if (Object.keys(skillRenames).length) {
+      for (const tok of yamlSkillTokens(text)) {
+        const next = rewriteSkillLine(lines[tok.line], tok.match, skillRenames);
+        if (next !== lines[tok.line]) { lines[tok.line] = next; touched = true; }
+      }
     }
     if (touched) { writeFileSync(path, lines.join("\n")); changed.push(CONFIG_YAML); }
   }
@@ -207,13 +282,20 @@ export function applyRenames(projectRoot, findings) {
   return changed.sort();
 }
 
-/** The human report — one line per finding, plus what to do about it. */
+/** The human report — one line per finding, plus what to do about it. Covers both migrations
+ * that share this findings shape: agent-name renames (ADR-0021) and `plugin:skill` id renames
+ * (ADR-0026), disambiguated by `kind`. */
 export function renderReport(findings, { applied = false } = {}) {
-  if (findings.length === 0) return "✅ Agent names: no stale names in this project's config.";
+  if (findings.length === 0) return "✅ Agent names / skill ids: no stale references in this project's config.";
+  const agentCount = findings.filter((f) => f.kind !== "skill").length;
+  const skillCount = findings.filter((f) => f.kind === "skill").length;
+  const parts = [];
+  if (agentCount) parts.push(`${agentCount} agent name(s)`);
+  if (skillCount) parts.push(`${skillCount} skill id(s)`);
   const lines = [
     applied
-      ? `🔧 Agent names migrated (${findings.length}):`
-      : `⚠️ Agent names: ${findings.length} stale name(s) in this project's config (ADR-0021 renamed the roster; nothing translates them at runtime):`,
+      ? `🔧 Migrated (${parts.join(", ")}):`
+      : `⚠️ ${parts.join(", ")} stale in this project's config (nothing translates them at runtime — ADR-0021 renamed the roster, ADR-0026 renamed the embedded-framework skill namespace):`,
   ];
   for (const f of findings) {
     lines.push(`   ${f.file} ${f.where}: ${f.from} → ${f.to}${f.conflict ? "   (both spellings present — the stale one will be dropped)" : ""}`);

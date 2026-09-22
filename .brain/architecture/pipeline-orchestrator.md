@@ -11,7 +11,7 @@ source: ARCHITECTURE.md
 `plugins/sdlc/skills/pipeline-orchestrator/SKILL.md` is the heart of the system. Its algorithm:
 
 ```
-Step 0a · External plugin dependency preflight (optional: superpowers, security-guidance)
+Step 0a · External plugin dependency preflight (optional: superpowers, security-guidance — installed from their own marketplace, never redistributed by this one; resolution is name-keyed, ADR-0028)
 Step 0b · Detect profiles via Glob of manifest.yaml (split by kind)
           · per-aspect winner resolution (kind: foundation)
           · 0b-frameworks: resolve ADDITIVE_PROFILES (+ frameworks.enable/disable override)

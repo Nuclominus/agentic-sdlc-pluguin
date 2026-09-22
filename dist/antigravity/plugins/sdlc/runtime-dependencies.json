@@ -1,9 +1,9 @@
 {
-  "_comment": "Runtime plugin dependencies for the SDLC CORE pipeline. Read by pipeline-orchestrator/SKILL.md (Step 0a) at the start of /sdlc:start, which aggregates this file across EVERY installed plugin. Declare only what THIS plugin's own runtime invokes — a plugin that mandates a skill declares it itself (see android-foundation/runtime-dependencies.json). This is OUR custom preflight mechanism, separate from Claude Code's native plugin.json/dependencies array, which only handles intra-marketplace install-time resolution. Authoring-time skills are deliberately NOT listed: /sdlc:create-pluguin invokes superpowers:writing-skills, but the preflight runs on /sdlc:start and must not warn about a tool this run will never call.",
+  "_comment": "Runtime plugin dependencies for the SDLC CORE pipeline. Read by pipeline-orchestrator/SKILL.md (Step 0a) at the start of /sdlc:start, which aggregates this file across EVERY installed plugin. Declare only what THIS plugin's own runtime invokes — a plugin that mandates a skill declares it itself (see android-foundation/runtime-dependencies.json). This is OUR custom preflight mechanism, separate from Claude Code's native plugin.json/dependencies array. Native dependencies are install-time and REQUIRED — the resolver enables the dependency or fails the install — and since CC 2.1.x they may be cross-marketplace (\"name@marketplace\" strings, {name, marketplace, version, sha} objects, transitive closure, auto-enable). That is precisely why superpowers is NOT one: policy: warn means the pipeline runs anyway, which a native dependency cannot express. Authoring-time skills are deliberately NOT listed: /sdlc:create-pluguin invokes superpowers:writing-skills, but the preflight runs on /sdlc:start and must not warn about a tool this run will never call. Detection is marketplace-agnostic: deps.mjs keys skills on the bare plugin name (pluginNameOf), so ANY install of superpowers satisfies this row — superpowers@claude-plugins-official, superpowers@superpowers-dev (obra's own dev marketplace), or a user-level skills/ copy. install_command names the RECOMMENDED source, not a requirement. This marketplace deliberately does not re-declare superpowers as an entry of its own (ADR-0028): doing so clones it into our namespace as superpowers@agentic-sdlc and shadows the user's real install.",
   "dependencies": [
     {
       "name": "superpowers",
-      "marketplace": "obra/superpowers",
+      "marketplace": "claude-plugins-official",
       "version": ">=1.0.0",
       "policy": "warn",
       "skills_used": [
@@ -11,8 +11,8 @@
       ],
       "fallback_note": "The orchestrator skips its skill-discovery step (SKILL.md Step 3b-1a) and agents fall back to their own frontmatter guidance.",
       "install_command": [
-        "/plugin marketplace add obra/superpowers",
-        "/plugin install superpowers@superpowers"
+        "/plugin marketplace add anthropics/claude-plugins-official",
+        "/plugin install superpowers@claude-plugins-official"
       ]
     }
   ]

@@ -453,6 +453,69 @@ export function parseExtensionSkills(raw, { availableSkills = null, unavailableP
 }
 
 /**
+ * Every top-level key `.sdlc/sdlc.local.yaml` may legitimately carry.
+ *
+ * Two of these are read by the CALLER rather than by `applyLocalOverrides`: `active_workflow`
+ * (plan.mjs, into resolveWorkflow) and `frameworks` (plan.mjs, into resolveStack). They belong
+ * in the same list anyway — the list exists to answer "does anything read this key at all",
+ * and a whitelist scoped to one function would warn about both on every run.
+ *
+ * Keep it in sync with docs/CONFIGURATION.md; a key that ships in one and not the other is
+ * how `frameworks.enable/disable` survived documented-but-dead from v1.13.0 to v3.0.0.
+ */
+export const KNOWN_LOCAL_KEYS = new Set([
+  "post_pipeline_checks", "heal_checks", "phase_command_overrides", "extra_phase_prompts",
+  "skip_phases", "convention_skills_extra", "extensions", "cost_caps",
+  "active_workflow", "frameworks",
+]);
+
+/**
+ * 0b — the project's `frameworks:` override (issue #197).
+ *
+ * `disable: [<stack>, …]` suppresses a framework the resolver detected. Applied in
+ * `resolveStack`, which is why this only PARSES: the caller feeds the result into detection
+ * rather than unpicking an attachment afterwards.
+ *
+ * `enable` is deliberately unsupported. It existed in the deleted prose, but ADR-0026 made a
+ * framework a row inside its foundation's own manifest, so "force-activate one whose
+ * dependency was not found" now means injecting guidance for a library the project does not
+ * use — a wrong answer dressed as a feature. It warns rather than silently doing nothing,
+ * because silence is the half of #197 that made the config look honoured.
+ *
+ * Fail-open throughout: a malformed block suppresses NOTHING. The safe direction for a bad
+ * override is the resolver's own conclusion, never a half-applied one.
+ */
+export function parseFrameworkOverrides(local) {
+  const warnings = [];
+  const empty = { disable: [], warnings };
+  if (!isPlainObject(local) || !("frameworks" in local)) return empty;
+
+  const raw = local.frameworks;
+  if (!isPlainObject(raw)) {
+    warnings.push("WARN: frameworks must be a mapping with a `disable` list — ignored");
+    return empty;
+  }
+  if ("enable" in raw) {
+    warnings.push("WARN: frameworks.enable is not supported — a framework activates only when its dependency is present in the build (ADR-0026); add the dependency, or use frameworks.disable to suppress one that is");
+  }
+  if (!("disable" in raw)) return empty;
+  if (!Array.isArray(raw.disable)) {
+    warnings.push("WARN: frameworks.disable must be a list of stack ids — ignored");
+    return empty;
+  }
+  // Named, not dropped in silence. `frameworks:` was documented as a mapping with `enable` and
+  // `disable` for seven releases, so `- room: true` is the mistake a user actually makes — and
+  // dropping it quietly leaves that framework's guidance in every prompt with nothing said,
+  // which is the exact failure this change exists to remove, one level further down.
+  const disable = [];
+  raw.disable.forEach((entry, i) => {
+    if (typeof entry === "string" && entry !== "") disable.push(entry);
+    else warnings.push(`WARN: frameworks.disable[${i}] is not a stack id (${JSON.stringify(entry)}) — ignored; write a plain list, e.g. disable: [ktor]`);
+  });
+  return { disable, warnings };
+}
+
+/**
  * 1b — apply the project's overrides to a merged profile.
  *
  * Returns a NEW profile; the caller keeps the plugin profile intact so a parse failure can
@@ -527,6 +590,14 @@ export function applyLocalOverrides(profile, local, opts = {}) {
     if (n) applied.cost_caps = `${n} override(s)`;
   }
 
+  // An unknown key used to be ignored in complete silence, so a stale `frameworks:` block —
+  // or a plain typo like `skip_phase:` — read as honoured and did nothing (issue #197). One
+  // line per key, never fatal: this file is optional config and must not be able to stop a run.
+  for (const key of Object.keys(local)) {
+    if (KNOWN_LOCAL_KEYS.has(key)) continue;
+    warnings.push(`WARN: .sdlc/sdlc.local.yaml: unknown key '${key}' — ignored. Supported: ${[...KNOWN_LOCAL_KEYS].sort().join(", ")}`);
+  }
+
   return { profile: next, warnings, applied };
 }
 
@@ -547,13 +618,18 @@ export function renderStackPrint(stack) {
   if (!stack || !stack.foundation) return null;
   const source = stack.source ?? "unknown";
   const list = (xs) => (arr(xs).length ? arr(xs).join(", ") : "—");
-  return [
+  const rows = [
     "🎯 Active stack profiles:",
     `   primary:  ${stack.foundation} (priority ${stack.priority ?? 0}, from ${source})`,
     `   aspects:  ${list(stack.aspects)}`,
     `   additive: ${list(stack.additive)}`,
-    `   forced via --stack: ${stack.forced ? "yes" : "no"}`,
-  ].join("\n");
+  ];
+  // Only when something was actually suppressed. The whole point of `frameworks.disable` is
+  // overriding what detection concluded, so the banner — the contract with the user about
+  // which profiles are active — has to say that a framework was detected and held back.
+  if (arr(stack.suppressed).length) rows.push(`   suppressed: ${arr(stack.suppressed).join(", ")} (frameworks.disable)`);
+  rows.push(`   forced via --stack: ${stack.forced ? "yes" : "no"}`);
+  return rows.join("\n");
 }
 
 export function renderOverridesPrint(applied) {

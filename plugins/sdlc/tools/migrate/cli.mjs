@@ -14,7 +14,7 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  loadRenames, scanConfigs, applyRenames, renderReport,
+  loadRenames, loadSkillRenames, scanConfigs, applyRenames, renderReport,
   scanLegacyLocation, applyLegacyMove, renderLegacyReport,
 } from "./migrate.mjs";
 
@@ -40,7 +40,8 @@ try {
   const moved = cmd === "apply" ? applyLegacyMove(projectRoot, legacy) : { moved: [], skipped: [] };
 
   const renames = loadRenames(pluginRoot);
-  const findings = scanConfigs(projectRoot, renames);
+  const skillRenames = loadSkillRenames(pluginRoot);
+  const findings = scanConfigs(projectRoot, renames, skillRenames);
   const applied = cmd === "apply" ? applyRenames(projectRoot, findings) : [];
 
   if (jsonOut) {

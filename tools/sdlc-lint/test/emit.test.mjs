@@ -532,7 +532,7 @@ test("a project tier override is reported inert, not previewed as active", () =>
   //
   // Both halves are asserted, because either one alone is a different bug:
   // dropping the override silently would hide a file the user wrote and expects
-  // to matter, and honouring it is impossible. ADR-0022 §4 — declare the gap,
+  // to matter, and honouring it is impossible. ADR-0029 §4 — declare the gap,
   // never substitute a mechanism for it.
   const home = mkdtempSync(join(tmpdir(), "sdlc-inert-home-"));
   const project = mkdtempSync(join(tmpdir(), "sdlc-inert-"));
@@ -588,7 +588,7 @@ test("the install doc names every plugin the package carries", () => {
 });
 
 test("every drop reaches the install doc, with its reason", () => {
-  // A capability lost at emit time is stated, not substituted (ADR-0022 §4) —
+  // A capability lost at emit time is stated, not substituted (ADR-0029 §4) —
   // and a reason that lives only in a build log is not stated to the person
   // installing the package. This is what makes the drops list reach a reader.
   const r = emitAll(REPO, ANTIGRAVITY);

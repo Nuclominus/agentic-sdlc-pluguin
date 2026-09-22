@@ -90,8 +90,23 @@ export function expandRows(phases, { agentsPerPhase = {}, aspects = [], modelOve
   const rows = [];
   const push = (phase, agent, extra = {}) => {
     const tier = resolveTier(agent, { modelOverrides, frontmatterTiers });
-    const key = extra.aspect ? `${phase}:${extra.aspect}` : phase;
-    rows.push({ phase, agent, tier, resumed: resumedDone.has(key) || resumedDone.has(phase), ...extra });
+    // Two spellings of one unit: `phase:aspect` is this module's own key, `phase-aspect` is the
+    // on-disk checkpoint id (tools/run/reentry.mjs, and the `{phase}-{aspect}` the orchestrator's
+    // resume contract names). Accept both, so a caller can hand over the set `loadCheckpoints`
+    // produced without transliterating ids — a transliteration step is a place to be wrong, and
+    // silently: an unrecognised id just prices the phase as if it had never run.
+    //
+    // A BARE `{phase}` id does NOT resume an aspect row, though it is tempting. `reentry.mjs`'s
+    // `plainDone` requires every `{phase}-{aspect}` for an aspect-aware phase and never consults a
+    // bare entry, so honouring one here would price a `development` fan-out at $0.00 — its
+    // ×5.4 multiplier makes it the dominant term — while the real `--resume` re-dispatches every
+    // aspect. Under-pricing in the one direction nobody checks. Matching the resume rule matters
+    // more than second-guessing it: if a bare skipped-phase checkpoint should satisfy an
+    // aspect-aware phase, that belongs in reentry.mjs, where both callers would see it.
+    const resumed = extra.aspect == null
+      ? resumedDone.has(phase)
+      : resumedDone.has(`${phase}:${extra.aspect}`) || resumedDone.has(`${phase}-${extra.aspect}`);
+    rows.push({ phase, agent, tier, resumed, ...extra });
   };
 
   const aspectsOf = (mapping) =>
@@ -217,7 +232,7 @@ const money = (n) => `$${(n ?? 0).toFixed(2)}`;
 const moneyOrDash = (n, known) => (known ? money(n) : "$—");
 
 /** 1d-2 — the human dry-run block. Segments concatenate; only `‖ parallel` is exclusive. */
-export function renderDryRun({ estimate: est, slots, stack, workflow, autoselected, skipRules = [], cap, healEnabled, healBlocks = 0 }) {
+export function renderDryRun({ estimate: est, slots, stack, workflow, autoselected, skipRules = [], cap, healEnabled, healBlocks = 0, resume = null }) {
   // `slots` counts RECIPE entries; the rows below count DISPATCHES, and a
   // parallel group is one of the former and several of the latter. Printing
   // `Phases (7):` over eight numbered rows made the header contradict the list
@@ -227,10 +242,20 @@ export function renderDryRun({ estimate: est, slots, stack, workflow, autoselect
   const lines = [
     "🔎 DRY RUN — no agents dispatched, no code written.",
     `Stack: ${stack} | Workflow: ${workflow}${autoselected ? " (auto-selected)" : ""}`,
-    dispatches === slots
-      ? `Phases (${slots}):`
-      : `Phases (${slots}) · ${dispatches} dispatches — a parallel group is one phase and several dispatches:`,
   ];
+  // Gated on what was actually resumed, not on the flag being present. A `--resume` whose slug
+  // found no checkpoints prices a full run, and announcing that as `⏭ Resume: … 0 of 6 complete`
+  // would dress the unchanged full-run preview up as a resumed one — the warning already says what
+  // happened, and this header would contradict it.
+  const done = est.rows.filter((r) => r.resumed).length;
+  if (done > 0) {
+    const next = est.rows.find((r) => !r.resumed);
+    lines.push(`⏭ Resume: ${resume?.slug ?? "(slug unresolved)"}  — ${done} of ${est.rows.length} unit(s) already complete`);
+    lines.push(`   Re-entering at: ${next ? next.phase : "nothing left to run"}`);
+  }
+  lines.push(dispatches === slots
+    ? `Phases (${slots}):`
+    : `Phases (${slots}) · ${dispatches} dispatches — a parallel group is one phase and several dispatches:`);
   est.rows.forEach((r, i) => {
     if (r.resumed) {
       lines.push(`   ${i + 1}. ⏩ ${r.phase}${r.aspect ? ` — ${r.aspect}` : ""}   → skipped (resumed from checkpoint)   $0.00`);

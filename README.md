@@ -2,7 +2,7 @@
 
 A collection of Claude Code plugins that run an AI-assisted development pipeline for **Android** projects. You describe a feature in plain language, and a team of specialized agents takes it through the full cycle: analyzing the requirements, writing the code, adding tests, running a security review, and opening a pull request.
 
-Everything is built around one idea: a single core drives the pipeline, and plugins add the platform and library knowledge on top. **Android Foundation** teaches the pipeline how to build Android apps, and smaller **framework plugins** (Retrofit, Room, Dagger/Hilt, and more) add library-specific conventions — they activate automatically when your project uses that library. You never wire anything by hand; plugins are discovered and combined for you.
+Everything is built around one idea: a single core drives the pipeline, and a plugin adds the platform and library knowledge on top. **Android Foundation** teaches the pipeline how to build Android apps, and embeds its own additive framework support (Retrofit, Ktor, Room, Proto DataStore, Dagger/Hilt, Koin, WorkManager, and more) — each conditionally activates only when your project uses that library. You never wire anything by hand; the active frameworks are detected and combined for you.
 
 ---
 
@@ -15,8 +15,9 @@ Everything is built around one idea: a single core drives the pipeline, and plug
 # 2. Install Android Foundation (sdlc core installs automatically as a dependency)
 /plugin install android-foundation@agentic-sdlc   # Android (Kotlin + Gradle) — the centerpiece
 
-# 3. (Optional) Install framework plugins — they auto-activate when their library is detected
-/plugin install retrofit-plugin@agentic-sdlc      # Retrofit/OkHttp networking enrichment
+# 3. Frameworks (Retrofit, Ktor, Room, Proto DataStore, Dagger/Hilt, Koin, WorkManager) are
+#    embedded in android-foundation and auto-activate when their library is detected — nothing
+#    extra to install.
 
 # 4. Verify
 /sdlc:doctor
@@ -31,11 +32,48 @@ follow it instead of the development branch. Omit the suffix to track `develop` 
 
 Full install, optional dependencies, and requirements → [`docs/INSTALLATION.md`](docs/INSTALLATION.md).
 
-> **Upgrading from `1.x`?** `2.0.0` retired the eleven `android-*` agents in favour of a single
-> platform-neutral roster, and ships **no runtime aliases**. Update every plugin, then run
-> `/sdlc:doctor` — it lists any config entry naming a retired agent and rewrites it after you
-> approve. Nothing breaks if you skip it, but those entries stop taking effect. Details and the
-> full rename table: [`CHANGELOG.md`](CHANGELOG.md#200--2026-09-08).
+> **Upgrading from `2.x`?** `3.0.0` merged the seven additive framework plugins into
+> `android-foundation`. `retrofit-plugin`, `ktor-plugin`, `room-plugin`, `datastore-proto-plugin`,
+> `dagger-plugin`, `koin-plugin` and `workmanager-plugin` **no longer exist** — each is now a row in
+> `android-foundation`'s `frameworks:` array, activating on the same `dependency` detection as
+> before. Three steps:
+>
+> 1. **Update, then uninstall the seven.** `/plugin marketplace update agentic-sdlc`, then
+>    `/plugin uninstall <name>@agentic-sdlc` for each one still registered. A stale copy does not
+>    break a run — the resolver reports it as shadowed and prefers the foundation's own row — but it
+>    is dead weight.
+> 2. **Run `/sdlc:doctor`.** Skill ids moved into the `android-foundation:` namespace
+>    (`retrofit-plugin:retrofit-conventions` → `android-foundation:retrofit-conventions`, and note
+>    the divergent `dagger-plugin:hilt-conventions` → `android-foundation:hilt-conventions`). There
+>    are **no runtime aliases**, so a `.sdlc/sdlc.local.yaml` row naming an old id targets nothing.
+>    Doctor lists every stale id and rewrites it once you approve.
+> 3. **Nothing else changes.** `stack` ids are untouched, so `additive_profiles` telemetry stays
+>    comparable, and framework activation is still automatic — detected from your build files, with
+>    no list to maintain.
+>
+> Details: [`CHANGELOG.md`](CHANGELOG.md#300--2026-09-21).
+
+> **Installed `superpowers` or `security-guidance` from this marketplace?** They were never ours to
+> ship. Earlier versions re-declared both as entries of `agentic-sdlc`, so Claude Code cloned them
+> into our namespace as `superpowers@agentic-sdlc` / `security-guidance@agentic-sdlc`, shadowing the
+> copy you installed yourself. Both entries are gone (ADR-0028). **Install the replacement first,
+> uninstall ours second** — the other order leaves you with no superpowers in between:
+>
+> ```bash
+> /plugin marketplace add anthropics/claude-plugins-official
+> /plugin install superpowers@claude-plugins-official   # replacement FIRST
+> /sdlc:doctor                                          # confirm ✅ available
+> /plugin uninstall superpowers@agentic-sdlc            # only then remove ours
+> /plugin uninstall security-guidance@agentic-sdlc      # if still registered
+> ```
+>
+> Nothing renames: `superpowers:brainstorming` is the same id from either marketplace, so no config
+> migration is needed. Full steps: [`docs/INSTALLATION.md`](docs/INSTALLATION.md#updating-an-existing-install).
+
+> **Upgrading from `1.x`?** Do the `2.0.0` step first: it retired the eleven `android-*` agents in
+> favour of a single platform-neutral roster, also with no runtime aliases. `/sdlc:doctor` migrates
+> agent names and skill ids in the same pass, so one run covers both hops. Rename table:
+> [`CHANGELOG.md`](CHANGELOG.md#200--2026-09-08).
 
 ---
 
@@ -98,18 +136,18 @@ The full board — every track, status and landing PR — is generated from the 
 | Plugin               | Type               | Stack / Technology                                                    |
 | -------------------- | ------------------ | --------------------------------------------------------------------- |
 | `sdlc`               | Core               | Platform-agnostic orchestrator + the entire 12-agent roster            |
-| `android-foundation` | Stack provider     | Android (Kotlin + Gradle) — expertise for 11 roles: 13 skills, MASVS, vault, house rules |
-| `retrofit-plugin`    | Framework provider | Retrofit/OkHttp — additive (skill + injections + ProGuard), no agents  |
-| `room-plugin`        | Framework provider | Room persistence — additive (skill + injections + ProGuard), no agents |
-| `dagger-plugin`      | Framework provider | Dagger/Hilt DI — additive (skill + injections + ProGuard), no agents   |
-| `workmanager-plugin` | Framework provider | WorkManager background — additive (skill + injections + ProGuard), no agents |
+| `android-foundation` | Stack provider     | Android (Kotlin + Gradle) — expertise for 11 roles: 20 skills, MASVS, vault, house rules, **plus 7 embedded frameworks** (ADR-0026): Retrofit, Ktor, Room, Proto DataStore, Dagger/Hilt, Koin, WorkManager — each conditionally activates via its own `enriches_aspect`/`dependency` row in `manifest.yaml`'s `frameworks:` array, no separate install |
 
 ### Optional external dependencies
 
-| Plugin              | Source                               | Role                                                                                              |
-| ------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `superpowers`       | `obra/superpowers`                   | Brainstorming for BA, TDD for QA, verification-before-completion for architects. Degrades gracefully. |
-| `security-guidance` | `anthropics/claude-plugins-official` | Hooks-based in-session security review. The MASVS security phase runs fully without it.            |
+| Plugin              | Install                                               | Role                                                                                              |
+| ------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `superpowers`       | `/plugin install superpowers@claude-plugins-official`     | Brainstorming for BA, TDD for QA, verification-before-completion for architects. Degrades gracefully. |
+| `security-guidance` | `/plugin install security-guidance@claude-plugins-official` | Hooks-based in-session security review. The MASVS security phase runs fully without it.            |
+
+Neither plugin is redistributed by this marketplace — add `anthropics/claude-plugins-official`
+first, then install. The preflight resolves them **by plugin name, not by marketplace**, so an
+install from any source counts (ADR-0028).
 
 ### Optional system tools
 
@@ -121,7 +159,7 @@ The full board — every track, status and landing PR — is generated from the 
 
 ## Security: MASVS / MASTG
 
-The core security phase is **platform-neutral** and applies the standard injected by the active profile as authoritative. On Android, `security-analyst` runs a full **MASVS/MASTG** audit; active framework plugins concatenate their own checks (e.g. `retrofit-plugin` adds MASVS-NETWORK TLS/pinning). Details → [`plugins/android-foundation/README.md`](plugins/android-foundation/README.md#security--masvs--mastg).
+The core security phase is **platform-neutral** and applies the standard injected by the active profile as authoritative. On Android, `security-analyst` runs a full **MASVS/MASTG** audit; active embedded frameworks concatenate their own checks (e.g. the `retrofit` row adds MASVS-NETWORK TLS/pinning). Details → [`plugins/android-foundation/README.md`](plugins/android-foundation/README.md#security--masvs--mastg).
 
 ## Optional Obsidian Vault
 

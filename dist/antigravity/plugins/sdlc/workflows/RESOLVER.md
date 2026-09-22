@@ -7,17 +7,25 @@ single resolve command; `tools/sdlc-lint/test/workflow.test.mjs` holds it to thi
 
 ## Step 1: Locate the workflow file
 
-1. If `$ARGUMENTS` contains `--workflow=NAME`, use `NAME` as `WORKFLOW_NAME`.
-2. Else if `EFFECTIVE_PROFILE` (from sdlc.local.yaml) specifies `active_workflow`,
+1. **(tier 1)** If `$ARGUMENTS` contains `--workflow=NAME`, use `NAME` as `WORKFLOW_NAME`.
+2. **(tier 1b)** Else if `$ARGUMENTS` **names a discovered recipe in prose** (Step 1b below) —
+   "the docs-only workflow", "run this as a hotfix recipe" — use that name. Naming a recipe is an
+   explicit request, the prose form of tier 1. Skipped when `$ARGUMENTS` contains `--workflow=`
+   or `--no-auto-workflow`.
+3. **(tier 2)** Else if `EFFECTIVE_PROFILE` (from sdlc.local.yaml) specifies `active_workflow`,
    use that as `WORKFLOW_NAME`. *(Iteration 4+)*
-3. **Else run match-based auto-selection** (Step 1.5 below): evaluate every
+4. **(tier 3)** **Else run match-based auto-selection** (Step 1.5 below): evaluate every
    discovered recipe's `match:` block against the diff signals + `$ARGUMENTS`. If
    exactly one recipe is selected, use its `name` as `WORKFLOW_NAME`. Skipped when
    `$ARGUMENTS` contains `--no-auto-workflow`, or when tiers 1–2 already resolved a name.
-4. Else if the PRIMARY profile declared a `workflow:` in its `manifest.yaml`
+5. **(tier 4)** Else if the PRIMARY profile declared a `workflow:` in its `manifest.yaml`
    (`CONTEXT.profile_default_workflow`), use that. *(Generic — any profile may set it;
    e.g. a platform profile sets `workflow: <its-recipe>`.)*
-5. Otherwise: `WORKFLOW_NAME = "default"`.
+6. **(tier 5)** Otherwise: `WORKFLOW_NAME = "default"`.
+
+The resolved tier is reported as `workflow.tier` in the plan JSON (`--workflow`, `named_in_prose`,
+`active_workflow`, `auto`, `profile_default`, `fallback`), alongside `workflow.available` — the
+sorted, deduped set of recipe names this consumer could name.
 
 Search path — workflow recipes are discovered from **two sources**: project-local recipes in the
 current project, and recipes shipped across **all installed plugins** (the same aggregation pattern
@@ -66,10 +74,106 @@ If no file is found → **HALT**:
    Omit --workflow=NAME to use the default workflow.
 ```
 
+## Step 1b: A recipe named in the request
+
+`$ARGUMENTS` is the user's own words. When those words **name a recipe**, that is an explicit
+request — the prose equivalent of typing `--workflow=NAME` — and it is resolved here, above
+`active_workflow` and above `match:` auto-selection.
+
+The ordering is load-bearing, not a convenience. `docs-only` carries `match.config_only`, a
+condition on the **diff** (`CONFIG_ONLY == true`), so auto-selection can never reach it from prompt
+text and cannot fire at all where there is no comparable base ref. Naming it is the only route.
+Issue #176 is what the missing tier costs: "would the docs-only workflow fit under its cost cap?"
+resolved `default`, and answered with `default`'s six phases and its `$16.00` cap — every figure
+real, the substitution invisible.
+
+**Skip conditions.** Do NOT run this tier when `$ARGUMENTS` contains `--workflow=` (tier 1 already
+decided) or `--no-auto-workflow` (the user opted out of every inferred tier).
+
+**The match.** Deterministic, closed over the *discovered* recipe names — no free-form guessing,
+and no model involvement:
+
+- Collect the kebab-shaped tokens **standing at a cue word** (`workflow`, `recipe`, `pipeline`,
+  plural accepted): `<token> workflow`, `workflow <token>`, `<token> SDLC workflow`, and a token
+  **quoted** against the cue word. Matching is case-insensitive.
+- A token that **is** a discovered recipe name is a hit.
+
+**Adjacency is the guard, and a cue word alone is not.** Requiring only that a cue word appear
+*somewhere* — and matching names anywhere else in the text — routes ordinary feature descriptions
+to recipes: `/sdlc:start` is documented to the user as "run the SDLC pipeline", so "run the SDLC
+pipeline to add **debug** logging" carries both a cue word and a recipe name while naming no
+recipe, and "Add a **testing** stage to the release pipeline" would select the QA-only `testing`
+recipe — a pipeline with no `development` phase — for a request to implement something. Only a
+token standing at the cue word counts.
+
+**A halt is for the flag only.** `--workflow=NAME` is a machine-checkable instruction, so an
+unknown name there is fatal. Prose is a soft signal: a sentence that happens to carry a name-like
+token must never abort a run, so this tier only ever selects or warns.
+
+**Two guards stand on the unknown-name report, and the second carries the weight.**
+
+1. **A reference verb** — something is being run, and the token is what it is being run *as*:
+   `run`, `use`, `execute`, `start`, `launch`, `invoke`, `trigger`, `apply`, `kick off`, `with`,
+   `via`, each in any tense. A determiner and one adjective may stand between the verb and the
+   name ("run **our** mobile-release workflow", "run **the full** mobile-release workflow"), and
+   either word order counts (`run the <name> workflow`, `run workflow <name>`).
+2. **A compound name** — the token must be hyphenated (`mobile-release`, like the installed
+   `docs-only` and `android-feature`). The verb alone is not enough: `start`, `launch` and
+   `trigger` are app-lifecycle verbs first, so "trigger the **approval** workflow when a doc is
+   submitted" and "replace the old uploader with the **streaming** pipeline" name an
+   application's own workflow, not a recipe. Those are single English nouns; a recipe name that
+   is not a plain word is a hyphenated identifier. That is what separates the two classes.
+
+The cost is a miss on a single-word recipe nobody installed ("run the checkout workflow"), which
+is the cheap direction — this tier warns and never halts. "the `<X>` workflow" without a verb is
+also how English describes a thing to *build* ("wire up the multi-tenant **workflow** engine"),
+and printing the recipe list at those is noise.
+
+**Outcomes.** Only an unambiguous hit selects; everything else falls through to the next tier —
+never silently.
+
+- **Exactly one hit** → `WORKFLOW_NAME = <name>`, `workflow.tier = "named_in_prose"`.
+  MUST print (verbatim):
+
+  ```text
+  🧭 Recipe '{name}' named in the request — resolved as --workflow={name}. Override with --workflow=NAME.
+  ```
+
+- **Two or more hits** → choose neither, and say both:
+
+  ```text
+  WARN: the request names more than one workflow recipe ({csv}) — not choosing between them. Pass --workflow=NAME to be explicit.
+  ```
+
+- **No hit, but a token at the cue word was plainly MEANT as a name** — it is a one-character
+  slip from a discovered name (`docs-onli`), or it was quoted (`the 'frobnicate' workflow`), or
+  it followed `--workflow ` written with a space, or it was REFERRED TO as the recipe to run
+  (`Run the mobile-release workflow`) → report it against the same list the not-found halt
+  prints, then continue with the remaining tiers:
+
+  ```text
+  WARN: '{token}' reads like a workflow recipe, but no installed recipe has that name.
+     Available: {the discovered names, sorted}
+     Pass --workflow=NAME to be explicit — resolution continues with the remaining tiers.
+  ```
+
+  A wrong name reaching `default` unannounced is the defect this tier exists to close; it must not
+  come back through this branch.
+
+  **The gate is deliberately narrower than "any unrecognized token".** This warning reaches the
+  user — `plan.mjs` pushes it into `prints[]` — and a plain denylist of English words cannot be
+  complete, so an ungated version reports `implement`, `config`, `growth-log` and `engine` as
+  mistyped recipes on ordinary feature requests. The accepted cost of the narrowing: a token that
+  resembles no installed recipe and was not quoted (`the frobnicate workflow`) falls through
+  silently, and the resolved recipe is visible where it always was — the `Workflow:` line of the
+  preview.
+
+- **No hit and no such token** → print nothing, fall through.
+
 ## Step 1.5: Match-based auto-selection
 
 This tier fires **only** when tiers 1–2 above did NOT resolve a `WORKFLOW_NAME`
-(no `--workflow=NAME`, no `active_workflow`). It detects intent from the diff
+(no `--workflow=NAME`, no recipe named in the request, no `active_workflow`). It detects intent from the diff
 signals and `$ARGUMENTS`, choosing a more specific recipe than the generic
 profile default. It is **deterministic** — the same inputs always yield the same
 result.
@@ -78,7 +182,8 @@ result.
 profile default) when ANY of these hold:
 
 - `$ARGUMENTS` contains `--no-auto-workflow`, OR
-- tier 1 (`--workflow=NAME`) or tier 2 (`active_workflow`) already resolved a name.
+- tier 1 (`--workflow=NAME`), tier 1b (a recipe named in the request) or tier 2
+  (`active_workflow`) already resolved a name.
 
 **Signals available at selection time** (computed by Step 0c's `computeDiffSignals`): `LOC_TOUCHED` (integer),
 `HAS_MIGRATIONS` (boolean), `CONFIG_ONLY` (boolean), and the raw `$ARGUMENTS` string.

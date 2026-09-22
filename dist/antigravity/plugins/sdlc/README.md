@@ -22,7 +22,7 @@ sdlc/
 ├── tools/{resolve,run,usage,report,rollup,   # shipped runtime, called by the orchestrator
 │          migrate,aar}/
 ├── hooks/{hooks.json,enforce-agent-model.sh}
-├── runtime-dependencies.json                # declares superpowers (policy: warn)
+├── runtime-dependencies.json                # declares superpowers (external, warn)
 └── agents/  (the whole 12-agent roster)
 ```
 
@@ -74,7 +74,9 @@ cap, so the run's reported cost would stop being its real cost.
 `sdlc-lint agent-tools` enforces this in CI across `plugins/*/agents/*.md` — a declared non-empty
 `tools:`, no dispatch tool, no `Edit` on a reviewing agent, and a present `description:`. It covers
 shipped agents only: a project-local agent under `.claude/agents/` that omits `tools:` still
-inherits everything, and `sdlc.local.yaml` can bind one to a phase via `agents_per_phase`. See
+inherits everything. It cannot be bound to a phase from `sdlc.local.yaml`: since ADR-0021 the only
+`agents_per_phase` map in the marketplace is `plugins/sdlc/manifest.yaml`'s, and an
+`agents_per_phase` key in a project's config is reported as unknown (ADR-0027). See
 [ADR-0018](../../.brain/decisions/ADR-0018-reviewers-do-not-write-code.md).
 
 ---
@@ -101,13 +103,15 @@ This plugin ships `hooks/enforce-agent-model.sh` (registered in `hooks/hooks.jso
 
 ## Dependency preflight
 
-Declares `obra/superpowers` with `policy: warn`: if absent, the pipeline still runs but with reduced rigor in the BA/QA/Security phases. The check runs once at the start of `/sdlc:start` and is cached.
+Declares `superpowers` (external, `policy: warn`): if absent, the pipeline still runs but with reduced rigor in the BA/QA/Security phases. The check runs once at the start of `/sdlc:start` and is cached.
+
+The dependency is resolved **by plugin name, not by marketplace** (`tools/resolve/deps.mjs` `pluginNameOf`), so `superpowers@claude-plugins-official`, `superpowers@superpowers-dev` or a user-level `skills/` copy all satisfy it — `install_command` names the recommended source only. This marketplace does not redistribute superpowers as an entry of its own (ADR-0028).
 
 ---
 
 ## Project overrides
 
-The orchestrator honors a project-level `.sdlc/sdlc.local.yaml` (post-pipeline checks, phase command overrides, extra phase prompts, skipped phases, extra convention skills, and the `extensions.skills` Project Extension Manifest) — see [Configuration & Local Overrides](../../docs/CONFIGURATION.md#local-overrides).
+The orchestrator honors a project-level `.sdlc/sdlc.local.yaml`. The supported top-level keys are exactly `post_pipeline_checks`, `phase_command_overrides`, `extra_phase_prompts`, `skip_phases`, `convention_skills_extra`, `extensions` (the Project Extension Manifest), `cost_caps`, `heal_checks`, `active_workflow` and `frameworks` (ADR-0027 — `disable` only). Anything else is reported once per run as an unknown key, so this list and `KNOWN_LOCAL_KEYS` in `tools/resolve/profile.mjs` must stay in step — see [Configuration & Local Overrides](../../docs/CONFIGURATION.md#local-overrides).
 
 ---
 

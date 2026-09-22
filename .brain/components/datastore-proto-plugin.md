@@ -1,27 +1,24 @@
 ---
-plugin: datastore-proto-plugin
-kind: framework
+plugin: retired
+merged_into: android-foundation
+stack: datastore-proto
 enriches_aspect: persistence
-dependency: androidx.datastore
 ---
 
-# datastore-proto-plugin
+# datastore-proto-plugin (merged)
 
 ## Responsibility
 
-Additive framework provider for Proto DataStore persistence. Auto-detected from the Gradle version
-catalog / build files; enriches the `persistence` aspect (`enriches_aspect: persistence`) via
-`manifest.yaml` (`kind: framework`) with the `datastore-conventions` skill, development + security
-phase-prompt injections, and R8/ProGuard keep rules. Ships no agents — it specializes the existing
-development / security phase prompts. Coexists with `room-plugin` on the `persistence` aspect; only
-the detected provider activates.
-
-## Key files
-- `plugins/datastore-proto-plugin/manifest.yaml`
-- `plugins/datastore-proto-plugin/.claude-plugin/plugin.json`
+**Merged into [[components/android-foundation]] (ADR-0026, 2026-09-20).** This plugin no longer
+exists as an installed plugin — its manifest, convention skill, and ProGuard snippet were folded
+into a `frameworks:` row (`stack: datastore-proto`) inside `android-foundation/manifest.yaml`. Conditional
+activation is unchanged (`enriches_aspect: persistence`); the skill id moved from
+`datastore-proto-plugin:*-conventions` to `android-foundation:*-conventions`. This note is kept, not deleted, so
+existing links and change-note backlinks stay resolvable.
 
 ## Decisions
-- [[decisions/ADR-0002-framework-provider-pattern]]
+- [[decisions/ADR-0002-framework-provider-pattern]] (superseded)
+- [[decisions/ADR-0026-embed-framework-providers-in-the-foundation]]
 
 ## Change history
 _Backlinks from `changes/` accumulate here._

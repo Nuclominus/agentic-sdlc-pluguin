@@ -51,7 +51,7 @@ const defaultRegistry = () => join(claudeConfigDir(), "plugins", "cache");
 /**
  * Load the model registry for the dispatcher this install runs under.
  *
- * One file per dispatcher (`config/models/<host>.yaml`, ADR-0022 decision 7): `tier -> id`
+ * One file per dispatcher (`config/models/<host>.yaml`, ADR-0029 decision 7): `tier -> id`
  * is host knowledge and lives in the host descriptor, `id -> price` is provider knowledge
  * and lives here. Which file to read is not guessed — the package declares its host in
  * `config/host.json`, and the authored tree, which declares none, is Claude Code.

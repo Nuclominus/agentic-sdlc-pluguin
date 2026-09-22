@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolvePlan, resolveExpertise } from "../../../plugins/sdlc/tools/resolve/plan.mjs";
+import { resolvePlan, resolveExpertise, resolveResume } from "../../../plugins/sdlc/tools/resolve/plan.mjs";
 
 function write(file, content) {
   mkdirSync(join(file, ".."), { recursive: true });
@@ -18,7 +18,7 @@ function write(file, content) {
 }
 
 /** A consumer machine: config dir + one installed plugin + a git project. */
-function world({ localYaml = null, modelJson = null, recipe = null, roleExpertise = false } = {}) {
+function world({ localYaml = null, modelJson = null, recipe = null, roleExpertise = false, frameworks = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "sdlc-plan-"));
   const cfg = join(dir, "cfg");
   const plug = join(dir, "cache", "demo", "1.0.0");
@@ -34,6 +34,20 @@ function world({ localYaml = null, modelJson = null, recipe = null, roleExpertis
     "detect:",
     "  file_exists: marker.txt",
     "hosts_aspects: all",
+    // ADR-0026: two providers contesting one aspect, both coordinates present — the mid-migration
+    // shape `frameworks.disable` exists for (issue #197).
+    ...(frameworks ? [
+      "framework_detection: [\"deps.txt\"]",
+      "frameworks:",
+      "  - stack: alpha",
+      "    enriches_aspect: network",
+      "    dependency: com.example:alpha",
+      "    phase_injections: { development: \"ALPHA RULES\" }",
+      "  - stack: beta",
+      "    enriches_aspect: network",
+      "    dependency: com.example:beta",
+      "    phase_injections: { development: \"BETA RULES\" }",
+    ] : []),
     ...(roleExpertise ? [
       // ADR-0021 shape: the foundation binds NO agents; it declares expertise per core role.
       "role_expertise:",
@@ -123,6 +137,7 @@ function world({ localYaml = null, modelJson = null, recipe = null, roleExpertis
   });
 
   write(join(proj, "marker.txt"), "detect me\n");
+  if (frameworks) write(join(proj, "deps.txt"), "com.example:alpha:1.0\ncom.example:beta:1.0\n");
   if (localYaml) write(join(proj, ".sdlc", "sdlc.local.yaml"), localYaml);
   if (modelJson) write(join(proj, ".sdlc", "model.local.json"), modelJson);
 
@@ -139,6 +154,102 @@ function world({ localYaml = null, modelJson = null, recipe = null, roleExpertis
 
   return { dir, cfg, proj, plug, core, env: { HOME: dir, CLAUDE_CONFIG_DIR: cfg } };
 }
+
+/**
+ * A consumer that has installed NOTHING: a fresh config dir, no registry, no cache — and a host
+ * that loaded this plugin without exporting `CLAUDE_PLUGIN_ROOT`. That is `claude plugin eval`
+ * (issue #173), and it is also a bare `node tools/resolve/cli.mjs` against a checkout.
+ */
+function bareWorld() {
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-bare-"));
+  const proj = join(dir, "project");
+  write(join(proj, "README.md"), "# demo\n");
+
+  const g = (...a) => execFileSync("git", a, { cwd: proj, stdio: "ignore" });
+  g("init", "-q", "-b", "main");
+  g("config", "user.email", "t@example.com");
+  g("config", "user.name", "t");
+  g("add", "-A"); g("commit", "-qm", "seed");
+  g("update-ref", "refs/remotes/origin/main", "HEAD");
+
+  // A diff big enough that no skip-rule trims the recipe — the preview must be the full six.
+  write(join(proj, "src.txt"), Array.from({ length: 80 }, (_, i) => `line ${i}`).join("\n"));
+  g("add", "-A"); g("commit", "-qm", "work");
+
+  return { dir, proj, env: { HOME: dir, CLAUDE_CONFIG_DIR: join(dir, "cfg") } };
+}
+
+test("a registered install is never displaced by the checkout, however partial it is", () => {
+  // Two definitions of "the consumer has an install" must not disagree. `resolveSdlcRoot`'s
+  // registry branch additionally requires config/models.json; gating the self root on that alone
+  // let a PARTIAL sdlc entry keep its place in discovery while self-referential reads moved to
+  // whatever checkout was executing — two trees, one run, and a checkout announced to a consumer
+  // that never loaded it. The registry either lists this plugin or it does not.
+  const w = bareWorld();
+  try {
+    const partial = join(w.dir, "partial-install");
+    write(join(partial, "README.md"), "an install that lost its config/\n");
+    write(join(w.dir, "cfg", "plugins", "installed_plugins.json"), {
+      version: 2,
+      plugins: { "sdlc@m": [{ scope: "user", installPath: partial, version: "2.4.1" }] },
+    });
+    const { warnings } = resolvePlan({ cwd: w.proj, args: "--dry-run", env: w.env });
+    assert.deepEqual(
+      warnings.filter((x) => /loaded from a path/.test(x)), [],
+      "the consumer's own entry stands; repairing it is /sdlc:doctor's job, not a silent swap",
+    );
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("issue #173: with nothing installed and nothing exported, the checkout resolves its own plan", () => {
+  // The regression this guards: every registry-keyed discovery was blind to the tree the code
+  // was running from, so the run halted with "Workflow 'default' not found. Available: (none)"
+  // while default.yaml sat next to the code printing it. Under `claude plugin eval` that halt
+  // hit every should-fire case of plugins/sdlc/evals/.
+  const w = bareWorld();
+  try {
+    const { plan, halt } = resolvePlan({ cwd: w.proj, args: "--dry-run", env: w.env });
+    assert.equal(halt, null, "the recipe is found in the tree the code is executing from");
+    assert.equal(plan.stack.primary_profile, "vanilla");
+    assert.equal(plan.workflow.name, "default");
+    assert.equal(plan.workflow.resolved_phases.length, 6);
+    assert.ok(plan.dry_run.expected_total > 0, "config/models.json resolves from that same tree");
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("issue #176: the recipe the request names is the recipe the plan prices", () => {
+  // The defect: "would the docs-only workflow fit under its cost cap?" resolved `default` — six
+  // phases and a $16.00 cap — and answered the cap question for a pipeline nobody asked about.
+  // `docs-only` carries `match.config_only`, a condition on the DIFF, so auto-selection can never
+  // reach it from prose; naming it is the explicit request, and tier 1b is where that lands.
+  const w = bareWorld();
+  try {
+    const { plan, halt, prints } = resolvePlan({
+      cwd: w.proj,
+      args: "Would the docs-only SDLC workflow for 'Document the growth log screen' fit under its cost cap? --dry-run",
+      env: w.env,
+    });
+    assert.equal(halt, null);
+    assert.equal(plan.workflow.name, "docs-only");
+    assert.equal(plan.workflow.tier, "named_in_prose");
+    assert.deepEqual(plan.workflow.resolved_phases.map((p) => p.name), ["documentation"]);
+    assert.ok(
+      prints.some((p) => p.includes("🧭 Recipe 'docs-only' named in the request")),
+      "the substitution the old behaviour made silently is now announced",
+    );
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("the plan carries the recipe names a consumer could name", () => {
+  const w = bareWorld();
+  try {
+    const { plan } = resolvePlan({ cwd: w.proj, args: "--dry-run", env: w.env });
+    for (const name of ["default", "docs-only", "hotfix", "bugfix", "refactor", "analysis", "testing", "debug"]) {
+      assert.ok(plan.workflow.available.includes(name), `'${name}' is discoverable and must be listed`);
+    }
+    assert.deepEqual(plan.workflow.available, [...plan.workflow.available].sort(), "sorted, so it is stable to diff");
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
 
 test("end to end: detection, profile, workflow and cap resolve into one plan", () => {
   const w = world();
@@ -554,5 +665,273 @@ test("a project with no legacy files says nothing about them", () => {
     const { plan, warnings } = resolvePlan({ cwd: w.proj, args: "", env: w.env });
     assert.equal(warnings.filter((x) => /old location/.test(x)).length, 0);
     assert.equal(plan.cost_cap, 2, "the new location IS read");
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+// Issue #164, end to end and against the REAL plugin — the repro from the report, reduced to a
+// test. An empty config dir plus `CLAUDE_PLUGIN_ROOT=<checkout>/plugins/sdlc` is what
+// `--plugin-dir`, `claude plugin eval` and every development checkout look like from in here.
+// Before the fix this halted at "Workflow 'default' not found. Available: (none)" while
+// default.yaml sat next to the code printing the halt.
+test("a path-loaded plugin resolves its own manifest, recipes and dependencies", () => {
+  const SDLC = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "plugins", "sdlc");
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-pathload-"));
+  try {
+    const proj = join(dir, "project");
+    write(join(proj, "src.txt"), "seed\n");
+    const g = (...a) => execFileSync("git", a, { cwd: proj, stdio: "ignore" });
+    g("init", "-q", "-b", "main");
+    g("config", "user.email", "t@example.com");
+    g("config", "user.name", "t");
+    g("add", "-A"); g("commit", "-qm", "seed");
+    g("update-ref", "refs/remotes/origin/main", "HEAD");
+
+    // No installed_plugins.json, no cache: the registry every discovery keys off is empty.
+    const env = { HOME: dir, CLAUDE_CONFIG_DIR: join(dir, "cfg"), CLAUDE_PLUGIN_ROOT: SDLC };
+    const { plan, halt } = resolvePlan({ cwd: proj, args: '"Add dark mode" --dry-run', env });
+
+    assert.equal(halt, null, "the plugin that ships `vanilla` and default.yaml must not report neither");
+    assert.equal(plan.stack.primary_profile, "vanilla");
+    assert.equal(plan.workflow.name, "default");
+    assert.ok(plan.workflow.resolved_phases.length > 0);
+    assert.deepEqual(Object.keys(plan.deps_preflight), ["superpowers"],
+      "runtime-dependencies.json is read through the same registry, so it went missing with the rest");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("an explicit --stack=vanilla resolves under a path load", () => {
+  // The other face of the same defect: "no installed foundation declares that stack" for a stack
+  // that ships in the plugin doing the reporting.
+  const SDLC = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "plugins", "sdlc");
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-pathload-"));
+  try {
+    const proj = join(dir, "project");
+    mkdirSync(proj, { recursive: true });
+    const env = { HOME: dir, CLAUDE_CONFIG_DIR: join(dir, "cfg"), CLAUDE_PLUGIN_ROOT: SDLC };
+    const { plan, halt } = resolvePlan({ cwd: proj, args: '"Add dark mode" --stack=vanilla --dry-run', env });
+    assert.equal(halt, null);
+    assert.equal(plan.stack.primary_profile, "vanilla");
+    assert.equal(plan.stack.forced, true);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// Review of #166, finding 1 — and the half of it that the manifest layer alone does not cover.
+//
+// Disabling the installed copy in settings.json before running the checkout is the natural setup,
+// and the replacement inherits the registered key, so the `false` followed it. Fixing only
+// loadInstalledManifests still left discoverRecipes and the dependency preflight vetoing, which
+// halts the run just as dead: "Workflow 'default' not found. Available: (none)", the original bug.
+test("an enabledPlugins veto does not disable a path load — recipes and deps included", () => {
+  const SDLC = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "plugins", "sdlc");
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-pathload-"));
+  try {
+    const cfg = join(dir, "cfg");
+    const cached = join(cfg, "plugins", "cache", "agentic-sdlc", "sdlc", "2.4.0");
+    write(join(cached, "manifest.yaml"), "kind: foundation\nstack: vanilla\npriority: 0\ndetect:\n  any: [\"*\"]\n");
+    write(join(cfg, "settings.json"), { enabledPlugins: { "sdlc@agentic-sdlc": false } });
+    write(join(cfg, "plugins", "installed_plugins.json"), {
+      version: 2,
+      plugins: { "sdlc@agentic-sdlc": [{ scope: "user", installPath: cached, version: "2.4.0" }] },
+    });
+
+    const proj = join(dir, "project");
+    mkdirSync(proj, { recursive: true });
+    const env = { HOME: dir, CLAUDE_CONFIG_DIR: cfg, CLAUDE_PLUGIN_ROOT: SDLC };
+    const { plan, halt, warnings } = resolvePlan({ cwd: proj, args: '"Add dark mode" --dry-run', env });
+
+    assert.equal(halt, null);
+    assert.equal(plan.workflow.name, "default", "the recipe lives in the path-loaded tree, past the veto");
+    assert.deepEqual(Object.keys(plan.deps_preflight), ["superpowers"]);
+    assert.ok(warnings.some((w) => w.includes("is loaded from a path")), "and the displaced copy is named");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// Issue #168 — `commands/start.md` promises "Combine with --dry-run to preview what would be
+// skipped without dispatching anything". It previewed a full run instead: caps.mjs had every
+// resumed branch (⏩ rows, $0 pricing, exclusion from the loop/heal/gate arithmetic) and plan.mjs
+// never passed `resumedDone`, so none of it was reachable from the CLI.
+
+/** A resumable run: a real workspace under docs/plans/<slug>/.checkpoint with the given statuses. */
+function withCheckpoints(slug, statuses) {
+  const SDLC = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "plugins", "sdlc");
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-resume-"));
+  const proj = join(dir, "project");
+  const cp = join(proj, "docs", "plans", slug, ".checkpoint");
+  mkdirSync(cp, { recursive: true });
+  for (const [unit, status] of Object.entries(statuses)) write(join(cp, `${unit}.json`), { status });
+  const g = (...a) => execFileSync("git", a, { cwd: proj, stdio: "ignore" });
+  g("init", "-q", "-b", "main");
+  g("config", "user.email", "t@example.com");
+  g("config", "user.name", "t");
+  write(join(proj, "f.txt"), "seed\n");
+  g("add", "-A"); g("commit", "-qm", "seed");
+  g("update-ref", "refs/remotes/origin/main", "HEAD");
+  return { dir, proj, cp, env: { HOME: dir, CLAUDE_CONFIG_DIR: join(dir, "cfg"), CLAUDE_PLUGIN_ROOT: SDLC } };
+}
+
+test("--resume --dry-run prices only the phases that would actually be dispatched", () => {
+  const w = withCheckpoints("add-dark-mode", {
+    business_analysis: "completed", "development-vanilla": "completed", qa: "completed", security: "skipped",
+  });
+  try {
+    const args = '"Add dark mode" --resume --dry-run --no-skip-rules';
+    const { plan, halt } = resolvePlan({ cwd: w.proj, args, env: w.env });
+    assert.equal(halt, null);
+
+    const resumed = plan.dry_run.rows.filter((r) => r.resumed);
+    assert.deepEqual(resumed.map((r) => r.phase), ["business_analysis", "development", "qa", "security"],
+      "a `skipped` checkpoint is as terminal as a `completed` one");
+    assert.equal(resumed[1].aspect, "vanilla", "the aspect row matched its on-disk `development-vanilla` id");
+    assert.ok(resumed.every((r) => r.est === 0), "a resumed row costs nothing to redo");
+    assert.equal(plan.dry_run.reenter_at, "remediation");
+    assert.equal(plan.dry_run.resume_slug, "add-dark-mode");
+
+    // The number that matters: the estimate is the cost to FINISH.
+    const full = resolvePlan({ cwd: w.proj, args: '"Add dark mode" --dry-run --no-skip-rules', env: w.env });
+    assert.ok(plan.dry_run.expected_total < full.plan.dry_run.expected_total / 4,
+      `resumed ${plan.dry_run.expected_total} must be far below the full ${full.plan.dry_run.expected_total}`);
+    assert.equal(full.plan.dry_run.resumed, undefined, "a run that is not resuming grows no resume keys");
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("the human preview marks resumed phases and names the re-entry point", () => {
+  const w = withCheckpoints("add-dark-mode", { business_analysis: "completed" });
+  try {
+    const { prints } = resolvePlan({ cwd: w.proj, args: '"Add dark mode" --resume --dry-run --no-skip-rules', env: w.env });
+    const preview = prints.join("\n");
+    assert.match(preview, /⏭ Resume: add-dark-mode/);
+    assert.match(preview, /Re-entering at: development/);
+    assert.match(preview, /⏩ business_analysis {3}→ skipped \(resumed from checkpoint\) {3}\$0\.00/);
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("the headless dry-run line carries resumed and reenter_at", () => {
+  const w = withCheckpoints("add-dark-mode", { business_analysis: "completed", "development-vanilla": "completed" });
+  try {
+    const env = { ...w.env, SDLC_NONINTERACTIVE: "true" };
+    const { prints } = resolvePlan({ cwd: w.proj, args: '"Add dark mode" --resume --dry-run --no-skip-rules', env });
+    const line = JSON.parse(prints[prints.length - 1]);
+    assert.equal(line.resumed, true);
+    assert.equal(line.reenter_at, "qa");
+    assert.equal(line.dry_run, true);
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("a --resume whose workspace does not exist says so instead of showing a full run as a resume", () => {
+  // Step 2 generates the slug from $ARGUMENTS in prose, so a model's slug and this function's can
+  // differ. Silently previewing a full run is the failure this issue is about; a WARN is not.
+  const w = withCheckpoints("add-dark-mode", { business_analysis: "completed" });
+  try {
+    const { plan, warnings } = resolvePlan({ cwd: w.proj, args: '"Something else entirely" --resume --dry-run --no-skip-rules', env: w.env });
+    assert.ok(warnings.some((x) => /--resume: no checkpoints at docs\/plans\/something-else-entirely/.test(x)));
+    assert.ok(plan.dry_run.rows.every((r) => !r.resumed));
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("--resume=<slug> is exact and beats the derived slug", () => {
+  const w = withCheckpoints("explicit-slug", { business_analysis: "completed" });
+  try {
+    const { plan } = resolvePlan({ cwd: w.proj, args: '"Totally different words" --resume=explicit-slug --dry-run --no-skip-rules', env: w.env });
+    assert.equal(plan.dry_run.resume_slug, "explicit-slug");
+    assert.equal(plan.dry_run.rows[0].resumed, true);
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("resolveResume is inert without --resume, and slugifies by Step 2's rule", () => {
+  assert.equal(resolveResume({ args: '"Add dark mode" --dry-run' }).requested, false);
+  const r = resolveResume({ cwd: "/nonexistent", args: '"Add Dark Mode, now!" --resume --dry-run' });
+  assert.equal(r.slug, "add-dark-mode-now");
+  assert.equal(r.done.size, 0);
+});
+
+// Findings from the review of #171.
+
+test("a --resume that resumed nothing is not reported as a resume", () => {
+  // Gating the output on the FLAG rather than on what was resumed dressed an unchanged full-run
+  // preview up as a resumed one: `⏭ Resume: … 0 of 6 complete` beside the full estimate, and
+  // `{"resumed":true}` in the headless line for a CI consumer to misread.
+  const w = withCheckpoints("add-dark-mode", { business_analysis: "completed" });
+  try {
+    const args = '"Something else entirely" --resume --dry-run --no-skip-rules';
+    const { plan, prints, warnings } = resolvePlan({ cwd: w.proj, args, env: w.env });
+    assert.ok(warnings.some((x) => /no checkpoints at/.test(x)), "the warning is still owed");
+    assert.equal(plan.dry_run.resumed, undefined);
+    assert.equal(plan.dry_run.reenter_at, undefined);
+    assert.ok(!prints.join("\n").includes("⏭ Resume:"));
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("a space-separated flag value stays out of the derived slug", () => {
+  // `cli.mjs` reads `--mode tree` as two tokens, so a value-stripping rule keyed only on
+  // `--flag=value` left "tree" in the description: `--mode tree "Add dark mode"` derived
+  // `tree-add-dark-mode` and matched no workspace.
+  assert.equal(resolveResume({ cwd: "/nonexistent", args: "--mode tree Add dark mode --resume" }).slug, "add-dark-mode");
+  assert.equal(resolveResume({ cwd: "/nonexistent", args: "Add dark mode --skills a,b --resume" }).slug, "add-dark-mode");
+});
+
+test("--resume= with an empty slug warns instead of silently doing nothing", () => {
+  const r = resolveResume({ cwd: "/nonexistent", args: "Add dark mode --resume= --dry-run" });
+  assert.equal(r.requested, true, "a consuming (\\s|$) could not match the trailing '=' and read this as no resume at all");
+  assert.equal(r.slug, null);
+  assert.ok(r.warnings.some((w) => /empty slug/.test(w)));
+});
+
+test("a slug that is a path, not a run name, is refused", () => {
+  const r = resolveResume({ cwd: "/nonexistent", args: "--resume=../../elsewhere --dry-run" });
+  assert.equal(r.slug, null);
+  assert.equal(r.done.size, 0);
+  assert.ok(r.warnings.some((w) => /not a run slug/.test(w)));
+});
+
+// ---- issue #197: `frameworks.disable` reaches detection, and an unknown key is not silent ----
+
+test("frameworks.disable suppresses a detected framework end to end, injection and all", () => {
+  const w = world({ frameworks: true, localYaml: "frameworks:\n  disable: [beta]\n" });
+  try {
+    const r = resolvePlan({ cwd: w.proj, args: "--dry-run", env: w.env });
+    assert.equal(r.halt, null, r.halt ?? "");
+    assert.deepEqual(r.plan.stack.additive_profiles, ["alpha"]);
+    assert.deepEqual(r.plan.stack.suppressed_profiles, ["beta"], "telemetry must be able to tell a suppression from a non-detection");
+    // The point of suppressing at attachment: the framework's guidance never reaches a prompt.
+    const dev = r.plan.profile.phase_prompts_injection.development ?? "";
+    assert.match(dev, /ALPHA RULES/);
+    assert.doesNotMatch(dev, /BETA RULES/, "a suppressed framework must not enrich any phase");
+    assert.ok(r.prints.some((x) => /suppressed: beta \(frameworks\.disable\)/.test(x)), "the banner has to say detection was overridden");
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("without the override both contesting frameworks still attach", () => {
+  const w = world({ frameworks: true });
+  try {
+    const r = resolvePlan({ cwd: w.proj, args: "--dry-run", env: w.env });
+    assert.deepEqual(r.plan.stack.additive_profiles, ["alpha", "beta"], "detection-only behaviour is unchanged");
+    assert.deepEqual(r.plan.stack.suppressed_profiles, []);
+    assert.ok(!r.prints.some((x) => /suppressed/.test(x)));
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("a disable naming nothing installed warns instead of failing quietly", () => {
+  const w = world({ frameworks: true, localYaml: "frameworks:\n  disable: [gamma]\n" });
+  try {
+    const r = resolvePlan({ cwd: w.proj, args: "--dry-run", env: w.env });
+    assert.deepEqual(r.plan.stack.additive_profiles, ["alpha", "beta"]);
+    assert.ok(r.warnings.some((x) => /frameworks\.disable 'gamma'/.test(x)), `got ${JSON.stringify(r.warnings)}`);
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("a stale frameworks.enable block is reported rather than read as honoured", () => {
+  const w = world({ frameworks: true, localYaml: "frameworks:\n  enable: [gamma]\n  disable: [beta]\n" });
+  try {
+    const r = resolvePlan({ cwd: w.proj, args: "--dry-run", env: w.env });
+    assert.deepEqual(r.plan.stack.additive_profiles, ["alpha"], "the supported half still applies");
+    assert.ok(r.warnings.some((x) => /frameworks\.enable is not supported/.test(x)));
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("an unknown top-level key in a real sdlc.local.yaml warns on every run", () => {
+  const w = world({ localYaml: "skip_phase:\n  - security\n" });
+  try {
+    const r = resolvePlan({ cwd: w.proj, args: "--dry-run", env: w.env });
+    assert.ok(r.warnings.some((x) => /unknown key 'skip_phase'/.test(x)), `got ${JSON.stringify(r.warnings)}`);
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });

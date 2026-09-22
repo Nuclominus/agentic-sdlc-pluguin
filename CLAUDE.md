@@ -12,3 +12,9 @@ of truth for architecture, decisions, per-PR changes, and planning. The binding 
 @.claude/rules/second-brain.md
 
 `ARCHITECTURE.md` and `CORE-TODO.md` are pointer stubs — their content now lives in `.brain/`.
+
+## Pull requests
+
+After opening a PR, offer the user a review of it before reporting done. The binding rule:
+
+@.claude/rules/pr-review-offer.md

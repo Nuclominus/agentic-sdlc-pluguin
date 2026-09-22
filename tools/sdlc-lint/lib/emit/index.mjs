@@ -233,7 +233,7 @@ export function emitPlugin(root, pluginName, host) {
         // Whether a dispatch can carry a model at all. False means each agent
         // file's model was baked at build time, so a project's tier override has
         // no mechanism to take effect and must be reported inert rather than
-        // previewed as active (ADR-0022 §4).
+        // previewed as active (ADR-0029 §4).
         model_arg: host.dispatch?.model_arg !== false,
         host_cli_version: host.verified_on?.cli_version ?? null,
         config_dir_env: host.discovery?.config_dir_env ?? null,
@@ -284,7 +284,7 @@ export function listPlugins(root) {
  * from the same `install` block the descriptor already carries, so `emit
  * --check` covers it on all three axes like every other emitted file.
  *
- * The drops table is the point of the second half. ADR-0022 §4 says a lost
+ * The drops table is the point of the second half. ADR-0029 §4 says a lost
  * capability is stated rather than substituted; a reason recorded only in a
  * build log is not stated to the person who installs the thing.
  */

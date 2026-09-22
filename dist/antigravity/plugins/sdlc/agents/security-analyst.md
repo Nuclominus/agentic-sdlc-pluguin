@@ -88,7 +88,7 @@ You are platform-neutral. Platform knowledge arrives in exactly one of two ways:
 
 ## Special cases (stack-specific guidance)
 
-The active foundation supplies its standard through the `Stack expertise for security-analyst` block (ADR-0021) — for example, the Android foundation's invariants read "secrets in Keystore not SharedPreferences; no cleartext traffic; validate Intents/deep links" and its mandatory skill carries the full MASVS audit. Additive framework providers (e.g. retrofit-plugin) still concatenate their guidance into `phase_prompts_injection`. Follow both — the stack's standard is authoritative over the generic baseline above.
+The active foundation supplies its standard through the `Stack expertise for security-analyst` block (ADR-0021) — for example, the Android foundation's invariants read "secrets in Keystore not SharedPreferences; no cleartext traffic; validate Intents/deep links" and its mandatory skill carries the full MASVS audit. Additive frameworks (e.g. the embedded `retrofit` row in `android-foundation`'s manifest, ADR-0026) still concatenate their guidance into `phase_prompts_injection`. Follow both — the stack's standard is authoritative over the generic baseline above.
 
 ## Deliverable
 

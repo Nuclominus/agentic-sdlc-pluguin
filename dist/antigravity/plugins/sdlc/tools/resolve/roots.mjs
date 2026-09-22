@@ -17,9 +17,13 @@
 //   session/user state (stamps, transcripts)    -> CONFIG_DIR
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const CACHE_MARKER = "/plugins/cache/";
+
+/** The file that makes a directory THIS plugin's root, on every host. */
+const REGISTRY_FILE = join("config", "models", "claude.yaml");
 
 /**
  * The project-local directory the SDLC owns: `<project>/.sdlc/`.
@@ -31,7 +35,7 @@ const CACHE_MARKER = "/plugins/cache/";
  *
  * One directory, not one per host: the content here is host-neutral. Extensions,
  * skill mappings, agent bindings, cost caps and tier tags mean the same thing
- * everywhere (ADR-0022 §6 keeps tier tags untranslated across hosts), so a
+ * everywhere (ADR-0029 §6 keeps tier tags untranslated across hosts), so a
  * per-host copy would be the same fact in two places — the drift shape the model
  * registry split was corrected to avoid.
  *
@@ -80,10 +84,11 @@ export function resolveConfigDir(env = process.env) {
 /**
  * SDLC_PLUGIN_ROOT — where THIS plugin's own `config/` and `tools/` live.
  *
- * Order: the harness's own export, then the installed registry, then the newest cached
- * version. Only the last is a guess, and it says so.
+ * Order: a package that declares its host, then the harness's own export, then the installed
+ * registry, then the tree this module runs from, then the newest cached version. Only the
+ * last is a guess, and it says so.
  */
-export function resolveSdlcRoot(configDir, env = process.env) {
+export function resolveSdlcRoot(configDir, env = process.env, self = selfPluginRoot()) {
   // A package built for another host is SELF-LOCATING and answers before anything
   // else is consulted. Without this, running `cli.mjs` out of an Antigravity
   // install still resolved sdlc_plugin_root to a Claude Code cache copy — the
@@ -107,10 +112,16 @@ export function resolveSdlcRoot(configDir, env = process.env) {
     for (const [key, entries] of Object.entries(registry.plugins)) {
       if (!/^sdlc@/.test(key)) continue;
       const list = (Array.isArray(entries) ? entries : [entries]).filter((e) => e?.installPath);
-      const hit = list.find((e) => existsSync(join(e.installPath, "config", "models", "claude.yaml")));
+      const hit = list.find((e) => existsSync(join(e.installPath, REGISTRY_FILE)));
       if (hit) return { value: hit.installPath, source: "installed_plugins.json", version: hit.version ?? null };
     }
   }
+
+  // The tree this module is executing from, when the consumer has no copy of its own (#173).
+  // It ranks BELOW the registry deliberately: `claude plugin eval` and a bare checkout have no
+  // registry to consult, while a consumer that installed the plugin must keep getting what it
+  // installed, whatever checkout happens to be running the code.
+  if (self && existsSync(join(self, REGISTRY_FILE))) return { value: self, source: "self" };
 
   // Last resort: the newest cached copy that actually carries the Claude registry.
   const cacheRoot = join(configDir, "plugins", "cache");
@@ -119,7 +130,7 @@ export function resolveSdlcRoot(configDir, env = process.env) {
     const sdlcDir = join(cacheRoot, marketplace, "sdlc");
     for (const version of safeDirs(sdlcDir)) {
       const root = join(sdlcDir, version);
-      if (existsSync(join(root, "config", "models", "claude.yaml"))) candidates.push({ root, version });
+      if (existsSync(join(root, REGISTRY_FILE))) candidates.push({ root, version });
     }
   }
   if (candidates.length === 0) return { value: null, source: "unresolved" };
@@ -140,8 +151,11 @@ function safeDirs(dir) {
  * plugins out differently. On Claude Code it is the one cache root, unchanged.
  * On a declared host it comes from that package's own `config/host.json` — the
  * package states where its siblings live rather than any code guessing.
+ *
+ * `self` is the caller's OFFER of the tree this module runs from (ADR-0023); a declared host
+ * never needs it, because such a package is its own install by construction.
  */
-export function resolveRoots(env = process.env, cwd = process.cwd()) {
+export function resolveRoots(env = process.env, cwd = process.cwd(), self = selfPluginRoot()) {
   const declared = readDeclaredHost();
   if (declared) {
     // Both the env-named config dir AND the default, not one OR the other.
@@ -191,7 +205,7 @@ export function resolveRoots(env = process.env, cwd = process.cwd()) {
   }
 
   const config = resolveConfigDir(env);
-  const sdlc = resolveSdlcRoot(config.value, env);
+  const sdlc = resolveSdlcRoot(config.value, env, self);
   const cacheRoot = join(config.value, "plugins", "cache");
   return {
     config_dir: config.value,
@@ -222,5 +236,65 @@ function readDeclaredHost() {
 
 /** Where the module itself lives — the development-checkout escape hatch. */
 export function ownPluginRoot() {
-  return dirname(dirname(dirname(new URL(import.meta.url).pathname)));
+  // fileURLToPath, not `new URL(...).pathname`: the latter hands back a percent-encoded path, so
+  // a checkout under `~/My Plugins/` resolves to a directory that does not exist. Harmless while
+  // this was an unused escape hatch; not harmless now that #173 made it load-bearing.
+  return dirname(dirname(dirname(fileURLToPath(import.meta.url))));
+}
+
+/**
+ * Does the consumer's registry list a copy of THIS plugin — in any state?
+ *
+ * The question `resolveSdlcRoot` asks of the registry is stricter (it wants an installPath that
+ * actually carries the registry file), and the two must not be confused: gating the self root
+ * on the strict answer let a PARTIAL install keep its entry for cross-plugin discovery while
+ * self-referential reads moved to whatever checkout happened to be executing. One run, two trees.
+ * A registry entry that cannot be read is a broken install — `/sdlc:doctor`'s problem, not a
+ * reason to substitute a directory the consumer never pointed at.
+ */
+export function registryListsSdlc(installs) {
+  for (const key of installs.keys()) if (/^sdlc@/.test(key)) return true;
+  return false;
+}
+
+/**
+ * The plugin tree this module is executing from, or `null` when that tree is a cache install.
+ *
+ * A module running out of `<config>/plugins/cache/...` IS the installed copy: registry-keyed
+ * discovery already has it with the right key, version and scope, and offering it a second time
+ * as a path load is how one plugin becomes two foundations of equal priority.
+ */
+export function selfPluginRoot(own = ownPluginRoot()) {
+  return own && !own.includes(CACHE_MARKER) ? own : null;
+}
+
+/**
+ * The roots of plugins loaded from a PATH rather than from the cache — normally just this one.
+ *
+ * `claude --plugin-dir plugins/sdlc`, `claude plugin eval plugins/sdlc` and every development
+ * checkout load the plugin from a directory that is in no cache and in no
+ * `installed_plugins.json`. Cross-plugin discovery keys off that registry, so under a path load
+ * the plugin cannot find its OWN manifest, `workflows/` or `runtime-dependencies.json` — the run
+ * halts at Step 0 with "Workflow 'default' not found. Available: (none)" while the recipe sits
+ * next to the code printing the halt (issue #164).
+ *
+ * The first signal is `CLAUDE_PLUGIN_ROOT`. A root inside `/plugins/cache/` is dropped: that copy
+ * IS registered, and ordinary installed discovery already covers it with the right key, version
+ * and scope.
+ *
+ * `CLAUDE_PLUGIN_ROOT` is not the ONLY signal, because a host can load a plugin without exporting
+ * it — `claude plugin eval` is exactly that host, and under it every should-fire case of
+ * `plugins/sdlc/evals/` halted at Step 0 (issue #173). So the caller may OFFER the tree this
+ * module is executing from, via `selfPluginRoot()`. The offer is the caller's to make and not a
+ * default here: the module volunteering its own location unconditionally would announce a
+ * checkout to any consumer that merely imported it — a test fixture, a lint pass — while having
+ * a registered install of its own. `resolveProfile` therefore offers it only when Step 0 already
+ * resolved this plugin's root from that same location (`sources.sdlc_plugin_root === "self"`),
+ * which keeps self-referential reads and cross-plugin discovery pointed at ONE tree.
+ */
+export function pathLoadedRoots(env = process.env, self = null) {
+  const candidate = env.CLAUDE_PLUGIN_ROOT || self;
+  if (!candidate || candidate.includes(CACHE_MARKER)) return [];
+  const root = resolve(candidate);
+  return existsSync(join(root, "manifest.yaml")) ? [root] : [];
 }

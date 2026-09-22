@@ -4,7 +4,7 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
-### ⚠️ BREAKING — this project's SDLC files moved to `.sdlc/` (ADR-0023)
+### ⚠️ BREAKING — this project's SDLC files moved to `.sdlc/` (ADR-0030)
 
 A project's own SDLC configuration lived in `<project>/.claude/`, which is Claude Code's directory.
 That was untidy while Claude Code was the only host and wrong once the pipeline ran on others. Four
@@ -29,6 +29,173 @@ read, so a cost cap that stopped capping cannot pass unnoticed.
 agent names, and never overwrites a file already at the destination. Or move them by hand:
 `mkdir -p .sdlc && git mv .claude/sdlc.local.yaml .sdlc/`.
 
+### Changed
+
+- **`superpowers` and `security-guidance` are no longer entries of this marketplace** ([#200],
+  ADR-0028). `marketplace.json` re-declared both as plugins of `agentic-sdlc` — `superpowers` with a
+  `url` source pointing at `obra/superpowers.git`, `security-guidance` with a `git-subdir` source
+  into `anthropics/claude-plugins-official`. Claude Code takes such an entry literally and clones
+  the foreign repository into **our** namespace, registering it as `<name>@agentic-sdlc`. The result
+  was a second install of software we never authored: `superpowers@agentic-sdlc` alongside whatever
+  the user installed themselves, and `security-guidance` present twice, once under each marketplace.
+  Both entries are removed; the marketplace now lists only the two plugins this repo owns.
+
+  Nothing about resolution changes, because it was never marketplace-dependent: `deps.mjs` keys
+  skills on the bare plugin name, so **any** install of superpowers satisfies the declared
+  dependency, and every mandate is a `superpowers:<skill>` id that is identical from any source.
+  `install_command` now names a recommended source rather than a fictional one — the id was
+  previously spelled `superpowers@superpowers` (both `runtime-dependencies.json` files) and
+  `superpowers@superpowers-marketplace` (`docs/INSTALLATION.md`), and **both were wrong**: obra's
+  marketplace is actually named `superpowers-dev`. All of it now reads
+  `superpowers@claude-plugins-official`.
+
+  **Migration — install first, uninstall second.** The other order leaves you with no superpowers at
+  all in between, silently downgrading every `MANDATORY — invoke superpowers:*` row to best-effort:
+
+  ```bash
+  /plugin marketplace add anthropics/claude-plugins-official
+  /plugin install superpowers@claude-plugins-official   # replacement FIRST
+  /sdlc:doctor                                          # confirm ✅ available
+  /plugin uninstall superpowers@agentic-sdlc            # only then remove ours
+  /plugin uninstall security-guidance@agentic-sdlc      # if still registered
+  ```
+
+  Nothing renames — `superpowers:brainstorming` is the same id from either marketplace — so there is
+  no config migration to run. The official entry is pinned to obra commit `b36e0829` (v6.3.0) while
+  ours tracked HEAD, so you may step back one minor version; every skill this marketplace declares
+  exists at that pin. For HEAD instead, add `obra/superpowers` and install
+  `superpowers@superpowers-dev`.
+
+  `/sdlc:doctor` reports a leftover `@agentic-sdlc` copy as a stale install with the ordered remedy,
+  and a new lint rule (`sdlc-lint marketplace-surface`) fails any future entry whose source is not a
+  local `./plugins/<name>`, so the defect cannot return.
+
+### Fixed
+
+- **`frameworks.disable` works again** ([#197], ADR-0027). `.claude/sdlc.local.yaml` documented
+  `frameworks.enable` / `frameworks.disable` as the way to override framework auto-detection. Both
+  were orchestrator prose and both were lost in `05ecdb6` (#121) when resolution moved into
+  `tools/resolve/`; no code read either key from `1.13.0` through `3.0.0`. `disable` is restored —
+  and applied in `resolveStack`, where attachment is decided, so a suppressed framework contributes
+  no phase injection, no convention skill and no `role_expertise` rules rather than being unpicked
+  afterwards. This is the supported answer to the case ADR-0026 made sharp: a project mid-migration
+  carrying both Ktor and Retrofit (or Dagger and Koin, or Room and DataStore-Proto) otherwise gets
+  both sets of guidance in every prompt, with removing the dependency as the only way out.
+
+  ```yaml
+  frameworks:
+    disable: [ktor]
+  ```
+
+  The run reports it: a `suppressed: ktor (frameworks.disable)` row in the active-profiles banner
+  and `stack.suppressed_profiles` in the plan and telemetry — a framework held back and one never
+  detected are no longer indistinguishable. A name no installed framework declares warns.
+
+- **`frameworks.enable` is not coming back**, and now says so. Under ADR-0026 a framework is a row
+  in its foundation's own manifest keyed to a dependency coordinate, so force-activating one whose
+  dependency is absent means injecting guidance for a library the project does not use. A stale
+  `enable:` block warns and names the remedy instead of doing nothing quietly.
+
+- **An unknown top-level key in `sdlc.local.yaml` is no longer silent** ([#197]). Every key nothing
+  reads now produces one warning per run, listing the supported set. A typo like `skip_phase:` used
+  to be ignored in complete silence — which is how a dead `frameworks:` block read as honoured for
+  seven releases.
+
+[#200]: https://github.com/Nuclominus/agentic-sdlc-pluguin/issues/200
+[#197]: https://github.com/Nuclominus/agentic-sdlc-pluguin/issues/197
+
+
+## [3.0.0] — 2026-09-21
+
+`android-foundation` `2.0.2` → `3.0.0`, `sdlc` `2.4.1` → `2.5.0`, marketplace `2.0.0` → `3.0.0`.
+
+### ⚠️ BREAKING CHANGES — `2.*` → `3.*`
+
+**The 7 additive Android framework plugins are merged into `android-foundation` (ADR-0026,
+supersedes ADR-0002).** `retrofit-plugin`, `ktor-plugin`, `room-plugin`, `datastore-proto-plugin`,
+`dagger-plugin`, `koin-plugin` and `workmanager-plugin` no longer exist as installed plugins. Each
+is now a row in `android-foundation/manifest.yaml`'s new `frameworks:` array, and the resolver
+synthesizes an ordinary `kind: framework` record from every row — in **both** loader modes (tree
+and installed), verified by a dual-mode equality test written before any file was moved. Conditional
+activation is unaffected: `retrofit` still activates only when Retrofit is detected, `ktor` only
+when Ktor is detected, and so on — no unconditional injection, no two providers of one aspect
+(network / persistence / di) activating together.
+
+**Stack ids are preserved; skill ids are renamed once, with no alias layer.** The `stack` ids
+(`retrofit`, `ktor`, `room`, `datastore-proto`, `dagger`, `koin`, `workmanager`) are unchanged, so
+`additive_profiles` telemetry stays comparable across the upgrade — no action needed there. The skill namespace breaks: `retrofit-plugin:retrofit-conventions` →
+`android-foundation:retrofit-conventions` (×7, including the divergent
+`dagger-plugin:hilt-conventions` → `android-foundation:hilt-conventions`).
+
+**Migrate with `/sdlc:doctor`.** It now also reads `plugins/sdlc/config/plugin-migrations.json` and
+reports every `.claude/sdlc.local.yaml` `extensions.skills[].skill` entry naming a retired
+`<plugin>:<skill>` id, alongside the existing agent-name migration — rewriting only after you
+approve. If `installed_plugins.json` still registers one of the 7 removed plugins, doctor prints an
+advisory to uninstall it (`/plugin uninstall <name>@agentic-sdlc`) rather than writing that
+harness-owned file itself.
+
+**The marketplace shrinks from 11 entries to 4** (`sdlc`, `android-foundation`, plus the two
+optional external dependencies `superpowers` and `security-guidance`) — 7 `*-plugin` entries removed
+from `.claude-plugin/marketplace.json`.
+
+**`sdlc:create-pluguin`'s "framework" branch now scaffolds an embedded row**, not a standalone
+plugin directory: it asks which foundation hosts the new framework and appends to that
+foundation's own `frameworks:` array. The "foundation" branch is unchanged.
+
+### Added
+
+- **An eval suite for the orchestrator's `--dry-run` flow** (`plugins/sdlc/evals/`, #177), now nine
+  cases. The `claude plugin eval` grant is load-bearing: no skill declares `allowed-tools`, so
+  without it `resolve/cli.mjs` never runs and every case scores 0 in *both* arms — which reads as a
+  suite that measures nothing rather than as a misconfiguration. The ninth case (#189) covers
+  prose naming a recipe nobody installed, asserting both that the warning fires and that nothing
+  else does — no agent dispatch, no phase banner, no workspace.
+- **Two structural lint verbs**, both wired into `sdlc-lint all` and therefore into CI:
+  `nested-manifest` fails on any `manifest.yaml` below a plugin root (the tree-vs-installed trap
+  ADR-0026 closes, made unrepeatable), and `stack-uniqueness` rejects a `stack` id declared twice —
+  across a foundation's own id, its embedded rows, and any standalone framework.
+- **A Duplication (DRY) section in the `android-review` skill** — an extraction threshold
+  (~60-70% shared structure), the four ways to parameterise the differing part, a worked Kotlin
+  example, and a checklist row.
+- **ADR-0025 — a branch switch is a file operation** (#183), mirroring the agent-memory lesson into
+  the vault per ADR-0013.
+
+### Fixed
+
+- **A path-loaded plugin now discovers its own manifest, recipes and dependencies** (#166, #174,
+  closes #164 / #173). Cross-plugin discovery keys off `installed_plugins.json`, so a plugin loaded
+  from a *path* — `claude --plugin-dir`, `claude plugin eval`, any development checkout — was
+  invisible to itself: every run halted at Step 0 with `Workflow 'default' not found. Available:
+  (none)` while `default.yaml` sat next to the code printing the halt. A populated cache masks this
+  completely, which is why it survived normal use.
+- **A recipe named in prose resolves that recipe** (#178, closes #176). "Would the **docs-only**
+  workflow fit under its cost cap?" resolved `default` — 6 phases, `~$4.38`, cap `$16.00` — and
+  answered a cap question about a pipeline nobody asked about. Both sets of figures are real, which
+  is exactly what made the substitution invisible.
+- **Naming a recipe that is not installed now warns and names the substitution** (#181, closes
+  #180, completing ADR-0024). `--workflow=mobile-release` halts with exit 1; the same name in prose
+  silently resolved `default` under a different cap and said nothing.
+- **The orchestrator answers preview requests** (#167, closes #165). Its trigger surface named only
+  "run the pipeline" — nothing covered *preview*, *dry run*, *cost estimate* or *what would it do*,
+  and `Do NOT use for: read-only questions` actively pushed away from the read-only half of the
+  command's own documented surface.
+- **`--resume --dry-run` previews the cost to finish, not to redo** (#171, closes #168). It priced
+  every phase as if about to be dispatched, printed no `⏩` rows, and returned a cap verdict for
+  work already done — `EXCEEDS` against a remaining cost of nearly zero.
+
+### Changed
+
+- **A change note's Summary is enrichable too** (#186). `.claude/rules/second-brain.md` said to
+  enrich only the prose *below* the auto Summary, while the vault had never worked that way. The
+  rule and the practice it governed contradicted each other; this resolves it in favour of the
+  practice — only the frontmatter and `changes/_moc-changes.md` stay machine-owned.
+- **A dry run must not re-price the plan in the model's own words.** Echoing `prints[]` discharges
+  the obligation; the sentence *after* the preview is where it was lost. Measured in
+  `evals/02-nl-preview`: a run echoed the preview verbatim, then closed with a cost figure the
+  resolver never produced. A second, more precise-sounding number contradicts a machine value and
+  is the one a reader quotes back.
+- **README and `docs/` brought back in line** (#162). Five files still described the pre-ADR-0021
+  topology — in the places a reader lands first.
 
 ## [2.0.0] — 2026-09-08
 

@@ -4,7 +4,7 @@ status: in-progress
 
 # J1 — Multi-host portability (Antigravity CLI, Codex CLI)
 
-> Track J. Decision: [[decisions/ADR-0022-one-ssot-emitted-host-packages]]. See
+> Track J. Decision: [[decisions/ADR-0029-one-ssot-emitted-host-packages]]. See
 > [[planning/_moc-planning]] and [[planning/roadmap]].
 
 Ship the pipeline on two more agentic CLIs from one authoring surface. `plugins/**` stays the SSOT;
@@ -140,11 +140,11 @@ redirects `$HOME`, and each new regression test was confirmed to fail with its f
 marketplace manifest makes a nine-plugin tree installable in one line and Antigravity has no
 analogue, so what replaces it is prose — which, shipped beside a generated tree, has to be generated
 too or the first descriptor change makes it quietly wrong while `emit --check` stays green. It
-carries the drops table, because ADR-0022 §4's "state the loss, do not substitute for it" is not
+carries the drops table, because ADR-0029 §4's "state the loss, do not substitute for it" is not
 satisfied by a reason that lives only in a build log.
 
 **One declared loss:** `android-foundation`'s `SessionStart` advisory about the optional `android`
-CLI. This host has no `SessionStart`, and ADR-0022 §4 already settled what to do about a missing
+CLI. This host has no `SessionStart`, and ADR-0029 §4 already settled what to do about a missing
 event — state the gap, do not build a substitute, which is the compat shim the ADR exists to avoid.
 Building one on `PreInvocation` would have been exactly that. The advisory is not lost anyway:
 `/sdlc-doctor` already probes `android --version` on every host, so the check moves from automatic to
@@ -180,7 +180,7 @@ shape: a Claude-only mechanism presented as active on a host that has none of it
    Yet the preview printed "Model tier overrides loaded" and `business-analyst (opus)` where
    `gemini-3.1-pro-high` would run. Neither applying the override (impossible) nor dropping it
    silently (hides a file the user wrote) is right, so the host declaration now carries `model_arg`
-   and the resolver reports the file inert on every run. ADR-0022 §4 predicted this gap and said to
+   and the resolver reports the file inert on every run. ADR-0029 §4 predicted this gap and said to
    declare it; §4's wording has been corrected, because it promised doctor would do the reporting and
    what shipped reports it at the moment it would otherwise mislead.
 
@@ -217,7 +217,7 @@ shape: a Claude-only mechanism presented as active on a host that has none of it
    called a conflict.
 
 **Then changed, on the operator's call:** those files moved to `<project>/.sdlc/`
-([[decisions/ADR-0023-the-project-sdlc-directory-is-ours]]) — one host-neutral directory, no
+([[decisions/ADR-0030-the-project-sdlc-directory-is-ours]]) — one host-neutral directory, no
 fallback read, migrated once by `/sdlc-doctor`, with the old location noticed and reported on every
 run so a cost cap left behind cannot silently stop capping. The reasoning below is why it is ONE
 directory rather than one per host, which was the original proposal:
@@ -225,9 +225,9 @@ directory rather than one per host, which was the original proposal:
 **Why not per-host:** `.claude/sdlc.local.yaml`, `.claude/model.local.json` and
 `.claude/sdlc-workflows/`. Those are the SDLC's own files parked in the host's directory, not the
 host's files, and their content is host-neutral — extensions, skill mappings, agent bindings, tier
-tags (ADR-0022 §6 keeps tier tags untranslated across hosts). A per-host copy would put the same fact
+tags (ADR-0029 §6 keeps tier tags untranslated across hosts). A per-host copy would put the same fact
 in two places, which is the drift shape the registry split was corrected to avoid. Where they should
-live was a rename with a doctor-migration story, and it is now ADR-0023. Note the pair with the
+live was a rename with a doctor-migration story, and it is now ADR-0030. Note the pair with the
 model-registry split, which went the other way: **split what differs per host, share what does
 not.** Prices differ per provider and were split; a cost cap does not and is shared.
 

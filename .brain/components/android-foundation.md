@@ -18,20 +18,31 @@ mandatory skills), nine extracted skills (`android-requirements`, `android-revie
 `android-security-masvs`, `android-testing`, `android-e2e`, `android-docs-vault`,
 `android-debugging`, `android-build-release`, `android-ci`), the four convention skills for Compose
 UI, architecture, data and Navigation, the `rules/` set, and the PostToolUse hooks. Carries pinned
-house rules (Coil3, Kermit, KSP, `@Serializable` routes, DataStore, Play Billing); detect-don't-impose
-libraries (Retrofit, Room, Dagger/Hilt) attach as additive framework plugins. In-pipeline checks:
-detekt + unit tests + compile-check (builds CI-deferred).
+house rules (Coil3, Kermit, KSP, `@Serializable` routes, DataStore, Play Billing). In-pipeline
+checks: detekt + unit tests + compile-check (builds CI-deferred).
+
+Since [[decisions/ADR-0026-embed-framework-providers-in-the-foundation]] (2026-09-20) this plugin
+also embeds all 7 additive Android frameworks directly, via a `frameworks:` array in its own
+`manifest.yaml` — detect-don't-impose libraries (Retrofit, Ktor, Room, Proto DataStore, Dagger/Hilt,
+Koin, WorkManager) are no longer separate installed plugins. Each row carries its own
+`enriches_aspect` + `dependency` for conditional activation (only the detected provider per
+contested aspect — network: retrofit/ktor, persistence: room/datastore-proto, di: dagger/koin —
+activates), and its convention skill now lives under this plugin's own `skills/` (namespace
+`android-foundation:<name>-conventions`) with its ProGuard snippet under `rules/snippets/`.
 
 Rule files here are read by agents that live in `sdlc`, so they never name the plugin-root variable —
 the resolver emits each `role_expertise.<role>.rules` path **absolute** instead.
 
 ## Key files
-- `plugins/android-foundation/manifest.yaml` (`role_expertise` — the whole contribution to a run)
+- `plugins/android-foundation/manifest.yaml` (`role_expertise` — the whole contribution to a run;
+  `frameworks:` — the 7 embedded framework rows, ADR-0026)
 - `plugins/android-foundation/.claude-plugin/plugin.json`
-- `plugins/android-foundation/skills/` (4 convention skills + the 9 extracted role skills)
+- `plugins/android-foundation/skills/` (4 convention skills + 9 extracted role skills + 7 embedded
+  framework-conventions skills)
 - `plugins/android-foundation/rules/` (`documentation` carries the per-role vault reading map;
   `workflow` carries what Android adds to each pipeline step; `skills` is now only the optional
-  `android` CLI capability bindings)
+  `android` CLI capability bindings; `snippets/` also carries the 7 relocated ProGuard keep-rule
+  files)
 
 ## Decisions
 - [[decisions/ADR-0001-stack-provider-pattern]]
@@ -41,6 +52,9 @@ the resolver emits each `role_expertise.<role>.rules` path **absolute** instead.
 - [[decisions/ADR-0020-logging-lives-in-a-development-artifact]] — diagnostics separate at compile
   time (`Development*` decorator in the debug source set) rather than being deleted before Done;
   gated at publish time by the `git-guard` PreToolUse hook.
+- [[decisions/ADR-0026-embed-framework-providers-in-the-foundation]] — the 7 additive framework
+  plugins (see e.g. [[components/retrofit-plugin]]) merged in; supersedes
+  [[decisions/ADR-0002-framework-provider-pattern]].
 
 ## Change history
 _Backlinks from `changes/` accumulate here._
