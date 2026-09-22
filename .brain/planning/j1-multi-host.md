@@ -44,6 +44,29 @@ field (openai/codex#28491), so agent TOMLs ship as plain files plus an install s
 
 ## State
 
+**Rebased on `develop` as of 2026-09-22** (merge commit `08ab5aa`, 93 develop commits, ADR-0022..0028).
+The branch was briefly a candidate for deletion in favour of a fresh start; the analysis said
+otherwise, because most of its substance (`lib/emit/*`, `hosts/antigravity.json`, the Antigravity
+run below) never conflicted at all. What did conflict was one seam and one deletion:
+
+- **The resolver-identity seam.** develop's ADR-0022/0023 (a path-loaded plugin is its own install;
+  the self root answers when the host exports nothing, #173) and this branch's declared-host
+  self-location had rewritten the same functions in `roots.mjs`/`plan.mjs`. Merged as one chain: a
+  `config/host.json` package answers first; below it develop's order in full — `CLAUDE_PLUGIN_ROOT`
+  → registry → self root → newest cache — keyed on `config/models/claude.yaml`. A declared host takes
+  **no** path load from `CLAUDE_PLUGIN_ROOT`: the authored checkout beside a `dist/` package is a
+  foreign tree there, and reading both is the "Workflow 'default' is ambiguous" halt this note
+  already records.
+- **ADR-0026 deleted the seven framework plugins** this branch still edited; those edits were only
+  the `.sdlc/` path rename and went with them. `dist/antigravity` was re-emitted (231 files) and now
+  carries the embedded-framework skills, `plugin-migrations.json` and — probably wrongly, see
+  follow-ups — `evals/`.
+- **Numbering.** This branch's ADR-0022/0023 collided with develop's and are now
+  [[decisions/ADR-0029-one-ssot-emitted-host-packages]] and
+  [[decisions/ADR-0030-the-project-sdlc-directory-is-ours]].
+- `tools/migrate` runs the `.claude/` → `.sdlc/` relocation before develop's agent-name and skill-id
+  renames, as ADR-0030 §4 requires. `sdlc-lint all` clean, 835/835 tests, `brain check` clean.
+
 **Phase 1 is met.** A full vanilla pipeline ran end to end on `agy` 1.1.27 against a plain-Node
 fixture (2026-09-09, slug `add-a-healthz-endpoint-that-returns-200`, 539 s sealed wall clock):
 
