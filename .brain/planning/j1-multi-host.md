@@ -123,6 +123,24 @@ other methods, 18 tests written by the qa phase, all passing.
   and the target file are both `CLAUDE.md`. The host reads `AGENTS.md`, so seeding currently writes a
   file nothing loads. Fixing it needs the overlay mechanism extended from `skills/*/SKILL.md` to
   `commands/*.md`, which is why it is recorded here rather than patched in passing.
+  **Partially addressed by #204:** `skills/init/SKILL.md` (the file agents on Antigravity actually
+  read) now names both files in prose — "`CLAUDE.md` on Claude Code, `AGENTS.md` on hosts that use
+  it" — so seeding no longer targets a file nothing loads. The flag's *name* is still
+  `--seed-claude-md` everywhere, and Antigravity has no slash-command argument mechanism at all to
+  pass it through, so on that host the flag can only be inferred from natural language. Renaming it
+  host-neutrally is still open.
+- **#204 — three more commands became reachable on Antigravity: `doctor`, `init`, `list-stacks`.**
+  The premise this track's emitter comment stated — "the host does the command→skill conversion
+  itself" — was measured false against the real installed package on agy 1.2.8: `agy -p "/skills"`
+  showed only the three hand-authored skills (`aar`, `create-pluguin`, `pipeline-orchestrator`)
+  were ever invocable; the other 11 commands were copied into the install but reachable by nothing.
+  A live run on `parlor-android` hit this directly — the resolver's legacy-location `WARN:` told an
+  Antigravity user to run `/sdlc-doctor`, uninvokable on that host. Fixed by hand-authoring three
+  more `skills/<name>/SKILL.md` files (same shape as `start`/`aar`/`create-pluguin`) and thinning
+  their Claude-only commands to delegators. **Still unreachable on Antigravity:** `batch`,
+  `extension`, `model-config`, `workflow-config`, `security-init`, `report` — the next slice of this
+  same gap. `security-init` is a separate, pre-existing issue: it targets a plugin,
+  `security-guidance`, that this marketplace does not ship on any host.
 - **The "12,000 characters per rules file" cap** this track has been quoting is **unverified** — it
   came from documentation and is not findable in the binary. Nothing depends on it (our `rules/` ship
   as plain files an agent reads by absolute path), but it should not be repeated as measured.
