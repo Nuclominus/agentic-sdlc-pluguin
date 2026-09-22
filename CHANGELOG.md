@@ -4,6 +4,32 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+## [4.0.0] — 2026-09-22
+
+`sdlc` `2.5.0` → `3.0.0`, `android-foundation` `3.0.0` → `3.0.1`, marketplace `3.0.0` → `4.0.0`.
+
+### Added
+
+- **The pipeline now ships on hosts other than Claude Code, starting with Antigravity** ([#202],
+  Track J, ADR-0029). `plugins/**` stays the single authoring source of truth; a new
+  `sdlc-lint emit` verb renders a host-specific package to `dist/<host>/`, and `emit --check`
+  (wired into `sdlc-lint all`, so CI) gates the committed output against drift, orphaned files and
+  undeclared drops. Nothing translates at run time — the emitted package is a repackaging of the
+  same authored prose and code, not a second implementation to keep in sync.
+
+  `dist/antigravity/` is the first such package, built and measured against a real run: a full
+  pipeline executed and sealed on Google Antigravity's `agy` CLI. One finding shaped the package
+  itself — `agy`'s own hook runtime silently rejects this plugin's `hooks.json` even though
+  `agy plugin validate` accepts it, so the emitted package ships no hooks at all rather than ones
+  that look present and never fire, with the reasons recorded in the package's own `INSTALL.md`.
+
+- **`doctor`, `init` and `list-stacks` are reachable on Antigravity** ([#204]). Antigravity's
+  `agy plugin install` reports converting commands to skills, but measured against the real
+  installed package (`agy -p "/skills"`), that conversion never actually happens — only
+  hand-authored `skills/*/SKILL.md` files are ever invocable. These three commands, previously
+  Claude-Code-only, now exist as real skills there too. `batch`, `extension`, `model-config`,
+  `workflow-config`, `security-init` and `report` remain Claude-Code-only for now.
+
 ### ⚠️ BREAKING — this project's SDLC files moved to `.sdlc/` (ADR-0030)
 
 A project's own SDLC configuration lived in `<project>/.claude/`, which is Claude Code's directory.
@@ -103,6 +129,8 @@ agent names, and never overwrites a file already at the destination. Or move the
 
 [#200]: https://github.com/Nuclominus/agentic-sdlc-pluguin/issues/200
 [#197]: https://github.com/Nuclominus/agentic-sdlc-pluguin/issues/197
+[#202]: https://github.com/Nuclominus/agentic-sdlc-pluguin/issues/202
+[#204]: https://github.com/Nuclominus/agentic-sdlc-pluguin/issues/204
 
 
 ## [3.0.0] — 2026-09-21
