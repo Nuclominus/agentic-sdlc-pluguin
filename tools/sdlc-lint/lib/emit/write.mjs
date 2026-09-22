@@ -7,7 +7,7 @@
 //
 // Source-tree only — never runs at pipeline runtime (like lib/plugin-paths.mjs).
 
-import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, statSync, chmodSync } from "node:fs";
 import { dirname, join, posix } from "node:path";
 import { DIST_ROOT } from "./index.mjs";
 import { buildManifest, MANIFEST_NAME } from "./check.mjs";
@@ -35,7 +35,15 @@ export function writeEmission(root, host, plan) {
   for (const [rel, entry] of plan.outputs) {
     const abs = join(root, rel);
     mkdirSync(dirname(abs), { recursive: true });
-    writeFileSync(abs, entry.kind === "copy" ? readFileSync(join(root, entry.from)) : entry.content);
+    if (entry.kind === "copy") {
+      const from = join(root, entry.from);
+      writeFileSync(abs, readFileSync(from));
+      // A hook script is committed 100755 at its source; a plain write lands it 100644.
+      const mode = statSync(from).mode & 0o777;
+      if (mode & 0o111) chmodSync(abs, mode);
+    } else {
+      writeFileSync(abs, entry.content);
+    }
   }
 
   const manifest = buildManifest(root, host, plan);

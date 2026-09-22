@@ -69,6 +69,10 @@
     "subagent_cwd_caveat": "Subagents also write into ${GEMINI_CONFIG_DIR:-$HOME/.gemini}/antigravity-cli/scratch/ alongside the parent's cwd — both probe files appeared in BOTH places on the spike. Deliverable paths handed to a phase must therefore be ABSOLUTE, or the orchestrator's 3d Glob verification can look in one directory while the agent wrote to the other."
   },
 
+  "hook_env": {
+    "_comment": "The variable a hook COMMAND may interpolate for the plugin's own root. The authored hooks.json says `bash \"${CLAUDE_PLUGIN_ROOT}/hooks/seal-run.sh\"`. Whether this host sets that variable — or any — in a hook's environment is NOT measured (J1 'still open'), so it is null: the emitter keeps every such hook as authored (a repackager transforms nothing on a guess, ADR-0029 §3) and WARNS, on every emit and check and in INSTALL.md, that if the variable is unset the command expands to `bash \"/hooks/seal-run.sh\"` and fails silently. Measure it, set the name here (`CLAUDE_PLUGIN_ROOT` itself if the host aliases it, as Codex documents), re-emit, and the warning goes.",
+    "plugin_root_var": null
+  },
   "drop_hooks": [
     {
       "script": "enforce-agent-model.sh",

@@ -50,3 +50,14 @@ Every omission below is deliberate and has a reason. Nothing is silently missing
 | sdlc | `config/models/claude.yaml` | model registry for host claude; this package is antigravity |
 | sdlc | `hooks/hooks.json#PreToolUse:enforce-agent-model.sh` | Enforces the tier by rewriting the dispatch through the PreToolUse `updatedInput` envelope, which this host does not document, and matches on the tool name `Agent`, which this host does not have. Superseded at emit time: the tier is baked into each agent's `model:` (see models.map), which is enforcement by construction rather than by hook. |
 | sdlc | `hooks/hooks.json#PreToolUse (empty)` | every handler on PreToolUse was dropped, so the event registration goes with them |
+
+## What this package carries on an unmeasured assumption
+
+Each line names a host fact nobody has measured yet. The artifact ships as authored; if the
+assumption is wrong it fails quietly, which is why it is written down here.
+
+- android-foundation/hooks/hooks.json: Stop:format-on-stop.sh interpolates ${CLAUDE_PLUGIN_ROOT}, and whether host antigravity sets that variable for a hook command is unmeasured (hook_env.plugin_root_var is null) — kept as authored; if it is unset there, the command expands to `bash "/hooks/format-on-stop.sh"` and fails silently on every Stop
+- android-foundation/hooks/hooks.json: PreToolUse:guard-paths.sh interpolates ${CLAUDE_PLUGIN_ROOT}, and whether host antigravity sets that variable for a hook command is unmeasured (hook_env.plugin_root_var is null) — kept as authored; if it is unset there, the command expands to `bash "/hooks/guard-paths.sh"` and fails silently on every PreToolUse
+- android-foundation/hooks/hooks.json: PreToolUse:git-guard.sh interpolates ${CLAUDE_PLUGIN_ROOT}, and whether host antigravity sets that variable for a hook command is unmeasured (hook_env.plugin_root_var is null) — kept as authored; if it is unset there, the command expands to `bash "/hooks/git-guard.sh"` and fails silently on every PreToolUse
+- android-foundation/hooks/hooks.json: PostToolUse:kotlin-guard.sh interpolates ${CLAUDE_PLUGIN_ROOT}, and whether host antigravity sets that variable for a hook command is unmeasured (hook_env.plugin_root_var is null) — kept as authored; if it is unset there, the command expands to `bash "/hooks/kotlin-guard.sh"` and fails silently on every PostToolUse
+- sdlc/hooks/hooks.json: Stop:seal-run.sh interpolates ${CLAUDE_PLUGIN_ROOT}, and whether host antigravity sets that variable for a hook command is unmeasured (hook_env.plugin_root_var is null) — kept as authored; if it is unset there, the command expands to `bash "/hooks/seal-run.sh"` and fails silently on every Stop

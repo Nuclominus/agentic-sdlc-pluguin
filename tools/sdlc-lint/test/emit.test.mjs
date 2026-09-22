@@ -2,10 +2,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, resolve, join } from "node:path";
-import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync, cpSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
-import { resolveHost, hasTranscriptCost } from "../../../plugins/sdlc/tools/resolve/host.mjs";
+import { resolveHost, hasTranscriptCost, readHostDeclaration } from "../../../plugins/sdlc/tools/resolve/host.mjs";
 import { loadHost, listHosts, emitAll, emitPlugin, rewriteAgent, rewriteHooks } from "../lib/emit/index.mjs";
 import { resolveModel, modelPairs, TIERS } from "../lib/emit/models.mjs";
 import { checkHost } from "../lib/emit/check.mjs";
@@ -779,4 +779,84 @@ test("with no env override the config dir reports the default, not the variable 
   } finally {
     for (const d of [home, project]) rmSync(d, { recursive: true, force: true });
   }
+});
+
+// ------------------------------------------- review of #202: the pre-existing findings
+
+test("a hook command that needs the plugin root is kept and warned until the host names the variable", () => {
+  // The authored Stop hook says `bash "${CLAUDE_PLUGIN_ROOT}/hooks/seal-run.sh"`. Whether agy
+  // sets that variable for a hook command is unmeasured. A repackager does not transform on a
+  // guess (ADR-0029 §3), so the hook ships as authored — and the gap is stated, because if the
+  // variable is unset the command expands to `bash "/hooks/seal-run.sh"` and nothing gates a
+  // hook failure.
+  const src = JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: "command", command: 'bash "${CLAUDE_PLUGIN_ROOT}/hooks/seal-run.sh"' }] }] } });
+  const r = rewriteHooks(src, ANTIGRAVITY);
+  assert.ok(r.ok);
+  assert.equal(r.json.hooks.Stop[0].hooks[0].command, 'bash "${CLAUDE_PLUGIN_ROOT}/hooks/seal-run.sh"', "kept as authored");
+  assert.deepEqual(r.dropped, []);
+  assert.equal(r.warnings.length, 1);
+  assert.match(r.warnings[0], /Stop:seal-run\.sh .*plugin_root_var is null/);
+
+  const measured = { ...ANTIGRAVITY, hook_env: { plugin_root_var: "GEMINI_PLUGIN_ROOT" } };
+  const m = rewriteHooks(src, measured);
+  assert.equal(m.json.hooks.Stop[0].hooks[0].command, 'bash "${GEMINI_PLUGIN_ROOT}/hooks/seal-run.sh"');
+  assert.deepEqual(m.warnings, []);
+
+  const all = emitAll(REPO, ANTIGRAVITY);
+  assert.ok(all.warnings.some((w) => /^sdlc\/hooks\/hooks\.json: Stop:seal-run\.sh/.test(w)), "the plan carries it");
+  const install = all.outputs.get("dist/antigravity/INSTALL.md").content;
+  assert.match(install, /unmeasured assumption/);
+  assert.match(install, /seal-run\.sh/);
+});
+
+test("rewriting an agent keeps the blank lines around the keys and leaves the body alone", () => {
+  // `\s*$` in multiline mode ran across the line break and ate the blank line after `model:`;
+  // and a `model:` at the start of a body line is prose, not the field.
+  const mid = "---\nname: dev\ndescription: d\nmodel: sonnet\neffort: medium\n\ntools: [Read]\n---\n\nmodel: is a word in the body\n";
+  assert.equal(rewriteAgent(mid, ANTIGRAVITY).text,
+    "---\nname: dev\ndescription: d\nmodel: gemini-3.8-flash-medium\n\ntools: [Read]\n---\n\nmodel: is a word in the body\n");
+  const last = "---\nname: dev\ndescription: d\ntools: [Read]\nmodel: sonnet\neffort: medium\n---\nbody\n";
+  assert.equal(rewriteAgent(last, ANTIGRAVITY).text,
+    "---\nname: dev\ndescription: d\ntools: [Read]\nmodel: gemini-3.8-flash-medium\n---\nbody\n",
+    "an effort: that closes the frontmatter leaves no blank line behind");
+});
+
+test("a bold digit inside a step's prose does not end the section", () => {
+  const doc = ["**3c. Spawn**", "keep **10,676 characters** here", "**3 attempts** are the cap", "**3d. Verify**"].join("\n");
+  assert.deepEqual(sectionRange(doc, "3c"), { start: 0, end: 3 });
+});
+
+test("a malformed host.json is one answer to every reader", () => {
+  // Three readers used to disagree: exists -> declared host; parse-and-swallow -> Claude Code;
+  // parse-and-report -> unknown. Same file, same run, three hosts.
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-host-"));
+  try {
+    mkdirSync(join(dir, "config"), { recursive: true });
+    writeFileSync(join(dir, "config", "host.json"), '{"host": "antigravity",}\n');
+    const d = readHostDeclaration(dir);
+    assert.equal(d.declared, true);
+    assert.ok(d.error, "a file that exists but cannot be read is declared, with an error");
+    assert.equal(d.doc, null);
+    assert.equal(resolveHost(dir).host, "unknown");
+    assert.equal(hasTranscriptCost(dir), false);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("an emitted package with an unreadable host.json halts instead of running as Claude Code", () => {
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-badhost-"));
+  try {
+    cpSync(join(REPO, "dist", "antigravity", "plugins", "sdlc"), join(dir, "sdlc"), { recursive: true });
+    writeFileSync(join(dir, "sdlc", "config", "host.json"), '{"host": "antigravity",}\n');
+    const project = join(dir, "project");
+    mkdirSync(project);
+    writeFileSync(join(project, "package.json"), '{"name":"x","version":"1.0.0"}\n');
+    let out;
+    try {
+      out = execFileSync(process.execPath, [join(dir, "sdlc", "tools", "resolve", "cli.mjs"), "plan", "--json", "add a thing"], { cwd: project, encoding: "utf8", env: { ...process.env, CLAUDE_PLUGIN_ROOT: "" } });
+    } catch (e) { out = e.stdout; }
+    const r = JSON.parse(out);
+    assert.equal(r.ok, false);
+    assert.match(r.halt ?? "", /host that cannot be read/);
+    assert.equal(r.plan, null);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

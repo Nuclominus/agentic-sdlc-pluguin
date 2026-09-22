@@ -336,6 +336,7 @@ function printEmit(results, { write } = { write: false }) {
     for (const r of results) {
       if (write) {
         console.log(`emit: ${r.host} — wrote ${r.written} file(s) to ${r.dist}${r.drops ? `, ${r.drops} declared drop(s)` : ""}`);
+        for (const w of r.warnings) console.error(`  ${r.host}: ${w}`);
         continue;
       }
       for (const e of r.errors) console.error(`✗ ${r.host}: ${e}`);
@@ -401,7 +402,7 @@ switch (cmd) {
           const plan = emitAll(root, host);
           if (plan.errors.length) return { ok: false, tool_error: true, host: h, errors: plan.errors, warnings: [] };
           const w = writeEmission(root, host, plan);
-          return { ok: true, host: h, errors: [], warnings: [], written: w.written, dist: w.dist, drops: plan.drops.length };
+          return { ok: true, host: h, errors: [], warnings: plan.warnings ?? [], written: w.written, dist: w.dist, drops: plan.drops.length };
         }), { write: true });
       }
     } catch (e) {

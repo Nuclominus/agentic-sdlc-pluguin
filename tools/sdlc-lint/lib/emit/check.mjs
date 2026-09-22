@@ -23,7 +23,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join, posix } from "node:path";
 import { globSync } from "tinyglobby";
-import { DIST_ROOT, emitAll } from "./index.mjs";
+import { DIST_ROOT, emitAll, EMIT_IGNORE } from "./index.mjs";
 
 /** Bumped whenever a transform changes shape, so a stale manifest cannot pass. */
 export const EMITTER_VERSION = 1;
@@ -52,8 +52,9 @@ function renderEntry(root, entry) {
  */
 export function checkHost(root, host, opts = {}) {
   const errors = [];
-  const warnings = [];
   const plan = emitAll(root, host, opts);
+  // An unmeasured assumption the package ships on is reported on every check, not only on emit.
+  const warnings = [...(plan.warnings ?? [])];
 
   if (plan.errors.length) {
     // A render error is a tool error, not drift: we cannot say anything about
@@ -101,7 +102,9 @@ export function checkHost(root, host, opts = {}) {
 
   // Axis 2 — orphans.
   const produced = new Set(plan.outputs.keys());
-  const onDisk = globSync("**/*", { cwd: absDist, dot: true, onlyFiles: true })
+  // Same ignore list as the emitter: a Finder-created .DS_Store under dist/ is gitignored and
+  // invisible to git, and re-emitting cannot remove what Finder recreates.
+  const onDisk = globSync("**/*", { cwd: absDist, dot: true, onlyFiles: true, ignore: EMIT_IGNORE })
     .map((p) => posix.join(hostDist, p))
     .filter((p) => posix.basename(p) !== MANIFEST_NAME);
   const orphans = onDisk.filter((p) => !produced.has(p)).sort();

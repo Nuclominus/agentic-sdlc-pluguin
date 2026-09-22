@@ -15,8 +15,18 @@
 //
 // Source-tree only — never runs at pipeline runtime (like lib/plugin-paths.mjs).
 
-/** Tier tags the pipeline actually dispatches. Mirror of models.json `pipeline_tiers`. */
-export const TIERS = ["opus", "sonnet", "haiku", "fable"];
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { parseYaml } from "../../../../plugins/sdlc/tools/resolve/yaml.mjs";
+
+/**
+ * Tier tags the pipeline actually dispatches — read from the Claude registry, which is the
+ * only place they are declared. A hand-kept mirror here was one more copy of one list; a tier
+ * added to the registry would have left the emitter rejecting every agent that declared it.
+ */
+export const TIERS = parseYaml(readFileSync(
+  fileURLToPath(new URL("../../../../plugins/sdlc/config/models/claude.yaml", import.meta.url)), "utf8",
+)).pipeline_tiers;
 
 /** Reasoning budgets an agent may declare. */
 export const EFFORTS = ["high", "medium", "low"];

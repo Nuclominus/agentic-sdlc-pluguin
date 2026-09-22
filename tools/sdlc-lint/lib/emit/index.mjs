@@ -28,6 +28,9 @@ import { overlaysFor, applyOverlays } from "./overlay.mjs";
 /** Where emitted packages land, relative to the repo root. */
 export const DIST_ROOT = "dist";
 
+/** What the emitter never reads from a source tree — and what `check` must therefore never call an orphan. */
+export const EMIT_IGNORE = ["**/.DS_Store"];
+
 /**
  * Load a host descriptor.
  * @param {string} root  repo root
@@ -63,22 +66,30 @@ export function rewriteAgent(text, host) {
   const fm = frontmatter(text);
   if (fm === null) return { ok: false, text: null, changes: [], error: "no YAML frontmatter" };
 
-  const tier = fm.match(/^model:\s*(\S+)\s*$/m)?.[1] ?? null;
-  const effort = fm.match(/^effort:\s*(\S+)\s*$/m)?.[1] ?? null;
+  const tier = fm.match(/^model:[ \t]*(\S+)[ \t]*$/m)?.[1] ?? null;
+  const effort = fm.match(/^effort:[ \t]*(\S+)[ \t]*$/m)?.[1] ?? null;
   const r = resolveModel(tier, effort, host);
   if (!r.ok) return { ok: false, text: null, changes: [], error: r.error };
 
+  // Only the frontmatter is rewritten, and only within a line: `\s*` before a
+  // multiline `$` runs across the line break and swallows a blank line after the
+  // key, and a `model:` at the start of a BODY line is prose, not a field.
+  const head = text.slice(0, 4 + fm.length);   // "---\n" + fm; the closing "\n---" begins the tail
+  const tail = text.slice(head.length);
+
   const changes = [];
-  let out = text.replace(/^model:\s*\S+\s*$/m, `model: ${r.model}`);
+  let out = head.replace(/^model:[ \t]*\S+[ \t]*$/m, `model: ${r.model}`);
   changes.push(`model: ${tier} -> ${r.model}`);
 
   if (r.effort === null && effort !== null) {
     // The effort is inside the model id now. Drop the key rather than leave a
-    // second, independently-editable spelling of the same decision.
-    out = out.replace(/^effort:\s*\S+\s*\n/m, "");
+    // second, independently-editable spelling of the same decision. The line
+    // goes with the newline BEFORE it, so an `effort:` that closes the
+    // frontmatter leaves no blank line behind.
+    out = out.replace(/\neffort:[ \t]*\S+[ \t]*$/m, "");
     changes.push(`effort: ${effort} -> folded into model id`);
   }
-  return { ok: true, text: out, changes, error: null };
+  return { ok: true, text: out + tail, changes, error: null };
 }
 
 /**
@@ -99,6 +110,16 @@ export function rewriteHooks(text, host) {
 
   const supported = new Set(host?.hook_events?.supported ?? []);
   const dropScripts = host?.drop_hooks ?? [];
+  // The variable a hook command may interpolate for the plugin's own root. The
+  // authored commands say `${CLAUDE_PLUGIN_ROOT}`; a host that sets another name
+  // gets it rewritten. A host on which this has not been MEASURED keeps the
+  // command as authored — a repackager transforms nothing on a guess (ADR-0029
+  // §3) — and the gap is WARNED, in the emit report and in INSTALL.md, until
+  // someone measures it: if the variable is unset there, the command expands to
+  // `bash "/hooks/x.sh"` and fails on every event with nothing gating it.
+  const rootVar = host?.hook_env?.plugin_root_var ?? null;
+  const ROOT_REF = "${CLAUDE_PLUGIN_ROOT}";
+  const warnings = [];
   const events = parsed?.hooks ?? {};
   const kept = {};
   const dropped = [];
@@ -133,12 +154,23 @@ export function rewriteHooks(text, host) {
         if (hit) dropped.push({ what: `${event}:${hit.script}`, reason: hit.reason });
         return !hit;
       });
-      if (handlers.length) keptGroups.push({ ...group, hooks: handlers });
+      const usable = [];
+      for (const h of handlers) {
+        const cmd = String(h.command ?? "");
+        if (!cmd.includes(ROOT_REF)) { usable.push(h); continue; }
+        if (rootVar) { usable.push({ ...h, command: cmd.replaceAll(ROOT_REF, `\${${rootVar}}`) }); continue; }
+        const script = (cmd.match(/([\w.-]+\.sh)/) ?? [])[1] ?? cmd;
+        usable.push(h);
+        warnings.push(`${event}:${script} interpolates ${ROOT_REF}, and whether host ${host.host} sets that variable for a hook command`
+          + ` is unmeasured (hook_env.plugin_root_var is null) — kept as authored; if it is unset there, the command expands to`
+          + ` \`bash "/hooks/${script}"\` and fails silently on every ${event}`);
+      }
+      if (usable.length) keptGroups.push({ ...group, hooks: usable });
     }
     if (keptGroups.length) kept[event] = keptGroups;
     else dropped.push({ what: `${event} (empty)`, reason: `every handler on ${event} was dropped, so the event registration goes with them` });
   }
-  return { ok: true, json: { ...parsed, hooks: kept }, dropped, error: null };
+  return { ok: true, json: { ...parsed, hooks: kept }, dropped, warnings, error: null };
 }
 
 /**
@@ -147,7 +179,7 @@ export function rewriteHooks(text, host) {
  * @param {string} root        repo root
  * @param {string} pluginName  directory name under plugins/
  * @param {object} host
- * @returns {{ outputs: Map<string, {kind: string, content?: string, from?: string}>, drops: Array<object>, errors: string[] }}
+ * @returns {{ outputs: Map<string, {kind: string, content?: string, from?: string}>, drops: Array<object>, errors: string[], warnings: string[] }}
  */
 export function emitPlugin(root, pluginName, host) {
   const src = join(root, "plugins", pluginName);
@@ -157,10 +189,11 @@ export function emitPlugin(root, pluginName, host) {
   const outputs = new Map();
   const drops = [];
   const errors = [];
+  const warnings = [];
 
   const moves = new Map((host.package?.moves ?? []).map((m) => [m.from, m.to]));
 
-  const files = globSync("**/*", { cwd: src, dot: true, onlyFiles: true, ignore: ["**/.DS_Store"] }).sort();
+  const files = globSync("**/*", { cwd: src, dot: true, onlyFiles: true, ignore: EMIT_IGNORE }).sort();
 
   for (const rel of files) {
     const abs = join(src, rel);
@@ -261,13 +294,14 @@ export function emitPlugin(root, pluginName, host) {
       const r = rewriteHooks(readFileSync(abs, "utf8"), host);
       if (!r.ok) { errors.push(`${pluginName}/${from}: ${r.error}`); continue; }
       for (const d of r.dropped) drops.push({ path: `${from}#${d.what}`, reason: d.reason });
+      for (const w of r.warnings) warnings.push(`${from}: ${w}`);
       outputs.set(posix.join(outDir, to), { kind: "rewrite", content: JSON.stringify(r.json, null, 2) + "\n" });
     } else {
       outputs.set(posix.join(outDir, to), { kind: "copy", from: posix.join("plugins", pluginName, from) });
     }
   }
 
-  return { outputs, drops, errors };
+  return { outputs, drops, errors, warnings };
 }
 
 /** Every plugin directory under plugins/, sorted. */
@@ -291,7 +325,7 @@ export function listPlugins(root) {
  * capability is stated rather than substituted; a reason recorded only in a
  * build log is not stated to the person who installs the thing.
  */
-function renderInstallDoc(host, plugins, drops) {
+function renderInstallDoc(host, plugins, drops, warnings = []) {
   const cmd = (host.install?.command ?? ["<install>"]).join(" ");
   const un = cmd.replace(/\binstall\b/, "uninstall");
   const L = [];
@@ -340,6 +374,14 @@ function renderInstallDoc(host, plugins, drops) {
     }
     L.push("");
   }
+
+  if (warnings.length) {
+    L.push("## What this package carries on an unmeasured assumption", "");
+    L.push("Each line names a host fact nobody has measured yet. The artifact ships as authored; if the");
+    L.push("assumption is wrong it fails quietly, which is why it is written down here.", "");
+    for (const w of warnings) L.push(`- ${String(w).replace(/\s+/g, " ")}`);
+    L.push("");
+  }
   return L.join("\n");
 }
 
@@ -354,15 +396,17 @@ export function emitAll(root, host, opts = {}) {
   const outputs = new Map();
   const drops = [];
   const errors = [];
+  const warnings = [];
   for (const name of names) {
     const r = emitPlugin(root, name, host);
     for (const [k, v] of r.outputs) outputs.set(k, v);
     drops.push(...r.drops.map((d) => ({ ...d, plugin: name })));
     errors.push(...r.errors);
+    warnings.push(...r.warnings.map((w) => `${name}/${w}`));
   }
   outputs.set(posix.join(DIST_ROOT, host.host, "INSTALL.md"), {
     kind: "rewrite",
-    content: renderInstallDoc(host, names, drops),
+    content: renderInstallDoc(host, names, drops, warnings),
   });
-  return { outputs, drops, errors, plugins: names };
+  return { outputs, drops, errors, warnings, plugins: names };
 }

@@ -1,7 +1,7 @@
 {
   "emitter_version": 1,
   "host": "antigravity",
-  "host_descriptor_sha": "d4b245751e0a5beb60cd293dfdf5da16d94ddd6524479e1fafcdf72ddb564f28",
+  "host_descriptor_sha": "a81db154ae4801764284e65192f2eb7d9ca71651e32abc485bb0446e62b271b0",
   "host_cli_version": "1.1.28",
   "plugins": [
     "android-foundation",

@@ -17,8 +17,10 @@
 //   session/user state (stamps, transcripts)    -> CONFIG_DIR
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, resolve } from "node:path";
+import { ownPluginRoot, readHostDeclaration } from "./host.mjs";
+
+export { ownPluginRoot };
 
 const CACHE_MARKER = "/plugins/cache/";
 
@@ -101,7 +103,7 @@ export function resolveSdlcRoot(configDir, env = process.env, self = selfPluginR
   // Gated on the declaration file, which the authored tree does not carry, so
   // Claude Code resolution is byte-for-byte unchanged.
   const own = ownPluginRoot();
-  if (own && existsSync(join(own, "config", "host.json"))) {
+  if (own && readHostDeclaration(own).declared) {
     return { value: own, source: "own-package (declared host)" };
   }
 
@@ -156,8 +158,13 @@ function safeDirs(dir) {
  * never needs it, because such a package is its own install by construction.
  */
 export function resolveRoots(env = process.env, cwd = process.cwd(), self = selfPluginRoot()) {
-  const declared = readDeclaredHost();
-  if (declared) {
+  const declaration = readHostDeclaration();
+  if (declaration.declared) {
+    // A file that exists but cannot be read still makes this a declared-host package (it is
+    // its own install either way), with no host to name. `host_error` carries the reason so the
+    // plan can halt on it, rather than one reader calling this tree Claude Code while another
+    // calls it unknown.
+    const declared = declaration.doc ?? {};
     // Both the env-named config dir AND the default, not one OR the other.
     // Measured on agy 1.1.28: `agy plugin install` ignores GEMINI_CONFIG_DIR
     // entirely and always installs under $HOME/.gemini, and `agy plugin list`
@@ -179,7 +186,8 @@ export function resolveRoots(env = process.env, cwd = process.cwd(), self = self
       plugin_cache_root: searchPaths[0] ?? null,
       plugin_search_paths: searchPaths,
       sdlc_plugin_root: ownPluginRoot(),
-      host: declared.host,
+      host: declaration.error ? "unknown" : (declared.host ?? "unknown"),
+      host_error: declaration.error ? `${declaration.file}: ${declaration.error}` : null,
       // False when the model was baked into each agent file at build time, so a
       // dispatch carries no model and a per-project tier override cannot take
       // effect. Absent in older packages -> treat as capable, since that is the
@@ -217,6 +225,7 @@ export function resolveRoots(env = process.env, cwd = process.cwd(), self = self
     plugin_search_paths: [cacheRoot],
     sdlc_plugin_root: sdlc.value,
     host: "claude",
+    host_error: null,
     // Claude Code passes the tier at the call site and enforce-agent-model.sh
     // holds it there, so overrides are live.
     model_arg: true,
@@ -230,21 +239,6 @@ export function resolveRoots(env = process.env, cwd = process.cwd(), self = self
     sdlc_version: sdlc.version ?? null,
     sdlc_ambiguous: sdlc.ambiguous === true,
   };
-}
-
-/** The running package's host declaration, or null on the authored tree. */
-function readDeclaredHost() {
-  const own = ownPluginRoot();
-  if (!own) return null;
-  return readJson(join(own, "config", "host.json"));
-}
-
-/** Where the module itself lives — the development-checkout escape hatch. */
-export function ownPluginRoot() {
-  // fileURLToPath, not `new URL(...).pathname`: the latter hands back a percent-encoded path, so
-  // a checkout under `~/My Plugins/` resolves to a directory that does not exist. Harmless while
-  // this was an unused escape hatch; not harmless now that #173 made it load-bearing.
-  return dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 }
 
 /**

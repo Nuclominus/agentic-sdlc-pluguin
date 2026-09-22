@@ -295,7 +295,12 @@ paths handed to a phase must be absolute on this host.**
 ## Still open
 
 - Whether `${CLAUDE_PLUGIN_ROOT}`, or any plugin-root variable, is set for a hook command here — the
-  surviving `Stop`/`seal-run.sh` hook depends on it.
+  `Stop`/`seal-run.sh` hook and all four `android-foundation` guard hooks depend on it. Until
+  measured, the descriptor says so (`hook_env.plugin_root_var: null`), the hooks ship as authored,
+  and every `emit` / `emit --check` and the package's `INSTALL.md` carry the warning that an unset
+  variable makes each of them `bash "/hooks/<x>.sh"` — a silent failure. `agy` 1.2.0 is installed
+  locally; a probe plugin whose hook dumps its environment would settle it in one run. Then name
+  the variable in the descriptor and re-emit.
 - Whether `agy plugin import claude` makes even the two file moves unnecessary.
 - Whether per-phase cost can be attributed at all: the run envelope's `usage` looks aggregate
   (`cache_read_tokens: 418022` on a `num_turns: 1` run that dispatched two subagents), so this host

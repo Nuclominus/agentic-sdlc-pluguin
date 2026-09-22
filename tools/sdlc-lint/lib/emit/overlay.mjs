@@ -28,9 +28,13 @@ import { globSync } from "tinyglobby";
 
 /**
  * A step heading in the orchestrator: `**3c. Spawn the agent** …` at the start of
- * a line. Every step id begins with a digit, which is what bounds a section.
+ * a line — a digit-led id followed by a period, the same shape `sectionRange`
+ * matches for the anchor itself. `^\*\*\d` alone also matched prose such as
+ * `**10,676 characters…**`, and a section ending there is silently truncated:
+ * the overlay lands on the first half and the Claude Code tail of the step ships
+ * after it, with the anchor still resolved and nothing to fail.
  */
-const nextStepRe = /^\*\*\d/;
+const nextStepRe = /^\*\*\d[a-z0-9-]*\./;
 
 /**
  * Locate one anchored section: from its own heading line up to the next step

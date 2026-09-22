@@ -23,6 +23,7 @@ import { discoverRecipes, resolveWorkflowName, locateRecipe, validateWorkflow, n
 import { resolveCostCap, renderCapOverridePrint, expandRows, estimate, renderDryRun, renderHeadlessDryRun } from "./caps.mjs";
 import { loadCheckpoints, doneUnitIds } from "../run/reentry.mjs";
 import { parseYaml } from "./yaml.mjs";
+import { scanLegacyLocation } from "../migrate/migrate.mjs";
 
 /**
  * Immediate children of the given roots that are plugins.
@@ -151,23 +152,6 @@ function hostPluginRoots(roots) {
   consider(roots.sdlc_plugin_root, "own package");
   for (const dir of pluginDirsUnder(roots.plugin_search_paths ?? [])) consider(dir, "search path");
   return { roots: out, conflicts: [...conflicts.values()] };
-}
-
-/**
- * The SDLC's project files still sitting in the pre-rename location.
- *
- * The rename to `<project>/.sdlc/` ships with NO fallback read, on purpose — an
- * alias layer is the shape ADR-0021 §5 deleted. But a silent rename is its own
- * defect: the cost cap, the skill mappings and the agent bindings would simply
- * stop applying, and the run would look normal. So the old location is not read,
- * it is NOTICED, and the run says so. Detection only; the move belongs to
- * the doctor command, which asks first.
- */
-const LEGACY_PROJECT_ENTRIES = ["sdlc.local.yaml", "model.local.json", "sdlc-workflows", "sdlc-lessons.md"];
-function legacyProjectFiles(cwd) {
-  return LEGACY_PROJECT_ENTRIES
-    .filter((name) => existsSync(join(cwd, ".claude", name)))
-    .map((name) => `.claude/${name}`);
 }
 
 const readJson = (f) => { try { return JSON.parse(readFileSync(f, "utf8")); } catch { return null; } };
@@ -330,6 +314,12 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   const configDir = roots.config_dir;
   const { installs: registered, conflicts } = readInstalledPlugins({ configDir });
   if (roots.host === "claude" && !registryListsSdlc(registered)) roots = resolveRoots(env, cwd, selfPluginRoot());
+  if (roots.host_error) {
+    return {
+      prints, warnings, headless, roots, deps: null,
+      halt: `❌ This package declares a host that cannot be read: ${roots.host_error}\n   Regenerate the package: node tools/sdlc-lint/cli.mjs emit`,
+    };
+  }
 
   // On a host with no installed_plugins.json registry, discovery is the search
   // paths the running package declares: every immediate child of them that
@@ -403,7 +393,12 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   // framework has to prevent attachment (issue #197); a post-hoc filter over `additive` would
   // leave its `role_expertise` path, its `convention_skills` and its phase injection already
   // merged. One read, two consumers.
-  const stale = legacyProjectFiles(cwd);
+  // The rename to `<project>/.sdlc/` ships with NO fallback read, on purpose — an alias layer is
+  // the shape ADR-0021 §5 deleted. But a silent rename is its own defect: the cost cap, the skill
+  // mappings and the agent bindings would simply stop applying, and the run would look normal.
+  // So the old location is not read, it is NOTICED, and the run says so. Detection only, by the
+  // same scanner the doctor command moves with; the move itself asks first.
+  const stale = scanLegacyLocation(cwd).map((f) => f.from);
   if (stale.length) {
     warn(`WARN: ${stale.length} SDLC config file(s) still in the old location and NOT read: ${stale.join(", ")}.`
       + ` They moved to ${PROJECT_DIR}/ — the marketplace no longer keeps its files in another tool's directory.`
