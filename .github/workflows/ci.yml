@@ -32,12 +32,10 @@ jobs:
         run: node --test tools/brain-sync/test/*.test.mjs
       - name: AAR reference integrity
         run: |
-          # planning docs under docs/superpowers/ and historical change notes under .brain/
-          # legitimately retain the old skill reference as part of their narrative
-          if grep -rn "android-workflow:aar" --include='*.md' --include='*.yaml' --exclude-dir=superpowers --exclude-dir=.brain .; then
-            echo "::error::dangling android-workflow:aar reference — repoint to sdlc:aar"
-            exit 1
-          fi
+          # Dangling-reference drift (android-workflow:aar -> sdlc:aar and any future rename) is
+          # now covered generically by `sdlc-lint all` (tools/sdlc-lint/lib/doc-refs.mjs), which
+          # already ran earlier in this job. What remains here are file-existence assertions —
+          # confirming the AAR skill's own files are present, not that prose references resolve.
           for f in SKILL gather report apply; do
             test -f "plugins/sdlc/skills/aar/$f.md" || { echo "::error::missing plugins/sdlc/skills/aar/$f.md"; exit 1; }
           done
