@@ -15,6 +15,7 @@ import { checkStackUniqueness } from "./lib/stack-uniqueness.mjs";
 import { checkMachineValues } from "./lib/machine-values.mjs";
 import { checkAgentTools } from "./lib/agent-tools.mjs";
 import { checkRoster } from "./lib/roster.mjs";
+import { checkDocRefs } from "./lib/doc-refs.mjs";
 import { parseContracts } from "./lib/contracts.mjs";
 import { loadHost, listHosts, emitAll } from "./lib/emit/index.mjs";
 import { checkHost } from "./lib/emit/check.mjs";
@@ -85,6 +86,19 @@ function printNestedManifest(results) {
     console.log(`nested-manifest: ${results.length === 0 ? "clean" : `${results.length} violation(s)`}`);
   }
   return results.length ? 1 : 0;
+}
+
+// checkDocRefs returns ONE { ok, violations } object rather than a row per file (its "file" is
+// per-violation, not per-check), so it prints the violations-only way like nested-manifest and
+// stack-uniqueness — there is no "checked N, M passed" count, just a list that should be empty.
+function printDocRefs(result) {
+  if (jsonOut) {
+    console.log(JSON.stringify({ command: "doc-refs", failed: result.violations.length, failures: result.violations }));
+  } else {
+    for (const v of result.violations) console.error(`✗ ${v.file}:${v.line}\n    \`${v.ref}\` does not resolve to a plugins/<namespace>/{agents,skills,commands} entry`);
+    console.log(`doc-refs: ${result.violations.length === 0 ? "clean" : `${result.violations.length} violation(s)`}`);
+  }
+  return result.violations.length ? 1 : 0;
 }
 
 // checkMarketplaceSurface returns one row PER ENTRY (ADR-0028), so it reports a pass count the
@@ -365,6 +379,7 @@ function runAll() {
     printMachineValues(checkMachineValues(root)),
     printAgentTools(checkAgentTools(root)),
     printRoster(checkRoster(root)),
+    printDocRefs(checkDocRefs({ repoRoot: root })),
     // After roster: a roster failure is the more informative error, so it should
     // surface before a dist/ diff that is usually its downstream symptom.
     printEmit(listHosts(root).map((h) => checkHost(root, loadHost(root, h)))),
@@ -377,7 +392,7 @@ function runAll() {
 }
 
 const VERBS = ["schema", "cycles", "detect", "resume", "report", "rollup", "read-discipline",
-  "plugin-paths", "nested-manifest", "marketplace-surface", "stack-uniqueness", "machine-values", "agent-tools", "roster", "emit", "compliance", "start-window", "all"];
+  "plugin-paths", "nested-manifest", "marketplace-surface", "stack-uniqueness", "machine-values", "agent-tools", "roster", "doc-refs", "emit", "compliance", "start-window", "all"];
 
 let code = 0;
 switch (cmd) {
@@ -391,6 +406,7 @@ switch (cmd) {
   case "machine-values": code = printMachineValues(checkMachineValues(root)); break;
   case "agent-tools": code = printAgentTools(checkAgentTools(root)); break;
   case "roster": code = printRoster(checkRoster(root)); break;
+  case "doc-refs": code = printDocRefs(checkDocRefs({ repoRoot: root })); break;
   case "emit": {
     const hosts = emitHosts();
     try {
@@ -454,7 +470,7 @@ switch (cmd) {
     // Even the help path owes a JSON consumer an envelope — `--json` must never leave stdout
     // unparseable, whatever the exit code (#126).
     if (jsonOut) { console.log(JSON.stringify({ command: "help", ok: true, verbs: VERBS })); break; }
-    console.log("Usage: sdlc-lint <schema|cycles|detect|resume|report|rollup|read-discipline|plugin-paths|nested-manifest|marketplace-surface|stack-uniqueness|machine-values|agent-tools|roster|emit|compliance|start-window|all> [--json]");
+    console.log("Usage: sdlc-lint <schema|cycles|detect|resume|report|rollup|read-discipline|plugin-paths|nested-manifest|marketplace-surface|stack-uniqueness|machine-values|agent-tools|roster|doc-refs|emit|compliance|start-window|all> [--json]");
     console.log("  read-discipline   E2: contract present in the stable prefix; no re-read phrasing in agents");
     console.log("  plugin-paths      #70: no home-anchored ~/.claude paths in shipped plugin text");
     console.log("  nested-manifest   ADR-0026: no manifest.yaml below a plugin root (tree-vs-installed trap)");
@@ -463,6 +479,7 @@ switch (cmd) {
     console.log("  machine-values    H3: no prose computing a value a machine already writes");
     console.log("  agent-tools       ADR-0018: every agent declares tools; none may dispatch agents; reviewers hold no Edit");
     console.log("  roster            ADR-0021: core binds every phase to a shipped agent; role_expertise keys/rules/skills resolve; expertise slot present");
+    console.log("  doc-refs          a backtick `<plugin>:<name>` reference in README/CONTRIBUTING/docs resolves to a real agent, skill or command");
     console.log("  emit              Track J: render dist/<host>/ from the plugins/ SSOT [--host <id>|all]; --check compares without writing (CI runs only --check)");
     console.log("  compliance        H1: did the orchestrator run its own mandated steps? [--runs <glob>]... [--config-dir <path>]");
     console.log("  start-window      ADR-0019 DoD: turns/cost between loading the orchestrator and its first dispatch [--runs <glob>]... [--config-dir <path>]");

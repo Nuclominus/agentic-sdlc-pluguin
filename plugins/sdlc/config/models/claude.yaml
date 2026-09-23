@@ -43,7 +43,7 @@ cache_write_multipliers:
 # materially.
 #
 # PROVISIONAL for `opus`: the tokens below were measured on claude-opus-5, and the tier
-# has since moved to claude-opus-5-5 (ADR-0031). Nothing has been measured on 5.5, so the
+# has since moved to claude-opus-5-5 (ADR-0035). Nothing has been measured on 5.5, so the
 # opus preview is the Opus 5 token shape at 5.5 rates. Re-derive once real 5.5 runs exist.
 estimation_baselines:
   opus:   { input: 30,  cache_read: 670000, cache_write: 93000, output: 1125 }

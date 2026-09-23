@@ -10,6 +10,16 @@
             "description": "Enforce declared model tier for SDLC pipeline agents. Reads model: from agent frontmatter and injects the correct model ID via updatedInput before the Agent tool fires. Fails open for unknown agents."
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-commit-guard.sh\"",
+            "description": "Block staged secrets and --no-verify on git commit/push/gh pr create. Fails open; scans the current content of files staged/changed in this commit/push, not just added lines or history."
+          }
+        ]
       }
     ],
     "Stop": [

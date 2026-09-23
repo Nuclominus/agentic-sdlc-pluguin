@@ -1,11 +1,11 @@
 ---
-adr: 31
+adr: 35
 status: accepted
 date: 2026-09-24
 supersedes: null
 ---
 
-# ADR-0031 — The `opus` tier moves to Claude Opus 5.5
+# ADR-0035 — The `opus` tier moves to Claude Opus 5.5
 
 ## Context
 

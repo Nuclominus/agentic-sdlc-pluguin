@@ -2,7 +2,11 @@
 
 > One note per architecture decision. Newest first.
 
-- [[decisions/ADR-0031-the-opus-tier-moves-to-opus-5-5]]
+- [[decisions/ADR-0035-the-opus-tier-moves-to-opus-5-5]]
+- [[decisions/ADR-0034-phase-boundary-lint-feedback-never-blocks]]
+- [[decisions/ADR-0033-lint-config-edits-are-gated-during-a-run]]
+- [[decisions/ADR-0032-commit-hygiene-is-a-deterministic-hook]]
+- [[decisions/ADR-0031-resume-preflight-gates]]
 - [[decisions/ADR-0030-the-project-sdlc-directory-is-ours]]
 - [[decisions/ADR-0029-one-ssot-emitted-host-packages]]
 - [[decisions/ADR-0028-an-external-dependency-is-never-a-marketplace-entry]]
