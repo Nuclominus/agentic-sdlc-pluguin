@@ -23,12 +23,19 @@ function refExists(repoRoot, namespace, name) {
   );
 }
 
+// docs/superpowers/** holds historical plan/spec narrative — a frozen record, not living
+// documentation a reader navigates today. The old one-off CI grep this check replaces exempted it
+// the same way (`--exclude-dir=superpowers`), because that narrative legitimately cites pre-rename
+// names (e.g. `android-workflow:aar`) on purpose; a dangling reference there isn't the class of bug
+// this check exists to catch.
+const IGNORE = ["docs/superpowers/**"];
+
 export function checkDocRefs({ repoRoot }) {
   const namespaces = pluginNamespaces(repoRoot);
   const docFiles = [
     "README.md",
     "CONTRIBUTING.md",
-    ...globSync("docs/**/*.md", { cwd: repoRoot }),
+    ...globSync("docs/**/*.md", { cwd: repoRoot, ignore: IGNORE }),
   ].filter((f) => existsSync(join(repoRoot, f)));
 
   const violations = [];
