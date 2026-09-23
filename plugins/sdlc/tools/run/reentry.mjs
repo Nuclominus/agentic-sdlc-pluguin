@@ -6,7 +6,7 @@
 // ${CLAUDE_PLUGIN_ROOT} to decide whether a run is finished enough to seal. Re-deriving
 // a simplified copy there would put the procedure in two places — the drift H1's spec
 // was written to avoid. `--resume` and the seal gate now share one definition of "done".
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 // Unit id for a (phase, aspect): aspect-agnostic → phase; aspect-aware → `${phase}-${aspect}`.
@@ -96,6 +96,43 @@ export function computeReentry(resolvedPhases, units) {
     reenter_at: resolvedPhases[idx].name,
     remaining: resolvedPhases.slice(idx).map(p => p.name),
   };
+}
+
+/**
+ * Two --resume safety gates claude-sdlc has and this codebase's `--resume`
+ * documents as a non-goal (commands/start.md): resuming on the wrong branch,
+ * and resuming a run whose checkpoints have gone stale. Advisory only — this
+ * function reports, the SKILL.md prose decides whether to HALT or ask.
+ */
+export function resumePreflight({ runPath, checkpointDir, currentBranch, nowMs = Date.now(), maxAgeMs = 6 * 3600 * 1000 }) {
+  let runBranch = null;
+  if (existsSync(runPath)) {
+    try {
+      const run = JSON.parse(readFileSync(runPath, "utf8"));
+      if (typeof run?.branch_name === "string" && run.branch_name.length > 0) runBranch = run.branch_name;
+    } catch { /* unparseable _run.json: treat as no recorded branch, fail open */ }
+  }
+  const branchOk = runBranch == null || runBranch === currentBranch;
+
+  let newestCheckpointPath = null;
+  let newestMtimeMs = -Infinity;
+  if (existsSync(checkpointDir)) {
+    for (const f of readdirSync(checkpointDir)) {
+      // Same exclusion as loadCheckpoints(): _run.json is written once at run start (its mtime
+      // reflects when the DAG was resolved, not phase progress) and would otherwise mask a
+      // genuinely stale phase checkpoint whenever it happens to be newer than the last completed
+      // unit — which is every run that hasn't finished a phase yet.
+      if (!f.endsWith(".json") || f === "_run.json") continue;
+      const p = join(checkpointDir, f);
+      let st;
+      try { st = statSync(p); } catch { continue; }
+      if (st.mtimeMs > newestMtimeMs) { newestMtimeMs = st.mtimeMs; newestCheckpointPath = p; }
+    }
+  }
+  const ageMs = newestCheckpointPath == null ? null : nowMs - newestMtimeMs;
+  const stale = ageMs != null && ageMs > maxAgeMs;
+
+  return { branchOk, runBranch, currentBranch, stale, ageMs, newestCheckpointPath };
 }
 
 export function resolveWorkspace(workspaceDir) {

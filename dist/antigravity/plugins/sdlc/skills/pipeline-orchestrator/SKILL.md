@@ -320,6 +320,35 @@ since: 2026-07-06
 1. Resolve `task_slug` from `resume_slug` or derive it from `$ARGUMENTS` (same algorithm as item 1).
 2. If `docs/plans/{task_slug}/` does not exist → HALT:
    `⛔ Nothing to resume: docs/plans/{task_slug}/ not found. Run without --resume to start fresh.`
+2b. Run the resume preflight (ADR-0031 — closes the "resume onto the wrong branch" gap `start.md`'s
+    Non-goal paragraph otherwise leaves fully unguarded, plus a staleness gate):
+    ```bash
+    node "${CLAUDE_PLUGIN_ROOT}/tools/run/cli.mjs" resume-check "docs/plans/{task_slug}" \
+      --branch "$(git branch --show-current)" --json
+    ```
+    - If `branchOk` is `false`: **HALT**, MUST PRINT VERBATIM:
+      ```
+      ❌ Cannot resume "{task_slug}": the run lives on branch {runBranch}, current branch is {currentBranch}.
+         git checkout {runBranch}   — then /sdlc:start --resume
+      ```
+      Do not proceed. This is the one way `--resume` can silently apply completed-phase context to
+      the wrong tree — never resume onto the wrong branch, no exceptions.
+    - If `branchOk` is `true` and `stale` is `false`: continue silently to item 3.
+    - If `stale` is `true`:
+      - **Interactive** (`CONTEXT.headless_mode` is `false`): MUST PRINT VERBATIM, then ask:
+        ```
+        ⚠️ Stale run "{task_slug}" found (last checkpoint update {age_hours}h ago).
+           resume / start fresh / abort ?
+        ```
+        - **resume** → continue to item 3 as normal.
+        - **start fresh** → treat exactly as "no --resume": go to the non-resume Step 2 algorithm
+          with the SAME `task_slug` (this overwrites `_brief.md` and, on first phase dispatch,
+          `.checkpoint/_run.json` — existing checkpoints for already-completed phases are left on
+          disk but no longer consulted, since a fresh run's Step 3 rebuilds `_run.json` from
+          scratch).
+        - **abort** → stop. Print nothing further.
+      - **Headless** (`CONTEXT.headless_mode` is `true`): behave as **start fresh**, and emit to
+        stderr: `WARN: stale run "{task_slug}" (age {age_hours}h) — starting fresh`.
 3. Do NOT recreate `_brief.md`. Read the existing one (it is the SSOT description for agents). If a
    non-empty description was passed AND it differs from `_brief.md`, print
    `⚠️ --resume: description differs from saved _brief.md; using saved brief` and continue with the saved brief.
@@ -351,8 +380,10 @@ For each phase in order, first determine if the phase is **aspect-agnostic** or 
 and write `.checkpoint/_run.json` — the resolved DAG, so `--resume` (and `sdlc-lint resume`) can
 compute the re-entry point without re-resolving the workflow. Shape (validated by
 `schemas/run.schema.json`): `{ task_slug, workflow: CONTEXT.active_workflow, stack: primary_stack,
-resolved_phases: [ {name, kind: "plain"|"loop"|"parallel", aspects: <ordered aspect list or null>,
-members?: [{name, aspects}] } ] }`. Derive each entry from `CONTEXT.resolved_phases`: a plain phase
+branch_name: <current branch, resolved AFTER Step 2 item 5's worktree resolution — never before>,
+written_at: <now, ISO 8601>, resolved_phases: [ {name, kind: "plain"|"loop"|"parallel", aspects:
+<ordered aspect list or null>, members?: [{name, aspects}] } ] }`. Derive each entry from
+`CONTEXT.resolved_phases`: a plain phase
 sets `kind:"plain"`; a **gated** phase also sets `kind:"plain"` (its gate changes whether it
 dispatches, not its resolved shape — and `schemas/run.schema.json`'s `kind` enum stays a closed set
 of three); a loop phase sets `kind:"loop"`; a `{parallel:[...]}` group sets
@@ -365,6 +396,9 @@ deterministic synthesized string `"parallel:" + members joined by "+"` (e.g.
 `parallel:security+test`) — this is what `sdlc-lint resume`'s `reenter_at`/`remaining` print for
 the group, since they read each resolved-phase entry's `.name`. Write it
 atomically (`.tmp` → rename). This file is overwritten (not appended) on every fresh run.
+`branch_name` is read once via `git branch --show-current` **after** Step 2 item 5 has already
+resolved the correct worktree/checkout — recording it before that resolution would capture the
+orchestrator's own starting branch instead of the run's actual one.
 
 **3-shapes. Phase-item shapes (generic control flow).**
 

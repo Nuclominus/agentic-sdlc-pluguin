@@ -2,6 +2,7 @@
 
 > One note per architecture decision. Newest first.
 
+- [[decisions/ADR-0031-resume-preflight-gates]]
 - [[decisions/ADR-0030-the-project-sdlc-directory-is-ours]]
 - [[decisions/ADR-0029-one-ssot-emitted-host-packages]]
 - [[decisions/ADR-0028-an-external-dependency-is-never-a-marketplace-entry]]

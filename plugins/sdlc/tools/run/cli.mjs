@@ -10,6 +10,7 @@ import { resolve, join } from "node:path";
 import { existsSync } from "node:fs";
 import { finishRun } from "./finish.mjs";
 import { sealStale } from "./seal.mjs";
+import { resumePreflight } from "./reentry.mjs";
 
 const args = process.argv.slice(2);
 const cmd = args[0];
@@ -23,14 +24,39 @@ function opt(name) {
 function usage() {
   console.error("usage: finish <slug-or-dir> [--no-report] [--registry <models.json>] [--projects-root <dir>] [--json]");
   console.error("       seal-stale [--max-age-hours <n>] [--plans-root <dir>] [--registry <models.json>] [--no-report] [--json]");
+  console.error("       resume-check <slug-or-dir> --branch <name> [--max-age-hours <n>] [--json]");
   return 2;
 }
 function round2(n) { return Math.round(n * 100) / 100; }
 const money = (n) => (n == null ? "$—" : `$${n.toFixed(2)}`);
 
 let code = 0;
-if (cmd !== "finish" && cmd !== "seal-stale") {
+if (cmd !== "finish" && cmd !== "seal-stale" && cmd !== "resume-check") {
   code = usage();
+} else if (cmd === "resume-check") {
+  // Advisory query, not a gate itself — same split as `resolve/cli.mjs plan` only reporting:
+  // SKILL.md's Resume-mode prose is what HALTs on branchOk===false or asks on stale===true.
+  const target = args[1] && !args[1].startsWith("--") ? args[1] : null;
+  if (!target) {
+    code = usage();
+  } else {
+    const direct = resolve(root, target);
+    const dir = existsSync(join(direct, ".checkpoint")) ? direct : join(root, "docs", "plans", target);
+    const checkpointDir = join(dir, ".checkpoint");
+    const runPath = join(checkpointDir, "_run.json");
+    const branch = opt("--branch") || "";
+    const hours = Number(opt("--max-age-hours"));
+    const r = resumePreflight({
+      runPath, checkpointDir, currentBranch: branch,
+      maxAgeMs: Number.isFinite(hours) && hours > 0 ? hours * 3600 * 1000 : undefined,
+    });
+    if (jsonOut) {
+      console.log(JSON.stringify({ command: "resume-check", ok: true, ...r }));
+    } else {
+      console.log(`resume-check: branchOk=${r.branchOk} runBranch=${r.runBranch ?? "—"} currentBranch=${r.currentBranch}`);
+      console.log(`  stale=${r.stale}${r.ageMs != null ? ` (age ${Math.round(r.ageMs / 3600000)}h)` : " (no checkpoints yet)"}`);
+    }
+  }
 } else if (cmd === "seal-stale") {
   // The deterministic tail's net (H6). Invoked by hooks/seal-run.sh on `Stop`, and by
   // hand when a run was left unsealed. Sealing is idempotent through .checkpoint/_sealed,
