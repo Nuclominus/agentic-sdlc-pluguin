@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-09-23 | #220 | `chore` | — | [[changes/2026-09-23-PR-220-promote-the-opus-tier-to-claude-opus-5-5]] |
 | 2026-09-23 | #213 | `docs` | — | [[changes/2026-09-23-PR-213-make-the-quadratic-cost-in-dispatch-length-heuristic-explici]] |
 | 2026-09-23 | #212 | `feat` | — | [[changes/2026-09-23-PR-212-generic-namespaced-doc-reference-check-replacing-the-one-off]] |
 | 2026-09-23 | #211 | `feat` | — | [[changes/2026-09-23-PR-211-surface-lint-typecheck-failures-right-after-the-developer-ph]] |
