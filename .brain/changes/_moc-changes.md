@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-09-23 | #208 | `feat` | — | [[changes/2026-09-23-PR-208-branch-and-staleness-preflight-before-resume]] |
 | 2026-09-22 | #206 | `chore` | — | [[changes/2026-09-22-PR-206-4-0-0]] |
 | 2026-09-22 | #204 | `fix` | — | [[changes/2026-09-22-PR-204-doctor-init-and-list-stacks-are-reachable-on-antigravity]] |
 | 2026-09-22 | #202 | `other` | — | [[changes/2026-09-22-PR-202-multi-host-portability-one-ssot-emitted-host-packages-track]] |
