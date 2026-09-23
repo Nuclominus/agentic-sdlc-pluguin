@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-09-23 | #210 | `feat` | — | [[changes/2026-09-23-PR-210-protect-lint-format-configs-during-an-active-sdlc-run-androi]] |
 | 2026-09-23 | #209 | `feat` | — | [[changes/2026-09-23-PR-209-block-secret-commits-and-no-verify-core]] |
 | 2026-09-23 | #208 | `feat` | — | [[changes/2026-09-23-PR-208-branch-and-staleness-preflight-before-resume]] |
 | 2026-09-22 | #206 | `chore` | — | [[changes/2026-09-22-PR-206-4-0-0]] |
