@@ -35,7 +35,10 @@ parallelism, clean verification).
 
 ## 5. Highest-leverage summary
 
-ONE line: the single change with the best cost/quality payoff.
+ONE line: the single change with the best cost/quality payoff. Per the cost-shape heuristic
+in `gather.md`, a viable phase-level cut outranks a same-phase model-tier downgrade here —
+state which kind of change this is (cut vs. re-tier) so the operator can tell at a glance
+whether approving it removes a phase or just makes it cheaper.
 
 ## Lessons candidates
 

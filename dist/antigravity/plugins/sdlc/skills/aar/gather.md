@@ -20,6 +20,25 @@ The analyst distills two sources. **Telemetry-first**, transcript best-effort.
 
 Never re-derive these from the transcript.
 
+## Cost-shape heuristic (apply before drafting findings)
+
+Dispatch cost is not linear in phase count — a phase's own cost grows with the context it
+carries (prior phase summaries, tool output, its own turns), so the SAME dollar saving is
+available two ways with very different leverage:
+
+- **Cutting a phase** (a skip-rule, merging two phases, or a workflow recipe with fewer
+  steps for this task shape) removes that phase's entire cost AND the marginal cost every
+  later phase paid to carry its context forward.
+- **Re-tiering one phase's model** (e.g. opus → sonnet) saves only that phase's own
+  cost delta; every later phase still pays to carry the (unchanged) context forward.
+
+When `by_phase` shows one phase as the dominant cost driver AND that phase's presence in
+this run was optional (a skip-rule that did not fire, or a workflow variant that omits it
+for this task shape), prefer recommending the phase-level cut over a model-tier downgrade
+for the same phase — name both options if genuinely unsure which the operator would want,
+but rank the cut first with the reason ("saves the phase's own cost and what later phases
+paid to carry it, not just this phase's marginal cost").
+
 ## From the session transcript (best-effort, honestly labeled)
 
 Parse with a small Bash + Python script; distill — never load raw JSONL into
