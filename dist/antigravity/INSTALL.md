@@ -57,6 +57,7 @@ Every omission below is deliberate and has a reason. Nothing is silently missing
 | android-foundation | `hooks/hooks.json#(file)` | no hook survives on this host, so no hooks.json is emitted |
 | sdlc | `config/models/claude.yaml` | model registry for host claude; this package is antigravity |
 | sdlc | `hooks/hooks.json#PreToolUse:enforce-agent-model.sh` | its matcher names Claude Code tool(s) Agent, which host antigravity spells differently and declares no tool-name map for — registered, it would guard nothing while reading as coverage |
+| sdlc | `hooks/hooks.json#PreToolUse:pre-commit-guard.sh` | its matcher names Claude Code tool(s) Bash, which host antigravity spells differently and declares no tool-name map for — registered, it would guard nothing while reading as coverage |
 | sdlc | `hooks/hooks.json#PreToolUse (empty)` | every handler on PreToolUse was dropped, so the event registration goes with them |
 | sdlc | `hooks/hooks.json#Stop:seal-run.sh` | Stop fires (measured on 1.2.0), but its payload names no project — workspacePaths is [] and there is no cwd field — and the command runs inside the plugin directory, so seal-stale would look for docs/plans under the plugin and seal nothing. The run seals itself at Step 6 (sealed_by: orchestrator); there is no Stop-time net on this host until it tells a hook where it ran. |
 | sdlc | `hooks/hooks.json#Stop (empty)` | every handler on Stop was dropped, so the event registration goes with them |
