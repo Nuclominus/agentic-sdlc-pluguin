@@ -2,6 +2,7 @@
 
 > One note per architecture decision. Newest first.
 
+- [[decisions/ADR-0032-commit-hygiene-is-a-deterministic-hook]]
 - [[decisions/ADR-0031-resume-preflight-gates]]
 - [[decisions/ADR-0030-the-project-sdlc-directory-is-ours]]
 - [[decisions/ADR-0029-one-ssot-emitted-host-packages]]

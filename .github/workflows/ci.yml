@@ -52,5 +52,7 @@ jobs:
         run: bash tests/test-enforce-agent-model.sh
       - name: resume preflight test
         run: bash tests/test-resume-preflight.sh
+      - name: pre-commit-guard test
+        run: bash tests/test-pre-commit-guard.sh
       - name: model-local schema test
         run: python3 tests/test-model-local-schema.py
