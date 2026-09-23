@@ -2,6 +2,7 @@
 
 > One note per architecture decision. Newest first.
 
+- [[decisions/ADR-0034-phase-boundary-lint-feedback-never-blocks]]
 - [[decisions/ADR-0033-lint-config-edits-are-gated-during-a-run]]
 - [[decisions/ADR-0032-commit-hygiene-is-a-deterministic-hook]]
 - [[decisions/ADR-0031-resume-preflight-gates]]

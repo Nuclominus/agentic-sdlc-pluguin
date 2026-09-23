@@ -364,6 +364,12 @@ since: 2026-07-06
 3. Do NOT recreate `_brief.md`. Read the existing one (it is the SSOT description for agents). If a
    non-empty description was passed AND it differs from `_brief.md`, print
    `⚠️ --resume: description differs from saved _brief.md; using saved brief` and continue with the saved brief.
+3b. Delete `docs/plans/{task_slug}/.checkpoint/_post-implement-check.json` if present — before
+    item 4 reads `.checkpoint/*.json` below, so it is never mistaken for a unit checkpoint. This
+    is a plain resume, not "start fresh" above — its `rm -f .checkpoint/*.json` already covers
+    this file, but the plain-resume path never otherwise touches it, so a copy left over from
+    before the interruption must not leak into the resumed phase's own `3e` check as that phase's
+    result.
 4. Read `.checkpoint/*.json` (ignore `_run.json`, any `*.tmp`, and any file that fails to parse or
    lacks `status` — those units are treated as NOT complete). Build `CONTEXT.completed_units` —
    the set of resolved-phase unit ids (`{phase}` or `{phase}-{aspect}`) whose checkpoint status ∈
@@ -1163,6 +1169,17 @@ gate uses the ACTUAL accumulated `cost_usd`. Both read the same cap from `CONTEX
 - Docs phase: must contain a PR URL or commit hash.
 
 If validation fails, **do not proceed** — ask the user how to handle (retry, skip, abort).
+
+On a stack that ships a `post-implement-check` `SubagentStop` hook (android-foundation does):
+check `docs/plans/{task_slug}/.checkpoint/_post-implement-check.json` (if present) — if its
+`status` field is `"fail"`, treat that the same as any other 3e validation failure — do not wait
+for Step 4 to discover the same problem after QA and Security have already spent tokens on this
+phase's output. A `status` of `"pass"` or `"skipped"` (tooling not configured for this project) is
+not a failure; an absent file means the hook did not run for this phase (no-op stack, or no
+`./gradlew`) and is likewise not a failure. Whichever status was read, the orchestrator MUST
+delete this file immediately after reading it — `"pass"`, `"fail"`, or `"skipped"` alike — so a
+later phase's `3e` check can never see a stale result left over from this one; the file may be
+read exactly once, by the `3e` check that immediately follows the `SubagentStop` that wrote it.
 
 **3e-heal. Self-healing micro-loop (Track G1).**
 

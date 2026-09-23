@@ -60,6 +60,17 @@
           }
         ]
       }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/post-implement-check.sh\"",
+            "description": "Run ktlint/detekt right after the developer or tester subagent stops; reports PASS/FAIL, never blocks."
+          }
+        ]
+      }
     ]
   }
 }

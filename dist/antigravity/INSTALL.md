@@ -55,6 +55,7 @@ Every omission below is deliberate and has a reason. Nothing is silently missing
 | android-foundation | `hooks/hooks.json#PostToolUse:kotlin-guard.sh` | its matcher names Claude Code tool(s) Edit, Write, which host antigravity spells differently and declares no tool-name map for — registered, it would guard nothing while reading as coverage |
 | android-foundation | `hooks/hooks.json#PostToolUse (empty)` | every handler on PostToolUse was dropped, so the event registration goes with them |
 | android-foundation | `hooks/hooks.json#SessionStart` | host antigravity does not fire the SessionStart hook event, so android-cli-check.sh never runs |
+| android-foundation | `hooks/hooks.json#SubagentStop` | host antigravity does not fire the SubagentStop hook event, so post-implement-check.sh never runs |
 | android-foundation | `hooks/hooks.json#(file)` | no hook survives on this host, so no hooks.json is emitted |
 | sdlc | `config/models/claude.yaml` | model registry for host claude; this package is antigravity |
 | sdlc | `hooks/hooks.json#PreToolUse:enforce-agent-model.sh` | its matcher names Claude Code tool(s) Agent, which host antigravity spells differently and declares no tool-name map for — registered, it would guard nothing while reading as coverage |
