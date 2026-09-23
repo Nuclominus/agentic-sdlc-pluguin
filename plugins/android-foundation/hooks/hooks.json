@@ -19,6 +19,11 @@
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/guard-paths.sh\"",
             "description": "Block edits to build/, .gradle/, and generated files."
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/config-protection.sh\"",
+            "description": "Deny lint/format config edits during an active SDLC run unless the run's brief names the tool."
           }
         ]
       },

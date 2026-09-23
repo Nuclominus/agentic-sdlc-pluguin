@@ -54,5 +54,7 @@ jobs:
         run: bash tests/test-resume-preflight.sh
       - name: pre-commit-guard test
         run: bash tests/test-pre-commit-guard.sh
+      - name: config-protection test
+        run: bash tests/test-config-protection.sh
       - name: model-local schema test
         run: python3 tests/test-model-local-schema.py
