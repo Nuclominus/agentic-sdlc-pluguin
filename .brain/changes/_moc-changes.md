@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-09-23 | #212 | `feat` | — | [[changes/2026-09-23-PR-212-generic-namespaced-doc-reference-check-replacing-the-one-off]] |
 | 2026-09-23 | #211 | `feat` | — | [[changes/2026-09-23-PR-211-surface-lint-typecheck-failures-right-after-the-developer-ph]] |
 | 2026-09-23 | #210 | `feat` | — | [[changes/2026-09-23-PR-210-protect-lint-format-configs-during-an-active-sdlc-run-androi]] |
 | 2026-09-23 | #209 | `feat` | — | [[changes/2026-09-23-PR-209-block-secret-commits-and-no-verify-core]] |
