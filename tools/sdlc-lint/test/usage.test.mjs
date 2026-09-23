@@ -881,6 +881,8 @@ test("every pipeline tier resolves to exactly one registry entry with the expect
 // The model each median was MEASURED on. A tier repointed to a cheaper/dearer model keeps its
 // token shape but not its dollar figure, so the drift check prices the baseline at the
 // measured-on model — `opus` was measured on claude-opus-5 before the tier moved to 5.5.
+// This validates the TOKEN shape only. It says nothing about how Opus 5.5 behaves: no run
+// has been measured on it, so the opus baseline is provisional (see claude.yaml).
 const MEASURED_ON = { opus: "claude-opus-5" };
 
 const estimateRow = (tier, registry, model = TIER_MODEL[tier]) => {
