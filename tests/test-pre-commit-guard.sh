@@ -4,7 +4,12 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HOOK="$REPO_ROOT/plugins/sdlc/hooks/pre-commit-guard.sh"
 fails=0
 
-run_hook() { printf '{"tool_name":"Bash","tool_input":{"command":"%s"}}' "$1" | bash "$HOOK"; echo "EXIT:$?"; }
+run_hook() {  # JSON-escapes $1 so a command containing a quoted commit message stays valid JSON.
+  local escaped
+  escaped=$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')
+  printf '{"tool_name":"Bash","tool_input":{"command":"%s"}}' "$escaped" | bash "$HOOK"
+  echo "EXIT:$?"
+}
 
 check_blocked() {  # $1 label, $2 command
   out=$(run_hook "$2")
@@ -21,5 +26,6 @@ check_blocked "no-verify on commit" 'git commit --no-verify -m x'
 check_blocked "no-verify on push"   'git push --no-verify'
 check_allowed "unrelated bash command" 'ls -la'
 check_allowed "commit with no staged files" 'git commit -m x'
+check_allowed "no-verify text inside a quoted commit message" 'git commit -m "please dont use --no-verify here"'
 
 [ "$fails" -eq 0 ] && { echo "ALL PASS"; exit 0; } || { echo "$fails FAILURE(S)"; exit 1; }

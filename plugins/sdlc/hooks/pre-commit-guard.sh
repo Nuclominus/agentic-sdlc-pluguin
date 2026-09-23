@@ -18,8 +18,11 @@ cmd=$(printf '%s' "$payload" | jq -r '.tool_input.command // empty' 2>/dev/null)
 [ -n "$cmd" ] || exit 0
 
 # ── 1. --no-verify is always denied on commit/push, independent of file contents ──────────
+# Strip quoted substrings before flag-scanning, so --no-verify mentioned inside a commit
+# message string (or any other quoted argument) isn't mistaken for the flag itself.
+scan_cmd=$(printf '%s' "$cmd" | sed -E "s/'[^']*'//g; s/\"[^\"]*\"//g")
 if printf '%s' "$cmd" | grep -qE '(^|[;&|[:space:]])git([[:space:]]+-[^[:space:]]+)*[[:space:]]+(commit|push)\b' \
-   && printf '%s' "$cmd" | grep -qE '(^|[[:space:]])--no-verify\b'; then
+   && printf '%s' "$scan_cmd" | grep -qE '(^|[[:space:]])--no-verify\b'; then
   {
     echo "HOOK BLOCKED — --no-verify is not allowed."
     echo "Pre-commit/pre-push hooks exist to catch problems before they leave your machine;"
