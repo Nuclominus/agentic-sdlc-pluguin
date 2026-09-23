@@ -52,8 +52,8 @@ estimation_baselines:
 models:
   # ── dispatched tiers ──────────────────────────────────────────────────────────
   - tag: opus
-    model_id: claude-opus-5
-    pricing: { input: 5.0, cached_input: 0.5, output: 25.0 }
+    model_id: claude-opus-5-5
+    pricing: { input: 4.0, cached_input: 0.2, output: 20.0 }
   - tag: sonnet
     model_id: claude-sonnet-5
     pricing: { input: 2.0, cached_input: 0.2, output: 10.0 }
@@ -72,6 +72,9 @@ models:
   - tag: fable-5
     model_id: claude-fable-5
     pricing: { input: 10.0, cached_input: 1.0, output: 50.0 }
+  - tag: opus-5
+    model_id: claude-opus-5
+    pricing: { input: 5.0, cached_input: 0.5, output: 25.0 }
   - tag: opus-4-8
     model_id: claude-opus-4-8
     pricing: { input: 5.0, cached_input: 0.5, output: 25.0 }

@@ -874,16 +874,21 @@ test("every pipeline tier resolves to exactly one registry entry with the expect
   for (const tier of reg.raw.pipeline_tiers) assert.ok(TIER_MODEL[tier], `tier ${tier} has no registry entry`);
   assert.deepEqual(
     Object.fromEntries(reg.raw.pipeline_tiers.map((t) => [t, TIER_MODEL[t]])),
-    { opus: "claude-opus-5", sonnet: "claude-sonnet-5", haiku: "claude-haiku-4-5-20251001", fable: "claude-fable-5-1" },
+    { opus: "claude-opus-5-5", sonnet: "claude-sonnet-5", haiku: "claude-haiku-4-5-20251001", fable: "claude-fable-5-1" },
   );
 });
 
-const estimateRow = (tier, registry) => {
+// The model each median was MEASURED on. A tier repointed to a cheaper/dearer model keeps its
+// token shape but not its dollar figure, so the drift check prices the baseline at the
+// measured-on model — `opus` was measured on claude-opus-5 before the tier moved to 5.5.
+const MEASURED_ON = { opus: "claude-opus-5" };
+
+const estimateRow = (tier, registry, model = TIER_MODEL[tier]) => {
   const b = registry.raw.estimation_baselines[tier];
   return priceUsage({
     input_tokens: b.input, cache_read_tokens: b.cache_read,
     cache_write_5m_tokens: b.cache_write, cache_write_1h_tokens: 0, output_tokens: b.output,
-  }, TIER_MODEL[tier], registry);
+  }, model, registry);
 };
 
 test("the registry carries an estimation baseline for every pipeline tier", () => {
@@ -899,7 +904,7 @@ test("the registry carries an estimation baseline for every pipeline tier", () =
 
 test("each baseline reproduces its tier's measured median cost within 15%", () => {
   for (const [tier, measured] of Object.entries(MEASURED_MEDIAN_USD)) {
-    const est = estimateRow(tier, reg);
+    const est = estimateRow(tier, reg, MEASURED_ON[tier]);
     const err = Math.abs(est / measured - 1);
     assert.ok(err < 0.15, `${tier}: estimate $${est.toFixed(4)} vs measured $${measured} (${(err * 100).toFixed(1)}% off)`);
   }
