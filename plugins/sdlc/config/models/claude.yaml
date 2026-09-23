@@ -41,6 +41,10 @@ cache_write_multipliers:
 # baseline (35k input, 60% cached, single call) did not model that at all and so
 # under-reported real cost by 6-10x. Re-derive when the roster or prompt sizes move
 # materially.
+#
+# PROVISIONAL for `opus`: the tokens below were measured on claude-opus-5, and the tier
+# has since moved to claude-opus-5-5 (ADR-0035). Nothing has been measured on 5.5, so the
+# opus preview is the Opus 5 token shape at 5.5 rates. Re-derive once real 5.5 runs exist.
 estimation_baselines:
   opus:   { input: 30,  cache_read: 670000, cache_write: 93000, output: 1125 }
   sonnet: { input: 25,  cache_read: 725000, cache_write: 73000, output: 1230 }
@@ -51,9 +55,11 @@ estimation_baselines:
 
 models:
   # ── dispatched tiers ──────────────────────────────────────────────────────────
+  # Opus 5.5 cache reads are $0.20 (5% of input) — the published rate, not a typo; only the
+  # Fable 5.1 / Mythos 5.1 rows share that non-10% shape.
   - tag: opus
-    model_id: claude-opus-5
-    pricing: { input: 5.0, cached_input: 0.5, output: 25.0 }
+    model_id: claude-opus-5-5
+    pricing: { input: 4.0, cached_input: 0.2, output: 20.0 }
   - tag: sonnet
     model_id: claude-sonnet-5
     pricing: { input: 2.0, cached_input: 0.2, output: 10.0 }
@@ -72,6 +78,9 @@ models:
   - tag: fable-5
     model_id: claude-fable-5
     pricing: { input: 10.0, cached_input: 1.0, output: 50.0 }
+  - tag: opus-5
+    model_id: claude-opus-5
+    pricing: { input: 5.0, cached_input: 0.5, output: 25.0 }
   - tag: opus-4-8
     model_id: claude-opus-4-8
     pricing: { input: 5.0, cached_input: 0.5, output: 25.0 }
