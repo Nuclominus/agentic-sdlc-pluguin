@@ -27,5 +27,9 @@ check_blocked "no-verify on push"   'git push --no-verify'
 check_allowed "unrelated bash command" 'ls -la'
 check_allowed "commit with no staged files" 'git commit -m x'
 check_allowed "no-verify text inside a quoted commit message" 'git commit -m "please dont use --no-verify here"'
+check_blocked "-n as its own flag on commit"     'git commit -n -m x'
+check_blocked "-n bundled with -m on commit"     'git commit -nm x'
+check_allowed "-n substring inside a quoted commit message" 'git commit -m "see section -n for details"'
+check_allowed "-n on push is --dry-run, not --no-verify" 'git push -n'
 
 [ "$fails" -eq 0 ] && { echo "ALL PASS"; exit 0; } || { echo "$fails FAILURE(S)"; exit 1; }

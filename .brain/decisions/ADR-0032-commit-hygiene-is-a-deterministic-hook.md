@@ -35,7 +35,9 @@ Android-specific, they apply to every stack the pipeline runs on.
 - Registered as a second `PreToolUse` group in `plugins/sdlc/hooks/hooks.json`, matcher `Bash`,
   alongside the existing `matcher: "Agent"` entry (`enforce-agent-model.sh`).
 - `--no-verify` on `git commit`/`git push` is denied unconditionally, independent of file
-  contents — it is a rule about the *act*, not the diff.
+  contents — it is a rule about the *act*, not the diff. `git commit`'s own short alias `-n`
+  (including bundled with other short flags, e.g. `-nm "msg"`) is denied the same way; `git
+  push -n` is left alone since there it means `--dry-run`, an unrelated flag.
 - Staged secrets are scanned only on `git commit` (staged files), `git push` and
   `gh pr create` (files added over the upstream/`origin/HEAD` base) — the same file-selection
   logic `git-guard.sh` already uses for the same three commands.
@@ -55,10 +57,13 @@ Android-specific, they apply to every stack the pipeline runs on.
 
 ## Consequences
 
-- **Diff-scoped only, not a history scanner.** A key committed before this hook shipped is out
-  of scope by design; this is a net for new leaks about to be published, not a repository audit.
-  The stderr report says so explicitly so a false-positive fix doesn't get reached for
-  `--no-verify` instead.
+- **Touched-file content, not a history scanner — and not line-level diff hunks either.** The
+  hook scans the current full content of each file staged/changed in this commit/push, not just
+  the lines being added. A file this commit/push doesn't touch at all is out of scope by design
+  (a key committed before this hook shipped, sitting untouched, isn't caught), but touching any
+  line of a file that already contains an old secret elsewhere in that same file still gets
+  caught, since the whole file's content is scanned, not just the diff hunk. The stderr report
+  says so explicitly so a false-positive fix doesn't get reached for `--no-verify` instead.
 - **Claude-Code-only for now.** No Antigravity or Codex hook equivalent exists yet. Antigravity's
   host descriptor (`tools/sdlc-lint/hosts/antigravity.json`) already drops every `Bash`-matcher
   `PreToolUse` hook (`git-guard.sh` included) because that event was not observed to fire in
@@ -73,7 +78,7 @@ Android-specific, they apply to every stack the pipeline runs on.
   not to reach for `--no-verify` instead, since that would defeat both denials at once.
 
 ## Related
-- Implemented by: this change (PR not yet opened at commit time).
+- Implemented by: #209
 - Relates to: [[decisions/ADR-0031-resume-preflight-gates]] /
   [[decisions/ADR-0020-logging-lives-in-a-development-artifact]] /
   [[decisions/ADR-0029-one-ssot-emitted-host-packages]]
