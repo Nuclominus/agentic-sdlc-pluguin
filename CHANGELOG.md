@@ -4,6 +4,37 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+`sdlc` `3.0.0` → `3.1.0`, `android-foundation` `3.0.1` → `3.1.0`.
+
+### Added
+
+- **Resume preflight** ([#208], ADR-0031): `--resume` now checks the checkpoint's branch and age
+  before re-entering a run, and start-fresh clears stale checkpoints.
+- **Commit-hygiene hook in core** ([#209], ADR-0032): blocks commits that stage secrets and
+  `git commit --no-verify` / `-n`.
+- **Config protection during a run** ([#210], ADR-0033, android-foundation): edits to lint/format
+  configs are gated while an SDLC run is active.
+- **Phase-boundary lint feedback** ([#211], ADR-0034, android-foundation): lint/typecheck failures
+  surface right after the developer phase; the check never blocks.
+- **Generic doc-reference check** ([#212]): `sdlc-lint` validates namespaced doc references,
+  replacing the one-off AAR CI step.
+
+### Changed
+
+- **The `opus` tier resolves to Claude Opus 5.5** ([#220], ADR-0035): $4 / $0.20 cached / $20 per
+  MTok; `claude-opus-5` stays as a pin-only reference so recorded runs still price. The opus
+  estimation baseline is provisional until measured on 5.5.
+- **AAR cost heuristic** ([#213]): the analyst ranks a phase-level cut above a same-phase model
+  re-tier, since dispatch cost grows faster than linearly in phase count.
+
+[#208]: https://github.com/Nuclominus/agentic-sdlc-pluguin/issues/208
+[#209]: https://github.com/Nuclominus/agentic-sdlc-pluguin/issues/209
+[#210]: https://github.com/Nuclominus/agentic-sdlc-pluguin/issues/210
+[#211]: https://github.com/Nuclominus/agentic-sdlc-pluguin/issues/211
+[#212]: https://github.com/Nuclominus/agentic-sdlc-pluguin/issues/212
+[#213]: https://github.com/Nuclominus/agentic-sdlc-pluguin/issues/213
+[#220]: https://github.com/Nuclominus/agentic-sdlc-pluguin/issues/220
+
 ## [4.0.0] — 2026-09-22
 
 `sdlc` `2.5.0` → `3.0.0`, `android-foundation` `3.0.0` → `3.0.1`, marketplace `3.0.0` → `4.0.0`.
