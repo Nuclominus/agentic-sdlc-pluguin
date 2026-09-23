@@ -4,6 +4,8 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+## [4.1.0] — 2026-09-24
+
 `sdlc` `3.0.0` → `3.1.0`, `android-foundation` `3.0.1` → `3.1.0`.
 
 ### Added
