@@ -329,26 +329,38 @@ since: 2026-07-06
     - If `branchOk` is `false`: **HALT**, MUST PRINT VERBATIM:
       ```
       ❌ Cannot resume "{task_slug}": the run lives on branch {runBranch}, current branch is {currentBranch}.
-         git checkout {runBranch}   — then /sdlc:start --resume
+         Run `git worktree list` and check for an existing checkout of {runBranch} first (Step 2
+         item 5) — switch to that worktree if one exists. Only run `git checkout {runBranch}` in
+         this workspace if no worktree holds it. Then /sdlc:start --resume
       ```
       Do not proceed. This is the one way `--resume` can silently apply completed-phase context to
-      the wrong tree — never resume onto the wrong branch, no exceptions.
+      the wrong tree — never resume onto the wrong branch, no exceptions. Never `git checkout` a
+      branch that might be checked out in another worktree (same rule as Step 2 item 5) — that
+      fails with `already checked out at <path>`.
     - If `branchOk` is `true` and `stale` is `false`: continue silently to item 3.
     - If `stale` is `true`:
-      - **Interactive** (`CONTEXT.headless_mode` is `false`): MUST PRINT VERBATIM, then ask:
+      - **Interactive** (`CONTEXT.headless_mode` is `false`): MUST PRINT VERBATIM, then ask (reading
+        `{ageHours}` FROM the `resume-check` JSON output above, never computed inline from `ageMs`):
         ```
-        ⚠️ Stale run "{task_slug}" found (last checkpoint update {age_hours}h ago).
+        ⚠️ Stale run "{task_slug}" found (last checkpoint update {ageHours}h ago).
            resume / start fresh / abort ?
         ```
         - **resume** → continue to item 3 as normal.
-        - **start fresh** → treat exactly as "no --resume": go to the non-resume Step 2 algorithm
-          with the SAME `task_slug` (this overwrites `_brief.md` and, on first phase dispatch,
-          `.checkpoint/_run.json` — existing checkpoints for already-completed phases are left on
-          disk but no longer consulted, since a fresh run's Step 3 rebuilds `_run.json` from
-          scratch).
+        - **start fresh** → **first**, remove every `*.json` file under
+          `docs/plans/{task_slug}/.checkpoint/` (including `_run.json` — nothing under it needs to
+          survive; Step 3's `3-checkpoint-init` rebuilds `_run.json` from scratch on the fresh run's
+          first phase dispatch, and every completed-phase checkpoint must be gone so a LATER resume
+          of this same fresh run cannot see the old run's completed units):
+          ```bash
+          rm -f docs/plans/{task_slug}/.checkpoint/*.json
+          ```
+          **Then** treat exactly as "no --resume": go to the non-resume Step 2 algorithm with the
+          SAME `task_slug` (this overwrites `_brief.md`; `_started_at`, which is not a `.json` file,
+          is left alone so elapsed time still spans from the task's original start).
         - **abort** → stop. Print nothing further.
-      - **Headless** (`CONTEXT.headless_mode` is `true`): behave as **start fresh**, and emit to
-        stderr: `WARN: stale run "{task_slug}" (age {age_hours}h) — starting fresh`.
+      - **Headless** (`CONTEXT.headless_mode` is `true`): behave as **start fresh** (clear the
+        checkpoints exactly as above before falling through), and emit to stderr:
+        `WARN: stale run "{task_slug}" (age {ageHours}h) — starting fresh`.
 3. Do NOT recreate `_brief.md`. Read the existing one (it is the SSOT description for agents). If a
    non-empty description was passed AND it differs from `_brief.md`, print
    `⚠️ --resume: description differs from saved _brief.md; using saved brief` and continue with the saved brief.

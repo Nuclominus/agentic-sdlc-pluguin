@@ -131,8 +131,11 @@ export function resumePreflight({ runPath, checkpointDir, currentBranch, nowMs =
   }
   const ageMs = newestCheckpointPath == null ? null : nowMs - newestMtimeMs;
   const stale = ageMs != null && ageMs > maxAgeMs;
+  // Machine value, not LLM arithmetic (H3 convention): the orchestrator prints this verbatim
+  // in SKILL.md's stale-run message, so the hour conversion happens here, not in the prompt.
+  const ageHours = ageMs == null ? null : Math.round(ageMs / 3600000);
 
-  return { branchOk, runBranch, currentBranch, stale, ageMs, newestCheckpointPath };
+  return { branchOk, runBranch, currentBranch, stale, ageMs, ageHours, newestCheckpointPath };
 }
 
 export function resolveWorkspace(workspaceDir) {

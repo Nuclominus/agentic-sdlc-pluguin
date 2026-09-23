@@ -54,7 +54,7 @@ if (cmd !== "finish" && cmd !== "seal-stale" && cmd !== "resume-check") {
       console.log(JSON.stringify({ command: "resume-check", ok: true, ...r }));
     } else {
       console.log(`resume-check: branchOk=${r.branchOk} runBranch=${r.runBranch ?? "—"} currentBranch=${r.currentBranch}`);
-      console.log(`  stale=${r.stale}${r.ageMs != null ? ` (age ${Math.round(r.ageMs / 3600000)}h)` : " (no checkpoints yet)"}`);
+      console.log(`  stale=${r.stale}${r.ageHours != null ? ` (age ${r.ageHours}h)` : " (no checkpoints yet)"}`);
     }
   }
 } else if (cmd === "seal-stale") {

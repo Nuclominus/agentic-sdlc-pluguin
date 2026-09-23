@@ -1,5 +1,5 @@
 ---
-adr:
+adr: 31
 status: accepted
 date: 2026-09-23
 supersedes: null
@@ -30,7 +30,9 @@ orchestrator only echoes" pattern (ADR-0019) instead of inlining bash logic into
   `plugins/sdlc/tools/run/reentry.mjs`, mirrored (re-exported, not duplicated — matching how
   `tools/sdlc-lint/lib/resume.mjs` already re-exports `resolveWorkspace`/`computeReentry`) into
   `tools/sdlc-lint/lib/resume.mjs`. It reports `{ branchOk, runBranch, currentBranch, stale,
-  ageMs, newestCheckpointPath }` and never gates anything itself.
+  ageMs, ageHours, newestCheckpointPath }` and never gates anything itself. `ageHours` (rounded)
+  exists so SKILL.md's stale-run message prints a machine-computed value rather than doing the
+  ms-to-hours arithmetic itself.
 - `_run.json` gains two optional fields (`schemas/run.schema.json`): `branch_name`, recorded at
   **3-checkpoint-init** via `git branch --show-current` *after* Step 2 item 5's worktree
   resolution (recording it before would capture the orchestrator's own starting branch instead of
@@ -60,6 +62,5 @@ orchestrator only echoes" pattern (ADR-0019) instead of inlining bash logic into
   *restore* repository state, it only refuses to proceed silently when the state looks wrong.
 
 ## Related
-- Implemented by: this change (PR not yet opened at commit time — task review runs first; the
-  brain-sync follow-up should backfill the PR number here once it merges).
+- Implemented by: #208
 - Relates to: [[decisions/ADR-0019-the-run-start-is-one-command]]

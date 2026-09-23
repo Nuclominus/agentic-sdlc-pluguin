@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, utimesSync } from "node:fs";
+import { readdirSync, readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, utimesSync, cpSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -131,6 +131,24 @@ test("resumePreflight: 7h-old newest checkpoint → stale under 6h threshold", (
   assert.ok(r.ageMs >= 7 * 3600 * 1000 * 0.99);
 });
 
+// H3 "machine values" convention: SKILL.md prints {ageHours} verbatim from this tool's own
+// output rather than computing hours-from-ageMs itself — so ageHours must be present and correct.
+test("resumePreflight: ageHours is the rounded-hours form of ageMs, not left for the caller to compute", () => {
+  const { runPath, checkpointDir } = makeRun({ branchName: "develop", ageHoursOfNewestCheckpoint: 7 });
+  const r = resumePreflight({ runPath, checkpointDir, currentBranch: "develop", maxAgeMs: 6 * 3600 * 1000 });
+  assert.equal(r.ageHours, Math.round(r.ageMs / 3600000));
+  assert.equal(r.ageHours, 7);
+});
+
+test("resumePreflight: no checkpoints yet → ageHours is null, same as ageMs", () => {
+  const dir = mkdtempSync(join(tmpdir(), "resume-preflight-"));
+  const checkpointDir = join(dir, ".checkpoint");
+  mkdirSync(checkpointDir, { recursive: true });
+  const r = resumePreflight({ runPath: join(checkpointDir, "_run.json"), checkpointDir, currentBranch: "develop" });
+  assert.equal(r.ageHours, null);
+  rmSync(dir, { recursive: true, force: true });
+});
+
 test("resumePreflight: missing _run.json → branchOk true (fail-open, nothing recorded yet)", () => {
   const dir = mkdtempSync(join(tmpdir(), "resume-preflight-"));
   const checkpointDir = join(dir, ".checkpoint");
@@ -162,15 +180,23 @@ test("resumePreflight against fixture resume-branch-mismatch: flags the recorded
 });
 
 test("resumePreflight against fixture resume-stale: flags a checkpoint backdated past the threshold", () => {
-  const checkpointDir = join(FIX, "resume-stale", ".checkpoint");
-  // Git does not preserve mtimes across checkout, so the fixture's staleness is set here at
-  // test time rather than relied on from the committed file's mtime. Every phase checkpoint
-  // (not _run.json, which resumePreflight already excludes) must be backdated — otherwise a
-  // freshly-checked-out sibling file newer than the one we backdate would still read as "newest".
-  const past = new Date(Date.now() - 7 * 3600 * 1000);
-  for (const f of ["business_analysis.json", "development-database.json", "development-backend.json"]) {
-    utimesSync(join(checkpointDir, f), past, past);
-  }
-  const r = resumePreflight({ runPath: join(checkpointDir, "_run.json"), checkpointDir, currentBranch: "develop", maxAgeMs: 6 * 3600 * 1000 });
-  assert.equal(r.stale, true);
+  // Backdating mtimes must never touch the committed fixture itself — utimesSync mutates the
+  // file it targets, and that mutation would otherwise persist on disk as a side effect of
+  // running the test suite. Copy the fixture into a scratch dir first (same mkdtempSync pattern
+  // used elsewhere in this file) and backdate the copy only.
+  const dir = mkdtempSync(join(tmpdir(), "resume-stale-"));
+  cpSync(join(FIX, "resume-stale"), dir, { recursive: true });
+  const checkpointDir = join(dir, ".checkpoint");
+  try {
+    // Git does not preserve mtimes across checkout, so the fixture's staleness is set here at
+    // test time rather than relied on from the committed file's mtime. Every phase checkpoint
+    // (not _run.json, which resumePreflight already excludes) must be backdated — otherwise a
+    // freshly-checked-out sibling file newer than the one we backdate would still read as "newest".
+    const past = new Date(Date.now() - 7 * 3600 * 1000);
+    for (const f of ["business_analysis.json", "development-database.json", "development-backend.json"]) {
+      utimesSync(join(checkpointDir, f), past, past);
+    }
+    const r = resumePreflight({ runPath: join(checkpointDir, "_run.json"), checkpointDir, currentBranch: "develop", maxAgeMs: 6 * 3600 * 1000 });
+    assert.equal(r.stale, true);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
