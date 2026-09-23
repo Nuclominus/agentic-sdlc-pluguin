@@ -1124,6 +1124,11 @@ gate uses the ACTUAL accumulated `cost_usd`. Both read the same cap from `CONTEX
 
 If validation fails, **do not proceed** — ask the user how to handle (retry, skip, abort).
 
+On a stack that ships a `post-implement-check` `SubagentStop` hook (android-foundation does): if
+its last message for this phase reported `FAIL`, treat that the same as any other 3e validation
+failure — do not wait for Step 4 to discover the same problem after QA and Security have already
+spent tokens on this phase's output.
+
 **3e-heal. Self-healing micro-loop (Track G1).**
 
 Runs ONLY when the resolved recipe phase carries a `heal: {max_attempts: N}` block. Without one,
