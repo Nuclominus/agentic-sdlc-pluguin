@@ -15,7 +15,9 @@
 #                          row is not rendered, so a project without CameraX never sees `camerax`.
 #
 # Do not hand-edit the generated table (android-skills.md) or the README block — edit this file, then
-# `node tools/sdlc-lint/cli.mjs skill-sets --write`. Refresh against upstream with /android-skills-sync.
+# `node tools/sdlc-lint/cli.mjs skill-sets --write`. There is no upstream refresh command yet (one is
+# planned under ADR-0036): until it lands, compare against `android skills list --long` and re-triage
+# by hand.
 
 set: android-skills
 source:
@@ -112,10 +114,14 @@ skills:
     upstream_updated: "2026-09-18"
     category: build-release
     summary: Upgrade or migrate a project to Android Gradle Plugin 9
+    # AGP below 9, however it is declared: a version-catalog key (agp, androidGradlePlugin,
+    # android-gradle-plugin, androidGradle …), the legacy buildscript classpath, or the plugins DSL
+    # in a build or settings script (`id("com.android.application") version "8.x"`).
     applies_if:
       any:
-        - file_contains: { path: gradle/libs.versions.toml, pattern: '\b(agp|androidGradlePlugin)\s*=\s*"[0-8]\.' }
-        - file_contains: { path: "**/build.gradle*", pattern: 'com\.android\.tools\.build:gradle:[0-8]\.' }
+        - file_contains: { path: gradle/libs.versions.toml, pattern: '(^|\s)(agp|[aA]ndroid-?[gG]radle(-?[pP]lugin)?)\s*=\s*"[0-8]\.' }
+        - file_contains: { path: "**/*.gradle*", pattern: 'com\.android\.tools\.build:gradle:[0-8]\.' }
+        - file_contains: { path: "**/*.gradle*", pattern: 'com\.android\.(application|library|test|dynamic-feature)[''"]\s*\)?\s*version\s*\(?\s*[''"][0-8]\.' }
     roles:
       devops:
         when: "when the task bumps AGP or Gradle, or touches build-logic that AGP 9 changes"

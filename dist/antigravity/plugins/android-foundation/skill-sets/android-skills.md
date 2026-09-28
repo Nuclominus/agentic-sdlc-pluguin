@@ -11,7 +11,7 @@ rendered into a prompt only when the project matches the gate.
 | Skill | Category | BA | DEV | REV | SEC | TST | QA | DBG | DOC | OPS | CI | Gate / needs |
 |---|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
 | `android-cli` | tooling | R | R | R | R | R | R | R | R | R | R | needs `android` |
-| `agp-9-upgrade` | build-release | — | R | — | — | — | — | — | — | R | R | `gradle/libs.versions.toml` matches or `**/build.gradle*` matches |
+| `agp-9-upgrade` | build-release | — | R | — | — | — | — | — | — | R | R | `gradle/libs.versions.toml` ~ `/(^\|\s)(agp\|[aA]ndroid-?[gG]radle(-?[pP]lugin)?)\s*=\s*"[0-8]\./` or `**/*.gradle*` ~ `/com\.android\.tools\.build:gradle:[0-8]\./` or `**/*.gradle*` ~ `/com\.android\.(application\|library\|test\|dynamic-feature)['"]\s*\)?\s*version\s*\(?\s*['"][0-8]\./` |
 | `r8-analyzer` | build-release | — | — | — | R | — | — | — | — | R | — | — |
 | `android-profiler` | profiling | — | — | — | — | — | R | R | — | — | — | needs `adb` |
 | `testing-setup` | testing | — | — | — | — | R | R | — | — | — | — | — |

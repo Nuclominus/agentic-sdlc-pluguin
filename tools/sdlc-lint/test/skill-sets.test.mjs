@@ -122,6 +122,47 @@ test("the android-skills set covers the security-analyst with no UI, navigation 
   for (const banned of ["ui", "navigation", "media", "form-factor"]) assert.ok(!secCats.has(banned), banned);
 });
 
+// The gate is evaluated by the SHIPPED resolver grammar, so it is tested against that, not a copy.
+test("agp-9-upgrade gate: every common way of declaring AGP 8 matches, AGP 9 and no AGP do not", async () => {
+  const { evalRule } = await import("../../../plugins/sdlc/tools/resolve/detect.mjs");
+  const doc = YAML.parse(readFileSync(join(REPO, "plugins/android-foundation/skill-sets/android-skills.yaml"), "utf8"));
+  const gate = doc.skills.find((s) => s.id === "agp-9-upgrade").applies_if;
+  const project = (files) => {
+    const root = mkdtempSync(join(tmpdir(), "agp-gate-"));
+    for (const [rel, text] of Object.entries(files)) {
+      mkdirSync(dirname(join(root, rel)), { recursive: true });
+      writeFileSync(join(root, rel), text);
+    }
+    return root;
+  };
+  const agp8 = {
+    "catalog agp": { "gradle/libs.versions.toml": '[versions]\nagp = "8.7.2"\n' },
+    "catalog androidGradlePlugin": { "gradle/libs.versions.toml": '[versions]\nandroidGradlePlugin = "8.5.0"\n' },
+    "catalog android-gradle-plugin": { "gradle/libs.versions.toml": '[versions]\nandroid-gradle-plugin = "8.3.1"\n' },
+    "catalog androidGradle": { "gradle/libs.versions.toml": '[versions]\nandroidGradle = "8.1.0"\n' },
+    "legacy classpath": { "build.gradle": "buildscript { dependencies { classpath 'com.android.tools.build:gradle:8.2.0' } }\n" },
+    "plugins DSL kts": { "build.gradle.kts": 'plugins {\n  id("com.android.application") version "8.6.0" apply false\n}\n' },
+    "plugins DSL groovy": { "build.gradle": "plugins {\n  id 'com.android.library' version '8.4.0' apply false\n}\n" },
+    "settings pluginManagement": { "settings.gradle.kts": 'pluginManagement { plugins { id("com.android.application") version "8.0.2" } }\n' },
+  };
+  for (const [name, files] of Object.entries(agp8)) assert.equal(evalRule(gate, project(files)), true, name);
+
+  const notAgp8 = {
+    "catalog AGP 9": { "gradle/libs.versions.toml": '[versions]\nagp = "9.0.0"\n' },
+    "plugins DSL AGP 9": { "build.gradle.kts": 'plugins { id("com.android.application") version "9.1.0" }\n' },
+    "unrelated 8.x key": { "gradle/libs.versions.toml": '[versions]\nkotlin = "8.0.0"\nmyagp = "8.0.0"\n' },
+    "no Android": { "build.gradle.kts": 'plugins { kotlin("jvm") version "2.1.0" }\n' },
+  };
+  for (const [name, files] of Object.entries(notAgp8)) assert.equal(evalRule(gate, project(files)), false, name);
+});
+
+test("the table shows a file_contains gate's pattern with `|` escaped", () => {
+  const doc = set();
+  doc.skills[0].applies_if = { file_contains: { path: "a.toml", pattern: "(x|y)" } };
+  const md = renderSkillSetTable(doc, CORE_ROLES, "demo.yaml");
+  assert.match(md, /`a\.toml` ~ `\/\(x\\\|y\)\/`/);
+});
+
 function tree() {
   const root = mkdtempSync(join(tmpdir(), "skill-sets-"));
   mkdirSync(join(root, "plugins/sdlc"), { recursive: true });

@@ -111,7 +111,9 @@ function ruleText(rule) {
   if ("dependency" in rule) return `\`${rule.dependency}\``;
   if ("file_glob" in rule) return `files \`${rule.file_glob}\``;
   if ("file_exists" in rule) return `file \`${rule.file_exists}\``;
-  if ("file_contains" in rule) return `\`${rule.file_contains.path}\` matches`;
+  // The pattern IS the gate — "matches" alone hides exactly what a reviewer needs to check.
+  // `|` is escaped so a regex alternation cannot split the table cell.
+  if ("file_contains" in rule) return `\`${rule.file_contains.path}\` ~ \`/${rule.file_contains.pattern.replaceAll("|", "\\|")}/\``;
   if ("any" in rule) return rule.any.map(ruleText).join(" or ");
   if ("all" in rule) return rule.all.map(ruleText).join(" and ");
   return "";
