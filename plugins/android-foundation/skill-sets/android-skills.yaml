@@ -1,0 +1,371 @@
+# ADR-0036 — the Android CLI skill catalog, triaged per core role.
+#
+# THE single source of truth for which role may use which skill from Google's android/skills catalog
+# (installed with `android skills add`, bare-named, into the agent's skills directory). Every catalog
+# skill appears exactly once: with `roles`, or with an `unassigned` reason.
+#
+#   categories.<id>.roles  is the SCOPE GUARD — a skill of that category may only be assigned to those
+#                          roles (`sdlc-lint skill-sets` rejects anything else). That is what keeps the
+#                          security-analyst away from UI skills and the reviewer away from build tooling.
+#   roles.<role>.policy    defaults to `recommended`. `mandatory` only when the trigger holds on
+#                          essentially every dispatch of that role — every M row is owed by compliance.
+#   roles.<role>.when      dispatch-scoped (never "the first …" without "this dispatch"): it is pasted
+#                          into EVERY dispatch of the role.
+#   applies_if             optional gate (detect.mjs grammar + `dependency: <maven coord>`); a gated-off
+#                          row is not rendered, so a project without CameraX never sees `camerax`.
+#
+# Do not hand-edit the generated table (android-skills.md) or the README block — edit this file, then
+# `node tools/sdlc-lint/cli.mjs skill-sets --write`. Refresh against upstream with /android-skills-sync.
+
+set: android-skills
+source:
+  homepage: https://github.com/android/skills
+  catalog_version: "1.0.16406183"
+  synced_at: "2026-09-28"
+
+categories:
+  tooling:
+    label: Tooling & environment
+    upstream: [devtools]
+    roles: [business-analyst, developer, reviewer, tester, qa-engineer, security-analyst, document-writer, debugger, devops, cicd]
+  build-release:
+    label: Build & release
+    upstream: [build-system, performance]
+    roles: [developer, devops, cicd, security-analyst]
+  profiling:
+    label: Runtime profiling
+    upstream: [profilers]
+    roles: [debugger, qa-engineer, developer]
+  testing:
+    label: Testing
+    upstream: [testing]
+    roles: [tester, qa-engineer, cicd]
+  security:
+    label: Security
+    upstream: [security]
+    roles: [security-analyst, developer]
+  play-policy:
+    label: Play policy compliance
+    upstream: [play]
+    roles: [security-analyst, business-analyst, devops]
+  play-integration:
+    label: Play integrations & monetization
+    upstream: [play]
+    roles: [developer, business-analyst]
+  identity:
+    label: Identity & credentials
+    upstream: [identity]
+    roles: [developer, security-analyst, business-analyst]
+  ui:
+    label: UI / Compose
+    upstream: [jetpack-compose, system]
+    roles: [developer, qa-engineer, business-analyst]
+  navigation:
+    label: Navigation
+    upstream: [navigation]
+    roles: [developer, business-analyst]
+  form-factor:
+    label: Form factors (TV / Wear / XR)
+    upstream: [tv, wear, xr]
+    roles: [developer, business-analyst, qa-engineer]
+  media:
+    label: Camera & media
+    upstream: [camera, media]
+    roles: [developer]
+  on-device-ai:
+    label: On-device AI & agents
+    upstream: [device-ai]
+    roles: [developer, business-analyst]
+
+skills:
+  # ---- tooling -------------------------------------------------------------------------------
+  - id: android-cli
+    upstream_path: devtools/android-cli
+    category: tooling
+    summary: The `android` CLI — create, describe, sdk, emulator, run, screen, layout, studio, docs, skills
+    requires_tools: [android]
+    roles:
+      business-analyst:
+        when: "when analysing an existing Android project — `android describe` for structure and build targets, `android docs search|fetch` to ground requirements; never `create`"
+      developer:
+        when: "when scaffolding (`android create`), inspecting (`describe`), installing SDK packages (`sdk`), using Studio analysis (`studio analyze-file|find-declaration|find-usages|render-compose-preview`) or grounding an API in `android docs`"
+      reviewer:
+        when: "when a finding needs IDE-backed evidence (`android studio analyze-file|find-usages|check`) or an API claim needs `android docs` grounding"
+      tester:
+        when: "when a test API needs grounding in `android docs search|fetch`"
+      qa-engineer:
+        when: "when verifying on a device — `android emulator`, `run`, `screen capture|resolve`, `layout` — or grounding in `android docs`"
+      security-analyst:
+        when: "when a platform-security claim needs grounding in `android docs search|fetch`; read-only — no `run`, `create` or `sdk`"
+      document-writer:
+        when: "when documenting an Android API and the reference needs `android docs` grounding"
+      debugger:
+        when: "when reproducing on a device — `android run`, `emulator`, `screen capture`, `layout` — or grounding a hypothesis in `android docs`"
+      devops:
+        when: "when managing the toolchain — `android sdk`, `studio version-lookup`, `init`, `update`, `info`, `skills`"
+      cicd:
+        when: "when a CI job installs SDK packages (`android sdk install`) or needs the SDK path (`android info`)"
+
+  # ---- build & release -----------------------------------------------------------------------
+  - id: agp-9-upgrade
+    upstream_path: build-system/agp/agp-9-upgrade
+    upstream_updated: "2026-09-18"
+    category: build-release
+    summary: Upgrade or migrate a project to Android Gradle Plugin 9
+    applies_if:
+      any:
+        - file_contains: { path: gradle/libs.versions.toml, pattern: '\b(agp|androidGradlePlugin)\s*=\s*"[0-8]\.' }
+        - file_contains: { path: "**/build.gradle*", pattern: 'com\.android\.tools\.build:gradle:[0-8]\.' }
+    roles:
+      devops:
+        when: "when the task bumps AGP or Gradle, or touches build-logic that AGP 9 changes"
+      developer:
+        when: "when the task itself is an AGP upgrade"
+      cicd:
+        when: "when a CI change depends on the AGP / JDK toolchain version"
+  - id: r8-analyzer
+    upstream_path: performance/r8-analyzer
+    upstream_updated: "2026-09-22"
+    category: build-release
+    summary: Analyse R8 keep rules and build files for redundancy and over-broad keeps
+    roles:
+      devops:
+        when: "when changing minification, ProGuard/R8 keep rules or release build types"
+      security-analyst:
+        when: "when auditing obfuscation / keep rules of the release variant (MASVS-RESILIENCE)"
+
+  # ---- profiling -----------------------------------------------------------------------------
+  - id: android-profiler
+    upstream_path: profilers/android-profiler
+    upstream_updated: "2026-08-06"
+    category: profiling
+    summary: Record and analyse Perfetto traces — jank, startup, memory
+    requires_tools: [adb]
+    roles:
+      debugger:
+        when: "when the symptom is jank, slow startup, ANR or memory growth"
+      qa-engineer:
+        when: "when an acceptance criterion is a performance budget (startup time, frame time, memory)"
+
+  # ---- testing -------------------------------------------------------------------------------
+  - id: testing-setup
+    upstream_path: testing/testing-setup
+    upstream_updated: "2026-09-23"
+    category: testing
+    summary: Testing strategy and harness setup — unit, UI, screenshot tests
+    roles:
+      tester:
+        when: "when the module has no JVM test harness yet (no test source set or test dependencies)"
+      qa-engineer:
+        when: "when the project lacks a UI / screenshot / instrumented test harness"
+
+  # ---- security ------------------------------------------------------------------------------
+  - id: android-intent-security
+    upstream_path: security/android-intent-security
+    upstream_updated: "2026-09-25"
+    category: security
+    summary: Intent redirection, PendingIntent and exported-component hardening
+    roles:
+      security-analyst:
+        policy: mandatory
+        when: "before auditing Intent handling, PendingIntents or exported components in THIS dispatch"
+      developer:
+        when: "when adding an exported component, a PendingIntent or handling incoming Intent extras — a remediation fix included"
+  - id: android-permissions-security
+    upstream_path: security/android-permissions-security
+    upstream_updated: "2026-09-25"
+    category: security
+    summary: Permission and IPC-component audit and remediation
+    roles:
+      security-analyst:
+        policy: mandatory
+        when: "before auditing permissions, custom permissions or IPC components in THIS dispatch"
+      developer:
+        when: "when adding a permission, a custom permission or an IPC component"
+
+  # ---- Play ----------------------------------------------------------------------------------
+  - id: play-policy-insights
+    upstream_path: play/play-policy-insights
+    upstream_updated: "2026-07-13"
+    category: play-policy
+    summary: Audit an app against Google Play policy domains and store declarations
+    requires_tools: [python3]
+    roles:
+      security-analyst:
+        when: "when the change collects, shares or transmits user data, or adds a sensitive permission"
+      business-analyst:
+        when: "when a requirement touches user data, permissions or monetization that Play policy governs"
+  - id: play-billing-library-version-upgrade
+    upstream_path: play/play-billing-library-version-upgrade
+    upstream_updated: "2026-09-01"
+    category: play-integration
+    summary: Upgrade Play Billing Library across major versions
+    applies_if: { dependency: com.android.billingclient }
+    roles:
+      developer:
+        when: "when the task touches Play Billing integration or its library version"
+  - id: engage-sdk-integration
+    upstream_path: play/engage-sdk-integration
+    upstream_updated: "2026-09-22"
+    category: play-integration
+    summary: Integrate and debug the Play Engage SDK
+    applies_if: { dependency: com.google.android.engage }
+    roles:
+      developer:
+        when: "when the task touches Engage SDK clusters, publishing or its broadcast receivers"
+
+  # ---- identity ------------------------------------------------------------------------------
+  - id: restore-credentials
+    upstream_path: identity/restore-credentials
+    upstream_updated: "2026-09-14"
+    category: identity
+    summary: Restore Credentials — sign users back in after device restore
+    applies_if: { dependency: androidx.credentials }
+    roles:
+      developer:
+        when: "when implementing sign-in, sign-out or account restore on a new device"
+      security-analyst:
+        when: "when auditing credential storage or restore-key handling"
+  - id: verified-email
+    upstream_path: identity/verified-email
+    upstream_updated: "2026-09-16"
+    category: identity
+    summary: Retrieve a verified email via Credential Manager
+    applies_if: { dependency: androidx.credentials }
+    roles:
+      developer:
+        when: "when implementing email verification or sign-up email capture"
+      security-analyst:
+        when: "when auditing how a verified-email credential is requested and trusted"
+
+  # ---- UI / Compose --------------------------------------------------------------------------
+  - id: adaptive
+    upstream_path: jetpack-compose/adaptive
+    upstream_updated: "2026-09-22"
+    category: ui
+    summary: Adaptive layouts for window size classes, foldables and tablets
+    roles:
+      developer:
+        when: "when building or changing a screen's layout"
+      qa-engineer:
+        when: "when acceptance criteria cover tablets, foldables or window resizing"
+  - id: edge-to-edge
+    upstream_path: system/edge-to-edge
+    upstream_updated: "2026-08-24"
+    category: ui
+    summary: Edge-to-edge and window insets for Compose
+    roles:
+      developer:
+        when: "when adding a screen, a scaffold, a bottom bar or an IME-adjacent input"
+      qa-engineer:
+        when: "when verifying that content is not obscured by system bars, cutouts or the IME"
+  - id: styles
+    upstream_path: jetpack-compose/theming/styles
+    upstream_updated: "2026-09-08"
+    category: ui
+    summary: The Jetpack Compose Styles API for theming components
+    roles:
+      developer:
+        when: "when defining or changing component styling or theme tokens"
+  - id: migrate-xml-views-to-jetpack-compose
+    upstream_path: jetpack-compose/migration/migrate-xml-views-to-jetpack-compose
+    upstream_updated: "2026-09-18"
+    category: ui
+    summary: Structured migration of an XML View to Jetpack Compose
+    applies_if: { file_glob: "**/src/main/res/layout/*.xml" }
+    roles:
+      developer:
+        when: "when the task modifies or replaces an XML layout / View"
+      business-analyst:
+        when: "when scoping a feature that sits on XML Views — size the migration"
+
+  # ---- navigation ----------------------------------------------------------------------------
+  - id: navigation-3
+    upstream_path: navigation/navigation-3
+    upstream_updated: "2026-09-24"
+    category: navigation
+    summary: Install and migrate to Jetpack Navigation 3
+    roles:
+      developer:
+        when: "when adding routes or a nav graph, or when the task migrates navigation"
+  - id: navigation-event
+    upstream_path: navigation/navigation-event
+    upstream_updated: "2026-09-01"
+    category: navigation
+    summary: Back-gesture interception and Predictive Back animations
+    roles:
+      developer:
+        when: "when handling back navigation or adding a Predictive Back animation"
+
+  # ---- media ---------------------------------------------------------------------------------
+  - id: camerax
+    upstream_path: camera/camerax
+    upstream_updated: "2026-09-24"
+    category: media
+    summary: Camera development with CameraX
+    applies_if: { dependency: androidx.camera }
+    roles:
+      developer:
+        when: "when the task touches camera preview, capture or analysis"
+  - id: media3-cast-integration
+    upstream_path: media/media3-cast-integration
+    upstream_updated: "2026-09-16"
+    category: media
+    summary: Google Cast support with Jetpack Media3
+    applies_if: { dependency: androidx.media3 }
+    roles:
+      developer:
+        when: "when the task adds or changes Cast playback"
+
+  # ---- on-device AI --------------------------------------------------------------------------
+  - id: appfunctions
+    upstream_path: device-ai/appfunctions
+    upstream_updated: "2026-08-14"
+    category: on-device-ai
+    summary: Expose app workflows to agents via AppFunctions
+    roles:
+      business-analyst:
+        when: "when a requirement asks for assistant / agent integration of an app workflow"
+      developer:
+        applies_if: { dependency: androidx.appfunctions }
+        when: "when implementing or changing an AppFunction"
+  - id: ml-kit-genai-prompt-api
+    upstream_path: device-ai/ml-kit-genai-prompt-api
+    upstream_updated: "2026-09-03"
+    category: on-device-ai
+    summary: On-device generative AI with the ML Kit GenAI Prompt API
+    applies_if: { dependency: com.google.mlkit:genai }
+    roles:
+      developer:
+        when: "when the task calls the on-device GenAI Prompt API"
+
+  # ---- form factors --------------------------------------------------------------------------
+  - id: leanback-to-compose-tv-migration
+    upstream_path: tv/leanback-to-compose-tv-migration
+    upstream_updated: "2026-09-18"
+    category: form-factor
+    summary: Migrate Android TV Leanback UI to Compose for TV
+    applies_if: { dependency: androidx.leanback }
+    roles:
+      developer:
+        when: "when the task touches a Leanback screen"
+      business-analyst:
+        when: "when scoping TV work on a Leanback codebase — size the migration"
+  - id: wear-compose-m3
+    upstream_path: wear/wear-compose-m3
+    upstream_updated: "2026-09-24"
+    category: form-factor
+    summary: Wear OS Compose Material 3
+    applies_if: { dependency: androidx.wear.compose }
+    roles:
+      developer:
+        when: "when the task touches a Wear OS screen"
+  - id: display-glasses-with-jetpack-compose-glimmer
+    upstream_path: xr/display-glasses-with-jetpack-compose-glimmer
+    upstream_updated: "2026-09-25"
+    category: form-factor
+    summary: Projected Android XR apps for display glasses with Compose Glimmer
+    applies_if: { dependency: androidx.xr }
+    roles:
+      developer:
+        when: "when the task targets Android XR display glasses"

@@ -27,7 +27,7 @@ export const ORCHESTRATOR = "plugins/sdlc/skills/pipeline-orchestrator/SKILL.md"
 // A skill trigger that counts occurrences across the RUN rather than within the dispatch. The
 // negative lookahead lets a trigger say `first … in this dispatch` and pass, so the rule bites the
 // scoping, not the word.
-const RUN_SCOPED = /\bthe first\b(?![^.]*\bthis dispatch\b)/i;
+export const RUN_SCOPED = /\bthe first\b(?![^.]*\bthis dispatch\b)/i;
 /** The header `renderRoleExpertiseBlock` emits — the orchestrator must paste a block that carries it. */
 export const EXPERTISE_HEADER = "Stack expertise for";
 
@@ -35,7 +35,7 @@ const readYaml = (file) => YAML.parse(readFileSync(file, "utf8"));
 const readJson = (file) => JSON.parse(readFileSync(file, "utf8"));
 
 /** Every agent name an `agents_per_phase` map binds, flat or per-aspect. */
-function boundAgents(agentsPerPhase = {}) {
+export function boundAgents(agentsPerPhase = {}) {
   const out = new Set();
   for (const m of Object.values(agentsPerPhase ?? {})) {
     if (typeof m === "string") out.add(m);

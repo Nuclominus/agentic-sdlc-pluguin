@@ -2,6 +2,7 @@
 
 > One note per architecture decision. Newest first.
 
+- [[decisions/ADR-0036-a-skill-catalog-is-a-runtime-dependency-a-skill-set-is-its-matrix]]
 - [[decisions/ADR-0035-the-opus-tier-moves-to-opus-5-5]]
 - [[decisions/ADR-0034-phase-boundary-lint-feedback-never-blocks]]
 - [[decisions/ADR-0033-lint-config-edits-are-gated-during-a-run]]

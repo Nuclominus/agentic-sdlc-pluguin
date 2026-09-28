@@ -4,6 +4,15 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+### Added
+
+- **Android CLI skill matrix** (ADR-0036, android-foundation): `skill-sets/android-skills.yaml`
+  assigns all 25 skills of Google's Android CLI catalog to the core roles that own them. Each
+  category limits which roles may receive its skills, so the security-analyst gets no UI skill.
+  A generated skills × roles table and a per-role README block come from the same file.
+  `sdlc-lint skill-sets` validates the matrix and fails on a stale table (`--write` regenerates).
+  The resolver, doctor and audit wiring follow in later PRs.
+
 ## [4.1.0] — 2026-09-24
 
 `sdlc` `3.0.0` → `3.1.0`, `android-foundation` `3.0.1` → `3.1.0`.

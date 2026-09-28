@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Nuclominus/Agentic-SDLC-Pluguin/schemas/skill-set.schema.json",
+  "title": "SDLC skill set (per-role matrix for an external skill catalog)",
+  "description": "ADR-0036: the ONE place a plugin assigns the skills of an external catalog (e.g. Google's android/skills) to core roles. Every catalog skill appears exactly once, either with `roles` or with an `unassigned` reason. Each category lists the only roles its skills may be assigned to — the scope guard `sdlc-lint skill-sets` enforces. Role names are validated against the core roster by lint, not here, so the schema never duplicates the roster.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["set", "source", "categories", "skills"],
+  "properties": {
+    "set": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "The catalog's name. Must equal the `name` of a `kind: skill-catalog` entry in the same plugin's runtime-dependencies.json once that entry exists."
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["homepage", "catalog_version", "synced_at"],
+      "properties": {
+        "homepage": { "type": "string", "minLength": 1 },
+        "catalog_version": { "type": "string", "minLength": 1, "description": "The catalog version this matrix was triaged against." },
+        "synced_at": { "type": "string", "format": "date" }
+      }
+    },
+    "categories": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "upstream", "roles"],
+        "properties": {
+          "label": { "type": "string", "minLength": 1 },
+          "upstream": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 },
+            "description": "The upstream catalog directories this category groups (the first path segment of `upstream_path`)."
+          },
+          "roles": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string", "pattern": "^[a-z][a-z-]*$" },
+            "description": "Scope guard: the ONLY roles a skill of this category may be assigned to."
+          }
+        }
+      }
+    },
+    "skills": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/skill" }
+    }
+  },
+  "$defs": {
+    "skill": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "upstream_path", "category", "summary"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$", "description": "Bare skill name, as `android skills add` installs it." },
+        "upstream_path": { "type": "string", "minLength": 1 },
+        "upstream_updated": { "type": "string", "format": "date" },
+        "category": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "summary": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "requires_tools": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Host binaries the skill cannot work without. A missing one makes the skill unavailable even when it is installed."
+        },
+        "applies_if": { "$ref": "#/$defs/rule" },
+        "roles": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "pattern": "^[a-z][a-z-]*$" },
+          "additionalProperties": { "$ref": "#/$defs/assignment" }
+        },
+        "unassigned": { "type": "string", "minLength": 1, "description": "Why no role gets this skill. `TRIAGE …` marks a skill the sync added and nobody has reviewed yet; lint rejects it." }
+      },
+      "oneOf": [
+        { "required": ["roles"], "not": { "required": ["unassigned"] } },
+        { "required": ["unassigned"], "not": { "required": ["roles"] } }
+      ]
+    },
+    "assignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["when"],
+      "properties": {
+        "policy": { "enum": ["mandatory", "recommended"], "default": "recommended" },
+        "when": { "type": "string", "minLength": 1, "description": "Dispatch-scoped trigger, rendered next to the skill in the role's prompt." },
+        "applies_if": { "$ref": "#/$defs/rule" }
+      }
+    },
+    "rule": {
+      "description": "The closed detection grammar of resolve/detect.mjs `evalRule`, plus `dependency`: a Maven coordinate prefix found in the foundation's framework_detection files.",
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "properties": {
+        "file_exists": { "type": "string", "minLength": 1 },
+        "file_glob": { "type": "string", "minLength": 1 },
+        "file_contains": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "pattern"],
+          "properties": { "path": { "type": "string" }, "pattern": { "type": "string" } }
+        },
+        "dependency": { "type": "string", "minLength": 3 },
+        "any": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/rule" } },
+        "all": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/rule" } }
+      },
+      "additionalProperties": false
+    }
+  }
+}
