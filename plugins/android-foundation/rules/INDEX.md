@@ -13,7 +13,6 @@ declaration — keep the two in sync.
 | File | Loaded by | When |
 |------|-----------|------|
 | `workflow.md` | aar-analyst; a human or orchestrator reading the Android DAG | When auditing a run against the Android specifics of each step |
-| `skills.md` | developer, qa-engineer, business-analyst, reviewer, devops | Only when the optional `android` CLI is on PATH and a task calls for native tooling |
 | `logging.md` | developer, reviewer, debugger, tester, security-analyst | Before writing a log line, when adding tracing, during review, and for the test-source exemption |
 | `documentation.md` | business-analyst, developer, reviewer, tester, qa-engineer, security-analyst, document-writer, debugger | Before answering project-specific questions (vault lookup); document-writer before the PR; reviewer during review |
 | `git-operations.md` | document-writer (PR step), any role on a commit request | Only when about to commit or open a PR |

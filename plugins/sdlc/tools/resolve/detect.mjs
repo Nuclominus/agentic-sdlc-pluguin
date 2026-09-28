@@ -63,7 +63,7 @@ export function evalRule(rule, root) {
  * module build files are the fallback. Substring, not parse — a coordinate is a coordinate
  * whether it appears in a catalog alias or an inline dependency line.
  */
-function dependencyPresent(root, paths, coordinate) {
+export function dependencyPresent(root, paths, coordinate) {
   if (!coordinate) return false;
   for (const p of paths) {
     for (const f of iterFiles(root, p)) {

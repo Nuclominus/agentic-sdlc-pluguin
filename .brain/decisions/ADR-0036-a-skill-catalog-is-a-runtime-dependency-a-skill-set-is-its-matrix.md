@@ -78,8 +78,9 @@ Wiring a 25-skill catalog into ten roles by hand has two failure modes:
   audit makes that visible rather than impossible.
 
 ## Related
-- Implemented by: #224 (matrix, schema, lint); the resolver wiring, doctor check, off-matrix audit
-  and the sync command follow in later PRs.
+- Implemented by: #224 (matrix, schema, lint), #225 (resolver: `skill_sets` manifest key,
+  `kind: skill-catalog` dependency, per-skill downgrade, host-tool check). The doctor check, the
+  off-matrix audit and the sync command follow in later PRs.
 - Relates to: [[decisions/ADR-0021-agents-live-in-the-core-foundations-carry-expertise]],
   [[decisions/ADR-0028-an-external-dependency-is-never-a-marketplace-entry]],
   [[components/android-foundation]]

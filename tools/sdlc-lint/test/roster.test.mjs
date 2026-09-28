@@ -278,3 +278,30 @@ test("expertise: a per-dispatch trigger naming the same moment is accepted", () 
     assert.deepEqual(failures(checkRoster(root)).filter((e) => e.startsWith("expertise:")), []);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+test("expertise: a catalog skill is authored only in its skill set (ADR-0036)", () => {
+  const root = goodTree();
+  try {
+    write(root, "plugins/foo-foundation/skill-sets/cat.yaml", [
+      "set: cat", "skills:",
+      "  - { id: intent-sec, upstream_path: security/intent-sec, category: sec, summary: s, roles: { security-analyst: { when: w } } }",
+      "  - { id: glasses, upstream_path: xr/glasses, category: ui, summary: s, unassigned: niche }",
+      "",
+    ].join("\n"));
+    write(root, "plugins/foo-foundation/manifest.yaml", [
+      "kind: foundation", "stack: foo", "priority: 300", "detect:", "  any: [{ file_exists: foo }]",
+      "skill_sets:", "  - { file: skill-sets/cat.yaml }",
+      "role_expertise:",
+      "  developer:",
+      "    skills:",
+      "      - { skill: intent-sec, when: w }",
+      "      - { skill: cat:intent-sec, when: w }",
+      "      - { skill: glasses, when: w }",
+      "",
+    ].join("\n"));
+    const errs = failures(checkRoster(root));
+    assert.equal(errs.filter((e) => /intent-sec is assigned in skill-sets\/cat\.yaml/.test(e)).length, 2, errs.join("\n"));
+    assert.ok(!errs.some((e) => /glasses/.test(e)), "an UNASSIGNED catalog skill is not owned by the set");
+    assert.ok(!errs.some((e) => /cat:intent-sec.*runtime-dependencies/.test(e)), "set ids count as declared");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

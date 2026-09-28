@@ -48,6 +48,20 @@ Both live in the **official Anthropic marketplace** — this one does not redist
 /plugin install security-guidance@claude-plugins-official
 ```
 
+**Android CLI and its agent skills** (Android projects). This is a runtime dependency with the same `warn` policy as
+superpowers (ADR-0036). Install Google's `android` binary from
+https://developer.android.com/tools/agents, then:
+
+```bash
+android update
+android init                                   # installs the `android-cli` agent skill
+android skills add --all --agent=claude-code   # the rest of the catalog the matrix assigns
+```
+
+Which role receives which skill is defined in
+[`skill-sets/android-skills.yaml`](../plugins/android-foundation/skill-sets/android-skills.yaml). If a
+skill is missing, the pipeline still runs and that skill's guidance becomes best-effort.
+
 The preflight resolves these **by plugin name, not by marketplace**, so any install counts. If you
 want superpowers at obra's HEAD rather than the official marketplace's pinned commit, use its own
 marketplace instead — note the name is `superpowers-dev`:

@@ -35,7 +35,17 @@ Since [[decisions/ADR-0036-a-skill-catalog-is-a-runtime-dependency-a-skill-set-i
 `skill-sets/android-skills.yaml` triages all 25 catalog skills into 13 categories, and each category
 lists the only roles its skills may reach. The security-analyst, for example, has no UI skill. The
 skills × roles table (`skill-sets/android-skills.md`) and the per-role README block are generated
-from that file and checked by `sdlc-lint skill-sets`.
+from that file and checked by `sdlc-lint skill-sets`. At resolve time the manifest's
+`skill_sets` key turns every assigned row into an ordinary `role_expertise` skill row. Each row is a
+bare id with `requires: android-skills` and is gated against the project. The catalog itself is a
+`kind: skill-catalog` dependency in `runtime-dependencies.json` with `policy: warn`, the same level
+as superpowers. Missing skills are judged per skill:
+- A mandatory row is downgraded to best-effort.
+- A recommended row is not rendered.
+- `android-cli` becomes unavailable when the `android` binary is missing.
+
+`rules/skills.md` was removed; its command-group bindings are now the per-role `when` text of the
+`android-cli` row.
 
 Rule files here are read by agents that live in `sdlc`, so they never name the plugin-root variable —
 the resolver emits each `role_expertise.<role>.rules` path **absolute** instead.
@@ -49,9 +59,8 @@ the resolver emits each `role_expertise.<role>.rules` path **absolute** instead.
 - `plugins/android-foundation/skill-sets/android-skills.yaml` (Android CLI skill matrix — the only
   place a catalog skill is assigned to a role; `android-skills.md` is generated from it)
 - `plugins/android-foundation/rules/` (`documentation` carries the per-role vault reading map;
-  `workflow` carries what Android adds to each pipeline step; `skills` is now only the optional
-  `android` CLI capability bindings; `snippets/` also carries the 7 relocated ProGuard keep-rule
-  files)
+  `workflow` carries what Android adds to each pipeline step; `snippets/` also carries the 7
+  relocated ProGuard keep-rule files)
 
 ## Decisions
 - [[decisions/ADR-0001-stack-provider-pattern]]

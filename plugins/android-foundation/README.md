@@ -112,8 +112,9 @@ Plugin-resident, reached by **absolute path**: the manifest lists each role's ru
 `role_expertise.<role>.rules` and the resolver emits them absolute, because the agent that reads them
 lives in `sdlc` — where the plugin-root variable would resolve to the wrong plugin. The files:
 `non-negotiable` (forbidden patterns), `gradle-commands`, `logging`, `documentation` (vault SDLC plus
-the per-role reading map), `git-operations`, `enforcement`, `skills` (the optional `android` CLI
-capability bindings), `workflow` (what Android adds to each pipeline step), `INDEX`. `testing` was
+the per-role reading map), `git-operations`, `enforcement`, `workflow` (what Android adds to each
+pipeline step), `INDEX`. The `android` CLI command bindings that used to live in `skills` are now
+the per-role `when` text of the `android-cli` row in `skill-sets/android-skills.yaml`. `testing` was
 folded into the `android-testing` skill; the `handoff` rule is intentionally omitted — the
 orchestrator passes phase context.
 
@@ -139,9 +140,24 @@ Roles treat `.obsidian-vault/` as the single source of project knowledge **when 
 
 ---
 
-## Optional Android CLI
+## Android CLI and its skill catalog — a `warn` dependency
 
-Google's `android` binary (project scaffolding, emulator/device, SDK, docs, Studio bridge) is an **optional** capability. `hooks/android-cli-check.sh` advises (non-blocking, SessionStart, Android projects only) if it is absent. No agent requires it; binding specific commands to agents is a future step.
+Google's `android` binary (project scaffolding, emulator/device, SDK, docs, Studio bridge) and the
+agent skills it installs (`android skills add`) are a runtime dependency with **policy `warn`**,
+the same level as superpowers (ADR-0036). `runtime-dependencies.json` declares the catalog as
+`kind: skill-catalog`. The skills it needs come from the matrix above, together with the host tools
+each skill requires (e.g. `android` for `android-cli`).
+
+When something is missing, the pipeline still runs:
+
+- A **mandatory** catalog row whose skill is not installed, or whose tool is not on PATH, is
+  downgraded to best-effort. This is how superpowers rows are handled.
+- A **recommended** row in the same situation is not rendered at all.
+- The preflight prints one `WARN` naming what is missing.
+- `hooks/android-cli-check.sh` gives a non-blocking SessionStart hint, on Android projects only, when
+  the binary or the skills are absent.
+
+Install with `android update` → `android init` → `android skills add --all --agent=claude-code`.
 
 ---
 
@@ -152,7 +168,7 @@ Google's `android` binary (project scaffolding, emulator/device, SDK, docs, Stud
 | `kotlin-guard` → `validate-kotlin.sh` | PostToolUse (Edit/Write) | **Blocking** — enforces non-negotiable patterns (`!!`, `runBlocking`, `println`, `android.util.Log.*`) in production Kotlin |
 | `format-on-stop` | Stop | ktlint/detekt formatting |
 | `guard-paths` | PreToolUse | block writes to `build/`, `.gradle/` |
-| `android-cli-check` | SessionStart | optional Android CLI advisory |
+| `android-cli-check` | SessionStart | Android CLI / skill-catalog advisory (non-blocking) |
 
 ---
 

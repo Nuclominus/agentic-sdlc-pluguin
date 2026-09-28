@@ -170,6 +170,10 @@ function tree() {
   mkdirSync(join(root, "plugins/p/skill-sets"), { recursive: true });
   writeFileSync(join(root, "plugins/p/skill-sets/demo.yaml"), YAML.stringify(set()));
   writeFileSync(join(root, "plugins/p/README.md"), "# p\n\n<!-- skill-set:demo:begin -->\n<!-- skill-set:demo:end -->\n");
+  writeFileSync(join(root, "plugins/p/manifest.yaml"), "skill_sets:\n  - { file: skill-sets/demo.yaml }\n");
+  writeFileSync(join(root, "plugins/p/runtime-dependencies.json"), JSON.stringify({
+    dependencies: [{ name: "demo", kind: "skill-catalog", policy: "warn", skill_set: "skill-sets/demo.yaml" }],
+  }));
   return root;
 }
 
@@ -194,4 +198,25 @@ test("a README without the markers is reported, not silently skipped", () => {
   const root = tree();
   writeFileSync(join(root, "plugins/p/README.md"), "# p\n");
   assert.match(checkSkillSets(root, { write: true })[0].errors.join("\n"), /has no <!-- skill-set:demo:begin -->/);
+});
+
+test("wiring: a set the manifest does not load, or no skill-catalog dependency declares, is reported", () => {
+  const root = tree();
+  checkSkillSets(root, { write: true });
+  assert.deepEqual(checkSkillSets(root)[0].errors, []);
+
+  writeFileSync(join(root, "plugins/p/manifest.yaml"), "skill_sets: []\n");
+  assert.match(checkSkillSets(root)[0].errors.join("\n"), /does not list \{ file: skill-sets\/demo\.yaml \} under skill_sets/);
+
+  writeFileSync(join(root, "plugins/p/manifest.yaml"), "skill_sets:\n  - { file: skill-sets/demo.yaml }\n");
+  writeFileSync(join(root, "plugins/p/runtime-dependencies.json"), JSON.stringify({
+    dependencies: [{ name: "demo", policy: "warn", skill_set: "skill-sets/other.yaml", skills_used: ["adaptive"] }],
+  }));
+  const errors = checkSkillSets(root)[0].errors.join("\n");
+  assert.match(errors, /'demo' must be `kind: skill-catalog`/);
+  assert.match(errors, /skill_set is 'skill-sets\/other\.yaml'/);
+  assert.match(errors, /lists skills_used — a skill catalog derives them/);
+
+  writeFileSync(join(root, "plugins/p/runtime-dependencies.json"), JSON.stringify({ dependencies: [] }));
+  assert.match(checkSkillSets(root)[0].errors.join("\n"), /declares no dependency named 'demo'/);
 });

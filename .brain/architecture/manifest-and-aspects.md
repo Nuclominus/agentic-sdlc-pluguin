@@ -95,7 +95,9 @@ framework_detection:             # WHERE to look for a framework's coordinate �
 Wins the `android` aspect (platform/winner axis) and declares the per-role expertise
 (`role_expertise` — invariants, rule paths and mandatory skills per CORE role; ADR-0021 moved both the
 roster and its `agents_per_phase` binding to `plugins/sdlc/manifest.yaml`, and the Android
-`phase_injections` became `role_expertise.<role>.invariants` in the same move), the convention skills,
+`phase_injections` became `role_expertise.<role>.invariants` in the same move), its `skill_sets`
+(ADR-0036). These are per-role matrices for an external skill catalog; the resolver folds their rows
+into `role_expertise` as bare ids owned via `requires`. The same manifest also declares the convention skills,
 and — via `hosts_aspects` + `framework_detection` — owns discovery of its frameworks (Retrofit→`network`,
 Room→`persistence`, Dagger→`di`). The stack id stays `android` (config stability); only the plugin name is
 `android-foundation`.

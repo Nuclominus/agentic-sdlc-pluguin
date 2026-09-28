@@ -349,6 +349,19 @@
       "description": "REMOVED in practice (ADR-0021) and FORBIDDEN on any non-vanilla foundation: the agent name that once overrode the core `aar-analyst` for /sdlc:aar. Nothing reads it — the `sdlc:aar` skill always dispatches `aar-analyst` and passes it the stack's `role_expertise.aar-analyst` blocks. The property is kept only so the failure a stale manifest gets is a precise ‘forbidden here’ rather than a bare ‘unknown property’.",
       "minLength": 1
     },
+    "skill_sets": {
+      "type": "array",
+      "description": "ADR-0036: per-role matrices for EXTERNAL skill catalogs (schemas/skill-set.schema.json), paths relative to this manifest's directory. The resolver turns each assigned row into an ordinary `role_expertise.<role>.skills` row (bare id, `requires: <set>`), gated against the project by its `applies_if`. The set must be declared as a `kind: skill-catalog` entry in this plugin's runtime-dependencies.json, which derives its `skills_used` from the same file.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file"],
+        "properties": {
+          "file": { "type": "string", "pattern": "^skill-sets/[a-z][a-z0-9-]*\\.yaml$" }
+        }
+      },
+      "uniqueItems": true
+    },
     "convention_skills": {
       "type": "array",
       "description": "Fully-qualified `plugin:skill` ids to apply during development (and other phases as the agent sees fit). Merged across the foundation and active frameworks.",
