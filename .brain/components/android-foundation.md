@@ -56,6 +56,18 @@ The section shows:
   `~/.android/cli/skills`), because `android skills add` copies and does not track updates;
 - catalog skills the matrix has not triaged yet.
 
+Keeping the matrix current is a maintainer job, done with the repo command `/android-skills-sync`.
+It drives `tools/sdlc-lint/scripts/skill-sets.mjs`:
+- `diff` compares the matrix against a catalog directory: the CLI's clone, or a `git clone` of
+  `android/skills`.
+- `refresh` rewrites only the lines it owns: the `source` fields and each skill's upstream path
+  and date. New skills are appended as `TRIAGE`, which lint refuses until someone decides.
+- `render` regenerates the table.
+
+The script never assigns a role and never deletes a row; each triage decision needs the
+maintainer's approval. Measured 2026-09-29: `android skills list|find` do not refresh the CLI's
+local clone; it moves with the CLI itself (`android update`).
+
 After a run, the seal checks the matrix against what each role actually loaded
 ([[decisions/ADR-0037-off-matrix-skill-use-is-audited-not-blocked]]). A security-analyst loading a UI
 skill shows up as a scope-leak finding in `/sdlc:aar`. The fix goes into this plugin's

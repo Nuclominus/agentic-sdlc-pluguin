@@ -82,7 +82,8 @@ Wiring a 25-skill catalog into ten roles by hand has two failure modes:
   `kind: skill-catalog` dependency, per-skill downgrade, host-tool check), #226 (doctor: read-only
   `resolve/cli.mjs deps` verb and the `skill_catalogs` report), #227 (the off-matrix audit —
   point 5's "audit" half, recorded as [[decisions/ADR-0037-off-matrix-skill-use-is-audited-not-blocked]]).
-  The sync command follows in a later PR.
+  #228 (maintainer sync: `tools/sdlc-lint/scripts/skill-sets.mjs diff|refresh|render` and the
+  repo command `/android-skills-sync`).
 - Relates to: [[decisions/ADR-0021-agents-live-in-the-core-foundations-carry-expertise]],
   [[decisions/ADR-0028-an-external-dependency-is-never-a-marketplace-entry]],
   [[components/android-foundation]]

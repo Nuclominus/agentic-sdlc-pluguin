@@ -45,6 +45,14 @@ catalog becomes a `warn` runtime dependency with a per-role matrix — ADR-0036)
   prints an advisory WARN on a leak. Nothing is blocked. The new compliance contract
   `3b-1a-skill-scope` (`agent_skill_scope`, `every-skill-call`) scores in-scope calls over catalog
   calls, and the AAR dashboard's `skill_scope` turns each leak into a scope-leak finding.
+- **Maintainer sync for the Android skill matrix** (ADR-0036). The repo command
+  `/android-skills-sync` drives `tools/sdlc-lint/scripts/skill-sets.mjs diff|refresh|render`
+  against a catalog directory (the Android CLI's clone, or a checkout of `android/skills`).
+  - `refresh` edits only the lines it owns (`source` and each `upstream_path`/`upstream_updated`).
+    Everything else in the file stays byte-identical.
+  - New skills are appended as `TRIAGE`, which lint refuses until they are triaged.
+  - Removed skills are reported, never deleted.
+  - Every role assignment needs the maintainer's approval.
 - `sdlc-lint roster` rejects a catalog skill also authored in `role_expertise`. `sdlc-lint
   skill-sets` requires the set to be wired into both the manifest and `runtime-dependencies.json`.
 

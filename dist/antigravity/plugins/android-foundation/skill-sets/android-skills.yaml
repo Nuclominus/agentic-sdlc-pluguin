@@ -15,9 +15,9 @@
 #                          row is not rendered, so a project without CameraX never sees `camerax`.
 #
 # Do not hand-edit the generated table (android-skills.md) or the README block — edit this file, then
-# `node tools/sdlc-lint/cli.mjs skill-sets --write`. There is no upstream refresh command yet (one is
-# planned under ADR-0036): until it lands, compare against `android skills list --long` and re-triage
-# by hand.
+# `node tools/sdlc-lint/cli.mjs skill-sets --write`. To re-sync with upstream, run the maintainer
+# command `/android-skills-sync` (it drives `tools/sdlc-lint/scripts/skill-sets.mjs diff|refresh|render`):
+# it rewrites only `source` and each `upstream_path`/`upstream_updated`, and appends new skills as TRIAGE.
 
 set: android-skills
 source:
