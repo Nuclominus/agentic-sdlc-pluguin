@@ -20,6 +20,8 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
   - The catalog is a `kind: skill-catalog` runtime dependency with `policy: warn`, like superpowers.
     Its required skills and host tools are derived from the matrix, gated the same way, so a skill
     no role receives in this project is never reported missing.
+    On a project that android-foundation does not detect (a Node app, say), the catalog is not
+    used at all, so it produces no warning.
   - A missing catalog skill is judged per skill: a mandatory row is downgraded to best-effort, and a
     recommended row is not rendered.
   - `android-cli` is unavailable without the `android` binary.
