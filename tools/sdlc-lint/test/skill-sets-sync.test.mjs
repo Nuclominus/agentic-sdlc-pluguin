@@ -50,6 +50,12 @@ const MATRIX = [
   "    category: play-a",
   "    summary: g",
   "    unassigned: retired",
+  "  - id: dropped",
+  "    upstream_path: play/dropped",
+  "    category: play-a",
+  "    summary: d",
+  "    roles:",
+  "      developer: { when: when dropping }",
   "",
 ].join("\n");
 
@@ -94,10 +100,11 @@ test("diffCatalog: added, removed, moved, re-dated, and the version", () => {
   try {
     const d = diffCatalog(YAML.parse(MATRIX), readCatalog(catalog(dir)));
     assert.deepEqual(d.added.map((a) => a.id), ["fresh"]);
-    assert.deepEqual(d.removed, ["gone"]);
+    assert.deepEqual(d.removed, ["dropped"], "gone upstream while a role still receives it: drift");
+    assert.deepEqual(d.retired, ["gone"], "gone upstream but already kept unassigned: settled");
     assert.deepEqual(d.moved, [{ id: "bill", from: "play/old/bill", to: "play/bill" }]);
     assert.deepEqual(d.updated, [{ id: "bill", from: null, to: "2026-09-05" }, { id: "sec", from: "2026-09-01", to: "2026-10-02" }]);
-    assert.deepEqual(d.catalog_version, { matrix: "1.0.1", catalog: "1.0.2", changed: true });
+    assert.deepEqual(d.catalog_version, { matrix: "1.0.1", catalog: "1.0.2", changed: true, unknown: false });
     assert.equal(d.in_sync, false);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
@@ -159,11 +166,56 @@ test("CLI: diff --exit-code signals drift; refresh writes; the live matrix is in
     const run = (...a) => spawnSync(process.execPath, [SCRIPT, ...a, "--set", "sets/cat.yaml", "--catalog", cat], { cwd: repo, encoding: "utf8" });
     const d = run("diff", "--json", "--exit-code");
     assert.equal(d.status, 1);
-    assert.equal(JSON.parse(d.stdout).removed[0], "gone");
+    assert.equal(JSON.parse(d.stdout).removed[0], "dropped");
     const r = run("refresh", "--today", "2026-10-03");
     assert.equal(r.status, 0);
     assert.match(readFileSync(join(repo, "sets", "cat.yaml"), "utf8"), /TRIAGE — new in 1\.0\.2/);
     assert.match(r.stdout, /1 skill\(s\) appended as TRIAGE/);
     assert.equal(spawnSync(process.execPath, [SCRIPT, "bogus"], { encoding: "utf8" }).status, 2);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// --- review of #228 ---------------------------------------------------------------------------
+
+test("a row kept unassigned after upstream dropped it does not hold the matrix out of sync forever", () => {
+  const dir = scratch();
+  try {
+    const c = readCatalog(catalog(dir));
+    // Resolve everything the way the command would: refresh, triage `fresh`, keep `dropped` unassigned.
+    const refreshed = applyRefresh(MATRIX, c, { today: "2026-10-03" }).text
+      .replace(/unassigned: "TRIAGE[^"]*"/, 'unassigned: "not for this marketplace"')
+      .replace("    roles:\n      developer: { when: when dropping }", '    unassigned: "gone upstream in 1.0.2"');
+    const d = diffCatalog(YAML.parse(refreshed), c);
+    assert.deepEqual(d.retired, ["dropped", "gone"]);
+    assert.equal(d.in_sync, true, "settled rows are not drift");
+    assert.equal(applyRefresh(refreshed, c, { today: "2099-01-01" }).text, refreshed, "so a refresh is a no-op — synced_at stays put");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("refresh refuses a catalog without a version rather than move synced_at alone", () => {
+  const dir = scratch();
+  try {
+    const c = { ...readCatalog(catalog(dir)), version: null };
+    const d = diffCatalog(YAML.parse(MATRIX), c);
+    assert.equal(d.catalog_version.unknown, true);
+    assert.throws(() => applyRefresh(MATRIX, c, { today: "2026-10-03" }), /no version .* pass --version/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("two upstream skills with one directory name are reported as a collision, never merged", () => {
+  const dir = scratch();
+  try {
+    const cat = catalog(dir);
+    skill(cat, "xr/sec", { updated: "2026-10-05" });
+    const mk = JSON.parse(readFileSync(join(cat, ".claude-plugin", "marketplace.json"), "utf8"));
+    mk.plugins[0].skills.push("./xr/sec");
+    writeFileSync(join(cat, ".claude-plugin", "marketplace.json"), JSON.stringify(mk));
+    const c = readCatalog(cat);
+    assert.deepEqual(c.collisions, [{ id: "sec", paths: ["security/sec", "xr/sec"] }]);
+    assert.equal(c.skills.sec.upstream_path, "security/sec", "the first path is kept, not silently replaced");
+    const d = diffCatalog(YAML.parse(MATRIX), c);
+    assert.equal(d.in_sync, false);
+    assert.deepEqual(d.moved.filter((m) => m.id === "sec"), [], "the existing row does not read as moved");
+    assert.throws(() => applyRefresh(MATRIX, c, { today: "2026-10-03" }), /more than one skill under the same id — sec: security\/sec, xr\/sec/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

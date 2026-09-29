@@ -68,10 +68,17 @@ export function readCatalog(dir, { version = null } = {}) {
   } catch { /* no marketplace file: walk instead */ }
   if (!paths || paths.length === 0) paths = walkSkillDirs(dir);
   const skills = {};
+  // A skill installs under its directory NAME, so two paths ending in the same name are one id on
+  // disk — upstream's problem, but one a keyed map would hide: the second path would silently
+  // replace the first, the kept row would read as "moved", and the new skill would never be triaged.
+  const seen = new Map();
   for (const p of paths.sort()) {
+    const id = basename(p);
+    if (seen.has(id)) { seen.get(id).push(p); continue; }
+    seen.set(id, [p]);
     const fm = frontmatter(join(dir, p, "SKILL.md"));
     const updated = fm?.metadata?.["last-updated"];
-    skills[basename(p)] = {
+    skills[id] = {
       upstream_path: p,
       updated: updated != null ? String(updated) : null,
       description: typeof fm.description === "string" ? fm.description.replace(/\s+/g, " ").trim() : "",
@@ -80,7 +87,8 @@ export function readCatalog(dir, { version = null } = {}) {
   if (Object.keys(skills).length === 0) throw new Error(`${dir} holds no skills (no marketplace.json entries, no SKILL.md)`);
   let v = version;
   if (v == null) { try { v = readFileSync(join(dir, "version"), "utf8").trim() || null; } catch { v = null; } }
-  return { version: v, skills };
+  const collisions = [...seen].filter(([, ps]) => ps.length > 1).map(([id, ps]) => ({ id, paths: ps }));
+  return { version: v, skills, collisions };
 }
 
 /** What differs between a parsed matrix and a catalog. Pure. */
@@ -93,12 +101,25 @@ export function diffCatalog(doc, catalog) {
     if (s.upstream_path !== c.upstream_path) moved.push({ id, from: s.upstream_path ?? null, to: c.upstream_path });
     if (c.updated && String(s.upstream_updated ?? "") !== c.updated) updated.push({ id, from: s.upstream_updated ?? null, to: c.updated });
   }
-  for (const id of mine.keys()) if (!(id in catalog.skills)) removed.push(id);
+  // Gone upstream. A row that still reaches a role is drift — roles are told to use a skill that can
+  // no longer be installed. A row the maintainer already kept as `unassigned` reaches nobody: it is
+  // a settled decision, listed for the record and never counted against `in_sync` again.
+  const retired = [];
+  for (const [id, s] of mine) {
+    if (id in catalog.skills) continue;
+    const hasRoles = s.roles && typeof s.roles === "object" && Object.keys(s.roles).length > 0;
+    (hasRoles ? removed : retired).push(id);
+  }
+  const collisions = catalog.collisions ?? [];
   const matrix = doc?.source?.catalog_version != null ? String(doc.source.catalog_version) : null;
   return {
-    catalog_version: { matrix, catalog: catalog.version, changed: Boolean(catalog.version && matrix !== catalog.version) },
-    added, removed: removed.sort(), moved, updated,
-    in_sync: added.length + removed.length + moved.length + updated.length === 0
+    catalog_version: {
+      matrix, catalog: catalog.version, changed: Boolean(catalog.version && matrix !== catalog.version),
+      // A checkout carries no version file: the version cannot be compared, only content can.
+      unknown: catalog.version == null,
+    },
+    added, removed: removed.sort(), retired: retired.sort(), moved, updated, collisions,
+    in_sync: added.length + removed.length + moved.length + updated.length + collisions.length === 0
       && !(catalog.version && matrix !== catalog.version),
   };
 }
@@ -141,6 +162,16 @@ export function applyRefresh(text, catalog, { today }) {
   const plain = YAML.parse(text);
   const diff = diffCatalog(plain, catalog);
   if (diff.in_sync) return { text, diff };
+  // Refuse rather than write something half-true. Without a version, `synced_at` would move while
+  // `catalog_version` still names the old release — a matrix claiming a sync it cannot identify.
+  // With a collision, whichever path won the map would be written as the skill's home.
+  if (diff.collisions.length) {
+    throw new Error(`upstream ships more than one skill under the same id — ${diff.collisions.map((c) => `${c.id}: ${c.paths.join(", ")}`).join("; ")}. `
+      + "They install to one directory, so resolve it upstream (or pin a catalog without the clash) before refreshing.");
+  }
+  if (!catalog.version) {
+    throw new Error("the catalog has no version (no `version` file) — pass --version <v> so catalog_version moves with synced_at");
+  }
 
   const lines = text.split("\n");
   const setSource = (key, value) => {
@@ -185,6 +216,9 @@ export function applyRefresh(text, catalog, { today }) {
 
 function renderDiff(d, setFile) {
   const out = [`${setFile}: catalog ${d.catalog_version.catalog ?? "(unknown version)"} vs matrix ${d.catalog_version.matrix ?? "?"}`];
+  if (d.catalog_version.unknown) out.push("  ⚠️ catalog version unknown (no `version` file) — pass --version; refresh refuses without one");
+  for (const c of d.collisions) out.push(`  ✗ ${c.id}  shipped at ${c.paths.join(" AND ")} — one install directory; refresh refuses until upstream resolves it`);
+  for (const id of d.retired ?? []) out.push(`  · ${id}  gone upstream, kept unassigned — settled, not drift`);
   if (d.in_sync) { out.push("  in sync — nothing to do"); return out.join("\n"); }
   for (const a of d.added) out.push(`  + ${a.id}  (${a.upstream_path})  ${summarize(a.description)}`);
   for (const id of d.removed) out.push(`  - ${id}  gone upstream — decide: drop the row, or keep it unassigned with a reason`);
@@ -219,7 +253,9 @@ function main(argv) {
     return argv.includes("--exit-code") && !d.in_sync ? 1 : 0;
   }
   const today = opt("--today") ?? new Date().toISOString().slice(0, 10);
-  const { text: next, diff } = applyRefresh(text, catalog, { today });
+  let next, diff;
+  try { ({ text: next, diff } = applyRefresh(text, catalog, { today })); }
+  catch (e) { console.error(`✗ refresh refused: ${e.message}`); return 1; }
   if (next !== text) writeFileSync(join(root, setFile), next);
   console.log(argv.includes("--json") ? JSON.stringify({ set: setFile, written: next !== text, ...diff }) : renderDiff(diff, setFile));
   if (diff.added.length) console.log(`\n${diff.added.length} skill(s) appended as TRIAGE — \`sdlc-lint skill-sets\` fails until each is assigned or given a reason.`);

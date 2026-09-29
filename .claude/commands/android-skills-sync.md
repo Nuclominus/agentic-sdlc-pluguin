@@ -37,7 +37,11 @@ an unfinished sync cannot merge.
 3. **Refresh.** `node tools/sdlc-lint/scripts/skill-sets.mjs refresh $ARGUMENTS`.
    It rewrites only the lines it owns (`source.catalog_version`, `synced_at`, each
    `upstream_path` / `upstream_updated`) and appends new skills as TRIAGE. `git diff` the YAML and
-   show the user the result.
+   show the user the result. It **refuses** (exit 1, nothing written) in two cases — report them,
+   do not work around them: the catalog has no version (pass `--version`), or upstream ships two
+   skills under one directory name (`✗ <id> shipped at A AND B` — they install to one directory;
+   that is upstream's to fix). A row gone upstream that is already `unassigned` shows as `·`
+   (settled) and needs nothing.
 
 4. **Triage — one decision per skill, each approved.** For every entry the diff listed:
    - **`+` added (TRIAGE):** read its `SKILL.md` in the catalog. Propose a category (the TRIAGE
