@@ -165,3 +165,13 @@ test("render: the human section names roles, marks MANDATORY, and prints the fix
     assert.equal(renderCatalogReport([]), "Skill catalogs: none declared by the installed plugins.");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("report: a catalog its foundation does not serve here is one line — nothing missing, nothing to install", () => {
+  const dir = scratch();
+  try {
+    const { dep, env, skillRoots } = fixture(dir);
+    const [r] = catalogReport({ dependencies: [{ ...dep, skills_used: [], not_applicable: true }], status: {}, skillRoots, env, which: () => null });
+    assert.deepEqual(r, { name: "cat", policy: "warn", status: "not_applicable", skill_set: "cat", applies_to_project: false });
+    assert.match(renderCatalogReport([r]), /cat \[policy=warn\] — ➖ not used by this project/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

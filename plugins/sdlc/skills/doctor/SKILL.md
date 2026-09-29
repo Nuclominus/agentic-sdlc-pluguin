@@ -56,7 +56,9 @@ nothing. Doctor finds those, shows them, and rewrites/moves them **only after yo
 2. **Skill catalogs (ADR-0036).** The same output carries `skill_catalogs[]` — one entry per
    `kind: skill-catalog` dependency (e.g. `android-skills`, the Android CLI's agent skills, which
    `android-foundation` assigns per role in `skill-sets/android-skills.yaml`). Render each entry
-   as the "Skill catalogs" section below; the fields mean:
+   as the "Skill catalogs" section below. An entry with `applies_to_project: false`
+   (`status: "not_applicable"`) belongs to a foundation that does not detect this project — print
+   its one line and nothing else; it is not a problem to fix. Otherwise the fields mean:
 
    - `version.installed` / `version.matrix` / `version.drift` — the catalog on this machine vs. the
      version the plugin's matrix was triaged against. Drift is the maintainers' cue, not the user's

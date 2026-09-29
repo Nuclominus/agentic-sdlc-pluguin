@@ -99,6 +99,13 @@ export function catalogReport({
   for (const dep of dependencies) {
     if (dep?.kind !== "skill-catalog") continue;
     const doc = dep.skill_set_file ? readSkillSet(dep.skill_set_file) : null;
+    // Declared by a foundation that does not detect this project: its skills reach no role here,
+    // so there is nothing missing, stale or to install — one line, not a diagnosis of a stack the
+    // project does not use.
+    if (dep.not_applicable) {
+      out.push({ name: dep.name, policy: dep.policy ?? "warn", status: "not_applicable", skill_set: doc?.set ?? null, applies_to_project: false });
+      continue;
+    }
     const skills = (doc?.skills ?? []).filter((s) => isObj(s) && typeof s.id === "string");
     const assigned = doc ? assignedSkills(doc) : [];
     const used = dep.skills_used ?? [];
@@ -157,6 +164,7 @@ export function catalogReport({
       name: dep.name,
       policy: dep.policy ?? "warn",
       status: s.status === "available" ? "available" : "degraded",
+      applies_to_project: true,
       skill_set: doc?.set ?? null,
       version: { installed, matrix, drift },
       catalog_dir: catalogDir,
@@ -191,6 +199,10 @@ export function renderCatalogReport(reports) {
   if (reports.length === 0) return "Skill catalogs: none declared by the installed plugins.";
   const lines = ["Skill catalogs:"];
   for (const r of reports) {
+    if (r.applies_to_project === false) {
+      lines.push(`  ${r.name} [policy=${r.policy}] — ➖ not used by this project (its plugin's stack is not detected here)`);
+      continue;
+    }
     const mark = r.status === "available" ? "✅ available" : "⚠️ degraded";
     lines.push(`  ${r.name} ${r.version.installed ?? "not installed"} [policy=${r.policy}] — ${mark}`);
     lines.push(`    matrix: ${r.skill_set ?? "?"} triaged against ${r.version.matrix ?? "?"}${r.version.drift ? " (⚠️ catalog has moved — re-triage owed)" : ""}`);
