@@ -4,6 +4,8 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+## [4.2.0] — 2026-09-29
+
 `sdlc` `3.1.0` → `3.2.0`, `android-foundation` `3.1.0` → `3.2.0` (minor: the Android CLI skill
 catalog becomes a `warn` runtime dependency with a per-role matrix — ADR-0036).
 
