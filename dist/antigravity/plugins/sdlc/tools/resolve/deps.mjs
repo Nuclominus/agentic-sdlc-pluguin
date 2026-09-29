@@ -145,17 +145,18 @@ export function expandHome(path, env = process.env) {
  */
 function expandSkillCatalog(dep, pluginDir, { projectRoot = null, gateCache = null } = {}) {
   if (dep?.kind !== "skill-catalog" || typeof dep.skill_set !== "string") return dep;
-  const doc = readSkillSet(join(pluginDir, dep.skill_set));
+  const file = join(pluginDir, dep.skill_set);
+  const doc = readSkillSet(file);
   if (!doc) return { ...dep, skills_used: dep.skills_used ?? [] };
   const manifest = readManifest(pluginDir);
   const tools = skillTools(doc);
   if (projectRoot && manifest?.kind === "foundation" && manifest.detect != null && !evalRule(manifest.detect, projectRoot)) {
-    return { ...dep, skills_used: [], skill_tools: tools, not_applicable: true };
+    return { ...dep, skills_used: [], skill_tools: tools, skill_set_file: file, not_applicable: true };
   }
   const used = projectRoot
     ? applicableSkills(doc, { projectRoot, detectionPaths: detectionPathsOf(manifest), cache: gateCache })
     : assignedSkills(doc);
-  return { ...dep, skills_used: used, skill_tools: tools };
+  return { ...dep, skills_used: used, skill_tools: tools, skill_set_file: file };
 }
 
 function readManifest(pluginDir) {
@@ -395,6 +396,9 @@ export function preflight({ configDir, projectRoot, installs, enabled, skills = 
 
   return {
     deps_preflight: status,
+    // The merged declarations the status was computed from — the doctor's catalog report
+    // (./catalogs.mjs) reads these rather than collecting a second, possibly different, set.
+    dependencies,
     // The enumerated set travels with the result: Step 1b-ext needs it to decide whether an
     // extension skill exists, and recomputing it there would be a second enumeration that
     // could disagree with this one.

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Dependency-free entry for resolving a run, shipped inside the sdlc plugin.
 //
-// Two commands:
+// Three commands:
 //   node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs plan [--json] [--dry-run] [--workflow=NAME] …
 //     invoked by pipeline-orchestrator Steps 0 → 1d. It replaces ~926 lines of prose that the
 //     model executed as ~24 turns and 14 tool calls, for a measured median of $1.31 per run
@@ -11,6 +11,9 @@
 //     orchestrator. It prints the same `Stack expertise for <role>` and `Skills for this role`
 //     blocks a pipeline dispatch would have carried in its stable prefix (ADR-0021) — one
 //     command, once per invocation, in place of "self-read rules/skills.md and sdlc.local.yaml".
+//   node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs deps [--json] [--probe]
+//     invoked by /sdlc:doctor. The run's own dependency preflight, read-only (no stamp, no
+//     enforcement), plus the per-catalog report for `kind: skill-catalog` dependencies (ADR-0036).
 //
 // Paths resolve against the CONSUMER's project cwd; only the script itself is loaded from the
 // plugin root.
@@ -19,7 +22,9 @@
 // orchestrator echoes `prints[]` verbatim rather than filling a template, which is
 // ADR-0015's machine-value invariant applied to prose instead of arithmetic.
 
-import { resolvePlan, resolveExpertise } from "./plan.mjs";
+import { resolvePlan, resolveExpertise, resolveDeps } from "./plan.mjs";
+import { renderCatalogReport } from "./catalogs.mjs";
+import { renderPreflightPrint } from "./deps.mjs";
 
 const argv = process.argv.slice(2);
 const cmd = argv[0];
@@ -31,6 +36,7 @@ function usage() {
   console.error("                    [--force-preflight] [--skills <csv>] [--no-skip-rules] [--force-ba]");
   console.error("                    [--base-ref <ref>] [--mode tree|installed]");
   console.error("       cli.mjs expertise --role <name> [--json] [--stack=NAME] [--mode tree|installed]");
+  console.error("       cli.mjs deps [--json] [--probe] [--mode tree|installed]");
   return 2;
 }
 
@@ -40,7 +46,7 @@ function tokenOpt(name) {
   return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : null;
 }
 
-if (cmd !== "plan" && cmd !== "expertise") process.exit(usage());
+if (cmd !== "plan" && cmd !== "expertise" && cmd !== "deps") process.exit(usage());
 
 const mode = tokenOpt("--mode") ?? "installed";
 
@@ -78,6 +84,25 @@ if (cmd === "expertise") {
   }
   // Unknown role is a caller error (2); a halt in resolution is the same "cannot proceed" as plan (1).
   process.exit(r.ok ? 0 : /^unknown role/.test(String(r.error)) ? 2 : 1);
+}
+
+if (cmd === "deps") {
+  let r;
+  try { r = resolveDeps({ cwd: process.cwd(), args: rest, env: process.env, mode, probe: argv.includes("--probe") }); } catch (e) { crash(e); }
+  if (jsonOut) {
+    const { prints, ...body } = r;
+    console.log(JSON.stringify(body));
+  } else if (!r.ok) {
+    console.error(`❌ deps: ${r.error}`);
+  } else {
+    for (const w of r.warnings) console.error(w);
+    console.log(renderPreflightPrint(r.deps_preflight, { versions: r.installed_versions }));
+    console.log("");
+    console.log(renderCatalogReport(r.skill_catalogs));
+    if (r.would_abort_pipeline) console.log("\n❌ A blocking dependency is missing — a pipeline run would abort.");
+  }
+  // Diagnosis, not a gate: a missing dependency is data (exit 0). Only "could not diagnose" fails.
+  process.exit(r.ok ? 0 : 1);
 }
 
 let result;

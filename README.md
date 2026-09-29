@@ -126,7 +126,7 @@ The full board — every track, status and landing PR — is generated from the 
 | `/sdlc:report`                  | Cross-run cost rollup over all runs → `docs/plans/rollup/index.html` + digest (deterministic, no LLM) |
 | `/sdlc:aar`                     | After Action Review of a run — token cost + agent cooperation; persists approved lessons |
 | `/sdlc:list-stacks`             | Show detected stack profiles and their priorities                  |
-| `/sdlc:doctor`                  | Preflight: deps, stack detection, host capability (uname/toolchains), cost. Also migrates config that names a retired agent — the one thing a `1.x` project needs after upgrading |
+| `/sdlc:doctor`                  | Preflight: deps, skill catalogs (Android CLI skills per role), stack detection, host capability (uname/toolchains), cost. Also migrates config that names a retired agent — the one thing a `1.x` project needs after upgrading |
 | `/sdlc:security-init`           | Materialize security-patterns for the security-guidance plugin     |
 
 ---

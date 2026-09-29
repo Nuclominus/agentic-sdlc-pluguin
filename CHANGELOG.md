@@ -29,12 +29,25 @@ catalog becomes a `warn` runtime dependency with a per-role matrix — ADR-0036)
     recommended row is not rendered.
   - `android-cli` is unavailable without the `android` binary.
   - The preflight stamp is keyed on the catalog's version file.
+- **`/sdlc:doctor` reports skill catalogs** (ADR-0036): the new read-only verb `resolve/cli.mjs deps
+  [--json] [--probe]` runs the pipeline's own preflight without writing its stamp and adds a
+  `skill_catalogs[]` report per `kind: skill-catalog` dependency. It covers:
+  - the catalog version against the version the matrix was triaged for;
+  - missing skills, with the roles they cost (mandatory first), and skills gated off here;
+  - host tools and, with `--probe`, their versions;
+  - installed copies that differ from the catalog copy (`stale`), and the same bare id installed in
+    more than one root;
+  - catalog skills the matrix has not triaged, and matrix ids the catalog no longer ships;
+  - the install and update commands to run.
 - `sdlc-lint roster` rejects a catalog skill also authored in `role_expertise`. `sdlc-lint
   skill-sets` requires the set to be wired into both the manifest and `runtime-dependencies.json`.
 
 ### Changed
 
 - The dependency preflight lists at most 8 missing skills per dependency, then a count.
+- `/sdlc:doctor` gets its dependency status from `resolve/cli.mjs deps` rather than re-running the
+  algorithm itself. Its JSON gains `skill_catalogs` and drops `host.toolchains.android`: the
+  `android` version is now reported under the catalog's `tools[]`.
 
 ### Removed
 
