@@ -35,6 +35,7 @@ import { accessSync, constants, existsSync, readFileSync, readdirSync, writeFile
 import { delimiter, join } from "node:path";
 import { readSkillSet, assignedSkills, applicableSkills, skillTools } from "./skillsets.mjs";
 import { parseYaml } from "./yaml.mjs";
+import { evalRule } from "./detect.mjs";
 
 const POLICY_RANK = { block: 3, warn: 2, "graceful-degrade": 1 };
 const STAMP = ".sdlc-deps-preflight.json";
@@ -135,23 +136,36 @@ export function expandHome(path, env = process.env) {
  * project without CameraX needs no `camerax`, and its absence must not mark the catalog degraded.
  * A `dependency:` gate looks where the declaring plugin's manifest says (`framework_detection`).
  * Without a root (no project to ask) every assigned skill counts — the conservative answer.
+ *
+ * The preflight runs BEFORE stack detection and reads every installed plugin's dependencies, so a
+ * catalog declared by a FOUNDATION is scoped here to the projects that foundation's own `detect`
+ * matches. Its skills only ever reach a role through that foundation's profile; on a Node project
+ * with android-foundation installed, 13 ungated Android skills are not "missing", they are
+ * irrelevant (`not_applicable`). The rule is evaluated exactly as stack detection evaluates it.
  */
 function expandSkillCatalog(dep, pluginDir, { projectRoot = null, gateCache = null } = {}) {
   if (dep?.kind !== "skill-catalog" || typeof dep.skill_set !== "string") return dep;
   const doc = readSkillSet(join(pluginDir, dep.skill_set));
   if (!doc) return { ...dep, skills_used: dep.skills_used ?? [] };
+  const manifest = readManifest(pluginDir);
+  const tools = skillTools(doc);
+  if (projectRoot && manifest?.kind === "foundation" && manifest.detect != null && !evalRule(manifest.detect, projectRoot)) {
+    return { ...dep, skills_used: [], skill_tools: tools, not_applicable: true };
+  }
   const used = projectRoot
-    ? applicableSkills(doc, { projectRoot, detectionPaths: manifestDetectionPaths(pluginDir), cache: gateCache })
+    ? applicableSkills(doc, { projectRoot, detectionPaths: detectionPathsOf(manifest), cache: gateCache })
     : assignedSkills(doc);
-  return { ...dep, skills_used: used, skill_tools: skillTools(doc) };
+  return { ...dep, skills_used: used, skill_tools: tools };
+}
+
+function readManifest(pluginDir) {
+  try { return parseYaml(readFileSync(join(pluginDir, "manifest.yaml"), "utf8")); } catch { return null; }
 }
 
 /** The declaring plugin's `framework_detection` — where its `dependency:` gates look. */
-function manifestDetectionPaths(pluginDir) {
-  try {
-    const paths = parseYaml(readFileSync(join(pluginDir, "manifest.yaml"), "utf8"))?.framework_detection;
-    return Array.isArray(paths) ? paths.filter((p) => typeof p === "string") : [];
-  } catch { return []; }
+function detectionPathsOf(manifest) {
+  const paths = manifest?.framework_detection;
+  return Array.isArray(paths) ? paths.filter((p) => typeof p === "string") : [];
 }
 
 /**
@@ -176,6 +190,8 @@ export function collectDependencies({ installs = new Map(), enabled = {}, projec
       if (!prev) { merged.set(dep.name, { ...dep, declared_by: [key] }); continue; }
       prev.declared_by.push(key);
       prev.skills_used = [...new Set([...(prev.skills_used ?? []), ...(dep.skills_used ?? [])])];
+      // Irrelevant only if irrelevant to EVERY declarer — one matching foundation makes it needed.
+      if (prev.not_applicable && !dep.not_applicable) delete prev.not_applicable;
       if (dep.skill_tools) prev.skill_tools = { ...(prev.skill_tools ?? {}), ...dep.skill_tools };
       if ((POLICY_RANK[dep.policy] ?? 0) > (POLICY_RANK[prev.policy] ?? 0)) prev.policy = dep.policy;
     }
@@ -212,7 +228,7 @@ export function computeDepsStatus(dependencies, available, { which = whichTool }
     });
     const unavailable = [...missing, ...toolBlocked];
     status[dep.name] = unavailable.length === 0
-      ? { status: "available", missing_skills: [] }
+      ? { status: "available", missing_skills: [], ...(dep.not_applicable ? { not_applicable: true } : {}) }
       : {
         status: "missing",
         missing_skills: missing,
@@ -277,7 +293,7 @@ export function renderPreflightPrint(status, { headless = false, cached = false,
   for (const name of names) {
     const s = status[name];
     const policy = s.policy ?? "warn";
-    const mark = s.status === "available" ? "✅ available" : policy === "block" ? "❌ missing" : "⚠️ degraded";
+    const mark = s.not_applicable ? "➖ not used by this project" : s.status === "available" ? "✅ available" : policy === "block" ? "❌ missing" : "⚠️ degraded";
     lines.push(`   ${name} (${versions[name] ?? "unknown"}, policy=${policy}): ${mark}`);
     lines.push(`     missing: ${s.missing_skills.length ? listSome(s.missing_skills).replaceAll(",", ", ") : "—"}`);
     if (s.missing_tools?.length) lines.push(`     missing tools: ${s.missing_tools.join(", ")}`);

@@ -165,6 +165,33 @@ test("deps: with a project, skills_used is GATED like the rows — a gated-off s
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("deps: a catalog declared by a foundation is not needed where that foundation does not detect", () => {
+  const dir = scratch();
+  try {
+    const p = plugin(join(dir, "p"));
+    writeFileSync(join(p, "manifest.yaml"), "kind: foundation\nstack: demo\ndetect:\n  file_exists: settings.gradle.kts\n");
+    const project = join(dir, "node-app");
+    mkdirSync(project, { recursive: true });
+    writeFileSync(join(project, "package.json"), "{}\n");
+    const installs = new Map([["p@m", { installPath: p }]]);
+    const config = join(dir, "cfg");
+    mkdirSync(config);
+
+    const { dependencies } = collectDependencies({ installs, enabled: {}, projectRoot: project });
+    const cat = dependencies.find((d) => d.name === "cat");
+    assert.deepEqual(cat.skills_used, [], "the preflight runs before detection; the declarer's own detect scopes it");
+    assert.equal(cat.not_applicable, true);
+    const status = computeDepsStatus(dependencies, enumerateSkills({ configDir: config, installs, enabled: {} }), { which: () => null });
+    assert.deepEqual(status.cat, { status: "available", missing_skills: [], not_applicable: true });
+    assert.deepEqual(enforcePolicies(status).stdout, [], "no WARN on a project the catalog does not serve");
+
+    writeFileSync(join(project, "settings.gradle.kts"), "");
+    const android = collectDependencies({ installs, enabled: {}, projectRoot: project }).dependencies.find((d) => d.name === "cat");
+    assert.deepEqual(android.skills_used, ["intent-sec", "the-cli"]);
+    assert.equal(android.not_applicable, undefined);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("gates: memoized per run, and blind to build outputs and vendored trees", () => {
   const dir = scratch();
   try {
