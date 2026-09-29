@@ -217,6 +217,34 @@ test("gates: memoized per run, and blind to build outputs and vendored trees", (
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("deps: the plugin-marketplace route satisfies a catalog — `cat:<id>` counts like a bare install", () => {
+  const dir = scratch();
+  try {
+    const p = plugin(join(dir, "p"));
+    // `/plugin install android-skills@android-skills` installs no bare dirs: the skills live in the
+    // catalog's own plugin, namespaced by its name — which is the dependency (and set) name.
+    const catalogPlugin = join(dir, "cat-plugin");
+    skill(catalogPlugin, "intent-sec");
+    skill(catalogPlugin, "the-cli");
+    skill(catalogPlugin, "camera");
+    const installs = new Map([["p@m", { installPath: p }], ["cat@cat", { installPath: catalogPlugin }]]);
+    const config = join(dir, "cfg");
+    mkdirSync(config);
+
+    const { dependencies } = collectDependencies({ installs, enabled: {} });
+    const available = enumerateSkills({ configDir: config, installs, enabled: {} });
+    assert.ok(available.skills.has("cat:intent-sec") && !available.skills.has("intent-sec"), "namespaced only — no bare copy");
+    const status = computeDepsStatus(dependencies, available, { which: () => "/bin/fakebin" });
+    assert.deepEqual(status.cat, { status: "available", missing_skills: [] });
+
+    const other = new Map([["p@m", { installPath: p }], ["someone-else@m", { installPath: catalogPlugin }]]);
+    const foreign = computeDepsStatus(collectDependencies({ installs: other, enabled: {} }).dependencies,
+      enumerateSkills({ configDir: config, installs: other, enabled: {} }), { which: () => "/bin/fakebin" });
+    assert.deepEqual(foreign.cat.missing_skills, ["intent-sec", "camera", "the-cli"],
+      "another plugin's same-named skill is not the catalog's");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("deps: a catalog's version comes from its version_file, so an update invalidates the stamp", () => {
   const dir = scratch();
   try {
