@@ -19,7 +19,9 @@ cost-tiered agent roster — `business-analyst` (Opus), `developer`, `reviewer`,
 agent. A foundation contributes `role_expertise` instead; the resolver merges it and pre-renders
 `profile.prompt_blocks[agent]`, which the orchestrator pastes verbatim into the phase prompt's
 stable prefix, and `resolve/cli.mjs expertise --role <name>` prints the same blocks for an agent
-invoked outside the pipeline. Slash command: `/sdlc:start "<feature>"`. Ships its own vanilla `manifest.yaml`
+invoked outside the pipeline. `resolve/cli.mjs deps` is `/sdlc:doctor`'s entry to the same
+dependency preflight, read-only (no stamp, no enforcement), plus a per-catalog report for
+`kind: skill-catalog` dependencies (`resolve/catalogs.mjs`, ADR-0036). Slash command: `/sdlc:start "<feature>"`. Ships its own vanilla `manifest.yaml`
 (`kind: foundation`, `priority: 0`) as the always-matching fallback profile when no specialized
 foundation claims the project, but the core pipeline logic itself never forks per stack — it
 reads whichever foundation manifest wins. Beyond the phase agents it ships `session-recorder`,

@@ -47,6 +47,15 @@ as superpowers. Missing skills are judged per skill:
 `rules/skills.md` was removed; its command-group bindings are now the per-role `when` text of the
 `android-cli` row.
 
+`/sdlc:doctor` reports the catalog in its own section (from `resolve/cli.mjs deps --json --probe`).
+The section shows:
+- the installed catalog version against the version the matrix was triaged for;
+- each missing skill, with the roles it costs;
+- the `android` binary and its version;
+- installed copies that no longer match the CLI's local clone (`catalog_dir`,
+  `~/.android/cli/skills`), because `android skills add` copies and does not track updates;
+- catalog skills the matrix has not triaged yet.
+
 Rule files here are read by agents that live in `sdlc`, so they never name the plugin-root variable —
 the resolver emits each `role_expertise.<role>.rules` path **absolute** instead.
 

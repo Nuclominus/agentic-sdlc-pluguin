@@ -77,7 +77,9 @@ marketplace instead — note the name is `superpowers-dev`:
 /sdlc:doctor
 # → Stack profiles: vanilla(0), android(300)
 # → superpowers: ✅ available (superpowers@claude-plugins-official)
-# → Android CLI: ⚠️ not found (optional — pipeline runs without it)
+# → Skill catalogs: android-skills 1.0.16406183 [policy=warn] — ✅ available
+#     tool android: 1.0.16406183 — needed by android-cli
+#   (missing skills are listed with the roles they cost, and the `android skills …` command to fix them)
 
 /sdlc:list-stacks
 ```

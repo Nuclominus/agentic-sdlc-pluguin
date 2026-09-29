@@ -1,7 +1,8 @@
 ---
 name: doctor
 description: |
-  Diagnose SDLC pipeline health — external plugin dependencies, runtime preflight status, stale
+  Diagnose SDLC pipeline health — external plugin dependencies and skill catalogs (missing per
+  role, stale, untriaged), runtime preflight status, stale
   agent names or a stale config location in this project's config, and cost baseline (if
   available). Diagnosis is read-only; the config migration is applied only with explicit approval.
 
@@ -37,18 +38,45 @@ nothing. Doctor finds those, shows them, and rewrites/moves them **only after yo
    operator's home instead of the active config dir. Print the resolved `{PLUGIN_CACHE_ROOT}` in the
    report; it is the first thing to check when a run picks an unexpected stack.
 
-1. **Locate the runtime dependencies file.** Try these paths in order, take the first that exists:
-   - `{SDLC_PLUGIN_ROOT}/runtime-dependencies.json`
-   - `<repo>/plugins/sdlc/runtime-dependencies.json` (development checkout)
+1. **Run the pipeline's own dependency preflight, read-only.** One command, from the project root:
 
-   If neither exists, print `🔌 Dependency preflight: no runtime-dependencies.json found.` and skip
-   step 2.
+   ```
+   node {SDLC_PLUGIN_ROOT}/tools/resolve/cli.mjs deps --json --probe
+   ```
 
-2. **Run the same preflight algorithm the pipeline runs** — `enumerateSkills` /
-   `collectDependencies` / `computeDepsStatus` in `${SDLC_PLUGIN_ROOT}/tools/resolve/deps.mjs`
-   (enumerate available skills via a skills-listing tool if the host has one, with a filesystem
-   fallback to `{PLUGIN_CACHE_ROOT}/**/{plugin}/**/skills/{skill}/SKILL.md`, then compute
-   per-dependency status). DO NOT enforce policy here — `block` does NOT exit. Just collect status.
+   It merges every installed+enabled plugin's `runtime-dependencies.json`, enumerates the available
+   skills and computes per-dependency status with the SAME code a run executes
+   (`tools/resolve/deps.mjs`) — but writes no preflight stamp and enforces no policy: a missing
+   `block` dependency is reported in `would_abort_pipeline`, it does not exit. Exit 1 means only
+   "could not diagnose" (`{ok:false, error}`); report the error and continue with step 3.
+
+   Take `deps_preflight` from its output as-is. If it is empty, print
+   `🔌 Dependency preflight: no external dependencies declared.`
+
+2. **Skill catalogs (ADR-0036).** The same output carries `skill_catalogs[]` — one entry per
+   `kind: skill-catalog` dependency (e.g. `android-skills`, the Android CLI's agent skills, which
+   `android-foundation` assigns per role in `skill-sets/android-skills.yaml`). Render each entry
+   as the "Skill catalogs" section below; the fields mean:
+
+   - `version.installed` / `version.matrix` / `version.drift` — the catalog on this machine vs. the
+     version the plugin's matrix was triaged against. Drift is the maintainers' cue, not the user's
+     fault; say so.
+   - `applicable` of `assigned`, `gated_off[]` — skills this project needs vs. the matrix total; a
+     gated-off skill (no CameraX → no `camerax`) is **not** missing and must not be reported as such.
+   - `assigned_missing[] = {skill, roles[{role, policy}]}` — **lead with any row whose policy is
+     `mandatory`**: that role's mandate is running best-effort.
+   - `tool_blocked[]` and `tools[] = {name, path, version, required_by}` — a skill installed but
+     unusable because its host tool is not on PATH. `--probe` fills `version` by running
+     `<tool> --version`; this is the ONLY place tool versions come from — do not probe them again
+     in step 3b.
+   - `stale[]` — an installed copy that differs from the catalog's copy (the CLI copies skills, so
+     they do not follow a catalog update); `duplicate_roots[]` — the same bare id installed in more
+     than one place, where the host may load either.
+   - `unknown_to_matrix[]` / `removed_upstream[]` — catalog skills no role receives yet, and matrix
+     ids the catalog no longer ships. Informational: `remediation.rematrix` explains that the
+     plugin's maintainers re-triage; there is nothing for the user to run.
+   - `remediation.install` / `.update` / `.alt_install` — print these verbatim as the fix. Never run
+     them: installing is the user's call.
 
 3. **Locate active stack profiles.** Reuse the detection logic in `tools/resolve/manifests.mjs` +
    `detect.mjs` (`resolveStack`): glob `{PLUGIN_CACHE_ROOT}/**/manifest.yaml`, parse each, split by
@@ -67,8 +95,9 @@ nothing. Doctor finds those, shows them, and rewrites/moves them **only after yo
     toolchains relevant to installed stack plugins — never fail, just report version or
     `not found`. Suggested probes (skip any that don't apply to the installed plugins):
     `node --version`, `java -version`, `./gradlew --version` (if a wrapper exists),
-    `swift --version`, `xcodebuild -version`, `android --version`. This surfaces capability-gated
-    checks up front (e.g. iOS lint/build needs macOS + Xcode; those post-pipeline checks SKIP
+    `swift --version`, `xcodebuild -version`. A skill catalog's host tools (e.g. `android`) are
+    already probed by step 1's `--probe` — report them under "Skill catalogs", not here. This
+    surfaces capability-gated checks up front (e.g. iOS lint/build needs macOS + Xcode; those post-pipeline checks SKIP
     rather than fail off-host).
 
 3c. **Check this project's config for stale agent names, stale skill ids and a stale location.**
@@ -160,6 +189,21 @@ Dependencies (from runtime-dependencies.json):
       /plugin marketplace add acme/internal-tools
       /plugin install acme-internal@acme-internal-tools
 
+Skill catalogs:
+  android-skills 1.0.16406183 [policy=warn] — ⚠️ degraded
+    matrix: android-skills triaged against 1.0.16406183
+    skills: 13 needed in this project of 25 assigned (gated off here: camerax, wear-compose-m3, …)
+    tool android: 1.0.16406183 — needed by android-cli
+    ❌ missing android-permissions-security — developer, security-analyst (MANDATORY)
+    ❌ missing r8-analyzer — devops, security-analyst
+    ⚠️ stale: android-cli at {CONFIG_DIR}/skills/android-cli differs from the catalog copy
+    fix:
+      android update
+      android init
+      android skills add --all --agent=claude-code
+      android skills update --all
+      (or: /plugin marketplace add android/skills && /plugin install android-skills@android-skills)
+
 Stack profiles:
   🎯 active: android (priority=300, from android-foundation/manifest.yaml)
   ➕ frameworks: retrofit (additive)
@@ -169,7 +213,6 @@ Stack profiles:
 Host capability:
   os: Linux x86_64
   node: v20.11.0   java: 17.0.10   ./gradlew: 8.7
-  android (CLI): not found (optional)
 
 Config location:
   ✅ this project's SDLC files are in .sdlc/.
@@ -214,6 +257,35 @@ never silently omit a section.
       ]
     }
   },
+  "skill_catalogs": [
+    {
+      "name": "android-skills",
+      "policy": "warn",
+      "status": "degraded",
+      "skill_set": "android-skills",
+      "version": { "installed": "1.0.16406183", "matrix": "1.0.16406183", "drift": false },
+      "catalog_dir": "/home/me/.android/cli/skills",
+      "catalog_present": true,
+      "tools": [{ "name": "android", "path": "/usr/local/bin/android", "version": "1.0.16406183", "required_by": ["android-cli"] }],
+      "assigned": 25,
+      "applicable": 13,
+      "gated_off": ["camerax", "wear-compose-m3"],
+      "assigned_missing": [
+        { "skill": "android-permissions-security", "roles": [{ "role": "developer", "policy": "recommended" }, { "role": "security-analyst", "policy": "mandatory" }] }
+      ],
+      "tool_blocked": [],
+      "unknown_to_matrix": [],
+      "removed_upstream": [],
+      "stale": [{ "skill": "android-cli", "installed_at": "/home/me/.claude/skills/android-cli", "catalog_at": "/home/me/.android/cli/skills/devtools/android-cli" }],
+      "duplicate_roots": [],
+      "remediation": {
+        "install": ["android update", "android init", "android skills add --all --agent=claude-code"],
+        "update": ["android update", "android skills update --all"],
+        "alt_install": ["/plugin marketplace add android/skills", "/plugin install android-skills@android-skills"],
+        "rematrix": null
+      }
+    }
+  ],
   "stack": {
     "active_profile": "android",
     "primary_priority": 300,
@@ -226,8 +298,7 @@ never silently omit a section.
     "toolchains": {
       "node": "v20.11.0",
       "java": "17.0.10",
-      "gradlew": "8.7",
-      "android": null
+      "gradlew": "8.7"
     }
   },
   "config_location": {
@@ -285,17 +356,21 @@ run even when a section above it is empty (e.g. `legacy_location: []`, `findings
   executes the two steps (ADR-0028).
 - **Do not enforce policy.** A missing `block` dep here is just reported, not actioned.
 - **Reuse, don't reimplement.** The dependency-status algorithm lives in
-  `tools/resolve/deps.mjs`. If that module changes, this skill's behavior must follow — it
-  delegates to it, and must not become a parallel implementation.
-- **Exit code semantics with `--json`:** exit 0 normally; exit 1 only if the runtime-dependencies
-  file itself is malformed JSON. Missing-but-blocking deps still exit 0 — report them in the JSON
-  and let the caller decide.
+  `tools/resolve/deps.mjs`, the catalog report in `tools/resolve/catalogs.mjs`, and step 1's
+  `resolve/cli.mjs deps` is the one entry to both. Never recompute a status, a role impact or a
+  stale check by hand — a second implementation is how a diagnosis comes to disagree with the run.
+- **Never install or update a skill catalog.** `remediation.*` commands are printed, not run.
+- **Exit code semantics with `--json`:** exit 0 normally; exit 1 only if the dependency preflight
+  could not run at all (step 1's `ok: false`). Missing-but-blocking deps still exit 0 — report them
+  in the JSON and let the caller decide.
 
 ## When to use
 
 - **After upgrading the marketplace** — catch a config that still names agents from the previous
   version, or still lives in the pre-rename location, before a run silently drops those entries.
 - After installing or updating a stack plugin — verify external dep wiring still resolves.
+- After `android skills add` / `android skills update` — confirm every role's catalog skills are
+  installed, current, and not shadowed by a same-named copy elsewhere.
 - Before kicking off a long pipeline run — confirm it won't abort on a `block`-policy dependency.
 - In CI / automation — `--json` gives a machine-checkable health report.
 - When a cost regression is suspected — compare current `cost_baseline` against historical values.

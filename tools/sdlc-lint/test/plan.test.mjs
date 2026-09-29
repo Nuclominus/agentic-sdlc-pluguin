@@ -5,12 +5,12 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, appendFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolvePlan, resolveExpertise, resolveResume } from "../../../plugins/sdlc/tools/resolve/plan.mjs";
+import { resolvePlan, resolveExpertise, resolveResume, resolveDeps } from "../../../plugins/sdlc/tools/resolve/plan.mjs";
 
 function write(file, content) {
   mkdirSync(join(file, ".."), { recursive: true });
@@ -933,5 +933,37 @@ test("an unknown top-level key in a real sdlc.local.yaml warns on every run", ()
   try {
     const r = resolvePlan({ cwd: w.proj, args: "--dry-run", env: w.env });
     assert.ok(r.warnings.some((x) => /unknown key 'skip_phase'/.test(x)), `got ${JSON.stringify(r.warnings)}`);
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+// ---- ADR-0036: the doctor's read-only dependency view ----------------------------------------
+
+test("resolveDeps: the run's own preflight, read-only — no stamp — with the catalog report and its role impact", () => {
+  const w = world({ roleExpertise: true });
+  try {
+    appendFileSync(join(w.plug, "manifest.yaml"), "skill_sets:\n  - file: skill-sets/cat.yaml\n");
+    write(join(w.plug, "skill-sets", "cat.yaml"), [
+      "set: cat",
+      "source: { homepage: h, catalog_version: '2.0', synced_at: '2026-09-28' }",
+      "categories: {}",
+      "skills:",
+      "  - { id: sec, upstream_path: s/sec, category: c, summary: s, roles: { developer: { policy: mandatory, when: before editing } } }",
+      "",
+    ].join("\n"));
+    write(join(w.plug, "runtime-dependencies.json"), { dependencies: [
+      { name: "cat", kind: "skill-catalog", policy: "warn", skill_set: "skill-sets/cat.yaml", install_command: ["cat add sec"] },
+    ] });
+
+    const r = resolveDeps({ cwd: w.proj, env: w.env });
+    assert.equal(r.ok, true);
+    assert.equal(existsSync(join(w.cfg, ".sdlc-deps-preflight.json")), false, "diagnosing never writes the fast-path stamp");
+    assert.equal(r.would_abort_pipeline, false);
+    assert.equal(r.deps_preflight.cat.policy, "warn");
+    const [cat] = r.skill_catalogs;
+    assert.deepEqual(cat.assigned_missing, [{ skill: "sec", roles: [{ role: "developer", policy: "mandatory" }] }]);
+    assert.deepEqual(cat.remediation.install, ["cat add sec"]);
+
+    resolvePlan({ cwd: w.proj, args: "--dry-run", env: w.env });
+    assert.equal(existsSync(join(w.cfg, ".sdlc-deps-preflight.json")), true, "a run still writes it — the control");
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });

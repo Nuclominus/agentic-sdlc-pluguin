@@ -107,7 +107,7 @@ that reads `model:` from the agent frontmatter and rewrites the Agent call).
 /plugin install retrofit-plugin@agentic-sdlc        # optional; auto-activates when Retrofit is detected
 
 # Status
-/sdlc:doctor            # preflight + host-capability report + active frameworks
+/sdlc:doctor            # preflight + skill catalogs + host-capability report + active frameworks
 /sdlc:list-stacks       # 🎯 android (settings.gradle[.kts] + *.kt) · ➕ retrofit (additive)
 
 # Run

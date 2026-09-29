@@ -138,12 +138,13 @@ export function expandHome(path, env = process.env) {
  */
 function expandSkillCatalog(dep, pluginDir, { projectRoot = null, gateCache = null } = {}) {
   if (dep?.kind !== "skill-catalog" || typeof dep.skill_set !== "string") return dep;
-  const doc = readSkillSet(join(pluginDir, dep.skill_set));
+  const file = join(pluginDir, dep.skill_set);
+  const doc = readSkillSet(file);
   if (!doc) return { ...dep, skills_used: dep.skills_used ?? [] };
   const used = projectRoot
     ? applicableSkills(doc, { projectRoot, detectionPaths: manifestDetectionPaths(pluginDir), cache: gateCache })
     : assignedSkills(doc);
-  return { ...dep, skills_used: used, skill_tools: skillTools(doc) };
+  return { ...dep, skills_used: used, skill_tools: skillTools(doc), skill_set_file: file };
 }
 
 /** The declaring plugin's `framework_detection` — where its `dependency:` gates look. */
@@ -379,6 +380,9 @@ export function preflight({ configDir, projectRoot, installs, enabled, skills = 
 
   return {
     deps_preflight: status,
+    // The merged declarations the status was computed from — the doctor's catalog report
+    // (./catalogs.mjs) reads these rather than collecting a second, possibly different, set.
+    dependencies,
     // The enumerated set travels with the result: Step 1b-ext needs it to decide whether an
     // extension skill exists, and recomputing it there would be a second enumeration that
     // could disagree with this one.

@@ -15,6 +15,7 @@ import { readInstalledPlugins, readEnabledPlugins, loadInstalledManifests, loadM
 import { resolveStack } from "./detect.mjs";
 import { preflight } from "./deps.mjs";
 import { loadSkillSets, skillSetRoleRows } from "./skillsets.mjs";
+import { catalogReport } from "./catalogs.mjs";
 import { computeDiffSignals, applySkipRules, renderSkipPrint } from "./skiprules.mjs";
 import {
   mergeProfiles, applyLocalOverrides, parseFrameworkOverrides, parseModelOverrides, renderOverridesPrint, renderModelPrint, renderStackPrint,
@@ -292,7 +293,7 @@ function renderPromptBlocks({ agents, roleExpertise, extensionRows, stack, unava
  *
  * Returns `halt` when detection cannot proceed; otherwise every intermediate the caller needs.
  */
-export function resolveProfile({ cwd = process.cwd(), args = "", env = process.env, mode = "installed" } = {}) {
+export function resolveProfile({ cwd = process.cwd(), args = "", env = process.env, mode = "installed", readOnly = false } = {}) {
   const prints = [];
   const warnings = [];
   /** Record a diagnostic in both channels — see the note on resolvePlan. */
@@ -384,7 +385,7 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   // `applies_if` questions of the same tree, and each is a directory walk.
   const gateCache = new Map();
   const deps = preflight({
-    configDir, projectRoot: cwd, installs, enabled, headless, gateCache,
+    configDir, projectRoot: cwd, installs, enabled, headless, gateCache, stamp: !readOnly,
     force: flag(args, "--force-preflight"), skills: opt(args, "--skills"),
     workspaceSkillDirs: roots.workspace_skill_dirs ?? null,
   });
@@ -558,6 +559,42 @@ export function resolveExpertise({ cwd = process.cwd(), args = "", env = process
     ok: true, role, stack: r.stack.foundation, profile_dir: r.profile_dir,
     expertise: r.role_expertise[role] ?? null,
     block: blocks.expertise, skills_block: blocks.skills,
+    prints: r.prints, warnings: r.warnings,
+  };
+}
+
+/**
+ * The doctor's dependency view (ADR-0036): `node …/resolve/cli.mjs deps --json [--probe]`.
+ *
+ * The SAME preflight a run executes, resolved against this project, but read-only — `stamp:false`,
+ * so diagnosing never moves the fast path — and never enforcing: a missing `block` dependency is
+ * reported in `would_abort_pipeline`, not acted on. Skill catalogs get the full report
+ * (./catalogs.mjs); `--probe` adds `<tool> --version` for their host tools, which spawns, and
+ * which the pipeline itself never does.
+ */
+export function resolveDeps({ cwd = process.cwd(), args = "", env = process.env, mode = "installed", probe = false } = {}) {
+  const r = resolveProfile({ cwd, args, env, mode, readOnly: true });
+  if (!r.deps) return { ok: false, error: r.halt ?? "dependency preflight did not run", prints: r.prints, warnings: r.warnings };
+  const deps = r.deps;
+  const policies = Object.fromEntries((deps.dependencies ?? []).map((d) => [d.name, d.policy ?? "warn"]));
+  const depsPreflight = Object.fromEntries(Object.entries(deps.deps_preflight)
+    .map(([name, s]) => [name, { policy: policies[name] ?? "warn", ...s }]));
+  const skillCatalogs = catalogReport({
+    dependencies: deps.dependencies, status: deps.deps_preflight, installedVersions: deps.installed_versions,
+    skillRoots: deps.skill_roots, roleExpertise: r.role_expertise ?? {}, env, probe,
+  });
+  return {
+    ok: true,
+    deps_preflight: depsPreflight,
+    skill_catalogs: skillCatalogs,
+    installed_versions: deps.installed_versions,
+    skills_source: deps.skills_source,
+    fs_blind_to: deps.fs_blind_to,
+    stack: r.stack?.foundation ?? null,
+    // A halt after the preflight (a forced --stack nothing declares, …) leaves the catalog report
+    // without role impact; say so rather than print roles as if none were affected.
+    roles_resolved: !r.halt,
+    would_abort_pipeline: Boolean(deps.abort),
     prints: r.prints, warnings: r.warnings,
   };
 }
