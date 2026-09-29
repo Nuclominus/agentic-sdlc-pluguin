@@ -16,6 +16,7 @@ import { checkMachineValues } from "./lib/machine-values.mjs";
 import { checkAgentTools } from "./lib/agent-tools.mjs";
 import { checkRoster } from "./lib/roster.mjs";
 import { checkDocRefs } from "./lib/doc-refs.mjs";
+import { checkSkillSets } from "./lib/skill-sets.mjs";
 import { parseContracts } from "./lib/contracts.mjs";
 import { loadHost, listHosts, emitAll } from "./lib/emit/index.mjs";
 import { checkHost } from "./lib/emit/check.mjs";
@@ -144,6 +145,21 @@ function printRoster(results) {
   } else {
     for (const r of failed) console.error(`✗ [${r.check}] ${r.file}\n    ${r.errors.join("\n    ")}`);
     console.log(`roster: ${results.length - failed.length}/${results.length} clean`);
+  }
+  return failed.length ? 1 : 0;
+}
+
+// checkSkillSets returns one row per skill-set file (ADR-0036). `--write` regenerates the matrix
+// table and the README block from the YAML; without it the check only compares.
+function printSkillSets(results, { write } = { write: false }) {
+  const failed = results.filter(r => !r.ok);
+  if (jsonOut) {
+    console.log(JSON.stringify({ command: "skill-sets", checked: results.length, failed: failed.length, failures: failed,
+      ...(write ? { written: results.flatMap(r => r.written ?? []) } : {}) }));
+  } else {
+    for (const r of failed) console.error(`✗ ${r.file}\n    ${r.errors.join("\n    ")}`);
+    if (write) for (const f of results.flatMap(r => r.written ?? [])) console.log(`  wrote ${f}`);
+    console.log(`skill-sets: ${results.length - failed.length}/${results.length} clean`);
   }
   return failed.length ? 1 : 0;
 }
@@ -379,6 +395,7 @@ function runAll() {
     printMachineValues(checkMachineValues(root)),
     printAgentTools(checkAgentTools(root)),
     printRoster(checkRoster(root)),
+    printSkillSets(checkSkillSets(root)),
     printDocRefs(checkDocRefs({ repoRoot: root })),
     // After roster: a roster failure is the more informative error, so it should
     // surface before a dist/ diff that is usually its downstream symptom.
@@ -392,7 +409,7 @@ function runAll() {
 }
 
 const VERBS = ["schema", "cycles", "detect", "resume", "report", "rollup", "read-discipline",
-  "plugin-paths", "nested-manifest", "marketplace-surface", "stack-uniqueness", "machine-values", "agent-tools", "roster", "doc-refs", "emit", "compliance", "start-window", "all"];
+  "plugin-paths", "nested-manifest", "marketplace-surface", "stack-uniqueness", "machine-values", "agent-tools", "roster", "skill-sets", "doc-refs", "emit", "compliance", "start-window", "all"];
 
 let code = 0;
 switch (cmd) {
@@ -406,6 +423,11 @@ switch (cmd) {
   case "machine-values": code = printMachineValues(checkMachineValues(root)); break;
   case "agent-tools": code = printAgentTools(checkAgentTools(root)); break;
   case "roster": code = printRoster(checkRoster(root)); break;
+  case "skill-sets": {
+    const write = args.includes("--write");
+    code = printSkillSets(checkSkillSets(root, { write }), { write });
+    break;
+  }
   case "doc-refs": code = printDocRefs(checkDocRefs({ repoRoot: root })); break;
   case "emit": {
     const hosts = emitHosts();
@@ -470,7 +492,7 @@ switch (cmd) {
     // Even the help path owes a JSON consumer an envelope — `--json` must never leave stdout
     // unparseable, whatever the exit code (#126).
     if (jsonOut) { console.log(JSON.stringify({ command: "help", ok: true, verbs: VERBS })); break; }
-    console.log("Usage: sdlc-lint <schema|cycles|detect|resume|report|rollup|read-discipline|plugin-paths|nested-manifest|marketplace-surface|stack-uniqueness|machine-values|agent-tools|roster|doc-refs|emit|compliance|start-window|all> [--json]");
+    console.log("Usage: sdlc-lint <schema|cycles|detect|resume|report|rollup|read-discipline|plugin-paths|nested-manifest|marketplace-surface|stack-uniqueness|machine-values|agent-tools|roster|skill-sets|doc-refs|emit|compliance|start-window|all> [--json]");
     console.log("  read-discipline   E2: contract present in the stable prefix; no re-read phrasing in agents");
     console.log("  plugin-paths      #70: no home-anchored ~/.claude paths in shipped plugin text");
     console.log("  nested-manifest   ADR-0026: no manifest.yaml below a plugin root (tree-vs-installed trap)");
@@ -479,6 +501,7 @@ switch (cmd) {
     console.log("  machine-values    H3: no prose computing a value a machine already writes");
     console.log("  agent-tools       ADR-0018: every agent declares tools; none may dispatch agents; reviewers hold no Edit");
     console.log("  roster            ADR-0021: core binds every phase to a shipped agent; role_expertise keys/rules/skills resolve; expertise slot present");
+    console.log("  skill-sets        ADR-0036: skill-set matrices are valid, in scope, triaged, and their generated table + README block are current [--write regenerates]");
     console.log("  doc-refs          a backtick `<plugin>:<name>` reference in README/CONTRIBUTING/docs resolves to a real agent, skill or command");
     console.log("  emit              Track J: render dist/<host>/ from the plugins/ SSOT [--host <id>|all]; --check compares without writing (CI runs only --check)");
     console.log("  compliance        H1: did the orchestrator run its own mandated steps? [--runs <glob>]... [--config-dir <path>]");
