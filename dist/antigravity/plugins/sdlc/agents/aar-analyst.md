@@ -48,6 +48,9 @@ Follow the `sdlc:aar` skill's `gather.md` contract. In short:
   non-empty, call out each flagged phase (peak prefix + reads/turn) and
   recommend a cache-read remedy — surgical reads (`offset/limit`, grep-first,
   no re-reads) and/or a smaller injected prefix — rather than a raw token cut.
+- **Skill scope** — when `metrics_json.skill_scope` lists `off_role` or `unassigned` calls, report
+  each as a scope-leak finding (ADR-0037) with the remedy `gather.md` describes; `null` means no
+  audit ran, which you state rather than treat as clean.
 - **Cooperation signals** — from the transcript: review-loop round count vs the
   workflow's `max_rounds` cap; parallel phases actually dispatched in one
   assistant message; redundant re-reads of the same file across agents;

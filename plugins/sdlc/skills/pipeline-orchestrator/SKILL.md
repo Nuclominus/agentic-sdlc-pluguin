@@ -706,6 +706,22 @@ dispatch_scope: telemetry.expertise_block_agents
 since: 2026-09-07
 ```
 
+```sdlc-contract
+id: 3b-1a-skill-scope
+requires: agent_skill_scope
+cardinality: every-skill-call
+dispatch_scope: telemetry.expertise_block_agents
+since: 2026-09-29
+```
+
+> **`3b-1a-skill-scope` is the inverse question (ADR-0037): did a role use a catalog skill the
+> matrix never gave it?** There is no per-subagent skill ACL, so a security-analyst CAN load a UI
+> skill; the skills block only tells it not to. Step 5b's seal judges every catalog `Skill` call
+> in each dispatch's own transcript against the static matrix and writes `skill_scope` +
+> `skill_scope_audit` into telemetry — you copy nothing for it. This contract re-scores the same
+> calls as `in-scope / catalog calls`. Nothing is blocked: an off-role call is a finding for
+> `/sdlc:aar`, whose remedy is a tighter `when` or a re-triaged row, never a refusal mid-run.
+
 > **Delivering the block is half the contract; the other half is whether it was acted on.**
 > `3b-1a-expertise-block` asks whether each dispatch RECEIVED its block.
 > `3b-1a-mandatory-skill` asks whether the subagent then invoked what that block MANDATED of it —

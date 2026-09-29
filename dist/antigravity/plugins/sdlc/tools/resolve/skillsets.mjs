@@ -143,3 +143,20 @@ export function skillSetRoleRows(sets, { projectRoot, detectionPaths = [], cache
   }
   return out;
 }
+
+/**
+ * ADR-0037 — the STATIC matrix: `{ skillId: { set, roles: [role, …] } }` for every skill of every
+ * set, an unassigned one with `roles: []`. Ungated on purpose: a gate decides what a prompt
+ * carries, not who may use a skill — a developer who reaches for `camerax` in a project that has
+ * just added CameraX is in scope. This is what the off-matrix audit judges a `Skill` call against.
+ */
+export function skillScope(sets) {
+  const out = {};
+  for (const doc of sets ?? []) {
+    for (const s of doc?.skills ?? []) {
+      if (!isObj(s) || typeof s.id !== "string") continue;
+      out[s.id] = { set: doc.set, roles: isObj(s.roles) ? Object.keys(s.roles).sort() : [] };
+    }
+  }
+  return out;
+}

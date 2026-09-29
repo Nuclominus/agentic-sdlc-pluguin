@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { extractFacts, extractFactsFrom } from "./transcript-facts.mjs";
 import { knownRunAgentIds, findAgentTranscript, deriveDispatchMap } from "./usage.mjs";
+import { auditSkillScope } from "../../../plugins/sdlc/tools/usage/skill-scope.mjs";
 
 /**
  * Every session transcript that owns at least one of this run's agents, oldest first.
@@ -130,37 +131,67 @@ function scopedDispatches(contract, facts, tel) {
  * whose transcript cannot be resolved is counted NEITHER way — a denominator quietly filled with
  * unjudgeable rows is worse than a smaller honest one.
  */
-function scopedMandates(contract, facts, tel, opts = {}) {
-  const dispatches = scopedDispatchFacts(contract, facts, tel);
-  if (!dispatches) return null;
-  const re = new RegExp(contract.pattern, "g");
+/**
+ * The Skill ids a dispatch's OWN subagent invoked, joined by tool_use id (see scopedMandates).
+ * `undefined` when the dispatch has no resolvable agent, `null` when its transcript is missing.
+ */
+function dispatchSkillResolver(opts = {}) {
   const agentBySession = new Map();     // session path -> (tool_use id -> agent id)
   const skillsByAgent = new Map();      // agent id -> Set of invoked skill ids, or null if unresolved
-  let expected = 0, matched = 0, judged = 0;
-
-  for (const f of dispatches) {
-    const mandated = [...String(f.prompt ?? "").matchAll(re)].map((m) => m[1]).filter(Boolean);
-    if (!mandated.length) continue;
+  return (f) => {
     if (!agentBySession.has(f.source)) {
       const m = new Map();
       try { for (const d of deriveDispatchMap(f.source)) if (d.id) m.set(d.id, d.agent_id); } catch { /* unreadable */ }
       agentBySession.set(f.source, m);
     }
     const agentId = agentBySession.get(f.source)?.get(f.tool_use_id) ?? null;
-    if (!agentId) continue;
+    if (!agentId) return { agentId: null, skills: undefined };
     if (!skillsByAgent.has(agentId)) {
       const p = findAgentTranscript(agentId, { projectsRoot: opts.projectsRoot });
       skillsByAgent.set(agentId, p
         ? new Set(extractFacts(p).filter((x) => x.tool === "Skill" && x.skill).map((x) => x.skill))
         : null);
     }
-    const invoked = skillsByAgent.get(agentId);
-    if (!invoked) continue;             // no transcript: unjudgeable, not a failure
+    return { agentId, skills: skillsByAgent.get(agentId) };
+  };
+}
+
+function scopedMandates(contract, facts, tel, opts = {}) {
+  const dispatches = scopedDispatchFacts(contract, facts, tel);
+  if (!dispatches) return null;
+  const re = new RegExp(contract.pattern, "g");
+  const skillsOf = dispatchSkillResolver(opts);
+  let expected = 0, matched = 0, judged = 0;
+
+  for (const f of dispatches) {
+    const mandated = [...String(f.prompt ?? "").matchAll(re)].map((m) => m[1]).filter(Boolean);
+    if (!mandated.length) continue;
+    const invoked = skillsOf(f).skills;
+    if (!invoked) continue;             // no agent or no transcript: unjudgeable, not a failure
     judged += 1;
     expected += mandated.length;
     matched += mandated.filter((id) => [...invoked].some((got) => skillMatches(got, id))).length;
   }
   return judged === 0 ? { expected: 0, matched: 0 } : { expected, matched };
+}
+
+/**
+ * `every-skill-call` (ADR-0037): of the CATALOG skills in-scope dispatches invoked, how many did
+ * the matrix assign to the dispatching role? The matrix is the one the run recorded at seal time
+ * (`telemetry.skill_scope`), so a later edit to a skill set cannot re-judge an old run. Judged by
+ * the shipped `auditSkillScope` — the seal and this contract cannot disagree about a call.
+ */
+function scopedSkillCalls(contract, facts, tel, opts = {}) {
+  const dispatches = scopedDispatchFacts(contract, facts, tel);
+  if (!dispatches) return null;
+  const skillsOf = dispatchSkillResolver(opts);
+  const judged = dispatches.map((f) => {
+    const { agentId, skills } = skillsOf(f);
+    return { agent: f.subagent_type, agent_id: agentId, skills: skills ? [...skills] : null };
+  });
+  const r = auditSkillScope({ scope: tel?.skill_scope, dispatches: judged });
+  if (!r) return { unscoped: true };
+  return { expected: r.catalog_calls, matched: r.in_scope };
 }
 
 // Phases that actually dispatched an agent. NOT the id set: one resumed subagent can
@@ -285,13 +316,15 @@ function evaluate(contract, { facts, tel, phaseCount, date, opts = {} }) {
   if (contract.until && contract.until < date) return na("retired");
   for (const c of contract.applies_when) if (!conditionHolds(c, tel)) return na("not-applicable");
 
-  if (contract.cardinality === "every-dispatch" || contract.cardinality === "every-mandate") {
-    const counted = contract.cardinality === "every-mandate"
-      ? scopedMandates(contract, facts, tel, opts)
+  if (contract.cardinality === "every-dispatch" || contract.cardinality === "every-mandate" || contract.cardinality === "every-skill-call") {
+    const counted = contract.cardinality === "every-mandate" ? scopedMandates(contract, facts, tel, opts)
+      : contract.cardinality === "every-skill-call" ? scopedSkillCalls(contract, facts, tel, opts)
       : scopedDispatches(contract, facts, tel);
     if (!counted) return na("no-dispatch-scope");
+    // No matrix recorded (no skill set installed, or sealed before ADR-0037): nothing to judge.
+    if (counted.unscoped) return na("no-skill-scope");
     const { expected, matched } = counted;
-    if (expected === 0) return na("no-dispatch-in-scope");
+    if (expected === 0) return na(contract.cardinality === "every-skill-call" ? "no-catalog-call" : "no-dispatch-in-scope");
     const verdict = matched >= expected ? "pass" : matched > 0 ? "partial" : "fail";
     return { id: contract.id, verdict, reason: null, matched, expected };
   }

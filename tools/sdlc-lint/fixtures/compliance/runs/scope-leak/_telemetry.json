@@ -1,0 +1,43 @@
+{
+  "task_slug": "scope-leak",
+  "started_at": "2026-09-29T10:00:00Z",
+  "completed_at": "2026-09-29T10:01:00Z",
+  "plugin_version": "4.2.0",
+  "stack": "android",
+  "expertise_block_agents": [
+    "developer",
+    "security-analyst"
+  ],
+  "phases": [
+    {
+      "phase": "security",
+      "agent": "security-analyst",
+      "agent_id": "5ca000000001"
+    },
+    {
+      "phase": "development",
+      "agent": "developer",
+      "agent_id": "5ca000000002"
+    }
+  ],
+  "skill_scope": {
+    "android-intent-security": {
+      "set": "android-skills",
+      "roles": [
+        "developer",
+        "security-analyst"
+      ]
+    },
+    "adaptive": {
+      "set": "android-skills",
+      "roles": [
+        "developer",
+        "qa-engineer"
+      ]
+    },
+    "display-glasses-with-jetpack-compose-glimmer": {
+      "set": "android-skills",
+      "roles": []
+    }
+  }
+}

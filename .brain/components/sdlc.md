@@ -21,7 +21,11 @@ agent. A foundation contributes `role_expertise` instead; the resolver merges it
 stable prefix, and `resolve/cli.mjs expertise --role <name>` prints the same blocks for an agent
 invoked outside the pipeline. `resolve/cli.mjs deps` is `/sdlc:doctor`'s entry to the same
 dependency preflight, read-only (no stamp, no enforcement), plus a per-catalog report for
-`kind: skill-catalog` dependencies (`resolve/catalogs.mjs`, ADR-0036). Slash command: `/sdlc:start "<feature>"`. Ships its own vanilla `manifest.yaml`
+`kind: skill-catalog` dependencies (`resolve/catalogs.mjs`, ADR-0036). The run seal
+(`run/finish.mjs`) also audits every catalog `Skill` call against the static role matrix
+(`usage/skill-scope.mjs`, [[decisions/ADR-0037-off-matrix-skill-use-is-audited-not-blocked]]). The
+compliance contract `3b-1a-skill-scope` and the AAR's scope-leak finding read that audit, and it
+never blocks. Slash command: `/sdlc:start "<feature>"`. Ships its own vanilla `manifest.yaml`
 (`kind: foundation`, `priority: 0`) as the always-matching fallback profile when no specialized
 foundation claims the project, but the core pipeline logic itself never forks per stack — it
 reads whichever foundation manifest wins. Beyond the phase agents it ships `session-recorder`,

@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import YAML from "yaml";
 
-export const REQUIRES = new Set(["bash_match", "agent_dispatch", "agent_prompt", "agent_skill"]);
-export const CARDINALITIES = new Set(["once-per-run", "once-per-phase", "every-dispatch", "every-mandate"]);
+export const REQUIRES = new Set(["bash_match", "agent_dispatch", "agent_prompt", "agent_skill", "agent_skill_scope"]);
+export const CARDINALITIES = new Set(["once-per-run", "once-per-phase", "every-dispatch", "every-mandate", "every-skill-call"]);
 // `agent_skill` needs the pattern to CAPTURE the skill id out of the dispatch prompt; without a
 // group there is nothing to compare against what the subagent invoked, and every mandate would
 // score unmet — a flat 0% indistinguishable from total non-compliance.
@@ -54,7 +54,11 @@ function validate(raw, seen) {
   if (!CARDINALITIES.has(raw.cardinality)) {
     errs.push(`${label}: unknown cardinality '${raw.cardinality}' (expected ${[...CARDINALITIES].join(" | ")})`);
   }
-  if (typeof raw.pattern !== "string" || !raw.pattern) {
+  // `agent_skill_scope` judges a dispatch's Skill calls against the matrix the run recorded
+  // (`telemetry.skill_scope`, ADR-0037) — there is no text to match, so it takes no pattern.
+  if (raw.requires === "agent_skill_scope") {
+    if (raw.pattern != null) errs.push(`${label}: 'agent_skill_scope' takes no pattern — it judges against telemetry.skill_scope`);
+  } else if (typeof raw.pattern !== "string" || !raw.pattern) {
     errs.push(`${label}: missing required field 'pattern'`);
   } else if (raw.requires === "bash_match" || raw.requires === "agent_prompt" || raw.requires === "agent_skill") {
     try { new RegExp(raw.pattern); } catch (e) { errs.push(`${label}: uncompilable pattern — ${e.message}`); }
@@ -67,7 +71,7 @@ function validate(raw, seen) {
   // denominator is never guessed, rejected elsewhere so it cannot sit in a contract reading as
   // if it constrained something.
   let dispatch_scope = null;
-  const SCOPED_CARDINALITY = { "every-dispatch": "agent_prompt", "every-mandate": "agent_skill" };
+  const SCOPED_CARDINALITY = { "every-dispatch": "agent_prompt", "every-mandate": "agent_skill", "every-skill-call": "agent_skill_scope" };
   if (SCOPED_CARDINALITY[raw.cardinality]) {
     // Each evaluates the dispatch PROMPT, so each is meaningful only with its own `requires`.
     // Paired with anything else the evaluator would still compile this pattern — which validation
@@ -115,7 +119,7 @@ function validate(raw, seen) {
   return {
     errors: [],
     contract: {
-      id, requires: raw.requires, pattern: raw.pattern,
+      id, requires: raw.requires, pattern: raw.pattern ?? null,
       cardinality: raw.cardinality, since: raw.since, until: raw.until ?? null,
       applies_when: conditions, dispatch_scope,
     },

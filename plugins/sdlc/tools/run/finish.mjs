@@ -6,10 +6,19 @@
 // failure to price it, or to render its report, must never turn a successful run into a
 // failed one. Each stage records what happened and the next stage still runs.
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { sealRunClock, isoSeconds } from "./clock.mjs";
 import { enrichTelemetry } from "../usage/usage.mjs";
 import { renderReportFile } from "../report/report.mjs";
+import { auditRunSkillScope } from "../usage/skill-scope.mjs";
+import { resolveSkillScope } from "../resolve/plan.mjs";
+
+/** `<project>/docs/plans/<slug>` → `<project>`; any other layout → the process cwd. */
+function projectRootOf(runDir) {
+  const abs = resolve(runDir);
+  const plans = dirname(abs);
+  return basename(plans) === "plans" && basename(dirname(plans)) === "docs" ? dirname(dirname(plans)) : process.cwd();
+}
 
 /**
  * Seal a run: machine clock, transcript-derived cost, HTML report.
@@ -23,6 +32,8 @@ import { renderReportFile } from "../report/report.mjs";
  * @param {"orchestrator"|"stop-hook"} [opts.sealedBy]  who is sealing; default "orchestrator"
  * @param {Function} [opts.enrich]        TEST SEAM — replaces enrichTelemetry
  * @param {Function} [opts.renderReport]  TEST SEAM — replaces renderReportFile
+ * @param {Function} [opts.skillScope]    TEST SEAM — `(runDir, tel) => scope | null`, replaces the
+ *                                        read-only resolve of the project's skill-set matrix
  *
  * There is deliberately no `session` option. The enricher recovers the orchestrator
  * session from a resolved phase transcript by itself, which is why the model no longer
@@ -96,6 +107,30 @@ export function finishRun(runDir, opts = {}) {
     }
   }
 
+  // 3b. Off-matrix skill audit (ADR-0037). Advisory: it never fails a seal and never blocks —
+  //     the run is over. It resolves the STATIC matrix itself rather than trusting a copy the
+  //     orchestrator was asked to make (ADR-0015), and writes that matrix beside the verdict so
+  //     `sdlc-lint compliance` can re-judge the run later, on another machine, from telemetry alone.
+  let skillScope = null;
+  let scopeAudit = null;
+  try {
+    const current = JSON.parse(readFileSync(telPath, "utf8"));
+    // The run's own stack, not today's detection: see resolveSkillScope.
+    skillScope = (opts.skillScope || ((dir, t) => resolveSkillScope({ cwd: projectRootOf(dir), stack: t.stack ?? null })))(runDir, current);
+    if (skillScope) {
+      scopeAudit = auditRunSkillScope(runDir, current, { scope: skillScope, projectsRoot: opts.projectsRoot });
+      const leaks = scopeAudit ? scopeAudit.off_role.length + scopeAudit.unassigned.length : 0;
+      if (leaks) {
+        warnings.push(`WARN: ${leaks} skill call(s) outside the role skill matrix — ` +
+          [...scopeAudit.off_role, ...scopeAudit.unassigned].slice(0, 4).map((x) => `${x.agent}→${x.skill}`).join(", ") +
+          (leaks > 4 ? ", …" : "") + " (advisory; /sdlc:aar reports them)");
+      }
+    }
+  } catch (e) {
+    skillScope = null; scopeAudit = null;
+    warnings.push(`WARN: skill-scope audit skipped — ${e.message}`);
+  }
+
   // 4. The seal marker — LAST, and after enrich, which rewrites the whole telemetry
   //    file. Writing it earlier would let enrich erase `sealed_by`, and a run that
   //    reads as unsealed gets sealed twice: `wall_clock_seconds` is `now - anchor`, so
@@ -108,6 +143,10 @@ export function finishRun(runDir, opts = {}) {
   try {
     const tel = JSON.parse(readFileSync(telPath, "utf8"));
     tel.sealed_by = sealedBy;
+    if (skillScope && scopeAudit) {
+      tel.skill_scope = skillScope;
+      tel.skill_scope_audit = scopeAudit;
+    }
     // Same write, one more machine value: which recipe this run executed. It used to live only in
     // Step 5's prose, so whether a run recorded it was model discretion — one measured run wrote
     // `"workflow": "android-feature"`, the next omitted the key entirely, while both had resolved
@@ -132,5 +171,5 @@ export function finishRun(runDir, opts = {}) {
       "this run may be sealed a second time and its duration inflated");
   }
 
-  return { runDir, telPath, clock, enrich, report, sealed, warnings };
+  return { runDir, telPath, clock, enrich, report, skill_scope_audit: scopeAudit, sealed, warnings };
 }

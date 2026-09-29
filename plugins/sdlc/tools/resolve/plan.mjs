@@ -14,7 +14,7 @@ import { resolveRoots, pathLoadedRoots, selfPluginRoot, registryListsSdlc, PROJE
 import { readInstalledPlugins, readEnabledPlugins, loadInstalledManifests, loadManifestsFromTree, mergePathLoaded, withPathLoadedEnabled } from "./manifests.mjs";
 import { resolveStack } from "./detect.mjs";
 import { preflight } from "./deps.mjs";
-import { loadSkillSets, skillSetRoleRows } from "./skillsets.mjs";
+import { loadSkillSets, skillSetRoleRows, skillScope } from "./skillsets.mjs";
 import { catalogReport } from "./catalogs.mjs";
 import { computeDiffSignals, applySkipRules, renderSkipPrint } from "./skiprules.mjs";
 import {
@@ -503,11 +503,13 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   // `framework_detection` for a framework row that carries none of its own.
   const detectionFallback = primary?.framework_detection ?? [];
   const setWarnings = [];
+  const allSets = [];
   const expertiseSources = [primaryRecord, ...additiveRecords]
     .filter((r) => r?.doc)
     .map((r) => {
       const dir = r.file ? dirname(r.file) : "";
       const sets = loadSkillSets(dir, r.doc.skill_sets, setWarnings);
+      allSets.push(...sets);
       const skill_set_rows = sets.length
         ? skillSetRoleRows(sets, { projectRoot: cwd, detectionPaths: r.doc.framework_detection ?? detectionFallback, cache: gateCache })
         : undefined;
@@ -532,6 +534,8 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
     prints, warnings, halt: null, headless, roots, installs, enabled, manifests, deps, stack, local,
     primary, vanilla, additive, effective, models,
     role_expertise: expertise.role_expertise, prompt_blocks: promptBlocks, known_agents: blockAgents,
+    // ADR-0037: the static skill-set matrix, for the seal's off-matrix audit (run/finish.mjs).
+    skill_scope: skillScope(allSets),
     profile_dir: primaryRecord?.file ? dirname(primaryRecord.file) : null,
   };
 }
@@ -597,6 +601,25 @@ export function resolveDeps({ cwd = process.cwd(), args = "", env = process.env,
     would_abort_pipeline: Boolean(deps.abort),
     prints: r.prints, warnings: r.warnings,
   };
+}
+
+/**
+ * ADR-0037 — the static skill-set matrix in force for a project, for the seal's off-matrix audit.
+ * Read-only (no preflight stamp); `null` when nothing resolves or no installed plugin declares a
+ * skill set, which the seal records as "no scope" rather than as a clean audit.
+ *
+ * `stack` is the foundation the RUN used (`telemetry.stack`), passed as `--stack=` so the seal
+ * judges against that run's matrix, not whatever detection picks now — a run forced onto a stack
+ * detection would not choose (the reason `--stack` exists) must not be audited as another one. A
+ * name that no longer resolves halts the resolve, and the seal then records no audit, never a
+ * wrong one.
+ */
+export function resolveSkillScope({ cwd = process.cwd(), env = process.env, mode = "installed", stack = null } = {}) {
+  const args = typeof stack === "string" && /^[A-Za-z0-9._-]+$/.test(stack) ? `--stack=${stack}` : "";
+  const r = resolveProfile({ cwd, args, env, mode, readOnly: true });
+  if (r.halt) return null;
+  const scope = r.skill_scope;
+  return scope && Object.keys(scope).length ? scope : null;
 }
 
 /**

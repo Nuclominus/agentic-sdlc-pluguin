@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolvePlan, resolveExpertise, resolveResume, resolveDeps } from "../../../plugins/sdlc/tools/resolve/plan.mjs";
+import { resolvePlan, resolveExpertise, resolveResume, resolveDeps, resolveSkillScope } from "../../../plugins/sdlc/tools/resolve/plan.mjs";
 
 function write(file, content) {
   mkdirSync(join(file, ".."), { recursive: true });
@@ -965,5 +965,27 @@ test("resolveDeps: the run's own preflight, read-only — no stamp — with the 
 
     resolvePlan({ cwd: w.proj, args: "--dry-run", env: w.env });
     assert.equal(existsSync(join(w.cfg, ".sdlc-deps-preflight.json")), true, "a run still writes it — the control");
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("resolveSkillScope audits against the stack the RUN used, not today's detection (ADR-0037)", () => {
+  const w = world({ roleExpertise: true });
+  try {
+    appendFileSync(join(w.plug, "manifest.yaml"), "skill_sets:\n  - file: skill-sets/cat.yaml\n");
+    write(join(w.plug, "skill-sets", "cat.yaml"), [
+      "set: cat",
+      "source: { homepage: h, catalog_version: '2.0', synced_at: '2026-09-28' }",
+      "categories: {}",
+      "skills:",
+      "  - { id: sec, upstream_path: s/sec, category: c, summary: s, roles: { developer: { when: w } } }",
+      "",
+    ].join("\n"));
+    // The run was forced onto `demo`; detection alone would not pick it (no marker any more).
+    rmSync(join(w.proj, "marker.txt"));
+
+    assert.equal(resolveSkillScope({ cwd: w.proj, env: w.env }), null, "detection resolves vanilla, which carries no set");
+    assert.deepEqual(resolveSkillScope({ cwd: w.proj, env: w.env, stack: "demo" }), { sec: { set: "cat", roles: ["developer"] } });
+    assert.equal(resolveSkillScope({ cwd: w.proj, env: w.env, stack: "gone" }), null, "an unresolvable stack is no audit, never another stack's");
+    assert.equal(resolveSkillScope({ cwd: w.proj, env: w.env, stack: "demo --force-preflight" }), null, "a malformed name is not spliced into args");
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });

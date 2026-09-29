@@ -56,6 +56,11 @@ The section shows:
   `~/.android/cli/skills`), because `android skills add` copies and does not track updates;
 - catalog skills the matrix has not triaged yet.
 
+After a run, the seal checks the matrix against what each role actually loaded
+([[decisions/ADR-0037-off-matrix-skill-use-is-audited-not-blocked]]). A security-analyst loading a UI
+skill shows up as a scope-leak finding in `/sdlc:aar`. The fix goes into this plugin's
+`skill-sets/android-skills.yaml`, or into the role's `when` text.
+
 Rule files here are read by agents that live in `sdlc`, so they never name the plugin-root variable —
 the resolver emits each `role_expertise.<role>.rules` path **absolute** instead.
 
