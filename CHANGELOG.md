@@ -4,6 +4,9 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+`sdlc` `3.1.0` → `3.2.0`, `android-foundation` `3.1.0` → `3.2.0` (minor: the Android CLI skill
+catalog becomes a `warn` runtime dependency with a per-role matrix — ADR-0036).
+
 ### Added
 
 - **Android CLI skill matrix** (ADR-0036, android-foundation): `skill-sets/android-skills.yaml`
@@ -11,7 +14,40 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
   category limits which roles may receive its skills, so the security-analyst gets no UI skill.
   A generated skills × roles table and a per-role README block come from the same file.
   `sdlc-lint skill-sets` validates the matrix and fails on a stale table (`--write` regenerates).
-  The resolver, doctor and audit wiring follow in later PRs.
+- **Android CLI skills reach the agents** (ADR-0036): the android-foundation manifest's new
+  `skill_sets` key feeds the matrix into each role's skills block.
+  - Rows are bare ids, gated against the project. For example, `camerax` appears only when
+    `androidx.camera` is a dependency, and `agp-9-upgrade` only while AGP is below 9. Gates skip
+    build outputs and vendored trees (`build/`, `.gradle/`, `node_modules/`, …) and are evaluated
+    once per run.
+  - The catalog is a `kind: skill-catalog` runtime dependency with `policy: warn`, like superpowers.
+    Its required skills and host tools are derived from the matrix, gated the same way, so a skill
+    no role receives in this project is never reported missing.
+    On a project that android-foundation does not detect (a Node app, say), the catalog is not
+    used at all, so it produces no warning.
+  - A missing catalog skill is judged per skill: a mandatory row is downgraded to best-effort, and a
+    recommended row is not rendered.
+  - `android-cli` is unavailable without the `android` binary.
+  - The preflight stamp is keyed on the catalog's version file.
+- `sdlc-lint roster` rejects a catalog skill also authored in `role_expertise`. `sdlc-lint
+  skill-sets` requires the set to be wired into both the manifest and `runtime-dependencies.json`.
+
+### Changed
+
+- The dependency preflight lists at most 8 missing skills per dependency, then a count.
+
+### Removed
+
+- `plugins/android-foundation/rules/skills.md`: its `android` CLI command-to-role bindings are now
+  the per-role `when` text of the `android-cli` row in the skill matrix.
+
+### Fixed
+
+- `android-cli-check.sh` never fired: `ls settings.gradle.kts settings.gradle` fails when either file
+  is absent, and every real project has exactly one of them. The hook now also advises when the
+  binary is present but the catalog is not installed. It checks for a mandated catalog skill rather
+  than `android-cli`, which `android init` installs on its own, and it accepts a plugin-marketplace
+  install (`android-skills@android-skills`). It has a test in CI.
 
 ## [4.1.0] — 2026-09-24
 

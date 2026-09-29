@@ -31,8 +31,11 @@
 // check the prose asks for did not happen; the aggregate looked healthy and nobody noticed.
 // This module reports it, which is the whole point of moving the step into code.
 
-import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { accessSync, constants, existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { delimiter, join } from "node:path";
+import { readSkillSet, assignedSkills, applicableSkills, skillTools } from "./skillsets.mjs";
+import { parseYaml } from "./yaml.mjs";
+import { evalRule } from "./detect.mjs";
 
 const POLICY_RANK = { block: 3, warn: 2, "graceful-degrade": 1 };
 const STAMP = ".sdlc-deps-preflight.json";
@@ -102,12 +105,76 @@ export function skillsFromList(csv) {
 }
 
 /**
+ * Is `name` an executable on PATH? A directory scan, never a spawn — this runs on every plan, and
+ * "is the binary there" is the only question the preflight asks (versions are the doctor's job).
+ */
+export function whichTool(name, env = process.env) {
+  const exts = process.platform === "win32" ? (env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";") : [""];
+  for (const dir of String(env.PATH ?? "").split(delimiter)) {
+    if (!dir) continue;
+    for (const ext of exts) {
+      const file = join(dir, name + ext);
+      try { accessSync(file, constants.X_OK); return file; } catch { /* keep looking */ }
+    }
+  }
+  return null;
+}
+
+/** `$HOME/...` in a declared path, expanded against the given environment. */
+export function expandHome(path, env = process.env) {
+  if (typeof path !== "string") return null;
+  return path.replace(/^\$HOME(?=\/|$)/, env.HOME ?? "").replace(/^~(?=\/|$)/, env.HOME ?? "");
+}
+
+/**
+ * ADR-0036 — a `kind: skill-catalog` dependency declares no `skills_used` of its own: the list is
+ * DERIVED from its skill set (every skill some role receives), and so are the host tools each of
+ * those skills needs. One file answers "which role gets it" and "what must be installed", so the
+ * two can never disagree.
+ *
+ * With a `projectRoot`, the list is GATED exactly as the role rows are (`applicableSkills`): a
+ * project without CameraX needs no `camerax`, and its absence must not mark the catalog degraded.
+ * A `dependency:` gate looks where the declaring plugin's manifest says (`framework_detection`).
+ * Without a root (no project to ask) every assigned skill counts — the conservative answer.
+ *
+ * The preflight runs BEFORE stack detection and reads every installed plugin's dependencies, so a
+ * catalog declared by a FOUNDATION is scoped here to the projects that foundation's own `detect`
+ * matches. Its skills only ever reach a role through that foundation's profile; on a Node project
+ * with android-foundation installed, 13 ungated Android skills are not "missing", they are
+ * irrelevant (`not_applicable`). The rule is evaluated exactly as stack detection evaluates it.
+ */
+function expandSkillCatalog(dep, pluginDir, { projectRoot = null, gateCache = null } = {}) {
+  if (dep?.kind !== "skill-catalog" || typeof dep.skill_set !== "string") return dep;
+  const doc = readSkillSet(join(pluginDir, dep.skill_set));
+  if (!doc) return { ...dep, skills_used: dep.skills_used ?? [] };
+  const manifest = readManifest(pluginDir);
+  const tools = skillTools(doc);
+  if (projectRoot && manifest?.kind === "foundation" && manifest.detect != null && !evalRule(manifest.detect, projectRoot)) {
+    return { ...dep, skills_used: [], skill_tools: tools, not_applicable: true };
+  }
+  const used = projectRoot
+    ? applicableSkills(doc, { projectRoot, detectionPaths: detectionPathsOf(manifest), cache: gateCache })
+    : assignedSkills(doc);
+  return { ...dep, skills_used: used, skill_tools: tools };
+}
+
+function readManifest(pluginDir) {
+  try { return parseYaml(readFileSync(join(pluginDir, "manifest.yaml"), "utf8")); } catch { return null; }
+}
+
+/** The declaring plugin's `framework_detection` — where its `dependency:` gates look. */
+function detectionPathsOf(manifest) {
+  const paths = manifest?.framework_detection;
+  return Array.isArray(paths) ? paths.filter((p) => typeof p === "string") : [];
+}
+
+/**
  * Merge every installed+enabled plugin's `runtime-dependencies.json`.
  *
  * The strictest policy wins when two plugins declare the same dependency — a `warn` must
  * never be able to soften somebody else's `block`.
  */
-export function collectDependencies({ installs = new Map(), enabled = {} } = {}) {
+export function collectDependencies({ installs = new Map(), enabled = {}, projectRoot = null, gateCache = null } = {}) {
   const merged = new Map();
   const sources = [];
   for (const [key, info] of installs) {
@@ -116,12 +183,16 @@ export function collectDependencies({ installs = new Map(), enabled = {} } = {})
     const doc = readJson(file);
     if (!doc || !Array.isArray(doc.dependencies) || doc.dependencies.length === 0) continue;
     sources.push({ key, file, count: doc.dependencies.length });
-    for (const dep of doc.dependencies) {
-      if (!dep || !dep.name) continue;
+    for (const raw of doc.dependencies) {
+      if (!raw || !raw.name) continue;
+      const dep = expandSkillCatalog(raw, info.installPath, { projectRoot, gateCache });
       const prev = merged.get(dep.name);
       if (!prev) { merged.set(dep.name, { ...dep, declared_by: [key] }); continue; }
       prev.declared_by.push(key);
       prev.skills_used = [...new Set([...(prev.skills_used ?? []), ...(dep.skills_used ?? [])])];
+      // Irrelevant only if irrelevant to EVERY declarer — one matching foundation makes it needed.
+      if (prev.not_applicable && !dep.not_applicable) delete prev.not_applicable;
+      if (dep.skill_tools) prev.skill_tools = { ...(prev.skill_tools ?? {}), ...dep.skill_tools };
       if ((POLICY_RANK[dep.policy] ?? 0) > (POLICY_RANK[prev.policy] ?? 0)) prev.policy = dep.policy;
     }
   }
@@ -133,17 +204,35 @@ export function collectDependencies({ installs = new Map(), enabled = {} } = {})
  *
  * A skill counts as present when it is listed as `plugin:skill`, or bare (a user- or
  * project-level skill of the same name legitimately satisfies the need).
+ *
+ * A skill whose declared host tool is not on PATH (`skill_tools`, ADR-0036) is installed but NOT
+ * usable: it lands in `unavailable_skills` beside the missing ones, and the tool in
+ * `missing_tools`. `unavailable_skills` is what the per-skill downgrade reads.
  */
-export function computeDepsStatus(dependencies, available) {
+export function computeDepsStatus(dependencies, available, { which = whichTool } = {}) {
   const status = {};
+  const toolCache = new Map();
+  const onPath = (t) => {
+    if (!toolCache.has(t)) toolCache.set(t, Boolean(which(t)));
+    return toolCache.get(t);
+  };
   for (const dep of dependencies) {
     const used = dep.skills_used ?? [];
     const missing = used.filter((s) => !available.skills.has(`${dep.name}:${s}`) && !available.skills.has(s));
-    status[dep.name] = missing.length === 0
-      ? { status: "available", missing_skills: [] }
+    const missingTools = new Set();
+    const toolBlocked = used.filter((s) => {
+      if (missing.includes(s)) return false;
+      const gone = (dep.skill_tools?.[s] ?? []).filter((t) => !onPath(t));
+      for (const t of gone) missingTools.add(t);
+      return gone.length > 0;
+    });
+    const unavailable = [...missing, ...toolBlocked];
+    status[dep.name] = unavailable.length === 0
+      ? { status: "available", missing_skills: [], ...(dep.not_applicable ? { not_applicable: true } : {}) }
       : {
         status: "missing",
         missing_skills: missing,
+        ...(dep.skill_tools ? { missing_tools: [...missingTools].sort(), unavailable_skills: unavailable } : {}),
         policy: dep.policy ?? "warn",
         install_command: dep.install_command ?? [],
         fallback_note: dep.fallback_note ?? null,
@@ -151,6 +240,9 @@ export function computeDepsStatus(dependencies, available) {
   }
   return status;
 }
+
+/** At most `n` names, then a count — a 25-skill catalog must not turn one WARN into a paragraph. */
+const listSome = (names, n = 8) => names.length <= n ? names.join(",") : `${names.slice(0, n).join(",")} (+${names.length - n} more — /sdlc:doctor lists them)`;
 
 /**
  * Apply each missing dependency's policy.
@@ -167,6 +259,7 @@ export function enforcePolicies(status, { headless = false } = {}) {
   const stdout = [];
   const flags = {};
   const blocking = [];
+  const unavailableSkills = {};
 
   for (const [name, s] of Object.entries(status)) {
     if (s.status === "available") continue;
@@ -180,10 +273,14 @@ export function enforcePolicies(status, { headless = false } = {}) {
       continue;
     }
     flags[`${name}_unavailable`] = true;
-    if (policy === "warn") stdout.push(`WARN: ${name} missing skills: ${s.missing_skills.join(",")}`);
+    unavailableSkills[name] = s.unavailable_skills ?? s.missing_skills;
+    if (policy === "warn") {
+      if (s.missing_skills.length) stdout.push(`WARN: ${name} missing skills: ${listSome(s.missing_skills)}`);
+      if (s.missing_tools?.length) stdout.push(`WARN: ${name} missing tools: ${s.missing_tools.join(",")} — skills needing them are best-effort`);
+    }
     // graceful-degrade: flag only, silent by contract.
   }
-  return { abort: blocking.length > 0, blocking, stdout, flags, headless };
+  return { abort: blocking.length > 0, blocking, stdout, flags, unavailable_skills: unavailableSkills, headless };
 }
 
 /** The verbatim 0a-5 block. Suppressed in headless mode, where stdout already carried it. */
@@ -196,9 +293,10 @@ export function renderPreflightPrint(status, { headless = false, cached = false,
   for (const name of names) {
     const s = status[name];
     const policy = s.policy ?? "warn";
-    const mark = s.status === "available" ? "✅ available" : policy === "block" ? "❌ missing" : "⚠️ degraded";
+    const mark = s.not_applicable ? "➖ not used by this project" : s.status === "available" ? "✅ available" : policy === "block" ? "❌ missing" : "⚠️ degraded";
     lines.push(`   ${name} (${versions[name] ?? "unknown"}, policy=${policy}): ${mark}`);
-    lines.push(`     missing: ${s.missing_skills.length ? s.missing_skills.join(", ") : "—"}`);
+    lines.push(`     missing: ${s.missing_skills.length ? listSome(s.missing_skills).replaceAll(",", ", ") : "—"}`);
+    if (s.missing_tools?.length) lines.push(`     missing tools: ${s.missing_tools.join(", ")}`);
   }
   return lines.join("\n");
 }
@@ -207,12 +305,21 @@ export function readStamp(configDir) {
   return readJson(join(configDir, STAMP));
 }
 
-/** The installed version of each declared dependency — what a stamp must be keyed to. */
-export function dependencyVersions(dependencies, installs = new Map()) {
+/**
+ * The installed version of each declared dependency — what a stamp must be keyed to.
+ *
+ * A dependency that is not a plugin (a skill catalog installed by its own CLI) names a
+ * `version_file` instead; its contents are the version. Without it, updating the catalog would
+ * move nothing the stamp is keyed on — the exact staleness `stampIsFresh` exists to catch.
+ */
+export function dependencyVersions(dependencies, installs = new Map(), env = process.env) {
   const out = {};
   for (const dep of dependencies) {
     for (const [key, info] of installs) {
       if (pluginNameOf(key) === dep.name) { out[dep.name] = info.version ?? null; break; }
+    }
+    if (!(dep.name in out) && typeof dep.version_file === "string") {
+      try { out[dep.name] = readFileSync(expandHome(dep.version_file, env), "utf8").trim() || null; } catch { /* absent */ }
     }
     if (!(dep.name in out)) out[dep.name] = null;
   }
@@ -269,20 +376,22 @@ export function writeStamp(configDir, status, { aborted = false, now, versions =
 }
 
 /** The whole step. `skills` short-circuits the enumeration with an authoritative list. */
-export function preflight({ configDir, projectRoot, installs, enabled, skills = null, headless = false, force = false, workspaceSkillDirs = null } = {}) {
+export function preflight({ configDir, projectRoot, installs, enabled, skills = null, headless = false, force = false, workspaceSkillDirs = null, env = process.env, which = (t) => whichTool(t, env), stamp = true, gateCache = new Map() } = {}) {
   const available = skills ? skillsFromList(skills) : enumerateSkills({ configDir, projectRoot, installs, enabled, workspaceSkillDirs });
-  const { dependencies, sources } = collectDependencies({ installs, enabled });
-  const versions = Object.fromEntries(dependencies.map((d) => [d.name, d.version ?? "unknown"]));
-
+  const { dependencies, sources } = collectDependencies({ installs, enabled, projectRoot, gateCache });
   // The fast path is reported, never trusted: the full check is cheap in-process (it reads
   // directories, not eleven tool calls), so the stamp buys nothing worth a stale answer.
-  const installedVersions = dependencyVersions(dependencies, installs ?? new Map());
+  const installedVersions = dependencyVersions(dependencies, installs ?? new Map(), env);
+  // The declared range when there is one (`>=1.0.0`); otherwise what is installed — a skill catalog
+  // declares no range, and "unknown" beside a version file that says 1.0.16406183 is a false blank.
+  const versions = Object.fromEntries(dependencies.map((d) => [d.name, d.version ?? installedVersions[d.name] ?? "unknown"]));
   const cached = force ? null : readStamp(configDir);
   const freshness = stampIsFresh(cached, installedVersions);
 
-  const status = computeDepsStatus(dependencies, available);
+  const status = computeDepsStatus(dependencies, available, { which });
   const enforcement = enforcePolicies(status, { headless });
-  const stampFile = writeStamp(configDir, status, { aborted: enforcement.abort, versions: installedVersions });
+  // `stamp: false` is the read-only caller (the doctor): diagnosing must not move the fast path.
+  const stampFile = stamp ? writeStamp(configDir, status, { aborted: enforcement.abort, versions: installedVersions }) : null;
 
   return {
     deps_preflight: status,

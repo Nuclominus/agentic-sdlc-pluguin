@@ -54,6 +54,8 @@ jobs:
         run: bash tests/test-pre-commit-guard.sh
       - name: config-protection test
         run: bash tests/test-config-protection.sh
+      - name: android-cli-check test
+        run: bash tests/test-android-cli-check.sh
       - name: post-implement-check test
         run: bash tests/test-post-implement-check.sh
       - name: model-local schema test

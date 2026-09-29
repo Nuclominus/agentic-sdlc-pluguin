@@ -1,5 +1,5 @@
 {
-  "_comment": "Runtime plugin dependencies for android-foundation, aggregated by pipeline-orchestrator Step 0a. Every skill listed here is MANDATED by this plugin's own manifest.yaml `role_expertise.<role>.skills` rows — that block is the mapping, and each entry is traceable to a role (ADR-0021: this plugin ships no agents, so there is no agent file to trace to any more). `sdlc-lint roster` enforces the tie for superpowers:* rows. Android CLI is a SYSTEM tool, not a plugin: it is checked entirely inside android-foundation (hooks/android-cli-check.sh), never by the core, so it does not belong here. Detection is marketplace-agnostic: deps.mjs keys skills on the bare plugin name (pluginNameOf), so ANY install of superpowers satisfies this row — superpowers@claude-plugins-official, superpowers@superpowers-dev (obra's own dev marketplace), or a user-level skills/ copy. install_command names the RECOMMENDED source, not a requirement. This marketplace deliberately does not re-declare superpowers as an entry of its own (ADR-0028): doing so clones it into our namespace as superpowers@agentic-sdlc and shadows the user's real install.",
+  "_comment": "Runtime plugin dependencies for android-foundation, aggregated by pipeline-orchestrator Step 0a. Every skill listed here is MANDATED by this plugin's own manifest.yaml `role_expertise.<role>.skills` rows — that block is the mapping, and each entry is traceable to a role (ADR-0021: this plugin ships no agents, so there is no agent file to trace to any more). `sdlc-lint roster` enforces the tie for superpowers:* rows. The Android CLI skill catalog IS declared here (ADR-0036), as `kind: skill-catalog`: it is not a plugin, so it names no `skills_used` of its own — deps.mjs derives them from `skill_set` (every catalog skill some role receives in the current project — gated by the same `applies_if` as the rows, so an unused CameraX skill is never reported missing) together with the host tools each needs (`requires_tools`, e.g. `android` for `android-cli`). Policy `warn`, the same level as superpowers: the pipeline runs without it, a missing mandated catalog skill is downgraded to best-effort, and a missing recommended one is simply not rendered. The core stays Android-agnostic — it learns a generic dependency kind, never the word `android`. `version_file` keys the preflight stamp, since a CLI-installed catalog has no plugin version. Detection is marketplace-agnostic: deps.mjs keys skills on the bare plugin name (pluginNameOf), so ANY install of superpowers satisfies this row — superpowers@claude-plugins-official, superpowers@superpowers-dev (obra's own dev marketplace), or a user-level skills/ copy. install_command names the RECOMMENDED source, not a requirement. This marketplace deliberately does not re-declare superpowers as an entry of its own (ADR-0028): doing so clones it into our namespace as superpowers@agentic-sdlc and shadows the user's real install.",
   "dependencies": [
     {
       "name": "superpowers",
@@ -29,6 +29,27 @@
       "fallback_note": "The developer role implements Compose screens without the visual-design pass; layout, spacing and hierarchy get no dedicated review before the code review sees them.",
       "install_command": [
         "/plugin install frontend-design"
+      ]
+    },
+    {
+      "name": "android-skills",
+      "kind": "skill-catalog",
+      "policy": "warn",
+      "skill_set": "skill-sets/android-skills.yaml",
+      "version_file": "$HOME/.android/cli/skills/version",
+      "fallback_note": "The pipeline still runs. Roles lose Google's official Android guidance for the task at hand: the security-analyst audits Intents and permissions without the dedicated skills (its two mandatory rows become best-effort), and the developer, QA and devops roles fall back to their own knowledge for UI adaptivity, profiling, R8 and AGP upgrades. Without the `android` binary, the `android-cli` skill is best-effort even when installed.",
+      "install_command": [
+        "android update",
+        "android init",
+        "android skills add --all --agent=claude-code"
+      ],
+      "update_command": [
+        "android update",
+        "android skills update --all"
+      ],
+      "alt_install_command": [
+        "/plugin marketplace add android/skills",
+        "/plugin install android-skills@android-skills"
       ]
     }
   ]

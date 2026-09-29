@@ -120,6 +120,21 @@ export function checkRoster(root = process.cwd()) {
           .flatMap((d) => (d.skills_used ?? []).map((s) => `${d.name}:${s}`)));
       } catch { declaredSkills = new Set(); }
     }
+    // ADR-0036: a skill-set's assigned ids are declared by construction (its dependency derives
+    // `skills_used` from the set). They are also OWNED by the set, so a role_expertise row naming
+    // one is a second author for the same assignment — the drift the set exists to prevent.
+    const setOwned = new Map();
+    for (const d of Array.isArray(m.doc?.skill_sets) ? m.doc.skill_sets : []) {
+      const f = typeof d === "string" ? d : d?.file;
+      if (typeof f !== "string") continue;
+      let set;
+      try { set = readYaml(join(pluginDir, f)); } catch { continue; }
+      for (const s of set?.skills ?? []) {
+        if (typeof s?.id !== "string" || !s.roles) continue;
+        setOwned.set(s.id, f);
+        (declaredSkills ??= new Set()).add(`${set.set}:${s.id}`);
+      }
+    }
     const errors = [];
     for (const [role, decl] of Object.entries(rx)) {
       if (!coreRoles.has(role)) errors.push(`role_expertise key '${role}' is not a core role (${[...coreRoles].sort().join(", ")})`);
@@ -138,6 +153,10 @@ export function checkRoster(root = process.cwd()) {
         const when = typeof row === "object" && typeof row?.when === "string" ? row.when : null;
         if (when && RUN_SCOPED.test(when)) {
           errors.push(`role_expertise.${role}.skills: ${id ?? "(unnamed)"} — \`when: "${when}"\` is run-scoped ("the first …"). The block is pasted per dispatch, so this trigger goes silently false on every re-dispatch (review loop, heal retry). Scope it to the dispatch, e.g. "before your first … in THIS dispatch — a review-loop round counts"`);
+        }
+        if (typeof id === "string" && setOwned.has(id.slice(id.lastIndexOf(":") + 1))) {
+          errors.push(`role_expertise.${role}.skills: ${id} is assigned in ${setOwned.get(id.slice(id.lastIndexOf(":") + 1))} — author catalog skills only in their skill set`);
+          continue;
         }
         if (typeof id !== "string" || !id.includes(":")) continue;
         const [owner, skill] = id.split(":");

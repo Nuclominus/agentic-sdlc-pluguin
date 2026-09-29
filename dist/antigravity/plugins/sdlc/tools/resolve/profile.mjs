@@ -168,7 +168,12 @@ export function skillIdMatches(a, b) {
   return false;
 }
 
-/** One `role_expertise.<role>.skills[]` row, normalised. `policy` defaults to mandatory. */
+/**
+ * One `role_expertise.<role>.skills[]` row, normalised. `policy` defaults to mandatory.
+ *
+ * `requires` names the skill-set dependency a bare catalog row belongs to (ADR-0036). It is how
+ * the downgrade finds the row's owner — a bare id has no `plugin:` prefix to infer it from.
+ */
 function normalizeSkillRow(row) {
   if (typeof row === "string") return { skill: row, policy: "mandatory", when: "" };
   if (!isPlainObject(row) || typeof row.skill !== "string" || !row.skill.trim()) return null;
@@ -176,6 +181,7 @@ function normalizeSkillRow(row) {
     skill: row.skill.trim(),
     policy: row.policy === "recommended" ? "recommended" : "mandatory",
     when: typeof row.when === "string" ? row.when : "",
+    ...(typeof row.requires === "string" && row.requires ? { requires: row.requires } : {}),
   };
 }
 
@@ -229,6 +235,10 @@ function dedupeSkills(rows) {
  * directory and come out absolute: the core agent that reads them lives in a different plugin,
  * where `${CLAUDE_PLUGIN_ROOT}` would resolve to the wrong root. A rule file that does not exist
  * is dropped with a warning rather than handed to an agent as a dead `Read`.
+ *
+ * A source may also carry `skill_set_rows` (`{ role: rows }`, from ./skillsets.mjs — ADR-0036):
+ * its catalog rows, already gated for this project. They are appended after that manifest's own
+ * `skills`, so a role the manifest says nothing else about still receives them.
  */
 export function mergeRoleExpertise(sources = []) {
   const warnings = [];
@@ -237,7 +247,10 @@ export function mergeRoleExpertise(sources = []) {
   const ordered = [first, ...rest.sort((a, b) => String(a.stack).localeCompare(String(b.stack)))].filter(Boolean);
 
   for (const src of ordered) {
-    for (const [role, decl] of Object.entries(src.role_expertise ?? {})) {
+    const setRows = isPlainObject(src.skill_set_rows) ? src.skill_set_rows : {};
+    const roles = new Set([...Object.keys(src.role_expertise ?? {}), ...Object.keys(setRows)]);
+    for (const role of roles) {
+      const decl = src.role_expertise?.[role] ?? {};
       if (!isPlainObject(decl)) continue;
       const acc = roleExpertise[role] ?? (roleExpertise[role] = { invariants: "", rules: [], skills: [] });
 
@@ -257,7 +270,11 @@ export function mergeRoleExpertise(sources = []) {
         acc.rules.push({ path: abs, note: typeof r === "object" && typeof r?.note === "string" ? r.note : "" });
       }
 
-      acc.skills = dedupeSkills([...acc.skills, ...arr(decl.skills).map(normalizeSkillRow)]);
+      acc.skills = dedupeSkills([
+        ...acc.skills,
+        ...arr(decl.skills).map(normalizeSkillRow),
+        ...arr(setRows[role]).map(normalizeSkillRow),
+      ]);
     }
   }
   return { role_expertise: roleExpertise, warnings };
@@ -292,8 +309,24 @@ export function renderRoleExpertiseBlock(role, exp, { stack = "unknown" } = {}) 
  * was keyed on, and a downgrade rule that lived twice would rot the same way.
  *
  * Returns the row unchanged when there is no availability data to judge it by.
+ *
+ * A skill-set row (`requires` set, ADR-0036) is judged PER SKILL, from the dependency's own status
+ * (`unavailableSkills[<set>]`: not installed, or its host tool is missing). A catalog is 25 skills,
+ * and a whole-plugin flag would demote every one of them because one is absent. A missing
+ * MANDATORY row is downgraded like any other; a missing RECOMMENDED row is dropped (`null`) — a
+ * suggestion to invoke something that cannot be invoked is only noise in the stable prefix, and
+ * the preflight's own WARN already names what is missing.
  */
-function downgradeIfMissing(row, { availableSkills = null, unavailablePlugins = null, warnings = [], where = "role_expertise" } = {}) {
+function downgradeIfMissing(row, { availableSkills = null, unavailablePlugins = null, unavailableSkills = null, warnings = [], where = "role_expertise" } = {}) {
+  if (row.requires && unavailableSkills) {
+    const gone = arr(unavailableSkills[row.requires]).some((s) => skillIdMatches(s, row.skill));
+    if (gone) {
+      if (row.policy !== "mandatory") return null;
+      warnings.push(`WARN: ${where} ${row.skill} (${row.requires}) not available — downgraded to recommended`);
+      return { ...row, policy: "recommended", when: `${row.when}${row.when ? " " : ""}(skill not installed — best-effort)` };
+    }
+    return row;
+  }
   if (!availableSkills && !unavailablePlugins) return row;
   const pluginOf = row.skill.includes(":") ? row.skill.split(":")[0] : null;
   const pluginDown = pluginOf && unavailablePlugins ? unavailablePlugins[`${pluginOf}_unavailable`] === true : false;
@@ -332,6 +365,10 @@ function downgradeIfMissing(row, { availableSkills = null, unavailablePlugins = 
  * never in question. With no flags at all the rows render exactly as authored — absent evidence is
  * not evidence of absence.
  *
+ * Skill-set rows (ADR-0036) use the same kind of signal at skill granularity:
+ * `unavailableSkills[<set>]` is derived by the preflight from the dependency's own declaration,
+ * never from enumerating the tree, so the inversion above cannot come back through them.
+ *
  * `variant` picks the framing, never the content:
  *
  * - `"dispatch"` (default) — live obligations, the `MANDATORY — invoke` form the orchestrator
@@ -346,11 +383,13 @@ function downgradeIfMissing(row, { availableSkills = null, unavailablePlugins = 
  *   mandates to the pass that can meet them and to no other.
  */
 export function renderSkillsBlock(agent, {
-  roleSkills = [], extensionRows = [], unavailablePlugins = null, warnings = [], variant = "dispatch",
+  roleSkills = [], extensionRows = [], unavailablePlugins = null, unavailableSkills = null, warnings = [], variant = "dispatch",
 } = {}) {
   const targeted = extensionRows.filter((r) => r && (r.agents === "all" || arr(r.agents).includes(agent)));
   // Extension rows arrive already downgraded (1b-ext); only the profile's own rows need it here.
-  const own = roleSkills.map(normalizeSkillRow).map((r) => downgradeIfMissing(r, { unavailablePlugins, warnings }));
+  const own = roleSkills.map(normalizeSkillRow).filter(Boolean)
+    .map((r) => downgradeIfMissing(r, { unavailablePlugins, unavailableSkills, warnings }))
+    .filter(Boolean);
   const rows = dedupeSkills([...own, ...targeted.map(normalizeSkillRow)]);
   if (rows.length === 0) return null;
   rows.sort((a, b) => (POLICY_RANK[b.policy] - POLICY_RANK[a.policy]) || a.skill.localeCompare(b.skill));

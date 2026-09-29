@@ -249,7 +249,6 @@ role_expertise:
       reach, background-execution limits. Estimate complexity relatively, never in hours.
     rules:
       - { path: rules/documentation.md, note: "vault reading map — read before answering project questions" }
-      - { path: rules/skills.md, note: "only if the optional `android` CLI is on PATH — capability bindings" }
     skills:
       - { skill: android-foundation:android-requirements, when: "before any requirements analysis" }
       - { skill: superpowers:brainstorming, when: "before formulating requirements" }
@@ -275,7 +274,6 @@ role_expertise:
       - { path: rules/snippets/gradle-commands.md, note: "build / lint commands" }
       - { path: rules/logging.md, note: "logging library, tagging, diagnostics placement" }
       - { path: rules/documentation.md, note: "vault reading map" }
-      - { path: rules/skills.md, note: "only if the optional `android` CLI is on PATH — capability bindings" }
     skills:
       - { skill: superpowers:test-driven-development, when: "before your first Write/Edit of production Kotlin in THIS dispatch — a review-loop round counts" }
       - { skill: frontend-design:frontend-design, when: "before writing or changing any Compose UI, a review-loop fix included" }
@@ -297,7 +295,6 @@ role_expertise:
       - { path: rules/snippets/non-negotiable.md, note: "forbidden patterns — the reject list" }
       - { path: rules/documentation.md, note: "vault invariants and stub-marker enforcement" }
       - { path: rules/logging.md, note: "logging conventions under review" }
-      - { path: rules/skills.md, note: "only if the optional `android` CLI is on PATH — capability bindings" }
     skills:
       - { skill: android-foundation:android-review, when: "before your first finding in THIS dispatch — each loop round is a fresh review" }
       - { skill: superpowers:requesting-code-review, when: "when generating the review report" }
@@ -337,7 +334,6 @@ role_expertise:
       reporting an untested pass.
     rules:
       - { path: rules/snippets/gradle-commands.md, note: "instrumented / assemble task names" }
-      - { path: rules/skills.md, note: "only if the optional `android` CLI is on PATH — emulator, screen capture, layout" }
     skills:
       - { skill: android-foundation:android-e2e, when: "before writing or running E2E / UI tests" }
       - { skill: superpowers:verification-before-completion, policy: recommended, when: "before the QA signoff" }
@@ -427,7 +423,6 @@ role_expertise:
       - { path: rules/snippets/gradle-commands.md, note: "canonical build / assemble / bundle tasks" }
       - { path: rules/snippets/proguard-keep.md, note: "reusable R8 keep rules" }
       - { path: rules/enforcement.md, note: "the foundation's hook scripts" }
-      - { path: rules/skills.md, note: "only if the optional `android` CLI is on PATH — sdk / init / skills capabilities" }
     skills:
       - { skill: android-foundation:android-build-release, when: "before changing build config, signing, R8, or distribution" }
 
@@ -459,6 +454,12 @@ role_expertise:
       - { path: rules/workflow.md, note: "the Android DAG and per-step specifics you audit against" }
     skills:
       - { skill: superpowers:verification-before-completion, policy: recommended, when: "before returning findings — every claim cites transcript evidence" }
+
+# ADR-0036: Google's Android CLI skill catalog, triaged per core role. Its rows join each role's
+# `skills` above at resolve time (bare ids, gated against the project); runtime-dependencies.json
+# declares the catalog as a `kind: skill-catalog` dependency derived from the same file.
+skill_sets:
+  - { file: skill-sets/android-skills.yaml }
 
 convention_skills:
   - android-foundation:android-compose-ui

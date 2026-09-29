@@ -14,6 +14,7 @@ import { resolveRoots, pathLoadedRoots, selfPluginRoot, registryListsSdlc, PROJE
 import { readInstalledPlugins, readEnabledPlugins, loadInstalledManifests, loadManifestsFromTree, mergePathLoaded, withPathLoadedEnabled } from "./manifests.mjs";
 import { resolveStack } from "./detect.mjs";
 import { preflight } from "./deps.mjs";
+import { loadSkillSets, skillSetRoleRows } from "./skillsets.mjs";
 import { computeDiffSignals, applySkipRules, renderSkipPrint } from "./skiprules.mjs";
 import {
   mergeProfiles, applyLocalOverrides, parseFrameworkOverrides, parseModelOverrides, renderOverridesPrint, renderModelPrint, renderStackPrint,
@@ -263,7 +264,7 @@ function agentsBound(agentsPerPhase = {}) {
  * on-demand core role is served even when a foundation binds something else for its phases.
  * A `null` block is a real answer (this stack says nothing about this role), not a missing one.
  */
-function renderPromptBlocks({ agents, roleExpertise, extensionRows, stack, unavailablePlugins, warnings = [] }) {
+function renderPromptBlocks({ agents, roleExpertise, extensionRows, stack, unavailablePlugins, unavailableSkills = null, warnings = [] }) {
   const blocks = {};
   for (const agent of agents) {
     const exp = roleExpertise[agent];
@@ -271,7 +272,7 @@ function renderPromptBlocks({ agents, roleExpertise, extensionRows, stack, unava
     // row downgraded, not printed as a hard requirement the agent then has to disobey. Rendered
     // once and reused for both framings so the two can never disagree about which rows exist —
     // and so the downgrade WARN is emitted once, not twice.
-    const skillArgs = { roleSkills: exp?.skills ?? [], extensionRows, unavailablePlugins, warnings };
+    const skillArgs = { roleSkills: exp?.skills ?? [], extensionRows, unavailablePlugins, unavailableSkills, warnings };
     blocks[agent] = {
       expertise: renderRoleExpertiseBlock(agent, exp, { stack }),
       skills: renderSkillsBlock(agent, skillArgs),
@@ -379,8 +380,11 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   }
 
   // ---- Step 0a: dependency preflight
+  // One gate cache per run (ADR-0036): the preflight and the role rows below ask the same
+  // `applies_if` questions of the same tree, and each is a directory walk.
+  const gateCache = new Map();
   const deps = preflight({
-    configDir, projectRoot: cwd, installs, enabled, headless,
+    configDir, projectRoot: cwd, installs, enabled, headless, gateCache,
     force: flag(args, "--force-preflight"), skills: opt(args, "--skills"),
     workspaceSkillDirs: roots.workspace_skill_dirs ?? null,
   });
@@ -493,9 +497,22 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   if (modelPrint) prints.push(modelPrint);
 
   // ---- Step 1a-expertise (ADR-0021): per-role expertise, merged in injection order, paths absolute
+  // A manifest's `skill_sets` (ADR-0036) become ordinary role rows here, gated against THIS project.
+  // A `dependency:` gate looks where the manifest says to look, falling back to the foundation's
+  // `framework_detection` for a framework row that carries none of its own.
+  const detectionFallback = primary?.framework_detection ?? [];
+  const setWarnings = [];
   const expertiseSources = [primaryRecord, ...additiveRecords]
     .filter((r) => r?.doc)
-    .map((r) => ({ stack: r.doc.stack, dir: r.file ? dirname(r.file) : "", role_expertise: r.doc.role_expertise }));
+    .map((r) => {
+      const dir = r.file ? dirname(r.file) : "";
+      const sets = loadSkillSets(dir, r.doc.skill_sets, setWarnings);
+      const skill_set_rows = sets.length
+        ? skillSetRoleRows(sets, { projectRoot: cwd, detectionPaths: r.doc.framework_detection ?? detectionFallback, cache: gateCache })
+        : undefined;
+      return { stack: r.doc.stack, dir, role_expertise: r.doc.role_expertise, skill_set_rows };
+    });
+  warnAll(setWarnings);
   const expertise = mergeRoleExpertise(expertiseSources);
   warnAll(expertise.warnings);
   // Late-bound phases (an `extra_phases[].agent`, a project's skip injections) can add a name after
@@ -506,7 +523,7 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   const blockWarnings = [];
   const promptBlocks = renderPromptBlocks({
     agents: blockAgents, roleExpertise: expertise.role_expertise, extensionRows: effective.extension_skills ?? [], stack: stack.foundation,
-    unavailablePlugins: deps.flags, warnings: blockWarnings,
+    unavailablePlugins: deps.flags, unavailableSkills: deps.unavailable_skills, warnings: blockWarnings,
   });
   warnAll([...new Set(blockWarnings)]);
 

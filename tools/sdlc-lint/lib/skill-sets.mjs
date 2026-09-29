@@ -211,6 +211,32 @@ export function spliceBlock(text, set, body) {
 // ---- the check --------------------------------------------------------------------------------
 
 /**
+ * A matrix nobody loads is a table that only LOOKS authoritative. Both ends must name it: the
+ * manifest's `skill_sets` (so the resolver renders its rows) and a `kind: skill-catalog` entry in
+ * runtime-dependencies.json (so the preflight checks its skills are installed).
+ */
+export function checkWiring(pluginDir, set, relFile) {
+  const errors = [];
+  const manifestFile = join(pluginDir, "manifest.yaml");
+  let manifest = null;
+  try { manifest = YAML.parse(readFileSync(manifestFile, "utf8")); } catch { /* reported below */ }
+  const declared = (manifest?.skill_sets ?? []).some((d) => (typeof d === "string" ? d : d?.file) === relFile);
+  if (!declared) errors.push(`manifest.yaml does not list { file: ${relFile} } under skill_sets — the resolver never renders this matrix`);
+
+  let deps = null;
+  try { deps = JSON.parse(readFileSync(join(pluginDir, "runtime-dependencies.json"), "utf8")); } catch { /* reported below */ }
+  const entry = (deps?.dependencies ?? []).find((d) => d?.name === set);
+  if (!entry) {
+    errors.push(`runtime-dependencies.json declares no dependency named '${set}' — the preflight never checks these skills are installed`);
+  } else {
+    if (entry.kind !== "skill-catalog") errors.push(`runtime-dependencies.json '${set}' must be \`kind: skill-catalog\``);
+    if (entry.skill_set !== relFile) errors.push(`runtime-dependencies.json '${set}'.skill_set is '${entry.skill_set}', expected '${relFile}'`);
+    if (Array.isArray(entry.skills_used)) errors.push(`runtime-dependencies.json '${set}' lists skills_used — a skill catalog derives them from ${relFile}; a second list can only drift`);
+  }
+  return errors;
+}
+
+/**
  * @param {string} root repo root
  * @param {{ write?: boolean }} opts `write` regenerates the table and README block instead of comparing
  * @returns {Array<{file: string, ok: boolean, errors: string[], written?: string[]}>}
@@ -240,6 +266,7 @@ export function checkSkillSets(root = process.cwd(), { write = false } = {}) {
 
     const setDir = dirname(file);
     const pluginDir = dirname(setDir);
+    errors.push(...checkWiring(pluginDir, doc.set, relative(pluginDir, file)));
     const tableFile = join(setDir, `${doc.set}.md`);
     const table = renderSkillSetTable(doc, coreRoles, basename(file));
     const readmeFile = join(pluginDir, "README.md");

@@ -144,16 +144,11 @@ The full board — every track, status and landing PR — is generated from the 
 | ------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | `superpowers`       | `/plugin install superpowers@claude-plugins-official`     | Brainstorming for BA, TDD for QA, verification-before-completion for architects. Degrades gracefully. |
 | `security-guidance` | `/plugin install security-guidance@claude-plugins-official` | Hooks-based in-session security review. The MASVS security phase runs fully without it.            |
+| **Android CLI skills** (`android-skills`) | `android update` → `android init` → `android skills add --all --agent=claude-code` | Google's `android` binary and its agent-skill catalog, triaged per role in [`skill-sets/android-skills.yaml`](plugins/android-foundation/skill-sets/android-skills.yaml) (ADR-0036). The `warn` policy is the same as superpowers': a missing mandatory skill is downgraded to best-effort, and a missing recommended one is not rendered. |
 
 Neither plugin is redistributed by this marketplace — add `anthropics/claude-plugins-official`
 first, then install. The preflight resolves them **by plugin name, not by marketplace**, so an
 install from any source counts (ADR-0028).
-
-### Optional system tools
-
-| Tool | Role |
-| ---- | ---- |
-| **Android CLI** (Google's `android` binary) | Project scaffolding, emulator/device, SDK, docs, Studio bridge. `android-foundation` advises (non-blocking) if absent; no agent requires it. |
 
 ---
 

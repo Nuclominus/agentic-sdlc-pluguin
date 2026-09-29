@@ -94,7 +94,7 @@ that reads `model:` from the agent frontmatter and rewrites the Agent call).
 | `kotlin-guard` → `validate-kotlin.sh` | android-foundation | PostToolUse(Edit\|Write) | Block non-negotiable patterns (`!!`, `runBlocking`, `println`, `Log.*`) in production Kotlin. |
 | `format-on-stop.sh` | android-foundation | Stop | ktlint/detekt format. Fails open. |
 | `guard-paths.sh` | android-foundation | PreToolUse(Edit\|Write) | Deny edits to `build/`, `.gradle/`. |
-| `android-cli-check.sh` | android-foundation | SessionStart | Optional Android CLI advisory (non-blocking). |
+| `android-cli-check.sh` | android-foundation | SessionStart | Android CLI / skill-catalog advisory (a `warn` dependency, ADR-0036; non-blocking). |
 
 ---
 
