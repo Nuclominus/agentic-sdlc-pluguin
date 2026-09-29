@@ -11,8 +11,9 @@
 //     so ownership travels explicitly as `requires: <set>` instead of being inferred from a prefix;
 //   - a gated-off row is not rendered at all, so a project without CameraX never carries the
 //     `camerax` line in its stable prefix;
-//   - the same file tells deps.mjs which skills the dependency actually uses (`assignedSkills`)
-//     and which host tools each one needs (`skillTools`) — one list, two readers, no copy.
+//   - the same file tells deps.mjs which skills the dependency actually uses here
+//     (`applicableSkills` — gated like the rows, so a skill no role receives in this project is
+//     not "missing") and which host tools each one needs (`skillTools`) — one file, two readers.
 //
 // The authoring invariants (scope guard, triage markers, render drift) are lint's job
 // (tools/sdlc-lint/lib/skill-sets.mjs). This module is lenient on purpose: a malformed row is
@@ -67,17 +68,51 @@ export function skillTools(doc) {
 }
 
 /**
+ * Directories a gate never walks. A gate asks about the project's OWN sources; build outputs and
+ * vendored trees are the slowest part of a `**` walk and the likeliest false match — a React
+ * Native checkout carries `build.gradle` files under `node_modules` pinning an AGP the app itself
+ * left behind.
+ */
+export const GATE_SKIP_DIRS = new Set(["build", ".gradle", ".kotlin", ".cxx", ".git", ".idea", "node_modules"]);
+
+/**
  * Evaluate an `applies_if` gate: detect.mjs's closed grammar plus `{ dependency: <coord> }`,
  * which is looked up where the foundation says to look (`framework_detection`) — the same
  * place, and the same substring rule, a framework's own `dependency` uses.
+ *
+ * `cache` (a Map) memoizes by rule: 25 skills share about a dozen distinct gates, and the preflight
+ * and the role rows ask the same questions of the same tree in one run. Pass one Map per run —
+ * never a module-level one, which would outlive a project edit.
  */
-export function evalGate(rule, { projectRoot, detectionPaths = [] }) {
+export function evalGate(rule, { projectRoot, detectionPaths = [], cache = null }) {
   if (rule == null) return true;
   if (!isObj(rule)) return false;
-  if ("dependency" in rule) return dependencyPresent(projectRoot, detectionPaths, rule.dependency);
-  if ("any" in rule) return Array.isArray(rule.any) && rule.any.some((r) => evalGate(r, { projectRoot, detectionPaths }));
-  if ("all" in rule) return Array.isArray(rule.all) && rule.all.every((r) => evalGate(r, { projectRoot, detectionPaths }));
-  return evalRule(rule, projectRoot);
+  const key = cache ? `${projectRoot}\0${detectionPaths.join("\0")}\0${JSON.stringify(rule)}` : null;
+  if (key !== null && cache.has(key)) return cache.get(key);
+  const ctx = { projectRoot, detectionPaths, cache };
+  const opts = { skipDirs: GATE_SKIP_DIRS };
+  let v;
+  if ("dependency" in rule) v = dependencyPresent(projectRoot, detectionPaths, rule.dependency, opts);
+  else if ("any" in rule) v = Array.isArray(rule.any) && rule.any.some((r) => evalGate(r, ctx));
+  else if ("all" in rule) v = Array.isArray(rule.all) && rule.all.every((r) => evalGate(r, ctx));
+  else v = evalRule(rule, projectRoot, opts);
+  if (key !== null) cache.set(key, v);
+  return v;
+}
+
+/** The gate one role's row answers to: its own `applies_if` when it has one, else the skill's. */
+const roleGate = (s, a) => (isObj(a) && "applies_if" in a ? a.applies_if : s.applies_if);
+
+/**
+ * Ids of the assigned skills at least one role receives IN THIS PROJECT — what the dependency
+ * needs installed here. A skill gated off for every role (no CameraX → no `camerax`) is not
+ * needed, so its absence must not mark the catalog degraded.
+ */
+export function applicableSkills(doc, gateCtx) {
+  return (doc?.skills ?? [])
+    .filter((s) => isObj(s) && typeof s.id === "string" && isObj(s.roles))
+    .filter((s) => Object.values(s.roles).some((a) => isObj(a) && evalGate(roleGate(s, a), gateCtx)))
+    .map((s) => s.id);
 }
 
 /**
@@ -89,15 +124,14 @@ export function evalGate(rule, { projectRoot, detectionPaths = [] }) {
  * analyst who decides whether to adopt a library and gated for the developer who only needs it
  * once the library is in the build.
  */
-export function skillSetRoleRows(sets, { projectRoot, detectionPaths = [] } = {}) {
+export function skillSetRoleRows(sets, { projectRoot, detectionPaths = [], cache = new Map() } = {}) {
   const out = {};
   for (const doc of sets ?? []) {
     for (const s of doc.skills ?? []) {
       if (!isObj(s) || typeof s.id !== "string" || !isObj(s.roles)) continue;
       for (const [role, a] of Object.entries(s.roles)) {
         if (!isObj(a)) continue;
-        const gate = "applies_if" in a ? a.applies_if : s.applies_if;
-        if (gate !== undefined && !evalGate(gate, { projectRoot, detectionPaths })) continue;
+        if (!evalGate(roleGate(s, a), { projectRoot, detectionPaths, cache })) continue;
         (out[role] ??= []).push({
           skill: s.id,
           policy: a.policy === "mandatory" ? "mandatory" : "recommended",

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# android-cli-check.sh (ADR-0036): the three states it distinguishes, and that it always exits 0.
+# android-cli-check.sh (ADR-0036): the states it distinguishes, and that it always exits 0.
 set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HOOK="$REPO_ROOT/plugins/android-foundation/hooks/android-cli-check.sh"
@@ -32,7 +32,14 @@ cfg=$(tmp) || exit 1
 check "non-Android project is silent" "$(run "$(tmp)" "" "$cfg")" ""
 check "no binary → recommends the CLI, policy warn" "$(run "$(android_project)" "" "$cfg")" "policy \`warn\`"
 check "binary, no skills → recommends skills add" "$(run "$(android_project)" "$(fake_bin)" "$cfg")" "android skills add --all"
+# `android init` alone installs android-cli and nothing else — still not the catalog.
 mkdir -p "$cfg/skills/android-cli" && touch "$cfg/skills/android-cli/SKILL.md"
-check "binary + skills → silent" "$(run "$(android_project)" "$(fake_bin)" "$cfg")" ""
+check "binary + android-cli only (android init) → recommends skills add" "$(run "$(android_project)" "$(fake_bin)" "$cfg")" "android skills add --all"
+mkdir -p "$cfg/skills/android-intent-security" && touch "$cfg/skills/android-intent-security/SKILL.md"
+check "binary + catalog (skills add) → silent" "$(run "$(android_project)" "$(fake_bin)" "$cfg")" ""
+# The plugin-marketplace route installs no bare dirs; the install record is the evidence.
+pcfg=$(tmp) || exit 1
+mkdir -p "$pcfg/plugins" && printf '{"plugins":{"android-skills@android-skills":[{}]}}\n' > "$pcfg/plugins/installed_plugins.json"
+check "binary + catalog (plugin install) → silent" "$(run "$(android_project)" "$(fake_bin)" "$pcfg")" ""
 
 if [ "$fails" -eq 0 ]; then echo "ALL PASS"; else echo "$fails FAILED"; exit 1; fi

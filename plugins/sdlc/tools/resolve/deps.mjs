@@ -33,7 +33,8 @@
 
 import { accessSync, constants, existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { delimiter, join } from "node:path";
-import { readSkillSet, assignedSkills, skillTools } from "./skillsets.mjs";
+import { readSkillSet, assignedSkills, applicableSkills, skillTools } from "./skillsets.mjs";
+import { parseYaml } from "./yaml.mjs";
 
 const POLICY_RANK = { block: 3, warn: 2, "graceful-degrade": 1 };
 const STAMP = ".sdlc-deps-preflight.json";
@@ -129,12 +130,28 @@ export function expandHome(path, env = process.env) {
  * DERIVED from its skill set (every skill some role receives), and so are the host tools each of
  * those skills needs. One file answers "which role gets it" and "what must be installed", so the
  * two can never disagree.
+ *
+ * With a `projectRoot`, the list is GATED exactly as the role rows are (`applicableSkills`): a
+ * project without CameraX needs no `camerax`, and its absence must not mark the catalog degraded.
+ * A `dependency:` gate looks where the declaring plugin's manifest says (`framework_detection`).
+ * Without a root (no project to ask) every assigned skill counts — the conservative answer.
  */
-function expandSkillCatalog(dep, pluginDir) {
+function expandSkillCatalog(dep, pluginDir, { projectRoot = null, gateCache = null } = {}) {
   if (dep?.kind !== "skill-catalog" || typeof dep.skill_set !== "string") return dep;
   const doc = readSkillSet(join(pluginDir, dep.skill_set));
   if (!doc) return { ...dep, skills_used: dep.skills_used ?? [] };
-  return { ...dep, skills_used: assignedSkills(doc), skill_tools: skillTools(doc) };
+  const used = projectRoot
+    ? applicableSkills(doc, { projectRoot, detectionPaths: manifestDetectionPaths(pluginDir), cache: gateCache })
+    : assignedSkills(doc);
+  return { ...dep, skills_used: used, skill_tools: skillTools(doc) };
+}
+
+/** The declaring plugin's `framework_detection` — where its `dependency:` gates look. */
+function manifestDetectionPaths(pluginDir) {
+  try {
+    const paths = parseYaml(readFileSync(join(pluginDir, "manifest.yaml"), "utf8"))?.framework_detection;
+    return Array.isArray(paths) ? paths.filter((p) => typeof p === "string") : [];
+  } catch { return []; }
 }
 
 /**
@@ -143,7 +160,7 @@ function expandSkillCatalog(dep, pluginDir) {
  * The strictest policy wins when two plugins declare the same dependency — a `warn` must
  * never be able to soften somebody else's `block`.
  */
-export function collectDependencies({ installs = new Map(), enabled = {} } = {}) {
+export function collectDependencies({ installs = new Map(), enabled = {}, projectRoot = null, gateCache = null } = {}) {
   const merged = new Map();
   const sources = [];
   for (const [key, info] of installs) {
@@ -154,7 +171,7 @@ export function collectDependencies({ installs = new Map(), enabled = {} } = {})
     sources.push({ key, file, count: doc.dependencies.length });
     for (const raw of doc.dependencies) {
       if (!raw || !raw.name) continue;
-      const dep = expandSkillCatalog(raw, info.installPath);
+      const dep = expandSkillCatalog(raw, info.installPath, { projectRoot, gateCache });
       const prev = merged.get(dep.name);
       if (!prev) { merged.set(dep.name, { ...dep, declared_by: [key] }); continue; }
       prev.declared_by.push(key);
@@ -343,9 +360,9 @@ export function writeStamp(configDir, status, { aborted = false, now, versions =
 }
 
 /** The whole step. `skills` short-circuits the enumeration with an authoritative list. */
-export function preflight({ configDir, projectRoot, installs, enabled, skills = null, headless = false, force = false, workspaceSkillDirs = null, env = process.env, which = (t) => whichTool(t, env), stamp = true } = {}) {
+export function preflight({ configDir, projectRoot, installs, enabled, skills = null, headless = false, force = false, workspaceSkillDirs = null, env = process.env, which = (t) => whichTool(t, env), stamp = true, gateCache = new Map() } = {}) {
   const available = skills ? skillsFromList(skills) : enumerateSkills({ configDir, projectRoot, installs, enabled, workspaceSkillDirs });
-  const { dependencies, sources } = collectDependencies({ installs, enabled });
+  const { dependencies, sources } = collectDependencies({ installs, enabled, projectRoot, gateCache });
   // The fast path is reported, never trusted: the full check is cheap in-process (it reads
   // directories, not eleven tool calls), so the stamp buys nothing worth a stale answer.
   const installedVersions = dependencyVersions(dependencies, installs ?? new Map(), env);

@@ -80,8 +80,13 @@ export function compileGlob(pattern) {
  * first hit. Unreadable directories are skipped, never thrown on: detection runs against
  * whatever the consumer's checkout happens to contain, including trees the process cannot
  * enter, and one EACCES must not abort a pipeline.
+ *
+ * `skipDirs` names directories the WALK never descends into (a literal path or the magic-free
+ * prefix is still honoured). Empty by default, so stack detection keeps the lint's semantics;
+ * a caller asking about the project's own sources (ADR-0036 skill gates) passes build outputs
+ * and vendored trees, which are both the slowest part of a walk and the likeliest false match.
  */
-export function* iterFiles(root, pattern) {
+export function* iterFiles(root, pattern, { skipDirs = null } = {}) {
   const g = compileGlob(pattern);
 
   if (g.literal !== null) {
@@ -104,6 +109,7 @@ export function* iterFiles(root, pattern) {
     for (const e of entries) {
       const relPath = [...rel, e.name];
       if (e.isDirectory()) {
+        if (skipDirs?.has(e.name)) continue;
         if (relPath.length < g.maxDepth) stack.push({ dir: join(dir, e.name), rel: relPath });
       } else if (e.isFile() && g.test(relPath.join("/"))) {
         yield join(dir, e.name);
@@ -113,8 +119,8 @@ export function* iterFiles(root, pattern) {
 }
 
 /** True as soon as one file matches — the common case, and the reason iterFiles is lazy. */
-export function anyFile(root, pattern) {
-  for (const _ of iterFiles(root, pattern)) return true;
+export function anyFile(root, pattern, opts) {
+  for (const _ of iterFiles(root, pattern, opts)) return true;
   return false;
 }
 

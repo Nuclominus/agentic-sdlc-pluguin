@@ -12,11 +12,20 @@ root="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 if [ ! -f "$root/settings.gradle.kts" ] && [ ! -f "$root/settings.gradle" ]; then
   exit 0
 fi
-skills_dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills"
+cfg="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+# The catalog counts as installed when either route put it there: `android skills add` (bare skill
+# dirs under skills/) or the plugin marketplace (`android-skills@android-skills`). The sentinel is a
+# skill a role MANDATES, never `android-cli`: `android init` installs android-cli alone, so its
+# presence says nothing about the other 24.
+catalog_installed() {
+  [ -f "$cfg/skills/android-intent-security/SKILL.md" ] && return 0
+  grep -q '"android-skills@' "$cfg/plugins/installed_plugins.json" 2>/dev/null
+}
 if command -v android >/dev/null 2>&1; then
-  [ -f "$skills_dir/android-cli/SKILL.md" ] && exit 0   # binary + catalog present — nothing to say
+  catalog_installed && exit 0   # binary + catalog present — nothing to say
   cat <<'MSG'
-[android-foundation] Android CLI found, but its agent skills are not installed.
+[android-foundation] Android CLI found, but its agent skill catalog is not installed
+  (`android init` installs only the `android-cli` skill).
   Roles are assigned Google's Android skills (skill-sets/android-skills.yaml); without them the
   pipeline still runs, with those skills best-effort. To install:
     • android skills add --all --agent=claude-code

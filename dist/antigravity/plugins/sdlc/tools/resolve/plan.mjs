@@ -380,8 +380,11 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   }
 
   // ---- Step 0a: dependency preflight
+  // One gate cache per run (ADR-0036): the preflight and the role rows below ask the same
+  // `applies_if` questions of the same tree, and each is a directory walk.
+  const gateCache = new Map();
   const deps = preflight({
-    configDir, projectRoot: cwd, installs, enabled, headless,
+    configDir, projectRoot: cwd, installs, enabled, headless, gateCache,
     force: flag(args, "--force-preflight"), skills: opt(args, "--skills"),
     workspaceSkillDirs: roots.workspace_skill_dirs ?? null,
   });
@@ -505,7 +508,7 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
       const dir = r.file ? dirname(r.file) : "";
       const sets = loadSkillSets(dir, r.doc.skill_sets, setWarnings);
       const skill_set_rows = sets.length
-        ? skillSetRoleRows(sets, { projectRoot: cwd, detectionPaths: r.doc.framework_detection ?? detectionFallback })
+        ? skillSetRoleRows(sets, { projectRoot: cwd, detectionPaths: r.doc.framework_detection ?? detectionFallback, cache: gateCache })
         : undefined;
       return { stack: r.doc.stack, dir, role_expertise: r.doc.role_expertise, skill_set_rows };
     });

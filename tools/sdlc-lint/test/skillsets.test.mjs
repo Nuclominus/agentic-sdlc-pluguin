@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadSkillSets, skillSetRoleRows, assignedSkills, skillTools, evalGate } from "../../../plugins/sdlc/tools/resolve/skillsets.mjs";
+import { loadSkillSets, skillSetRoleRows, assignedSkills, applicableSkills, skillTools, evalGate } from "../../../plugins/sdlc/tools/resolve/skillsets.mjs";
 import { mergeRoleExpertise, renderSkillsBlock } from "../../../plugins/sdlc/tools/resolve/profile.mjs";
 import {
   collectDependencies, computeDepsStatus, enforcePolicies, enumerateSkills, dependencyVersions, preflight,
@@ -143,6 +143,50 @@ test("deps: a skill-catalog derives skills_used from its set; a missing host too
 
     const withTool = computeDepsStatus(dependencies, available, { which: () => "/bin/fakebin" });
     assert.deepEqual(withTool.cat.unavailable_skills, ["camera"]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("deps: with a project, skills_used is GATED like the rows — a gated-off skill is not missing", () => {
+  const dir = scratch();
+  try {
+    const p = plugin(join(dir, "p"));
+    writeFileSync(join(p, "manifest.yaml"), "framework_detection:\n  - build.gradle.kts\n");
+    const project = join(dir, "app");
+    mkdirSync(project, { recursive: true });
+    writeFileSync(join(project, "build.gradle.kts"), "dependencies { }\n");
+    const installs = new Map([["p@m", { installPath: p }]]);
+
+    const noCamera = collectDependencies({ installs, enabled: {}, projectRoot: project }).dependencies.find((d) => d.name === "cat");
+    assert.deepEqual(noCamera.skills_used, ["intent-sec", "the-cli"], "no androidx.camera → camera is not needed here");
+
+    writeFileSync(join(project, "build.gradle.kts"), 'implementation("androidx.camera:camera-core:1.4.0")\n');
+    const withCamera = collectDependencies({ installs, enabled: {}, projectRoot: project }).dependencies.find((d) => d.name === "cat");
+    assert.deepEqual(withCamera.skills_used, ["intent-sec", "camera", "the-cli"]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("gates: memoized per run, and blind to build outputs and vendored trees", () => {
+  const dir = scratch();
+  try {
+    // A React Native checkout: the only old-AGP pin lives in node_modules, the only layout in build/.
+    mkdirSync(join(dir, "node_modules", "rn-lib", "android"), { recursive: true });
+    writeFileSync(join(dir, "node_modules", "rn-lib", "android", "build.gradle"), "classpath 'com.android.tools.build:gradle:7.4.2'\n");
+    mkdirSync(join(dir, "app", "build", "res", "layout"), { recursive: true });
+    writeFileSync(join(dir, "app", "build", "res", "layout", "x.xml"), "<x/>");
+    const oldAgp = { file_contains: { path: "**/*.gradle*", pattern: "com\\.android\\.tools\\.build:gradle:[0-8]\\." } };
+    assert.equal(evalGate(oldAgp, { projectRoot: dir }), false, "a vendored build file is not the project's AGP");
+    assert.equal(evalGate({ file_glob: "**/res/layout/*.xml" }, { projectRoot: dir }), false, "build outputs are not sources");
+    assert.equal(evalGate({ dependency: "com.android.tools.build" }, { projectRoot: dir, detectionPaths: ["**/build.gradle"] }), false);
+
+    const cache = new Map();
+    const gate = { file_glob: "**/*.kt" };
+    assert.equal(evalGate(gate, { projectRoot: dir, cache }), false);
+    writeFileSync(join(dir, "Main.kt"), "");
+    assert.equal(evalGate(gate, { projectRoot: dir, cache }), false, "the cached answer is reused within the run");
+    assert.equal(evalGate(gate, { projectRoot: dir, cache: new Map() }), true, "a fresh run asks the tree again");
+
+    const doc = { set: "cat", skills: [{ id: "a", applies_if: gate, roles: { developer: { when: "w" } } }, { id: "b", roles: { developer: { when: "w" } } }] };
+    assert.deepEqual(applicableSkills(doc, { projectRoot: dir }), ["a", "b"]);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

@@ -14,9 +14,12 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 - **Android CLI skills reach the agents** (ADR-0036): the android-foundation manifest's new
   `skill_sets` key feeds the matrix into each role's skills block.
   - Rows are bare ids, gated against the project. For example, `camerax` appears only when
-    `androidx.camera` is a dependency, and `agp-9-upgrade` only while AGP is below 9.
+    `androidx.camera` is a dependency, and `agp-9-upgrade` only while AGP is below 9. Gates skip
+    build outputs and vendored trees (`build/`, `.gradle/`, `node_modules/`, …) and are evaluated
+    once per run.
   - The catalog is a `kind: skill-catalog` runtime dependency with `policy: warn`, like superpowers.
-    Its required skills and host tools are derived from the matrix.
+    Its required skills and host tools are derived from the matrix, gated the same way, so a skill
+    no role receives in this project is never reported missing.
   - A missing catalog skill is judged per skill: a mandatory row is downgraded to best-effort, and a
     recommended row is not rendered.
   - `android-cli` is unavailable without the `android` binary.
@@ -37,7 +40,9 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 - `android-cli-check.sh` never fired: `ls settings.gradle.kts settings.gradle` fails when either file
   is absent, and every real project has exactly one of them. The hook now also advises when the
-  binary is present but the catalog skills are not installed. It has a test in CI.
+  binary is present but the catalog is not installed. It checks for a mandated catalog skill rather
+  than `android-cli`, which `android init` installs on its own, and it accepts a plugin-marketplace
+  install (`android-skills@android-skills`). It has a test in CI.
 
 ## [4.1.0] — 2026-09-24
 

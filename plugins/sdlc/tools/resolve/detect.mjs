@@ -34,24 +34,26 @@ function readOrNull(file) {
  *   { all: [ …rules ] }             AND
  * Anything else is false, never an error — a manifest with a typo must fail to detect
  * rather than abort every run in the marketplace.
+ *
+ * `opts` is passed through to the walk (`skipDirs`, see fsglob.mjs); detection passes none.
  */
-export function evalRule(rule, root) {
+export function evalRule(rule, root, opts) {
   if (rule === "*") return true;
   if (rule == null || typeof rule !== "object") return false;
   if ("file_exists" in rule) return existsSync(join(root, rule.file_exists));
-  if ("file_glob" in rule) return anyFile(root, rule.file_glob);
+  if ("file_glob" in rule) return anyFile(root, rule.file_glob, opts);
   if ("file_contains" in rule) {
     const { path, pattern } = rule.file_contains;
     let re;
     try { re = new RegExp(pattern); } catch { return false; }
-    for (const f of iterFiles(root, path)) {
+    for (const f of iterFiles(root, path, opts)) {
       const text = readOrNull(f);
       if (text !== null && re.test(text)) return true;
     }
     return false;
   }
-  if ("any" in rule) return Array.isArray(rule.any) && rule.any.some((r) => evalRule(r, root));
-  if ("all" in rule) return Array.isArray(rule.all) && rule.all.every((r) => evalRule(r, root));
+  if ("any" in rule) return Array.isArray(rule.any) && rule.any.some((r) => evalRule(r, root, opts));
+  if ("all" in rule) return Array.isArray(rule.all) && rule.all.every((r) => evalRule(r, root, opts));
   return false;
 }
 
@@ -63,10 +65,10 @@ export function evalRule(rule, root) {
  * module build files are the fallback. Substring, not parse — a coordinate is a coordinate
  * whether it appears in a catalog alias or an inline dependency line.
  */
-export function dependencyPresent(root, paths, coordinate) {
+export function dependencyPresent(root, paths, coordinate, opts) {
   if (!coordinate) return false;
   for (const p of paths) {
-    for (const f of iterFiles(root, p)) {
+    for (const f of iterFiles(root, p, opts)) {
       const text = readOrNull(f);
       if (text !== null && text.includes(coordinate)) return true;
     }
