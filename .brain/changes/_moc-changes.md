@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-09-29 | #225 | `feat` | — | [[changes/2026-09-29-PR-225-android-cli-skills-reach-the-agents-adr-0036]] |
 | 2026-09-29 | #224 | `feat` | — | [[changes/2026-09-29-PR-224-android-cli-skill-matrix-as-a-skill-set-adr-0036]] |
 | 2026-09-23 | #222 | `chore` | — | [[changes/2026-09-23-PR-222-bump-sdlc-and-android-foundation-to-3-1-0]] |
 | 2026-09-23 | #220 | `chore` | — | [[changes/2026-09-23-PR-220-promote-the-opus-tier-to-claude-opus-5-5]] |
