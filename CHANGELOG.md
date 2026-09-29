@@ -36,6 +36,12 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
     more than one root;
   - catalog skills the matrix has not triaged, and matrix ids the catalog no longer ships;
   - the install and update commands to run.
+- **Off-matrix skill use is audited** (ADR-0037). Step 5b's seal reads every phase's own transcript
+  and judges each catalog `Skill` call against the static role matrix: in scope, off-role (another
+  role's skill), or unassigned. It writes `skill_scope` and `skill_scope_audit` to telemetry and
+  prints an advisory WARN on a leak. Nothing is blocked. The new compliance contract
+  `3b-1a-skill-scope` (`agent_skill_scope`, `every-skill-call`) scores in-scope calls over catalog
+  calls, and the AAR dashboard's `skill_scope` turns each leak into a scope-leak finding.
 - `sdlc-lint roster` rejects a catalog skill also authored in `role_expertise`. `sdlc-lint
   skill-sets` requires the set to be wired into both the manifest and `runtime-dependencies.json`.
 

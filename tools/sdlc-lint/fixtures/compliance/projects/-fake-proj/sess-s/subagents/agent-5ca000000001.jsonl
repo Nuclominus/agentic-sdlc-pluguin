@@ -1,0 +1,3 @@
+{"type": "assistant", "timestamp": "2026-09-29T10:00:10Z", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t0", "name": "Skill", "input": {"skill": "android-intent-security"}}]}}
+{"type": "assistant", "timestamp": "2026-09-29T10:00:11Z", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t1", "name": "Skill", "input": {"skill": "adaptive"}}]}}
+{"type": "assistant", "timestamp": "2026-09-29T10:00:12Z", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t2", "name": "Skill", "input": {"skill": "superpowers:verification-before-completion"}}]}}

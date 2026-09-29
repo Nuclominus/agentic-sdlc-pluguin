@@ -17,6 +17,19 @@ The analyst distills two sources. **Telemetry-first**, transcript best-effort.
 - `top_consumers` — the 5 heaviest phases by tokens.
 - `qa_iterations`, `cap_breach`, `unpriced_phase_count`, `skip_rules_count`,
   `post_check_failures`.
+- `skill_scope` (ADR-0037) — the seal's audit of catalog skill calls against the role skill
+  matrix: `catalog_calls`, `in_scope`, and every `off_role` (a role used a catalog skill the
+  matrix assigns only to `allowed_roles`) and `unassigned` (a skill no role receives) call. `null`
+  means the run recorded no audit — say so, never read it as clean. Each off-role or unassigned
+  entry is a **scope-leak** finding. Its remedy is one of two, and you pick by reading why the agent
+  loaded it:
+  - the agent strayed → tighten that role's `when` text, or add the category guard's reason to
+    the role's invariants;
+  - the matrix is wrong (the role genuinely needed it) → propose re-triaging the row in the
+    plugin's `skill-sets/*.yaml`.
+  In both cases name the file; the skill set is maintainer-owned, so the change is a proposal for
+  the plugin, not a project edit. Nothing was blocked at run time, so there is no failure to
+  explain, only a mismatch to resolve.
 
 Never re-derive these from the transcript.
 

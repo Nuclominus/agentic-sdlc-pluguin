@@ -1,0 +1,2 @@
+{"type": "assistant", "timestamp": "2026-09-29T10:00:10Z", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t0", "name": "Skill", "input": {"skill": "android-skills:adaptive"}}]}}
+{"type": "assistant", "timestamp": "2026-09-29T10:00:11Z", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t1", "name": "Skill", "input": {"skill": "display-glasses-with-jetpack-compose-glimmer"}}]}}

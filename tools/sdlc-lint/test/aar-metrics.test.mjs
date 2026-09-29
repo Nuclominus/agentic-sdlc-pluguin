@@ -142,3 +142,23 @@ test("a run with no healing reports zero and an empty exhausted list", () => {
   assert.equal(d.heal_attempts, 0);
   assert.deepEqual(d.heal_exhausted_phases, []);
 });
+
+test("skill_scope surfaces the seal's off-matrix audit, sorted; absent is null, never clean (ADR-0037)", () => {
+  assert.equal(computeMetrics(tel).skill_scope, null);
+  const d = computeMetrics({ ...tel, skill_scope_audit: {
+    dispatches_judged: 3, dispatches_unjudged: 1, catalog_calls: 4, in_scope: 1,
+    off_role: [
+      { agent: "security-analyst", agent_id: "b", skill: "styles", set: "android-skills", allowed_roles: ["developer"] },
+      { agent: "developer", agent_id: "a", skill: "r8-analyzer", set: "android-skills", allowed_roles: ["devops", "security-analyst"] },
+    ],
+    unassigned: [{ agent: "developer", agent_id: "a", skill: "glimmer", set: "android-skills" }],
+  } });
+  assert.deepEqual(d.skill_scope, {
+    catalog_calls: 4, in_scope: 1, dispatches_unjudged: 1,
+    off_role: [
+      { agent: "developer", skill: "r8-analyzer", allowed_roles: ["devops", "security-analyst"] },
+      { agent: "security-analyst", skill: "styles", allowed_roles: ["developer"] },
+    ],
+    unassigned: [{ agent: "developer", skill: "glimmer" }],
+  });
+});

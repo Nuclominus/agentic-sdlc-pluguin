@@ -90,6 +90,18 @@ export function computeMetrics(tel) {
     .filter((c) => num(c.exit_code) !== 0).length;
   const skip_rules_count = Array.isArray(tel.skip_rules_applied) ? tel.skip_rules_applied.length : 0;
 
+  // ADR-0037 — the seal's off-matrix audit, surfaced as-is. `null` when the run recorded none
+  // (no skill set installed, or sealed before the audit existed): absent is not clean.
+  const a = tel.skill_scope_audit;
+  const byAgentSkill = (x, y) => (x.agent < y.agent ? -1 : x.agent > y.agent ? 1 : x.skill < y.skill ? -1 : x.skill > y.skill ? 1 : 0);
+  const skill_scope = a && typeof a === "object" ? {
+    catalog_calls: num(a.catalog_calls),
+    in_scope: num(a.in_scope),
+    dispatches_unjudged: num(a.dispatches_unjudged),
+    off_role: (Array.isArray(a.off_role) ? a.off_role : []).map((x) => ({ agent: x.agent ?? null, skill: x.skill ?? null, allowed_roles: Array.isArray(x.allowed_roles) ? x.allowed_roles : [] })).sort(byAgentSkill),
+    unassigned: (Array.isArray(a.unassigned) ? a.unassigned : []).map((x) => ({ agent: x.agent ?? null, skill: x.skill ?? null })).sort(byAgentSkill),
+  } : null;
+
   return {
     task_slug: tel.task_slug ?? null,
     stack: tel.stack ?? null,
@@ -117,6 +129,7 @@ export function computeMetrics(tel) {
     unpriced_phase_count,
     skip_rules_count,
     post_check_failures,
+    skill_scope,
   };
 }
 

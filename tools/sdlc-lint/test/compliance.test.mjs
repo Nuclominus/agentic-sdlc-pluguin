@@ -435,3 +435,32 @@ test("a mandate pattern that captures nothing is rejected at parse time", () => 
   assert.equal(contracts.some((c) => c.id === "no-capture"), false);
   assert.ok(errors.some((e) => /no-capture/.test(e) && /capture/.test(e)), errors.join("; "));
 });
+
+// --- every-skill-call (ADR-0037): catalog skills used outside the role matrix ------------------
+
+const SCOPE_FIX = join(FIX, "skill-contracts-scope.md");
+const scopeContract = () => parseContracts(SCOPE_FIX).contracts.filter((c) => c.id === "3b-1a-skill-scope");
+
+test("every-skill-call judges each dispatch's own catalog calls against the recorded matrix", () => {
+  // security-analyst: android-intent-security (in scope) + adaptive (a UI skill: off-role) +
+  // a superpowers skill (not a catalog skill — not counted). developer: `android-skills:adaptive`
+  // (in scope, plugin-route id) + the glasses skill no role receives (unassigned).
+  const res = auditRun(run("scope-leak"), scopeContract(), { projectsRoot: PROJECTS });
+  assert.equal(res.status, "auditable");
+  const v = verdict(res, "3b-1a-skill-scope");
+  assert.equal(v.expected, 4, "catalog calls only");
+  assert.equal(v.matched, 2);
+  assert.equal(v.verdict, "partial");
+});
+
+test("every-skill-call is n/a on a run that recorded no matrix — never a pass", () => {
+  const v = verdict(auditRun(run("scope-none"), scopeContract(), { projectsRoot: PROJECTS }), "3b-1a-skill-scope");
+  assert.equal(v.verdict, "na");
+  assert.equal(v.reason, "no-skill-scope");
+});
+
+test("an agent_skill_scope contract takes no pattern", () => {
+  const { contracts, errors } = parseContracts(SCOPE_FIX);
+  assert.deepEqual(contracts.map((c) => c.id), ["3b-1a-skill-scope"]);
+  assert.ok(errors.some((e) => /'scope-with-pattern': 'agent_skill_scope' takes no pattern/.test(e)));
+});
