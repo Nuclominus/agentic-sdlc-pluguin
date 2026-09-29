@@ -39,7 +39,10 @@ checks what it actually used.
 2. **The matrix is static.** Scope is not gated: `applies_if` decides what a prompt carries, not
    who may use a skill.
 3. **The seal computes; nobody copies.** The seal resolves the matrix itself, read-only
-   (`resolve/plan.mjs` `resolveSkillScope`). It then writes both `skill_scope` and
+   (`resolve/plan.mjs` `resolveSkillScope`), for the stack the run itself used: `--stack=` comes
+   from `telemetry.stack`, never from today's detection. A run forced onto a foundation that
+   detection would not pick is audited as that foundation, and a stack that no longer resolves
+   records no audit rather than another stack's. It then writes both `skill_scope` and
    `skill_scope_audit` into `_telemetry.json`. The orchestrator is not asked to copy anything,
    following [[decisions/ADR-0015-the-machine-value-invariant]].
 4. **Three readers share one judgement.** All three use the shipped `auditSkillScope`, so they

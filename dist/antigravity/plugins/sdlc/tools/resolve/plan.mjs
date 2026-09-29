@@ -607,9 +607,17 @@ export function resolveDeps({ cwd = process.cwd(), args = "", env = process.env,
  * ADR-0037 — the static skill-set matrix in force for a project, for the seal's off-matrix audit.
  * Read-only (no preflight stamp); `null` when nothing resolves or no installed plugin declares a
  * skill set, which the seal records as "no scope" rather than as a clean audit.
+ *
+ * `stack` is the foundation the RUN used (`telemetry.stack`), passed as `--stack=` so the seal
+ * judges against that run's matrix, not whatever detection picks now — a run forced onto a stack
+ * detection would not choose (the reason `--stack` exists) must not be audited as another one. A
+ * name that no longer resolves halts the resolve, and the seal then records no audit, never a
+ * wrong one.
  */
-export function resolveSkillScope({ cwd = process.cwd(), env = process.env, mode = "installed" } = {}) {
-  const r = resolveProfile({ cwd, args: "", env, mode, readOnly: true });
+export function resolveSkillScope({ cwd = process.cwd(), env = process.env, mode = "installed", stack = null } = {}) {
+  const args = typeof stack === "string" && /^[A-Za-z0-9._-]+$/.test(stack) ? `--stack=${stack}` : "";
+  const r = resolveProfile({ cwd, args, env, mode, readOnly: true });
+  if (r.halt) return null;
   const scope = r.skill_scope;
   return scope && Object.keys(scope).length ? scope : null;
 }

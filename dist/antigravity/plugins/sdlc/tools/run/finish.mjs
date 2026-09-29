@@ -32,7 +32,7 @@ function projectRootOf(runDir) {
  * @param {"orchestrator"|"stop-hook"} [opts.sealedBy]  who is sealing; default "orchestrator"
  * @param {Function} [opts.enrich]        TEST SEAM — replaces enrichTelemetry
  * @param {Function} [opts.renderReport]  TEST SEAM — replaces renderReportFile
- * @param {Function} [opts.skillScope]    TEST SEAM — `(runDir) => scope | null`, replaces the
+ * @param {Function} [opts.skillScope]    TEST SEAM — `(runDir, tel) => scope | null`, replaces the
  *                                        read-only resolve of the project's skill-set matrix
  *
  * There is deliberately no `session` option. The enricher recovers the orchestrator
@@ -114,9 +114,10 @@ export function finishRun(runDir, opts = {}) {
   let skillScope = null;
   let scopeAudit = null;
   try {
-    skillScope = (opts.skillScope || ((dir) => resolveSkillScope({ cwd: projectRootOf(dir) })))(runDir);
+    const current = JSON.parse(readFileSync(telPath, "utf8"));
+    // The run's own stack, not today's detection: see resolveSkillScope.
+    skillScope = (opts.skillScope || ((dir, t) => resolveSkillScope({ cwd: projectRootOf(dir), stack: t.stack ?? null })))(runDir, current);
     if (skillScope) {
-      const current = JSON.parse(readFileSync(telPath, "utf8"));
       scopeAudit = auditRunSkillScope(runDir, current, { scope: skillScope, projectsRoot: opts.projectsRoot });
       const leaks = scopeAudit ? scopeAudit.off_role.length + scopeAudit.unassigned.length : 0;
       if (leaks) {

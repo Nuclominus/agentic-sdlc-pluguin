@@ -93,10 +93,12 @@ test("seal: finishRun records the matrix and the verdict, warns on a leak, and n
     const run = join(dir, "run");
     mkdirSync(join(run, ".checkpoint"), { recursive: true });
     writeFileSync(join(run, ".checkpoint", "_started_at"), "1785236400\n");
-    writeFileSync(join(run, "_telemetry.json"), JSON.stringify({ task_slug: "x", phases: [{ phase: "security", agent: "security-analyst", agent_id: "sec1" }] }));
+    writeFileSync(join(run, "_telemetry.json"), JSON.stringify({ task_slug: "x", stack: "android", phases: [{ phase: "security", agent: "security-analyst", agent_id: "sec1" }] }));
     const opts = { now: (1785236400 + 60) * 1000, noReport: true, projectsRoot: dir, enrich: () => ({ skipped_all: true }) };
 
-    const r = finishRun(run, { ...opts, skillScope: () => SCOPE });
+    let seenStack;
+    const r = finishRun(run, { ...opts, skillScope: (_dir, t) => { seenStack = t.stack; return SCOPE; } });
+    assert.equal(seenStack, "android", "the seal hands the resolver the run's own stack");
     const tel = JSON.parse(readFileSync(join(run, "_telemetry.json"), "utf8"));
     assert.deepEqual(tel.skill_scope, SCOPE, "the matrix travels with the run, so compliance can re-judge it offline");
     assert.equal(tel.skill_scope_audit.off_role.length, 1);
