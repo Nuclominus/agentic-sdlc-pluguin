@@ -42,9 +42,10 @@ cache_write_multipliers:
 # under-reported real cost by 6-10x. Re-derive when the roster or prompt sizes move
 # materially.
 #
-# PROVISIONAL for `opus`: the tokens below were measured on claude-opus-5, and the tier
-# has since moved to claude-opus-5-5 (ADR-0035). Nothing has been measured on 5.5, so the
-# opus preview is the Opus 5 token shape at 5.5 rates. Re-derive once real 5.5 runs exist.
+# PROVISIONAL for `opus` and `sonnet`: the tokens below were measured on claude-opus-5 and
+# claude-sonnet-5, and the tiers have since moved to claude-opus-5-5 (ADR-0035) and
+# claude-sonnet-5-5 (ADR-0038). Nothing has been measured on 5.5, so each preview is the
+# older token shape at 5.5 rates. Re-derive once real 5.5 runs exist.
 estimation_baselines:
   opus:   { input: 30,  cache_read: 670000, cache_write: 93000, output: 1125 }
   sonnet: { input: 25,  cache_read: 725000, cache_write: 73000, output: 1230 }
@@ -61,7 +62,7 @@ models:
     model_id: claude-opus-5-5
     pricing: { input: 4.0, cached_input: 0.2, output: 20.0 }
   - tag: sonnet
-    model_id: claude-sonnet-5
+    model_id: claude-sonnet-5-5
     pricing: { input: 2.0, cached_input: 0.2, output: 10.0 }
   - tag: haiku
     model_id: claude-haiku-4-5-20251001
@@ -93,6 +94,9 @@ models:
   - tag: opus-4-5
     model_id: claude-opus-4-5
     pricing: { input: 5.0, cached_input: 0.5, output: 25.0 }
+  - tag: sonnet-5
+    model_id: claude-sonnet-5
+    pricing: { input: 2.0, cached_input: 0.2, output: 10.0 }
   - tag: sonnet-4-6
     model_id: claude-sonnet-4-6
     pricing: { input: 3.0, cached_input: 0.3, output: 15.0 }
