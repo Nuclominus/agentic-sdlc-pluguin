@@ -874,7 +874,7 @@ test("every pipeline tier resolves to exactly one registry entry with the expect
   for (const tier of reg.raw.pipeline_tiers) assert.ok(TIER_MODEL[tier], `tier ${tier} has no registry entry`);
   assert.deepEqual(
     Object.fromEntries(reg.raw.pipeline_tiers.map((t) => [t, TIER_MODEL[t]])),
-    { opus: "claude-opus-5-5", sonnet: "claude-sonnet-5", haiku: "claude-haiku-4-5-20251001", fable: "claude-fable-5-1" },
+    { opus: "claude-opus-5-5", sonnet: "claude-sonnet-5-5", haiku: "claude-haiku-4-5-20251001", fable: "claude-fable-5-1" },
   );
 });
 
@@ -883,7 +883,7 @@ test("every pipeline tier resolves to exactly one registry entry with the expect
 // measured-on model — `opus` was measured on claude-opus-5 before the tier moved to 5.5.
 // This validates the TOKEN shape only. It says nothing about how Opus 5.5 behaves: no run
 // has been measured on it, so the opus baseline is provisional (see claude.yaml).
-const MEASURED_ON = { opus: "claude-opus-5" };
+const MEASURED_ON = { opus: "claude-opus-5", sonnet: "claude-sonnet-5" };
 
 const estimateRow = (tier, registry, model = TIER_MODEL[tier]) => {
   const b = registry.raw.estimation_baselines[tier];

@@ -2,6 +2,7 @@
 
 > One note per architecture decision. Newest first.
 
+- [[decisions/ADR-0038-the-sonnet-tier-moves-to-sonnet-5-5]]
 - [[decisions/ADR-0037-off-matrix-skill-use-is-audited-not-blocked]]
 - [[decisions/ADR-0036-a-skill-catalog-is-a-runtime-dependency-a-skill-set-is-its-matrix]]
 - [[decisions/ADR-0035-the-opus-tier-moves-to-opus-5-5]]

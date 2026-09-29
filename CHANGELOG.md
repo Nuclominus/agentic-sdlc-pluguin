@@ -4,6 +4,9 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+`sdlc` `3.2.0` → `3.2.1` (patch: the `sonnet` tier resolves to `claude-sonnet-5-5`, same
+price; `claude-sonnet-5` kept as a pin-only registry entry — ADR-0038).
+
 ## [4.2.0] — 2026-09-29
 
 `sdlc` `3.1.0` → `3.2.0`, `android-foundation` `3.1.0` → `3.2.0` (minor: the Android CLI skill
