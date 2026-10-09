@@ -19,7 +19,7 @@ Nothing in the pipeline is exposed to the 5.5 changes: every agent declares `eff
 
 ## Consequences
 
-- No price change, so dry-run previews for `sonnet` are unchanged.
+- Input and output prices are unchanged. **Correction (2026-10-09):** the cache-read rate is *not* unchanged — Sonnet 5.5 bills cache hits at 0.05× input ($0.10), not Sonnet 5's $0.20. The registry carried $0.20 until the pricing page was re-read; dry-run previews for `sonnet` were over-stated by the cache-read share until then.
 - `estimation_baselines.sonnet` is **provisional**: its tokens were measured on Sonnet 5 and no run has been measured on 5.5. The drift test prices it at the model it was measured on. Re-derive once real 5.5 runs exist.
 - Recorded runs that name `claude-sonnet-5` keep pricing correctly through the reference entry.
 
