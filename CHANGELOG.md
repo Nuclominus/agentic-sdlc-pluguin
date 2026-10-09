@@ -4,6 +4,10 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+`sdlc` `3.2.1` → `3.2.2` (patch: registry — `sonnet` cache-read corrected $0.20 → $0.10 per MTok,
+Sonnet 5.5 bills cache hits at 0.05× input, so ADR-0038's "same price" held for input/output only;
+`claude-haiku-5-5` added pin-only at its ≤100K-token rate, the dispatched `haiku` tier unchanged).
+
 ## [4.2.1] — 2026-10-08
 
 `sdlc` `3.2.0` → `3.2.1` (patch: the `sonnet` tier resolves to `claude-sonnet-5-5`, same

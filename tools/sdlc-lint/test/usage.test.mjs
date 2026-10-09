@@ -981,3 +981,11 @@ test("deriveDispatchMap carries the tool_use id, so a consumer can join it to a 
   assert.equal(dm[0].id, "tu-1");
   assert.equal(dm[0].agent_id, "bc70de3f30beff162");
 });
+
+test("sonnet 5.5 bills cache reads at 0.05x input; haiku 5.5 is pin-only", () => {
+  // Published rate (pricing page, 2026-10-09). Sonnet 5 stayed at 0.1x — do not conflate.
+  assert.equal(reg.byId.get("claude-sonnet-5-5").cached_input, 0.1);
+  assert.equal(reg.byId.get("claude-sonnet-5").cached_input, 0.2);
+  assert.ok(reg.byId.get("claude-haiku-5-5"), "haiku 5.5 must price recorded runs");
+  assert.ok(!reg.raw.pipeline_tiers.includes("haiku-5-5"));
+});

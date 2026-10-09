@@ -56,14 +56,15 @@ estimation_baselines:
 
 models:
   # ── dispatched tiers ──────────────────────────────────────────────────────────
-  # Opus 5.5 cache reads are $0.20 (5% of input) — the published rate, not a typo; only the
-  # Fable 5.1 / Mythos 5.1 rows share that non-10% shape.
+  # Opus 5.5 and Sonnet 5.5 cache reads are 5% of input ($0.20 / $0.10) — the published
+  # rate, not a typo; only the Fable 5.1 / Mythos 5.1 rows (2.5%) also leave the 10% shape.
+  # Rates read from https://platform.claude.com/docs/en/about-claude/pricing on 2026-10-09.
   - tag: opus
     model_id: claude-opus-5-5
     pricing: { input: 4.0, cached_input: 0.2, output: 20.0 }
   - tag: sonnet
     model_id: claude-sonnet-5-5
-    pricing: { input: 2.0, cached_input: 0.2, output: 10.0 }
+    pricing: { input: 2.0, cached_input: 0.1, output: 10.0 }
   - tag: haiku
     model_id: claude-haiku-4-5-20251001
     pricing: { input: 1.0, cached_input: 0.1, output: 5.0 }
@@ -103,6 +104,14 @@ models:
   - tag: sonnet-4-5
     model_id: claude-sonnet-4-5
     pricing: { input: 3.0, cached_input: 0.3, output: 15.0 }
+  # Haiku 5.5 is priced by PROMPT LENGTH: $0.10 / $0.01 cached / $0.50 for prompts up to
+  # 100K tokens, $0.50 / $0.05 / $2.50 above (cache reads and writes count toward the
+  # length). This registry holds one rate per model, so only the <=100K rate is here and a
+  # long-prefix call recorded under this id is UNDER-priced ~5x. That is why it is pin-only:
+  # the dispatched `haiku` tag stays on 4.5 until the tier is representable.
+  - tag: haiku-5-5
+    model_id: claude-haiku-5-5
+    pricing: { input: 0.1, cached_input: 0.01, output: 0.5 }
   - tag: mythos
     model_id: claude-mythos-5-1
     pricing: { input: 10.0, cached_input: 0.25, output: 50.0 }
