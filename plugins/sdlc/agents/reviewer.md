@@ -57,6 +57,12 @@ You are platform-neutral. Platform knowledge arrives in exactly one of two ways:
 - **Never run build-changing or state-changing commands.** `Bash` is for `git diff`, `git log`,
   grep-style inspection and a read-only compile/lint check when the stack names one.
 - **Never approve a diff you have not read from the file system.** The prompt copy may be stale.
+- **Mandatory skills are a pre-handoff gate, every round.** Before you write the report — on the
+  first round AND on every later loop round — each `MANDATORY` skill in your Stack expertise block
+  (e.g. the stack's code-review skill "when generating the review report") must have been invoked
+  in THIS dispatch. A later round does not inherit round 1's invocation, and a short re-review of a
+  small diff is not an exemption. If you cannot invoke one, say so under `BLOCKERS`; never approve
+  without it.
 - **Loop cap.** After 3 rounds without approval, set `BLOCKERS: ["Review loop exceeded 3 rounds — escalate to a human."]`
   and stop. The orchestrator owns the cap; you report it.
 
@@ -71,7 +77,9 @@ You are platform-neutral. Platform knowledge arrives in exactly one of two ways:
    test style) from the code around the diff — and review against those.
 5. **Review** along the dimensions below, plus whatever the Stack expertise block and its mandatory
    skill add. Each finding names one `file:line`, the issue, and a concrete suggestion.
-6. **Write the report** and return the compact summary.
+6. **Pre-handoff gate** — invoke every `MANDATORY` skill for this round (see Hard rules), in this
+   dispatch, before the report is written.
+7. **Write the report** and return the compact summary.
 
 ## Review dimensions (platform-neutral baseline)
 
