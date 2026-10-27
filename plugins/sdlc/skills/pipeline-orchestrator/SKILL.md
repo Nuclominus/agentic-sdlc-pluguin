@@ -597,6 +597,7 @@ Output language contract:
 - narrative artifacts (markdown reports, summaries): match the per-call narrative_language value below
 
 Compact handoff contract: return ONLY a COMPACT summary (≤2-3K tokens). The full deliverable goes to a per-call file path supplied below. Do NOT inline a previous phase's full output into your reasoning; read prior outputs from the file system as needed.
+The file at detailed_output_path is a pipeline handoff artifact read by later phases, not an optional report file. Writing it is mandatory and overrides any generic "do not write report/summary .md files" guidance; a phase that returns without writing it has not finished.
 
 Read discipline: your entire prompt prefix is re-read and billed on every turn, so
 what you pull into context costs on every subsequent turn, not once.
@@ -1870,6 +1871,67 @@ RETURN ONLY a COMPACT summary (≤3K tokens):
 - 3-5 key decisions
 - Deviations from plan: [list or "none"]
 - Any blockers or open questions for the next phase
+```
+
+### review
+
+```
+Review the changes described in: docs/plans/{task_slug}/02-development.md
+Scope and acceptance criteria: docs/plans/{task_slug}/01-business-analysis.md
+Read the actual changed files via the file system; the diff is not in this prompt and any
+copy of it would be stale. On a later loop round (a `loop_findings` block or an earlier
+review report exists), review only what changed since your last report, and say for each
+earlier finding whether it is resolved.
+
+You are READ-ONLY on production code: report findings with file:line and a concrete
+suggestion; the development phase applies them in the next round. Security is the
+security phase's dimension, not yours.
+
+Invoke every MANDATORY skill in your Stack expertise block for THIS round, in this
+dispatch, before you write the report — a later round never inherits round 1's.
+
+Write the review report to the detailed_output_path below.
+
+RETURN ONLY a COMPACT summary (≤2K tokens), ending with these lines VERBATIM:
+REVIEW_STATUS: approved | changes-requested
+FINDINGS: critical=N important=N suggestion=N
+MUST_FIX: [file:line — one-line issue, max 10]
+BLOCKERS: [empty, or the loop-cap line]
+
+REVIEW_STATUS and FINDINGS are a machine contract — the review loop (3-loop) reads them.
+Emit explicit zeros when you find nothing; approved requires critical=0 important=0.
+```
+
+### test
+
+```
+Write and run unit / integration tests for the changes described in:
+docs/plans/{task_slug}/02-development.md
+Acceptance criteria: docs/plans/{task_slug}/01-business-analysis.md
+
+Read the actual changed files via the file system; do not rely on getting the diff in this prompt.
+
+Build an AC → test-method table first: every acceptance criterion that is testable on the
+JVM/host gets a covering test, or a stated reason it has none (already covered — name the
+test; on-device/E2E only — the qa phase owns it). An AC with neither is a gap to close
+before you return.
+
+In-pipeline scope: fast, host-independent tests only (the Stack expertise block names the
+task to run). Instrumentation / UI / on-device tests are the qa phase's or CI's.
+
+🛑 HARD LIMIT: You have a maximum of 3 ATTEMPTS to fix failing tests.
+After attempt #3, STOP and report unresolved failures. Do NOT iterate further.
+
+Write the test report, including its "AC traceability" section, to the detailed_output_path below.
+
+RETURN ONLY a COMPACT summary (≤2K tokens):
+STACK: {name}
+TESTS: added=N passing=N failing=N skipped=N
+AC: total=N covered=N waived=N uncovered=N
+COVERAGE: ~N% on changed code
+ITERATIONS_USED: 1..3
+STATUS: complete | incomplete-blocked
+OPEN_ISSUES: [list, max 5]
 ```
 
 ### qa
