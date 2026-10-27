@@ -1660,8 +1660,8 @@ Artifacts:
 
 Post-pipeline checks:
   ✅ ./gradlew detekt
-  ✅ ./gradlew testDebugUnitTest (47 passed)
-  ✅ ./gradlew compileDebugKotlin
+  ✅ ./gradlew :app:testDevDebugUnitTest (47 passed)
+  ✅ ./gradlew :app:compileDevDebugKotlin
 
 PR: {pr_url_if_created}
 ```

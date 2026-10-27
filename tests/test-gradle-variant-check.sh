@@ -164,6 +164,30 @@ for SH in "${shells[@]}"; do
   n2=$(wc -l < "$d/listings.log" | tr -d ' ')
   [ "$n1" = "1" ] && [ "$n2" = "2" ] && pass "listing cached, re-listed after a build-file change" \
     || fail "cache: listings after 2 runs=$n1, after edit=$n2"
+  # The cache is renamed into place, never written in place: no temp file survives a run.
+  left=$(find "$d/.gradle/sdlc-variant-check" -name 'tasks.txt.*' | wc -l | tr -d ' ')
+  [ "$left" = "0" ] && [ "$(head -n 1 "$d/.gradle/sdlc-variant-check/tasks.txt" | cut -c1-2)" = "# " ] \
+    && pass "cache written atomically (no temp file left, key line first)" \
+    || fail "cache: $left temp file(s) left"
+  # A Gradle/AGP upgrade through the wrapper is a build change too.
+  mkdir -p "$d/gradle/wrapper"; echo 'distributionUrl=gradle-9.0-bin.zip' > "$d/gradle/wrapper/gradle-wrapper.properties"
+  run_check "$d" compile >/dev/null
+  n3=$(wc -l < "$d/listings.log" | tr -d ' ')
+  [ "$n3" = "3" ] && pass "wrapper-properties change re-lists" || fail "cache: listings after wrapper edit=$n3"
+  rm -rf "$d"
+
+  # --- a gradlew that lost its exec bit is RUN through sh, never reported absent (127 = SKIP)
+  d=$(make_project "${PLAIN[@]}")
+  chmod -x "$d/gradlew"
+  out=$(run_check "$d" compile)
+  [ "$(exit_of "$out")" = "0" ] && printf '%s' "$out" | grep -q "WARN: .*not executable" \
+    && [ "$(gradle_args "$d")" = "--console=plain --continue :app:compileDebugKotlin :core:compileDebugKotlin" ] \
+    && pass "non-executable gradlew → run with sh, WARN, real tasks" \
+    || fail "non-executable gradlew: exit $(exit_of "$out"), ran: $(gradle_args "$d") / $out"
+  echo 1 > "$d/exit_code"
+  out=$(run_check "$d" compile)
+  [ "$(exit_of "$out")" = "1" ] && pass "non-executable gradlew still fails on a failing task" \
+    || fail "non-executable failing gradlew exited $(exit_of "$out")"
   rm -rf "$d"
 
   # --- no gradlew → 127, the orchestrator's tool-unavailable SKIP

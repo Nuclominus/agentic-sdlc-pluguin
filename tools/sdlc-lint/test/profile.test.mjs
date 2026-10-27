@@ -85,6 +85,28 @@ test("post_pipeline_checks REPLACE, extra_phase_prompts APPEND", () => {
   assert.match(r.profile.phase_prompts_injection.development, /Kermit is NOT a dependency here\.$/);
 });
 
+// Issue #238 / ADR-0039: a project that replaces the lists must still be able to call the
+// foundation's variant-check script. Left raw, the token names the sdlc plugin in the
+// orchestrator's Bash and the copied gate cannot open its script.
+test("${CLAUDE_PLUGIN_ROOT} in a replaced check list binds to the primary foundation", () => {
+  const { profile } = merged();
+  const gate = 'sh "${CLAUDE_PLUGIN_ROOT}/scripts/gradle-variant-check.sh" compile';
+  const r = applyLocalOverrides(profile, { heal_checks: [gate], post_pipeline_checks: [gate, "./gradlew detekt"] },
+    { pluginRoot: "/plugins/android-foundation" });
+  assert.deepEqual(r.profile.heal_checks, ['sh "/plugins/android-foundation/scripts/gradle-variant-check.sh" compile']);
+  assert.deepEqual(r.profile.post_pipeline_checks,
+    ['sh "/plugins/android-foundation/scripts/gradle-variant-check.sh" compile', "./gradlew detekt"]);
+  assert.deepEqual(r.warnings, []);
+});
+
+test("${CLAUDE_PLUGIN_ROOT} in a check override with no foundation stays raw and warns", () => {
+  const { profile } = merged();
+  const gate = 'sh "${CLAUDE_PLUGIN_ROOT}/scripts/x.sh"';
+  const r = applyLocalOverrides(profile, { heal_checks: [gate] });
+  assert.deepEqual(r.profile.heal_checks, [gate]);
+  assert.match(r.warnings.join("\n"), /heal_checks uses \$\{CLAUDE_PLUGIN_ROOT\} but no foundation is active/);
+});
+
 test("an empty array disables the plugin's checks entirely", () => {
   const { profile } = merged();
   const r = applyLocalOverrides(profile, { heal_checks: [] });

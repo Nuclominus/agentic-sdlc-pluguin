@@ -37,10 +37,12 @@ Two constraints shaped the fix:
    plugin's directory.** `bindPluginRoot` in `plugins/sdlc/tools/resolve/manifests.mjs` runs at
    manifest load. It covers `heal_checks`, `post_pipeline_checks` and `pre_phase_commands`, at the
    top level and on embedded `frameworks:` rows (ADR-0026). Only that literal spelling is bound,
-   because it is the one Claude Code's hooks.json uses for the same meaning. Prose and project
-   overrides in `.sdlc/sdlc.local.yaml` are never rewritten. Every consumer (plan, dry-run,
-   telemetry, lint) sees the absolute path the command will really use, on every host and install
-   layout.
+   because it is the one Claude Code's hooks.json uses for the same meaning. Prose is never
+   rewritten. A `heal_checks:` / `post_pipeline_checks:` list in `.sdlc/sdlc.local.yaml` binds the
+   same token to the **primary foundation's** directory, the plugin whose defaults the list
+   replaces, so a project can keep a shipped gate while trimming the rest; with no foundation
+   active the token stays raw and a `WARN` says so. Every consumer (plan, dry-run, telemetry, lint)
+   sees the absolute path the command will really use, on every host and install layout.
 2. **Every android Gradle gate calls `scripts/gradle-variant-check.sh <compile|test|lint>`**,
    shipped in android-foundation. The script asks Gradle for the build's task list
    (`tasks --all`) and names **one project-qualified variant task per module**, for example
@@ -54,7 +56,8 @@ Two constraints shaped the fix:
 3. **Nothing to check is a failure.** When no module declares a target task, the script exits 1
    and never invokes a build. A failing listing (a broken build script) fails with its own exit
    code. A missing `./gradlew` exits 127, which the orchestrator already treats as "tool
-   unavailable on this host".
+   unavailable on this host". A `./gradlew` that exists without its exec bit is not missing: it is
+   run through `sh` with a `WARN`, because a 127 there would turn every gate into a skip.
 4. **Lint can fail.** `lint` runs whichever of `detekt` / `ktlintCheck` the build declares, by bare
    name (the sweep is meant to cover every module that has it), with `--continue`. Violations fail
    the check; Step 4 reports a failure and never auto-iterates. A build that declares neither linter
@@ -65,9 +68,11 @@ Two constraints shaped the fix:
 
 The task listing costs one Gradle configuration pass. It is cached in
 `.gradle/sdlc-variant-check/tasks.txt`, keyed on a checksum of every build script, settings file,
-`gradle.properties`, version catalog and `buildSrc` / `build-logic` source. The cache keeps the heal
-loop's invocation count (measured in the manifest's perf note) at one extra listing per
-build-file change, not one per check.
+`gradle.properties`, wrapper properties, version catalog and `buildSrc` / `build-logic` source. The
+cache keeps the heal loop's invocation count (measured in the manifest's perf note) at one extra
+listing per build-file change, not one per check. It is written aside and renamed into place, so a
+concurrent check never reads a key line over a half-written listing (which would select fewer
+modules and pass). A composite build included from outside the project tree is not fingerprinted.
 
 ## Consequences
 
@@ -82,7 +87,11 @@ build-file change, not one per check.
 - Any foundation can now ship a helper and call it as `"${CLAUDE_PLUGIN_ROOT}/…"` from its
   command lists. Before this ADR that spelling resolved to the sdlc plugin.
 - A project that needs exact tasks still replaces the lists outright with `heal_checks:` /
-  `post_pipeline_checks:` in `.sdlc/sdlc.local.yaml`, which this change does not touch.
+  `post_pipeline_checks:` in `.sdlc/sdlc.local.yaml`. Such a list may keep the shipped gate by
+  copying its line verbatim, `${CLAUDE_PLUGIN_ROOT}` included.
+- The bound path is absolute and machine-specific, and it lands in plan output, telemetry and the
+  run report, as `role_expertise` rule paths already do. No consumer keys on a check's command
+  string across runs, so this costs no rollup accuracy.
 - Only Debug variants are targeted, which matches the old gates. KMP targets
   (`compileDebugKotlinAndroid`) are out of scope and fail loudly rather than pass.
 

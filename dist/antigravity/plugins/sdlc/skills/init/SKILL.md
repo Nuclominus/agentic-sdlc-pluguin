@@ -46,8 +46,8 @@ file uses only the neutral override fields.
    # default_variant: devDebug             # build variant the stack's own checks target (Android: the product flavor)
 
    # post_pipeline_checks:                 # REPLACES the profile's defaults entirely
-   #   - "./gradlew testDebugUnitTest"
-   #   - "./gradlew lintDebug"
+   #   - "./gradlew :app:testDevDebugUnitTest"   # name the module + variant; a bare testDebugUnitTest skips a flavored :app
+   #   - "./gradlew :app:lintDevDebug"
 
    # phase_command_overrides:
    #   qa: "./gradlew connectedDebugAndroidTest"

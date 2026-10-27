@@ -12,6 +12,7 @@
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { bindCommand, PLUGIN_ROOT_TOKEN } from "./manifests.mjs";
 
 const ASPECT_AGNOSTIC = ["business_analysis", "security", "documentation"];
 const DEFAULT_TIERS = ["opus", "sonnet", "haiku", "fable"];
@@ -563,6 +564,9 @@ export function parseFrameworkOverrides(local) {
  *
  * Returns a NEW profile; the caller keeps the plugin profile intact so a parse failure can
  * fall back to it without having to undo a partial mutation.
+ *
+ * `opts.pluginRoot` is the PRIMARY foundation's directory, which `${CLAUDE_PLUGIN_ROOT}` in a
+ * replaced check list is bound to.
  */
 export function applyLocalOverrides(profile, local, opts = {}) {
   const warnings = [];
@@ -581,12 +585,23 @@ export function applyLocalOverrides(profile, local, opts = {}) {
     return { profile: next, warnings, applied };
   }
 
+  // A replaced list takes over from the PRIMARY foundation's defaults, so `${CLAUDE_PLUGIN_ROOT}`
+  // in it names that foundation (ADR-0039) — the same binding the defaults got at manifest load.
+  // Left raw, the orchestrator's Bash would resolve it to the sdlc plugin and the copied gate
+  // would fail to open its script. With no foundation to bind to, keep it raw and say so.
+  const checkList = (key) => {
+    const list = local[key].filter((c) => typeof c === "string");
+    if (!list.some((c) => c.includes(PLUGIN_ROOT_TOKEN))) return list;
+    if (opts.pluginRoot) return list.map((c) => bindCommand(c, opts.pluginRoot));
+    warnings.push(`WARN: ${key} uses ${PLUGIN_ROOT_TOKEN} but no foundation is active to bind it to — left unbound`);
+    return list;
+  };
   if (Array.isArray(local.post_pipeline_checks)) {
-    next.post_pipeline_checks = local.post_pipeline_checks.filter((c) => typeof c === "string");
+    next.post_pipeline_checks = checkList("post_pipeline_checks");
     applied.post_pipeline_checks = `replaced (${next.post_pipeline_checks.length} items)`;
   }
   if (Array.isArray(local.heal_checks)) {
-    next.heal_checks = local.heal_checks.filter((c) => typeof c === "string");
+    next.heal_checks = checkList("heal_checks");
     applied.heal_checks = `replaced (${next.heal_checks.length} items)`;
   }
   if (isPlainObject(local.phase_command_overrides)) {

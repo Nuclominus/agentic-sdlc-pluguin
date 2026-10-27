@@ -24,12 +24,15 @@
 # vacuous pass — that silence is the defect this script exists to remove.
 #
 # Exit codes: Gradle's own; 1 when no module has a target task; 64 on bad usage; 127 when
-# ./gradlew is absent (the orchestrator's "tool unavailable on this host" SKIP).
+# ./gradlew is absent (the orchestrator's "tool unavailable on this host" SKIP). A ./gradlew that
+# exists but lost its exec bit is NOT absent: it is run through `sh`, never reported as a skip.
 #
 # The task listing costs one Gradle configuration pass, so it is cached in
 # .gradle/sdlc-variant-check/tasks.txt, keyed on a checksum of every build script, settings file,
-# gradle.properties, version catalog and convention-plugin source. heal_checks runs after every
-# guarded dispatch; the cache keeps that at one listing per build-file change, not one per check.
+# gradle.properties, wrapper properties, version catalog and convention-plugin source. heal_checks
+# runs after every guarded dispatch; the cache keeps that at one listing per build-file change, not
+# one per check. A composite build included from OUTSIDE the project tree is not fingerprinted;
+# delete the cache file after changing one.
 set -u
 
 mode="${1:-}"
@@ -38,9 +41,18 @@ case "$mode" in
   *) echo "usage: gradle-variant-check.sh compile|test|lint" >&2; exit 64 ;;
 esac
 
-if [ ! -x ./gradlew ]; then
+if [ ! -f ./gradlew ]; then
   echo "gradle-variant-check: ./gradlew not found in $(pwd) — tool unavailable on this host" >&2
   exit 127
+fi
+# A wrapper without its exec bit (a Windows checkout, a zip, core.fileMode=false) is still a POSIX
+# sh script. Reporting it absent would turn every gate into a SKIP — the silent pass this script
+# exists to remove — so run it through sh instead and say so.
+if [ -x ./gradlew ]; then
+  gradlew="./gradlew"
+else
+  echo "WARN: gradle-variant-check: ./gradlew is not executable — running it with sh" >&2
+  gradlew="sh ./gradlew"
 fi
 
 # ---- default_variant (optional) -------------------------------------------------------------
@@ -58,27 +70,29 @@ fi
 
 # ---- task listing (cached) ------------------------------------------------------------------
 fingerprint() {
-  {
-    find . \( -name .git -o -name build -o -name .gradle -o -name node_modules \) -prune -o -type f \
-      \( -name 'settings.gradle' -o -name 'settings.gradle.kts' -o -name 'build.gradle' \
-         -o -name 'build.gradle.kts' -o -name 'gradle.properties' -o -name '*.versions.toml' \) -print
-    find . \( -name .git -o -name build -o -name .gradle -o -name node_modules \) -prune -o -type f \
-      \( -path '*/buildSrc/*' -o -path '*/build-logic/*' \) \
-      \( -name '*.kt' -o -name '*.kts' -o -name '*.gradle' \) -print
-  } 2>/dev/null | LC_ALL=C sort -u | while IFS= read -r f; do
-    printf '%s\n' "$f"
-    cat "$f"
-  done | cksum | awk '{ print $1 "-" $2 }'
+  find . \( -name .git -o -name build -o -name .gradle -o -name .idea -o -name node_modules \) -prune \
+    -o -type f \( -name 'settings.gradle' -o -name 'settings.gradle.kts' -o -name 'build.gradle' \
+       -o -name 'build.gradle.kts' -o -name 'gradle.properties' -o -name 'gradle-wrapper.properties' \
+       -o -name '*.versions.toml' \
+       -o \( \( -path '*/buildSrc/*' -o -path '*/build-logic/*' \) \
+             \( -name '*.kt' -o -name '*.kts' -o -name '*.gradle' \) \) \) -print 2>/dev/null \
+    | LC_ALL=C sort | while IFS= read -r f; do
+      printf '%s\n' "$f"
+      cat "$f"
+    done | cksum | awk '{ print $1 "-" $2 }'
 }
 
 cache_dir=.gradle/sdlc-variant-check
 cache="$cache_dir/tasks.txt"
 key=$(fingerprint)
 tasks=""
-if [ -f "$cache" ] && [ "$(head -n 1 "$cache")" = "# $key" ]; then
-  tasks=$(tail -n +2 "$cache")
+# One read of the whole file: the key line and the listing below it must come from the same write.
+cached=$(cat "$cache" 2>/dev/null) || cached=""
+if [ -n "$cached" ] && [ "$(printf '%s\n' "$cached" | head -n 1)" = "# $key" ]; then
+  tasks=$(printf '%s\n' "$cached" | tail -n +2)
 else
-  listing=$(./gradlew -q --console=plain tasks --all 2>&1)
+  # shellcheck disable=SC2086
+  listing=$($gradlew -q --console=plain tasks --all 2>&1)
   status=$?
   if [ "$status" -ne 0 ]; then
     printf '%s\n' "$listing" >&2
@@ -89,8 +103,15 @@ else
   tasks=$(printf '%s\n' "$listing" | awk '{ print $1 }' \
     | grep -E '(^|:)(compile[A-Za-z0-9]*DebugKotlin|test[A-Za-z0-9]*DebugUnitTest|detekt|ktlintCheck)$' \
     | LC_ALL=C sort -u)
+  # Write aside, then rename: a concurrent check must never read a key line over a half-written
+  # listing — it would select fewer modules and pass without checking the rest.
   if mkdir -p "$cache_dir" 2>/dev/null; then
-    { printf '# %s\n' "$key"; printf '%s\n' "$tasks"; } > "$cache" 2>/dev/null || true
+    tmp="$cache.$$"
+    if { printf '# %s\n' "$key"; printf '%s\n' "$tasks"; } > "$tmp" 2>/dev/null; then
+      mv -f "$tmp" "$cache" 2>/dev/null || rm -f "$tmp"
+    else
+      rm -f "$tmp" 2>/dev/null
+    fi
   fi
 fi
 
@@ -108,7 +129,7 @@ if [ "$mode" = "lint" ]; then
   fi
   echo "gradle-variant-check: lint →$lint"
   # shellcheck disable=SC2086
-  exec ./gradlew --console=plain --continue $lint
+  exec $gradlew --console=plain --continue $lint
 fi
 
 # ---- compile / test: one project-qualified variant task per module ----------------------------
@@ -145,4 +166,4 @@ fi
 selected=$(printf '%s\n' "$selected" | tr '\n' ' ')
 echo "gradle-variant-check: $mode → $selected"
 # shellcheck disable=SC2086
-exec ./gradlew --console=plain --continue $selected
+exec $gradlew --console=plain --continue $selected

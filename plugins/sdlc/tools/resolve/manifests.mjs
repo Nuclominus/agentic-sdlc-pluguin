@@ -144,6 +144,7 @@ function classify(records) {
 // verbatim through its own Bash. Embedded `frameworks:` rows carry the same keys (ADR-0026).
 const COMMAND_LISTS = ["pre_phase_commands", "post_pipeline_checks", "heal_checks"];
 export const PLUGIN_ROOT_TOKEN = "${CLAUDE_PLUGIN_ROOT}";
+export const bindCommand = (c, dir) => (typeof c === "string" ? c.split(PLUGIN_ROOT_TOKEN).join(dir) : c);
 
 /**
  * Bind `${CLAUDE_PLUGIN_ROOT}` in a manifest's command lists to the DECLARING plugin's directory.
@@ -158,14 +159,15 @@ export const PLUGIN_ROOT_TOKEN = "${CLAUDE_PLUGIN_ROOT}";
  *
  * Only the literal `${CLAUDE_PLUGIN_ROOT}` spelling is bound; it is the spelling Claude Code's own
  * hooks.json uses for the same meaning. A project's `.sdlc/sdlc.local.yaml` override is not a
- * manifest and is never rewritten — it belongs to no plugin.
+ * manifest: `applyLocalOverrides` (profile.mjs) binds the same token there to the PRIMARY
+ * foundation's directory, the plugin whose defaults the override replaces.
  */
 export function bindPluginRoot(doc, dir) {
   if (!doc || typeof doc !== "object") return doc;
   const bind = (obj) => {
     for (const key of COMMAND_LISTS) {
       if (!Array.isArray(obj[key])) continue;
-      obj[key] = obj[key].map((c) => (typeof c === "string" ? c.split(PLUGIN_ROOT_TOKEN).join(dir) : c));
+      obj[key] = obj[key].map((c) => bindCommand(c, dir));
     }
   };
   bind(doc);

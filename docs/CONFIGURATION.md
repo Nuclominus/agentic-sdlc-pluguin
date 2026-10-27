@@ -114,7 +114,14 @@ the key it picks each module's unflavored task, else its alphabetically first fl
 the named flavor wherever a module has it (`devDebug` and `dev` mean the same — the gates are all
 Debug). A value no module has prints a `WARN` and falls back. A project whose modules declare no
 variant task at all FAILS the check rather than passing it. To pin exact tasks instead, replace
-the lists themselves with `heal_checks:` / `post_pipeline_checks:`.
+the lists themselves with `heal_checks:` / `post_pipeline_checks:`. A replaced list may keep a
+shipped gate by copying its line verbatim: `${CLAUDE_PLUGIN_ROOT}` in a project check list is
+bound to the active foundation's directory, the same as in the foundation's own manifest.
+
+```yaml
+post_pipeline_checks:               # keep the flavor-aware compile gate, drop lint and tests
+  - sh "${CLAUDE_PLUGIN_ROOT}/scripts/gradle-variant-check.sh" compile
+```
 
 [#238]: https://github.com/Nuclominus/agentic-sdlc-pluguin/issues/238
 
