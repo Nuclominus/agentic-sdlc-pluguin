@@ -682,7 +682,7 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
     forceBa: flag(args, "--force-ba"),
     disabled: flag(args, "--no-skip-rules"),
   });
-  const skipPrint = renderSkipPrint(skip.applied);
+  const skipPrint = renderSkipPrint(skip.applied, skip.withheld);
   if (skipPrint) prints.push(skipPrint);
 
   const skipNames = [...skip.applied.map((a) => a.phase_skipped), ...(effective.skip_phases ?? [])];
@@ -743,7 +743,7 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
       profile_dir: resolved.profile_dir,
       forced: Boolean(stack.forced),
     },
-    skip_rules: { applied: skip.applied, suppressed: skip.suppressed, signals },
+    skip_rules: { applied: skip.applied, withheld: skip.withheld, suppressed: skip.suppressed, signals },
     workflow: {
       name: resolvedName.name,
       tier: resolvedName.tier,
@@ -825,7 +825,7 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
         ? renderHeadlessDryRun({ estimate: est, slots: built.phases.length, workflow: resolvedName.name, cap: cap.cost_cap, resumed: anyResumed, reenterAt })
         : renderDryRun({
           estimate: est, slots: built.phases.length, stack: stack.foundation, workflow: resolvedName.name,
-          autoselected: resolvedName.autoselected, skipRules: skip.applied, cap: cap.cost_cap,
+          autoselected: resolvedName.autoselected, skipRules: skip.applied, skipWithheld: skip.withheld, cap: cap.cost_cap,
           healEnabled, healBlocks: rows.filter((r) => r.heal).length, resume,
         }));
     }

@@ -348,3 +348,13 @@ test("a looped AND healed phase: expected uses avg rounds, worst uses max_rounds
   assert.ok(Math.abs(worstHeal - 3 * 2 * base) < 1e-9, "worst: max_rounds × max_attempts — every round hitting the cap");
   assert.ok(worstHeal > expectedHeal * 5, "the two must not collapse into one figure");
 });
+
+test("issue #239: the dry run names the skip-rules an empty diff held back", () => {
+  const rows = expandRows([{ name: "development" }, { name: "documentation" }], { agentsPerPhase: AGENTS });
+  const est = estimate(rows, UNPRICED);
+  const withheld = [{ rule: "lightweight-no-db", phase_kept: "security", reason: "empty" }];
+  const out = renderDryRun({ estimate: est, slots: 2, stack: "android", workflow: "w", cap: 10, skipWithheld: withheld });
+  assert.match(out, /Skip-rules applied: none\nSkip-rules withheld: lightweight-no-db — empty diff, change size unknown/);
+  assert.ok(!/withheld/.test(renderDryRun({ estimate: est, slots: 2, stack: "android", workflow: "w", cap: 10 })),
+    "the line is absent when nothing was withheld");
+});

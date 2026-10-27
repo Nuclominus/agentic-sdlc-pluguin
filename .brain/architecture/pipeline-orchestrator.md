@@ -27,6 +27,13 @@ Step 5b · Render HTML run-report
 Step 6  · Close the session: dispatch `session-recorder` → append entry to docs/plans/_journal.md
 ```
 
+**Skip-rules and an empty diff (Step 0c).** The diff signals are measured at run start, before any
+phase writes code, so a fresh feature branch reads an empty diff. That is treated as "size
+unknown", not "small": the LOC-gated skip-rules (`typo-fix`, `lightweight-no-db`) and the
+`loc_touched_*` recipe bounds do not fire on it, and the plan prints what it held back
+(`🛡️ Skip-rules withheld:`, `🧭 Auto-select withheld …`). See
+[[decisions/ADR-0040-an-empty-diff-is-size-unknown]].
+
 **Run clock (Step 2 + Step 5).** Step 2 records a write-once epoch anchor
 `docs/plans/{slug}/.checkpoint/_started_at`; Step 5 computes `wall_clock_seconds` = now − start and
 renders `started_at`/`completed_at` from it. This measured timing (not an estimate) flows into

@@ -142,3 +142,83 @@ test("the verbatim print is emitted only when a rule fired", () => {
   const out = renderSkipPrint([{ rule: "config-only", phase_skipped: "qa", reason: "because" }]);
   assert.match(out, /^✂️ Skip-rules applied:\n {3}config-only → skipped qa: because$/);
 });
+
+// Issue #239 / ADR-0040 — a fresh feature branch has an empty diff at Step 0. That is "size
+// unknown", not "small": the 28-file change in the AAR lost its security phase this way.
+
+test("signals: an empty diff is flagged, and LOC_TOUCHED still reads the true 0", () => {
+  const { dir } = repo();
+  try {
+    const s = computeDiffSignals(dir);
+    assert.equal(s.degraded, false);
+    assert.equal(s.empty_diff, true);
+    assert.equal(s.loc_touched, 0);
+    assert.equal(s.whitespace_only, false, "whitespace-only cannot fire on an empty diff");
+    assert.equal(s.config_only, false, "config-only cannot fire on an empty diff");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("issue #239: a fresh branch (empty diff) keeps security and says why", () => {
+  const { dir } = repo();
+  try {
+    const r = applySkipRules(computeDiffSignals(dir), { args: "Add the purchase screens", phases: PHASES });
+    assert.deepEqual(r.applied, [], "an empty diff must not justify any skip");
+    assert.ok(r.phases.includes("security"));
+    assert.ok(!("development" in r.injections), "security runs, so no SECURITY-LITE check is owed");
+    assert.deepEqual(r.withheld.map((w) => [w.rule, w.phase_kept]), [["lightweight-no-db", "security"]]);
+    assert.match(r.withheld[0].reason, /diff against origin\/develop is empty/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("issue #239: a real small diff still skips security", () => {
+  const { dir, g } = repo();
+  try {
+    writeFileSync(join(dir, "Button.kt"), "class Button\n");
+    g("add", "-A"); g("commit", "-qm", "small");
+    const s = computeDiffSignals(dir);
+    assert.equal(s.empty_diff, false);
+    const r = applySkipRules(s, { phases: PHASES });
+    assert.ok(r.applied.some((a) => a.rule === "lightweight-no-db" && a.phase_skipped === "security"));
+    assert.deepEqual(r.withheld, []);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("issue #239: an explicit --base-ref changes the range, not the meaning of an empty one", () => {
+  const { dir, g } = repo();
+  try {
+    g("update-ref", "refs/remotes/origin/release", "HEAD");
+    const empty = computeDiffSignals(dir, { baseRef: "origin/release" });
+    assert.equal(empty.base_ref, "origin/release");
+    const kept = applySkipRules(empty, { phases: PHASES });
+    assert.deepEqual(kept.applied, [], "naming the base does not make an empty diff small");
+    assert.match(kept.withheld[0].reason, /origin\/release/, "the print names the ref the user chose");
+
+    writeFileSync(join(dir, "a.kt"), "val a = 1\n");
+    g("add", "-A"); g("commit", "-qm", "small");
+    const small = applySkipRules(computeDiffSignals(dir, { baseRef: "origin/release" }), { phases: PHASES });
+    assert.ok(small.applied.some((a) => a.phase_skipped === "security"), "a real diff against it behaves as before");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("issue #239: typo-fix is withheld on an empty diff — 'rename X to Y' can touch every file", () => {
+  const s = { ...SAFE_DEFAULTS, degraded: false, loc_touched: 0, has_migrations: false, empty_diff: true, base_ref: "origin/main" };
+  const r = applySkipRules(s, { args: "rename Foo to Bar", phases: PHASES });
+  assert.ok(!r.applied.some((a) => a.rule === "typo-fix"));
+  assert.ok(r.withheld.some((w) => w.rule === "typo-fix" && w.phase_kept === "business_analysis"));
+  const forced = applySkipRules(s, { args: "rename Foo to Bar", phases: PHASES, forceBa: true });
+  assert.ok(!forced.withheld.some((w) => w.rule === "typo-fix"), "--force-ba keeps BA anyway, so nothing was held back");
+});
+
+test("a rule is reported withheld only for a phase that is present", () => {
+  const s = { ...SAFE_DEFAULTS, degraded: false, loc_touched: 0, has_migrations: false, empty_diff: true };
+  const r = applySkipRules(s, { phases: PHASES.filter((p) => p !== "security") });
+  assert.deepEqual(r.withheld, [], "a phase the recipe never had was not kept by anyone");
+  assert.deepEqual(applySkipRules(s, { phases: PHASES, disabled: true }).withheld, []);
+});
+
+test("the print reports withheld rules, alone or after the applied ones", () => {
+  const withheld = [{ rule: "lightweight-no-db", phase_kept: "security", reason: "empty" }];
+  assert.match(renderSkipPrint([], withheld), /^🛡️ Skip-rules withheld:\n {3}lightweight-no-db → kept security: empty$/);
+  const both = renderSkipPrint([{ rule: "config-only", phase_skipped: "qa", reason: "because" }], withheld);
+  assert.match(both, /^✂️ Skip-rules applied:\n.*\n🛡️ Skip-rules withheld:\n/);
+});

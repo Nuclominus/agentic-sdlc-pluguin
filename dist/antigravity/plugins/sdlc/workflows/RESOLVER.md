@@ -188,6 +188,27 @@ profile default) when ANY of these hold:
 **Signals available at selection time** (computed by Step 0c's `computeDiffSignals`): `LOC_TOUCHED` (integer),
 `HAS_MIGRATIONS` (boolean), `CONFIG_ONLY` (boolean), and the raw `$ARGUMENTS` string.
 
+**An empty diff is "size unknown", not "small"** (ADR-0040, issue #239). Step 0c runs at the start
+of the run, and a fresh feature branch (`git switch -c feat origin/develop` seconds earlier) has no
+commits yet: its diff against the base ref is empty and `LOC_TOUCHED` reads `0`. That `0` measures
+the branch, not the change, so on an empty diff (`EMPTY_DIFF == true`, i.e. the range changes no
+path):
+
+- a `loc_touched_max` / `loc_touched_min` condition is **not satisfied** — the recipe does not
+  match. When every *other* condition of its `match` block held, the recipe is reported as held
+  back: `🧭 Auto-select withheld '<name>' — its loc_touched bound needs a change size, and the diff
+  against <base> is empty. Pass --workflow=NAME to choose one.` Selection continues with the
+  remaining candidates and then tier 4. Recipes without a size bound are unaffected.
+- the Step 0c skip-rules that read `LOC_TOUCHED` — `typo-fix` and `lightweight-no-db` — do not
+  fire. Each one whose other conditions held is reported under `🛡️ Skip-rules withheld:` with the
+  phase it kept, and lands in `plan.skip_rules.withheld[]`. `whitespace-only` and `config-only`
+  cannot fire on an empty diff by construction (both require a changed path).
+
+An explicit `--base-ref` changes *which* range is measured, not what an empty one means: an empty
+diff against a named ref is still size-unknown. Any non-empty diff is judged exactly as before.
+Uncommitted changes are not part of the `<base>...HEAD` range, so work that exists only in the
+working tree also reads as empty, and is kept conservative the same way.
+
 ### Candidate set
 
 Every discovered recipe (globbed across ALL plugins, same search path as Step 1)
@@ -204,8 +225,8 @@ constraint). The conditions:
 | Key | Satisfied when |
 | --- | --- |
 | `arguments_pattern` | the ECMAScript regex, tested **case-insensitively**, finds a match in `$ARGUMENTS` |
-| `loc_touched_max` | `LOC_TOUCHED <= value` |
-| `loc_touched_min` | `LOC_TOUCHED >= value` |
+| `loc_touched_max` | `LOC_TOUCHED <= value` — never on an empty diff (see above) |
+| `loc_touched_min` | `LOC_TOUCHED >= value` — never on an empty diff (see above) |
 | `has_migrations: true` | `HAS_MIGRATIONS == true` |
 | `config_only: true` | `CONFIG_ONLY == true` |
 

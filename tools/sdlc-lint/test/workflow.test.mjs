@@ -460,3 +460,42 @@ test("the core debug recipe opens with the debugging phase, not with development
     "the description must not still claim vanilla ships no debugger agent");
   assert.ok(!/ships no dedicated debugger/.test(doc.description));
 });
+
+// Issue #239 / ADR-0040 — an empty Step-0 diff is "size unknown", so a size bound cannot be met.
+const EMPTY = { loc_touched: 0, has_migrations: false, config_only: false, empty_diff: true, base_ref: "origin/develop" };
+
+test("issue #239: a loc_touched bound does not match on an empty diff", () => {
+  assert.deepEqual(evaluateMatch({ loc_touched_max: 500 }, EMPTY), { matched: false, satisfied: [], size_unknown: true },
+    "0 LOC on a fresh branch is not a small change");
+  assert.equal(evaluateMatch({ loc_touched_min: 0 }, EMPTY).matched, false, "nor a large one");
+  assert.equal(evaluateMatch({ arguments_pattern: "fix", loc_touched_max: 500 }, EMPTY, "fix it").size_unknown, true);
+  assert.equal(evaluateMatch({ arguments_pattern: "fix", loc_touched_max: 500 }, EMPTY, "add it").size_unknown, undefined,
+    "a recipe that failed on another condition was not held back by the size");
+  assert.equal(evaluateMatch({ arguments_pattern: "fix" }, EMPTY, "fix it").matched, true, "no size bound, no change");
+  assert.equal(evaluateMatch({ loc_touched_max: 500 }, { ...EMPTY, empty_diff: false }).matched, true, "a real 0 still matches");
+});
+
+test("issue #239: an empty diff falls through to the default tier and names what it held back", () => {
+  const recipes = [
+    { name: "bugfix", doc: { name: "bugfix", match: { arguments_pattern: "\\bfix\\b", loc_touched_max: 500 }, phases: ["a"] } },
+    { name: "hotfix", doc: { name: "hotfix", match: { arguments_pattern: "\\bfix\\b", loc_touched_max: 200 }, phases: ["a"] } },
+  ];
+  const r = resolveWorkflowName({ args: "fix the purchase flow", recipes, signals: EMPTY, profileDefault: "android-feature" });
+  assert.equal(r.name, "android-feature");
+  assert.equal(r.tier, "profile_default");
+  assert.equal(r.print, "🧭 Auto-select withheld 'bugfix', 'hotfix' — their loc_touched bounds need a change size, and the diff against origin/develop is empty. Pass --workflow=NAME to choose one.");
+
+  const real = resolveWorkflowName({ args: "fix the purchase flow", recipes, signals: { ...EMPTY, empty_diff: false, loc_touched: 40 }, profileDefault: "p" });
+  assert.equal(real.name, "bugfix", "with a real diff the size bounds are judged as before");
+  assert.ok(!/withheld/.test(real.print));
+});
+
+test("issue #239: a recipe without a size bound still auto-selects on an empty diff", () => {
+  const recipes = [
+    { name: "bugfix", doc: { name: "bugfix", match: { arguments_pattern: "crash", loc_touched_max: 500 }, phases: ["a"] } },
+    { name: "debug", doc: { name: "debug", match: { arguments_pattern: "crash" }, phases: ["a"] } },
+  ];
+  const r = resolveWorkflowName({ args: "crash on launch", recipes, signals: EMPTY, profileDefault: "p" });
+  assert.equal(r.name, "debug");
+  assert.match(r.print, /^🧭 Auto-selected workflow 'debug'.*\n🧭 Auto-select withheld 'bugfix' — its loc_touched bound needs/);
+});

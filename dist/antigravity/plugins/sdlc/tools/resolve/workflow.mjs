@@ -167,13 +167,20 @@ export function validateAcyclic(phases, workflowName, file) {
   return errors;
 }
 
-/** Which of a recipe's `match` conditions hold. Absent conditions are not constraints. */
+/**
+ * Which of a recipe's `match` conditions hold. Absent conditions are not constraints.
+ *
+ * A `loc_touched_*` bound cannot be evaluated on an empty diff (ADR-0040): the run has not
+ * written anything yet, so 0 is not a size. Such a recipe does not match, and when every other
+ * condition held it reports `size_unknown: true` so the selector can say what it held back.
+ */
 export function evaluateMatch(match, signals, args = "") {
   if (!isPlainObject(match)) return null;
   const conditions = Object.keys(match).filter((k) => k !== "priority");
   if (conditions.length === 0) return null;                 // empty block -> never auto-selected
 
   const satisfied = [];
+  let sizeUnknown = false;
   for (const key of conditions) {
     const v = match[key];
     switch (key) {
@@ -182,8 +189,11 @@ export function evaluateMatch(match, signals, args = "") {
         if (!re.test(String(args))) return { matched: false, satisfied: [] };
         break;
       }
-      case "loc_touched_max": if (!(signals.loc_touched <= v)) return { matched: false, satisfied: [] }; break;
-      case "loc_touched_min": if (!(signals.loc_touched >= v)) return { matched: false, satisfied: [] }; break;
+      case "loc_touched_max":
+      case "loc_touched_min":
+        if (signals.empty_diff === true) { sizeUnknown = true; continue; }
+        if (key === "loc_touched_max" ? !(signals.loc_touched <= v) : !(signals.loc_touched >= v)) return { matched: false, satisfied: [] };
+        break;
       // A `false` here imposes no constraint, per RESOLVER.md.
       case "has_migrations": if (v === true && signals.has_migrations !== true) return { matched: false, satisfied: [] }; break;
       case "config_only": if (v === true && signals.config_only !== true) return { matched: false, satisfied: [] }; break;
@@ -191,7 +201,27 @@ export function evaluateMatch(match, signals, args = "") {
     }
     satisfied.push(key);
   }
+  if (sizeUnknown) return { matched: false, satisfied: [], size_unknown: true };
   return { matched: true, satisfied };
+}
+
+/**
+ * The recipes an empty diff held back from auto-selection: everything else in their `match`
+ * block held, only the size bound could not be judged. Named so the user can pick one.
+ */
+export function sizeWithheldRecipes(recipes, signals, args = "") {
+  const names = new Set();
+  for (const r of recipes) {
+    if (!r.doc) continue;
+    if (evaluateMatch(r.doc.match, signals, args)?.size_unknown) names.add(r.doc.name ?? r.name);
+  }
+  return [...names].sort();
+}
+
+function renderSizeWithheld(names, baseRef) {
+  const list = names.map((n) => `'${n}'`).join(", ");
+  const bound = names.length === 1 ? "its loc_touched bound needs" : "their loc_touched bounds need";
+  return `🧭 Auto-select withheld ${list} — ${bound} a change size, and the diff against ${baseRef ?? "the base ref"} is empty. Pass --workflow=NAME to choose one.`;
 }
 
 /**
@@ -395,12 +425,18 @@ export function resolveWorkflowName({ args = "", activeWorkflow = null, recipes 
   if (named?.name) return { name: named.name, tier: "named_in_prose", autoselected: false, print: named.print, warnings };
 
   if (activeWorkflow) return { name: activeWorkflow, tier: "active_workflow", autoselected: false, print: null, warnings };
+  let withheldPrint = null;
   if (signals && !/--no-auto-workflow\b/.test(String(args))) {
+    const withheld = sizeWithheldRecipes(recipes, signals, args);
+    if (withheld.length) withheldPrint = renderSizeWithheld(withheld, signals.base_ref);
     const auto = autoSelect(recipes, signals, args);
-    if (auto) return { name: auto.name, tier: "auto", autoselected: true, satisfied: auto.satisfied, print: auto.print, warnings };
+    if (auto) {
+      const print = [auto.print, withheldPrint].filter(Boolean).join("\n");
+      return { name: auto.name, tier: "auto", autoselected: true, satisfied: auto.satisfied, print, warnings };
+    }
   }
-  if (profileDefault) return { name: profileDefault, tier: "profile_default", autoselected: false, print: null, warnings };
-  return { name: "default", tier: "fallback", autoselected: false, print: null, warnings };
+  if (profileDefault) return { name: profileDefault, tier: "profile_default", autoselected: false, print: withheldPrint, warnings };
+  return { name: "default", tier: "fallback", autoselected: false, print: withheldPrint, warnings };
 }
 
 /**
