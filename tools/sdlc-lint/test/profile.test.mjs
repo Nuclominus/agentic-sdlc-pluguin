@@ -242,9 +242,10 @@ test("an unknown top-level key in sdlc.local.yaml is reported, never silently ig
 test("every key the resolver actually reads is in the whitelist", () => {
   // `active_workflow` and `frameworks` are consumed by plan.mjs, not by applyLocalOverrides:
   // a whitelist that only knew this function's own keys would warn about both on every run.
+  // `default_variant` is read by a foundation's check script, not by the core (#238, ADR-0039).
   for (const k of ["post_pipeline_checks", "heal_checks", "phase_command_overrides", "extra_phase_prompts",
                    "skip_phases", "convention_skills_extra", "extensions", "cost_caps",
-                   "active_workflow", "frameworks"]) {
+                   "active_workflow", "frameworks", "default_variant"]) {
     assert.ok(KNOWN_LOCAL_KEYS.has(k), `${k} is read somewhere — warning about it would be a false alarm`);
   }
   const { profile } = merged();

@@ -6,11 +6,12 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   loadManifestsFromTree, loadInstalledManifests, readEnabledPlugins, readInstalledPlugins, mergePathLoaded,
+  bindPluginRoot, PLUGIN_ROOT_TOKEN,
 } from "../../../plugins/sdlc/tools/resolve/manifests.mjs";
 
 const REPO = new URL("../../../", import.meta.url).pathname;
@@ -574,4 +575,58 @@ test("a foundation with an empty frameworks array is valid and synthesizes nothi
     assert.equal(foundations.length, 1);
     assert.equal(frameworks.length, 0, "an empty array synthesizes zero records");
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// ---- Issue #238 / ADR-0039: `${CLAUDE_PLUGIN_ROOT}` in a command list names the DECLARING plugin --
+//
+// The orchestrator runs heal_checks / post_pipeline_checks through its own Bash, from the sdlc
+// plugin's skill — where the variable names sdlc, not the foundation that wrote the command. The
+// loader binds it to the manifest's own directory, so a foundation can ship a helper script and
+// call it by a path that resolves on every host and install layout.
+
+test("bindPluginRoot rewrites every command list, top-level and embedded rows, and nothing else", () => {
+  const doc = {
+    heal_checks: [`sh "${PLUGIN_ROOT_TOKEN}/scripts/a.sh" compile`],
+    post_pipeline_checks: [`sh "${PLUGIN_ROOT_TOKEN}/a.sh" && sh "${PLUGIN_ROOT_TOKEN}/b.sh"`, "echo plain"],
+    pre_phase_commands: [`${PLUGIN_ROOT_TOKEN}/pre.sh`],
+    phase_injections: { development: `see ${PLUGIN_ROOT_TOKEN}/rules.md` },
+    frameworks: [{ stack: "x", post_pipeline_checks: [`${PLUGIN_ROOT_TOKEN}/fw.sh`] }],
+  };
+  bindPluginRoot(doc, "/opt/plugins/android-foundation");
+  assert.deepEqual(doc.heal_checks, ['sh "/opt/plugins/android-foundation/scripts/a.sh" compile']);
+  assert.deepEqual(doc.post_pipeline_checks,
+    ['sh "/opt/plugins/android-foundation/a.sh" && sh "/opt/plugins/android-foundation/b.sh"', "echo plain"],
+    "every occurrence is bound; a command without the token is untouched");
+  assert.deepEqual(doc.pre_phase_commands, ["/opt/plugins/android-foundation/pre.sh"]);
+  assert.deepEqual(doc.frameworks[0].post_pipeline_checks, ["/opt/plugins/android-foundation/fw.sh"]);
+  assert.equal(doc.phase_injections.development, `see ${PLUGIN_ROOT_TOKEN}/rules.md`,
+    "prose is not a command — only the command lists are bound");
+});
+
+test("installed mode binds the token to the plugin's installPath, not the sdlc plugin's", () => {
+  const dir = scratch();
+  try {
+    const installPath = join(dir, "cache", "m", "android-foundation", "9.9.9");
+    write(join(installPath, "manifest.yaml"), manifest("android", "foundation",
+      `heal_checks:\n  - sh "\${CLAUDE_PLUGIN_ROOT}/scripts/gradle-variant-check.sh" compile\n`));
+    const { configDir } = fakeConfig(dir, {
+      installs: { "android-foundation@m": [{ scope: "user", installPath, version: "9.9.9" }] },
+      enabled: { "android-foundation@m": true },
+    });
+    const { foundations } = loadInstalledManifests({ configDir });
+    const android = foundations.find((f) => f.doc.stack === "android");
+    assert.deepEqual(android.doc.heal_checks, [`sh "${installPath}/scripts/gradle-variant-check.sh" compile`]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("tree mode: no shipped manifest leaves the token unbound, and every bound script exists", () => {
+  const { foundations, frameworks } = loadManifestsFromTree(REPO);
+  const lists = (d) => [...(d.heal_checks ?? []), ...(d.post_pipeline_checks ?? []), ...(d.pre_phase_commands ?? [])];
+  const commands = [...foundations, ...frameworks].flatMap((r) => lists(r.doc));
+  assert.ok(commands.length > 0);
+  for (const c of commands) assert.ok(!c.includes(PLUGIN_ROOT_TOKEN), `unbound token in '${c}'`);
+  const android = foundations.find((f) => f.doc.stack === "android");
+  const scripts = lists(android.doc).map((c) => c.match(/^sh "([^"]+)"/)?.[1]).filter(Boolean);
+  assert.ok(scripts.length >= 4, "the android gates call the variant-check script (#238)");
+  for (const s of scripts) assert.ok(existsSync(s), `${s} must exist — the gate would fail on a missing file`);
 });

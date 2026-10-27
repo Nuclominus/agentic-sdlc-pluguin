@@ -501,11 +501,15 @@ export function parseExtensionSkills(raw, { availableSkills = null, unavailableP
  *
  * Keep it in sync with docs/CONFIGURATION.md; a key that ships in one and not the other is
  * how `frameworks.enable/disable` survived documented-but-dead from v1.13.0 to v3.0.0.
+ *
+ * `default_variant` is read by no code in this plugin: it belongs to the active foundation's
+ * check commands (android-foundation's scripts/gradle-variant-check.sh reads it from the project
+ * file directly — issue #238, ADR-0039). It is listed so naming it does not warn.
  */
 export const KNOWN_LOCAL_KEYS = new Set([
   "post_pipeline_checks", "heal_checks", "phase_command_overrides", "extra_phase_prompts",
   "skip_phases", "convention_skills_extra", "extensions", "cost_caps",
-  "active_workflow", "frameworks",
+  "active_workflow", "frameworks", "default_variant",
 ]);
 
 /**

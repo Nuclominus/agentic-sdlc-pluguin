@@ -41,7 +41,8 @@ finalises it. Skill: `android-requirements`.
 ## development
 
 Detect the project's state-management pattern and DI framework before implementing state — never
-impose one. Compile check is `./gradlew compileDebugKotlin`, one attempt; the test phase iterates.
+impose one. Compile check is the variant task (`./gradlew :app:compile<Flavor>DebugKotlin`; a bare
+`compileDebugKotlin` silently skips a flavored `:app`), one attempt; the test phase iterates.
 The `check-docs-sync.sh` PostToolUse hook auto-creates vault stubs for new modules and screens — do
 not delete them; flag them in the handoff. `validate-kotlin.sh` blocks the forbidden patterns in
 `snippets/non-negotiable.md` at write time. Convention skills for Compose UI, architecture, data and

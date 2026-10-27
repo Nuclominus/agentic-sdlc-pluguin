@@ -19,7 +19,11 @@ mandatory skills), nine extracted skills (`android-requirements`, `android-revie
 `android-debugging`, `android-build-release`, `android-ci`), the four convention skills for Compose
 UI, architecture, data and Navigation, the `rules/` set, and the PostToolUse hooks. Carries pinned
 house rules (Coil3, Kermit, KSP, `@Serializable` routes, DataStore, Play Billing). In-pipeline
-checks: detekt + unit tests + compile-check (builds CI-deferred).
+checks: lint (detekt / ktlintCheck) + unit tests + compile-check (builds CI-deferred). Since
+[[decisions/ADR-0039-gradle-gates-name-the-variant-task-per-module]] every one of them goes through
+`scripts/gradle-variant-check.sh`. The script names one project-qualified variant task per module
+(`:app:compileDevDebugKotlin`), so a flavored `:app` is no longer silently skipped. It honours
+`default_variant` from `.sdlc/sdlc.local.yaml` and fails when no module has a target task.
 
 Since [[decisions/ADR-0026-embed-framework-providers-in-the-foundation]] (2026-09-20) this plugin
 also embeds all 7 additive Android frameworks directly, via a `frameworks:` array in its own

@@ -267,8 +267,9 @@ role_expertise:
       BuildConfig/local.properties, never in source. Every non-decorative composable gets a testTag
       from the central TestTag object — no inline literals — and any added or changed tag is
       mirrored into the vault's ui-patterns index. Use the project's logging library, never
-      android.util.Log or println. Compile check: ./gradlew compileDebugKotlin, one attempt; the
-      test phase iterates.
+      android.util.Log or println. Compile check: the variant task, e.g. ./gradlew
+      :app:compile<Flavor>DebugKotlin — a bare compileDebugKotlin silently skips a flavored :app —
+      one attempt; the test phase iterates.
     rules:
       - { path: rules/snippets/non-negotiable.md, note: "forbidden patterns — read before the first edit" }
       - { path: rules/snippets/gradle-commands.md, note: "build / lint commands" }
@@ -486,13 +487,29 @@ pre_phase_commands: []
 # longer gates the mid-pipeline heal loop. A compile break is the one failure mode that is
 # actually "mechanical" (blocks everything downstream); a lint violation is style debt that
 # stays visible in the Step 4 report without paying for it again on every guarded dispatch and
-# every loop round. `compileDebugKotlin` must still FAIL on a genuine compile break — no
-# `|| true` here, unlike the intentionally-non-blocking post_pipeline_checks lint line below.
+# every loop round. The compile check must still FAIL on a genuine compile break — no `|| true`.
+#
+# Flavor-aware (issue #238, ADR-0039): every Gradle gate goes through
+# scripts/gradle-variant-check.sh, never a bare `./gradlew compileDebugKotlin`. A bare task name
+# runs only in the modules that have it, so on an `:app` with product flavors Gradle compiled the
+# libraries, skipped `:app`, and exited 0 — three real runs went green with zero `:app:` tasks
+# executed. The script names one project-qualified variant task per module
+# (`:app:compileDevDebugKotlin`, `:core:compileDebugKotlin`), honours `default_variant` from
+# .sdlc/sdlc.local.yaml, and FAILS when no module has a target task. Its task listing is cached
+# per build-file fingerprint, so the invocation counts above still hold after the first check.
+# `${CLAUDE_PLUGIN_ROOT}` is bound to THIS plugin's directory by the resolver at manifest load —
+# in the orchestrator's Bash the variable would name the sdlc plugin instead.
 heal_checks:
-  - sh -c './gradlew compileDebugKotlin'
+  - sh "${CLAUDE_PLUGIN_ROOT}/scripts/gradle-variant-check.sh" compile
 
-# NO assembleDebug (full SDK), NO connectedAndroidTest (emulator). detekt + JVM unit tests + compile-check.
+# NO assembleDebug (full SDK), NO connectedAndroidTest (emulator). Lint + JVM unit tests + compile.
+#
+# Lint carries no `|| true` any more (issue #238): the old `detekt || ktlintCheck || true` line
+# could never fail, so a run with real lint violations reported the same green as a clean one.
+# A configured detekt/ktlintCheck that finds violations now FAILS the check (Step 4 reports it;
+# it never auto-iterates). A build that declares neither prints a visible
+# `WARN: … lint SKIPPED` line and exits 0 — absent tooling is a skip, not a pass.
 post_pipeline_checks:
-  - sh -c './gradlew detekt 2>/dev/null || ./gradlew ktlintCheck 2>/dev/null || true'
-  - sh -c './gradlew testDebugUnitTest'
-  - sh -c './gradlew compileDebugKotlin'
+  - sh "${CLAUDE_PLUGIN_ROOT}/scripts/gradle-variant-check.sh" lint
+  - sh "${CLAUDE_PLUGIN_ROOT}/scripts/gradle-variant-check.sh" test
+  - sh "${CLAUDE_PLUGIN_ROOT}/scripts/gradle-variant-check.sh" compile

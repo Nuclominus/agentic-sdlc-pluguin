@@ -5,7 +5,7 @@ import { dirname, resolve } from "node:path";
 import { checkSchemas } from "../lib/schema.mjs";
 import Ajv from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import YAML from "yaml";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
@@ -294,15 +294,33 @@ test("android heal_checks are trimmed to compile-only — lint stays in post_pip
   // style debt, not a mechanical build break, and is still fully covered (unconditionally) by
   // post_pipeline_checks below. Exactly one entry, and it must be able to fail (no `|| true`).
   assert.equal(m.heal_checks.length, 1, "heal_checks should carry exactly the compile check");
-  assert.match(m.heal_checks[0], /compileDebugKotlin/);
+  assert.match(m.heal_checks[0], /gradle-variant-check\.sh"? compile$/);
   assert.doesNotMatch(m.heal_checks[0], /\|\|\s*true\b/, "the heal compile check must be able to fail");
   for (const c of m.heal_checks) {
-    assert.doesNotMatch(c, /detekt|ktlintCheck/,
+    assert.doesNotMatch(c, /detekt|ktlintCheck|\blint$/,
       "lint is no longer part of the heal loop — it still runs unconditionally in post_pipeline_checks");
   }
   // The claim the perf fix relies on: lint coverage is not lost overall, only ungated mid-pipeline.
-  assert.ok(m.post_pipeline_checks.some((c) => /detekt/.test(c) && /ktlintCheck/.test(c)),
+  assert.ok(m.post_pipeline_checks.some((c) => /gradle-variant-check\.sh"? lint$/.test(c)),
     "post_pipeline_checks must still run the full detekt/ktlintCheck sweep at the end of every run");
+});
+
+// Issue #238 / ADR-0039: a bare `compileDebugKotlin` / `testDebugUnitTest` runs only in the
+// modules that have it, so a flavored `:app` was skipped and every gate went green with zero
+// `:app:` tasks executed. Every android Gradle gate must go through the variant-resolving script
+// (exercised against flavored and non-flavored builds by tests/test-gradle-variant-check.sh), and
+// none may swallow its own failure.
+test("android Gradle gates are flavor-aware and can fail (#238)", () => {
+  const m = YAML.parse(readFileSync(resolve(REPO, "plugins/android-foundation/manifest.yaml"), "utf8"));
+  const gates = [...m.heal_checks, ...m.post_pipeline_checks];
+  for (const c of gates) {
+    assert.match(c, /^sh "\$\{CLAUDE_PLUGIN_ROOT\}\/scripts\/gradle-variant-check\.sh" (compile|test|lint)$/,
+      `'${c}' must call the plugin's variant-check script, never a bare Gradle task`);
+    assert.doesNotMatch(c, /\|\|\s*true\b/, `'${c}' must be able to fail`);
+  }
+  assert.deepEqual(m.post_pipeline_checks.map((c) => c.split(" ").pop()), ["lint", "test", "compile"]);
+  assert.ok(existsSync(resolve(REPO, "plugins/android-foundation/scripts/gradle-variant-check.sh")),
+    "the script the gates call must ship inside the plugin");
 });
 
 // Cost caps are sized against MEASURED transcript cost (p90 of 56 transcript-priced phases across

@@ -162,6 +162,11 @@ set** is then resolved *under* the winning foundation:
 - Step 1a merges `ACTIVE_PROFILES.values() + PRIMARY_PROFILE + ADDITIVE_PROFILES`. The merge was already
   a union of `convention_skills`, `phase_prompts_injection` (per-phase concat), `extra_phases`, and
   `post_pipeline_checks` — additive profiles simply join it.
+- Before any merge, the loader binds `${CLAUDE_PLUGIN_ROOT}` in each manifest's command lists
+  (`heal_checks`, `post_pipeline_checks`, `pre_phase_commands`, including embedded `frameworks:`
+  rows) to that manifest's own plugin directory. The orchestrator runs these commands from the sdlc
+  plugin, where the variable would name sdlc. Binding at load lets a foundation call a script it
+  ships — see [[decisions/ADR-0039-gradle-gates-name-the-variant-task-per-module]].
 
 ### 4.1. Framework dependency detection — the foundation owns the search
 
