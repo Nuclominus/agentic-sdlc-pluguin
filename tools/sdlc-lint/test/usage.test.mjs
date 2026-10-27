@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -988,4 +988,124 @@ test("sonnet 5.5 bills cache reads at 0.05x input; haiku 5.5 is pin-only", () =>
   assert.equal(reg.byId.get("claude-sonnet-5").cached_input, 0.2);
   assert.ok(reg.byId.get("claude-haiku-5-5"), "haiku 5.5 must price recorded runs");
   assert.ok(!reg.raw.pipeline_tiers.includes("haiku-5-5"));
+});
+
+// ── nested subagents are windowed to their run (issue #240) ──────────────────
+//
+// Several runs chained in ONE session share one subagents dir. Every transcript there
+// that is not one of THIS run's phase agents used to be priced as "nested" overhead
+// — with no window — so each later run re-billed every earlier run's subagents. Real
+// runs were inflated by $3.32 and $5.79 this way. The nested bucket now shares the
+// main loop's machine-anchored window (ADR-0007), applied per turn.
+
+const iso = (s) => `2026-10-26T${s}Z`;
+const epoch = (s) => String(Math.floor(Date.parse(iso(s)) / 1000));
+
+// One session, two runs back to back: run-1 10:00–10:30, run-2 11:00–11:30. Each run
+// has one phase agent and one genuinely nested subagent inside its own window.
+function buildChainedSession() {
+  const root = mkdtempSync(join(tmpdir(), "chain-"));
+  const sid = "c4a1bed5deadbeef";
+  const sess = join(root, "proj", `${sid}.jsonl`);
+  const sub = join(root, "proj", sid, "subagents");
+  mkdirSync(dirname(sess), { recursive: true });
+  const dispatch = (ts, tu, id, desc) => [
+    JSON.stringify({ type: "assistant", timestamp: iso(ts), message: { role: "assistant", id: `m-${tu}`, model: "claude-opus-4-8",
+      usage: { input_tokens: 1000, output_tokens: 200, cache_read_input_tokens: 0 },
+      content: [{ type: "tool_use", id: tu, name: "Agent", input: { subagent_type: "x:dev", description: desc } }] } }),
+    JSON.stringify({ type: "user", timestamp: iso(ts), message: { role: "user", content: [{ type: "tool_result", tool_use_id: tu, content: `agentId: ${id}` }] } }),
+  ];
+  writeFileSync(sess, [
+    ...dispatch("10:01:00", "t1", "aaaa00000001", "Phase 1/1: development"),
+    ...dispatch("11:01:00", "t2", "bbbb00000002", "Phase 1/1: development"),
+  ].join("\n") + "\n");
+  const opus = (ts, usage) => turn("claude-opus-4-8", usage, { timestamp: iso(ts) });
+  const paths = {
+    phase1: writeAgent(sub, "aaaa00000001", [opus("10:05:00", { input_tokens: 5000, output_tokens: 1000, cache_read_input_tokens: 0 })]),
+    nested1: writeAgent(sub, "eeee00000001", [opus("10:10:00", { input_tokens: 400_000, output_tokens: 20_000, cache_read_input_tokens: 0 })]),
+    phase2: writeAgent(sub, "bbbb00000002", [opus("11:05:00", { input_tokens: 6000, output_tokens: 1000, cache_read_input_tokens: 0 })]),
+    nested2: writeAgent(sub, "ffff00000002", [opus("11:10:00", { input_tokens: 30_000, output_tokens: 2000, cache_read_input_tokens: 0 })]),
+  };
+  const plans = join(root, "docs", "plans");
+  const mkRun = (slug, start, agentId) => {
+    const runDir = join(plans, slug);
+    mkdirSync(join(runDir, ".checkpoint"), { recursive: true });
+    writeFileSync(join(runDir, ".checkpoint", "_started_at"), epoch(start));
+    writeFileSync(join(runDir, "_telemetry.json"), JSON.stringify({
+      task_slug: slug, wall_clock_seconds: 1800,
+      phases: [{ phase: "development", agent: "x-dev", model: "claude-opus-4-8", status: "completed", agent_id: agentId, usage_source: "subagent_aggregate", cost_usd: null }],
+      total_cost_usd: null,
+    }, null, 2));
+    return runDir;
+  };
+  return { root, sess, sub, paths, run1: mkRun("run-1", "10:00:00", "aaaa00000001"), run2: mkRun("run-2", "11:00:00", "bbbb00000002") };
+}
+
+test("a chained run's nested bucket excludes the earlier run's subagents", () => {
+  const { run2, paths, root } = buildChainedSession();
+  enrichTelemetry(run2, { registry: reg, projectsRoot: root });
+  const nested = readTel(run2).orchestration_overhead.nested_subagents;
+  assert.equal(nested.turns, 1, "only run-2's own nested subagent");
+  assert.equal(nested.cost_usd, priceTranscripts([paths.nested2], reg).cost_usd,
+    "run-1's nested subagent (and its phase agent) must not be billed again");
+});
+
+test("a genuinely nested subagent inside the run window is still billed", () => {
+  const { run1, paths, root } = buildChainedSession();
+  enrichTelemetry(run1, { registry: reg, projectsRoot: root });
+  const oh = readTel(run1).orchestration_overhead;
+  assert.equal(oh.nested_subagents.cost_usd, priceTranscripts([paths.nested1], reg).cost_usd);
+  assert.equal(oh.window.source, "anchor");
+  assert.ok(Math.abs(oh.cost_usd - (oh.main_loop.cost_usd + oh.nested_subagents.cost_usd)) < 0.011);
+});
+
+test("a nested transcript is windowed per turn, like the main loop", () => {
+  // A long-lived helper whose turns straddle two runs is split between them by time.
+  const { run2, sub, root } = buildChainedSession();
+  writeAgent(sub, "9999abcdef00", [
+    JSON.stringify({ type: "assistant", timestamp: iso("10:20:00"), message: { role: "assistant", id: "s1", model: "claude-opus-4-8", usage: { input_tokens: 10_000, output_tokens: 0 } } }),
+    JSON.stringify({ type: "assistant", timestamp: iso("11:20:00"), message: { role: "assistant", id: "s2", model: "claude-opus-4-8", usage: { input_tokens: 10_000, output_tokens: 0 } } }),
+  ]);
+  enrichTelemetry(run2, { registry: reg, projectsRoot: root });
+  const nested = readTel(run2).orchestration_overhead.nested_subagents;
+  assert.equal(nested.turns, 2, "run-2's nested agent + the in-window half of the straddler");
+  assert.equal(nested.input_tokens, 30_000 + 10_000);
+});
+
+test("a sibling run's phase agent is never nested overhead, even inside this window", () => {
+  // Defense in depth behind the window: a run-1 phase agent that kept running into
+  // run-2's window (a late background turn) is still run-1's, recorded in its telemetry.
+  const { run2, sub, root } = buildChainedSession();
+  writeAgent(sub, "aaaa00000001", [
+    turn("claude-opus-4-8", { input_tokens: 5000, output_tokens: 1000, cache_read_input_tokens: 0 }, { timestamp: iso("10:05:00") }),
+    turn("claude-opus-4-8", { input_tokens: 700_000, output_tokens: 0, cache_read_input_tokens: 0 }, { timestamp: iso("11:15:00") }),
+  ]);
+  enrichTelemetry(run2, { registry: reg, projectsRoot: root });
+  const nested = readTel(run2).orchestration_overhead.nested_subagents;
+  assert.equal(nested.turns, 1);
+  assert.equal(nested.input_tokens, 30_000);
+});
+
+test("with no run window at all, overhead is priced unbounded and says so", () => {
+  const { run2, root } = buildChainedSession();
+  rmSync(join(run2, ".checkpoint", "_started_at"));
+  const r = enrichTelemetry(run2, { registry: reg, projectsRoot: root });
+  assert.equal(r.overhead_window_missing, true, "the caller must be able to WARN");
+  const oh = readTel(run2).orchestration_overhead;
+  assert.equal(oh.window.source, "none");
+  assert.equal(oh.window.since, null);
+  // Unbounded, but a sibling run's recorded phase agent is still excluded.
+  assert.equal(oh.nested_subagents.turns, 2, "both nested subagents — nothing to window them by");
+});
+
+test("when the window excludes every main-loop turn, nested falls back with it", () => {
+  // One run window, one verdict: if it is wrong for the main loop it is wrong for the
+  // nested bucket too, and repricing only half of the overhead would hide the loss.
+  const { run2, root } = buildChainedSession();
+  writeFileSync(join(run2, ".checkpoint", "_started_at"), epoch("03:00:00"));
+  const r = enrichTelemetry(run2, { registry: reg, projectsRoot: root });
+  assert.equal(r.overhead_window_fallback, true);
+  const oh = readTel(run2).orchestration_overhead;
+  assert.equal(oh.window.source, "unbounded-fallback");
+  assert.equal(oh.nested_subagents.turns, 2);
 });

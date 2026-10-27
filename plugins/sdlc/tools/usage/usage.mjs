@@ -227,13 +227,14 @@ export function priceUsage(u, modelId, registry) {
  * Extract + price a set of transcripts, rolled up into a single priced record.
  * Handles a transcript (or several, e.g. a multi-pass phase) with one or many
  * models. cost is null only when NO model in the set could be priced.
+ * `window` ({ since, until }) keeps only the turns inside it, as for the main loop.
  */
-export function priceTranscripts(paths, registry) {
+export function priceTranscripts(paths, registry, window = {}) {
   const total = zeroUsage();
   let cost = 0, anyPriced = false, unpriced = 0;
   const models = new Set();
   for (const p of paths) {
-    const { byModel } = extractUsage(p);
+    const { byModel } = extractUsage(p, window);
     for (const [model, u] of Object.entries(byModel)) {
       models.add(model);
       for (const k of Object.keys(total)) total[k] = k === "peak_prefix_tokens" ? Math.max(total[k], u[k]) : total[k] + u[k];
@@ -577,8 +578,8 @@ export function enrichTelemetry(runDir, opts = {}) {
   // caller can surface it instead of silently reporting $0.00.
   if (!enriched.length) {
     return { telPath, enriched, skipped, total_cost_usd: tel.total_cost_usd ?? null,
-      overhead_cost_usd: null, overhead_window_fallback: false, session_mismatch: sessionMismatch,
-      skipped_all: true };
+      overhead_cost_usd: null, overhead_window_fallback: false, overhead_window_missing: false,
+      session_mismatch: sessionMismatch, skipped_all: true };
   }
 
   // Resolve the orchestrator session transcript for overhead accounting. Explicit
@@ -593,37 +594,50 @@ export function enrichTelemetry(runDir, opts = {}) {
   }
 
   // Orchestration overhead = orchestrator main-loop turns + non-phase/nested subagents.
-  let overhead = null, overheadWindowFallback = false;
+  let overhead = null, overheadWindowFallback = false, overheadWindowMissing = false;
   if (sessionTranscript) {
     const paths = [];
     const phaseIds = new Set([].concat(...[...byPhase.values()], ...phases.map((p) => (Array.isArray(p.agent_id) ? p.agent_id : p.agent_id ? [p.agent_id] : []))));
+    // A session can carry several chained runs, and they share one subagents dir. A
+    // sibling run's phase agent is that run's cost, never this run's overhead (ADR-0041).
+    const siblingIds = siblingRunAgentIds(runDir);
     if (subagentsDir && existsSync(subagentsDir)) {
       for (const f of readdirSync(subagentsDir)) {
         const m = f.match(/^agent-([a-f0-9]{12,})\.jsonl$/);
-        if (m && !phaseIds.has(m[1])) paths.push(join(subagentsDir, f));
+        if (m && !phaseIds.has(m[1]) && !siblingIds.has(m[1])) paths.push(join(subagentsDir, f));
       }
     }
-    const nested = priceTranscripts(paths, registry);
-    // Bound the orchestrator's own turns to the run window so a long-lived session
-    // (activity before/after this run) doesn't inflate the run's overhead. Source the
-    // window from the MACHINE-written .checkpoint/_started_at epoch (+ wall_clock),
-    // NOT the model-authored started_at/completed_at ISO strings — the orchestrator
-    // can transcribe those wrong, and a window that misses the transcript silently
-    // zeroes the largest cost bucket (ADR-0007).
+    // Bound BOTH overhead buckets to the run window so a long-lived session (activity
+    // before/after this run, including earlier chained runs and their subagents) doesn't
+    // inflate the run's overhead. Source the window from the MACHINE-written
+    // .checkpoint/_started_at epoch (+ wall_clock), NOT the model-authored
+    // started_at/completed_at ISO strings — the orchestrator can transcribe those wrong,
+    // and a window that misses the transcript silently zeroes the largest cost bucket
+    // (ADR-0007). Nested transcripts are windowed per turn, like the main loop (ADR-0041).
     const win = overheadWindow(runDir, tel);
+    let source = win.source;
     let main = priceMainLoop(sessionTranscript, registry, win);
+    let nested = priceTranscripts(paths, registry, win);
     // Defense in depth: if the window excluded EVERY main-loop turn but the
     // transcript genuinely has some, the window is wrong — recover the real cost
     // from the whole transcript and flag it so the caller can WARN rather than
-    // silently report $0 orchestration overhead.
+    // silently report $0 orchestration overhead. The nested bucket shares that
+    // verdict: it was filtered by the same wrong window.
     if (main.turns === 0) {
       const unbounded = priceMainLoop(sessionTranscript, registry, {});
-      if (unbounded.turns > 0) { main = unbounded; overheadWindowFallback = true; }
+      if (unbounded.turns > 0) {
+        main = unbounded;
+        nested = priceTranscripts(paths, registry);
+        overheadWindowFallback = true;
+        source = "unbounded-fallback";
+      }
     }
+    overheadWindowMissing = source === "none";
     overhead = {
       cost_usd: round2((main.cost_usd || 0) + (nested.cost_usd || 0)),
       main_loop: main,
       nested_subagents: nested,
+      window: { source, since: win.since ?? null, until: win.until ?? null },
     };
     tel.orchestration_overhead = overhead;
   }
@@ -654,6 +668,7 @@ export function enrichTelemetry(runDir, opts = {}) {
   writeFileSync(telPath, JSON.stringify(tel, null, 2) + "\n");
   return { telPath, enriched, skipped, total_cost_usd: tel.total_cost_usd,
     overhead_cost_usd: overhead ? overhead.cost_usd : null, overhead_window_fallback: overheadWindowFallback,
+    overhead_window_missing: overheadWindowMissing,
     session_mismatch: sessionMismatch, timestamps_corrected: timestampsCorrected,
     cap_breach_usd: tel.cap_breach_usd ?? null, cap_status: tel.cap_status ?? null };
 }
@@ -701,10 +716,38 @@ function reconcileCapStatus(tel, phaseCostSum) {
  * only when no usable anchor exists. This decouples cost accounting from the model's
  * fallible ISO-timestamp transcription in Step 5 — a wrong absolute start there used
  * to move the window off the real turns and zero the overhead (ADR-0007).
+ *
+ * `source` says where the window came from: "anchor", "telemetry", or "none" when
+ * neither bound is known — overhead is then priced unbounded, and the caller says so.
  */
 function overheadWindow(runDir, tel) {
-  const { since, until } = machineRunWindow(runDir, tel);
-  return { since, until };
+  const { since, until, anchored } = machineRunWindow(runDir, tel);
+  const source = anchored ? "anchor" : since || until ? "telemetry" : "none";
+  return { since, until, source };
+}
+
+/**
+ * Every phase agent id recorded by the OTHER runs under this run's parent dir
+ * (`docs/plans/<sibling>/`), from their telemetry and checkpoints alike.
+ *
+ * Chained runs in one session share its subagents dir, so a transcript that is not
+ * one of this run's phase agents may still be another run's. The run window already
+ * keeps those out by time; this keeps them out by identity, for a sibling agent whose
+ * turns ran late into this window. Best-effort: an unreadable sibling contributes none.
+ */
+function siblingRunAgentIds(runDir) {
+  const ids = new Set();
+  const parent = dirname(runDir);
+  let entries;
+  try { entries = readdirSync(parent, { withFileTypes: true }); } catch { return ids; }
+  for (const e of entries) {
+    if (!e.isDirectory() || e.name === basename(runDir)) continue;
+    const dir = join(parent, e.name);
+    let sib;
+    try { sib = JSON.parse(readFileSync(join(dir, "_telemetry.json"), "utf8")); } catch { continue; }
+    for (const id of knownRunAgentIds(dir, sib && sib.phases)) ids.add(id);
+  }
+  return ids;
 }
 
 /**

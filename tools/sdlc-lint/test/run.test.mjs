@@ -177,13 +177,14 @@ test("cap-breach and clock-drift warnings from enrichment are surfaced verbatim"
   const dir = makeUnresolvableRun();
   const r = finishRun(dir, { now: (ANCHOR + 300) * 1000, noReport: true,
     enrich: () => ({ telPath: join(dir, "_telemetry.json"), enriched: ["development"], skipped: [],
-      total_cost_usd: 3.5, overhead_cost_usd: 1, overhead_window_fallback: true,
+      total_cost_usd: 3.5, overhead_cost_usd: 1, overhead_window_fallback: true, overhead_window_missing: true,
       cap_breach_usd: 1.51, cap_status: "exceeded-undetected",
       timestamps_corrected: { from: "2026-07-28T14:24:17Z", to: "2026-07-28T11:04:17Z", drift_seconds: 12000 } }) });
   const w = r.warnings.join("\n");
   assert.match(w, /exceeded the cost cap by \$1\.51/);
   assert.match(w, /exceeded-undetected/);
   assert.match(w, /overhead window fell back/);
+  assert.match(w, /no run window/);
   assert.match(w, /machine anchor says/);
 });
 

@@ -77,4 +77,6 @@ heuristic when an exact machine anchor is already on disk).
 ## Related
 - Implemented by: `plugins/sdlc/tools/usage/usage.mjs` (`overheadWindow` + unbounded fallback), `plugins/sdlc/tools/usage/cli.mjs` (WARN); PR pending.
 - Builds on: [[decisions/ADR-0005-transcript-derived-cost]]
+- Amended by: [[decisions/ADR-0041-nested-subagents-share-the-run-window]] — the nested-subagents bucket
+  now shares this window (per turn) and its unbounded fallback.
 - Relates to: [[architecture/pipeline-orchestrator]] / [[components/sdlc]]

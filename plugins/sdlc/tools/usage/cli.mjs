@@ -115,6 +115,9 @@ if (cmd === "phase-cost") {
           if (r.overhead_window_fallback) {
             console.error(`WARN: overhead window fell back to the full transcript — telemetry started_at/completed_at look wrong; verify orchestration cost`);
           }
+          if (r.overhead_window_missing) {
+            console.error(`WARN: no run window (no .checkpoint/_started_at, no started_at/completed_at) — orchestration overhead priced over the whole session; it may include other runs`);
+          }
           if (r.cap_breach_usd != null) {
             console.error(`WARN: phase spend exceeded the cost cap by $${r.cap_breach_usd.toFixed(2)} (cap_status: ${r.cap_status})` +
               (r.cap_status === "exceeded-undetected" ? ` — the in-run gate did not catch this; check for cap_gate_blind phases` : ""));

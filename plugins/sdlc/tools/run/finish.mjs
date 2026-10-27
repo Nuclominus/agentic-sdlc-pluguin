@@ -73,6 +73,10 @@ export function finishRun(runDir, opts = {}) {
       warnings.push("WARN: overhead window fell back to the full transcript — the run window looks " +
         "wrong; verify the orchestration cost");
     }
+    if (r.overhead_window_missing) {
+      warnings.push("WARN: no run window — orchestration overhead priced over the whole session; " +
+        "it may include other runs' turns and subagents");
+    }
     if (r.cap_breach_usd != null) {
       warnings.push(`WARN: phase spend exceeded the cost cap by $${r.cap_breach_usd.toFixed(2)} ` +
         `(cap_status: ${r.cap_status})` + (r.cap_status === "exceeded-undetected"
