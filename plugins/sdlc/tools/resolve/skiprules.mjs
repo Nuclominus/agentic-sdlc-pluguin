@@ -9,27 +9,43 @@
 // The base ref is therefore RESOLVED, and the resolved name travels in the output so a
 // reader can see which branch a skip was justified against.
 //
-// An EMPTY diff establishes no size (ADR-0040). Step 0 runs at the start of a run, and a fresh
-// feature branch has no commits yet: its diff is empty, LOC_TOUCHED reads 0, and every rule
-// gated on "the change is small" used to fire — that is how a 28-file change with purchase
-// screens lost its security phase (issue #239). `empty_diff` marks the case, and the rules
-// that read LOC_TOUCHED are WITHHELD on it, and reported as withheld rather than staying silent.
+// A size that cannot be measured is not a small one (ADR-0040). Step 0 runs at the start of
+// a run, and a fresh feature branch has no commits yet: its diff is empty, and a LOC count of
+// 0 used to read as "small" — that is how a 28-file change with purchase screens lost its
+// security phase (issue #239). When the size is unknown — an empty diff, binary files git
+// cannot count in lines, more untracked files than are worth reading — `size_unknown` carries
+// the reason and `loc_touched` takes the same sentinel as degraded signals, so a reader that
+// only compares `loc_touched < n` gets the safe answer without knowing this rule exists.
+// `loc_measured` keeps the count that WAS measured: it is a lower bound, and a lower bound
+// already over a limit still settles "not small" (`locAtLeast`).
 
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 const CONFIG_EXT = /\.(env|env\..+|ya?ml|json|toml|ini)$/i;
 const MIGRATION_PATH = /(database\/migrations|\/migrations\/)/;
 const SENSITIVE_PATH = /(auth|password|crypt|secret|token|jwt|session)/i;
 const TYPO_ARGS = /^(typo|fix typo|rename .* to|format)/i;
 
+// The pipeline's own files are not the change: an untracked `.sdlc/sdlc.local.yaml` left by
+// /sdlc:init would otherwise turn a fresh branch into a small config-only diff, and a resumed
+// run's `docs/plans/<slug>/` would count its own reports as code.
+const PATHSPEC = ["--", ":/", ":(exclude).sdlc", ":(exclude)docs/plans"];
+// Untracked files are read to count their lines. Past this many, the size is called unknown
+// rather than paid for.
+const UNTRACKED_READ_LIMIT = 500;
+
 /** Signals that make every rule stay silent. Used whenever git cannot answer. */
 export const SAFE_DEFAULTS = Object.freeze({
   loc_touched: 999999,
+  loc_measured: null,
   has_migrations: true,
   config_only: false,
   whitespace_only: false,
   changed_files: [],
   empty_diff: false,
+  size_unknown: null,
   base_ref: null,
   degraded: true,
 });
@@ -39,6 +55,17 @@ function git(cwd, args) {
 }
 function gitOrNull(cwd, args) {
   try { return git(cwd, args); } catch { return null; }
+}
+
+/**
+ * Is the change at least `n` LOC? `true` / `false`, or `null` when the size is unknown and the
+ * measured part does not settle it. The ONE reading of the size every consumer shares — the
+ * skip-rules here and the recipe bounds in workflow.mjs — so neither can treat an unknown size
+ * as a small one.
+ */
+export function locAtLeast(signals, n) {
+  if (!signals.size_unknown) return signals.loc_touched >= n;
+  return (signals.loc_measured ?? 0) >= n ? true : null;
 }
 
 /**
@@ -60,48 +87,90 @@ export function resolveBaseRef(cwd, preferred = null) {
   return null;
 }
 
+/** Lines in a text buffer, counted the way `git diff --numstat` counts an added file. */
+function countLines(buf) {
+  if (buf.length === 0) return 0;
+  let n = 0;
+  for (const byte of buf) if (byte === 10) n++;
+  return buf[buf.length - 1] === 10 ? n : n + 1;
+}
+
 /**
  * Compute the four diff signals in one pass.
  *
  * Any git failure — no remote, detached HEAD, not a repository — yields SAFE_DEFAULTS with
  * `degraded: true`, so no rule can fire on a signal that was never established.
  *
- * `empty_diff` is true when the range changes no path at all. `loc_touched` still reads the
- * true count (0); it is the rules and the recipe matcher that must not read 0 as "small".
+ * The change is measured from the merge base to the WORKING TREE, plus untracked files — not
+ * `<base>...HEAD`, which sees commits only. A branch with one 3-line commit and 28 files of
+ * uncommitted work is a 28-file change, and every signal (size, migrations, sensitive paths,
+ * config-only, whitespace-only) has to see it as one.
  */
 export function computeDiffSignals(cwd = process.cwd(), { baseRef = null } = {}) {
   const base = resolveBaseRef(cwd, baseRef);
   if (!base) return { ...SAFE_DEFAULTS, reason: "no comparable base ref" };
 
-  const range = `${base}...HEAD`;
-  const names = gitOrNull(cwd, ["diff", "--name-only", range]);
-  const numstat = gitOrNull(cwd, ["diff", "--numstat", range]);
-  if (names === null || numstat === null) return { ...SAFE_DEFAULTS, base_ref: base, reason: `git diff against ${base} failed` };
+  const mergeBase = gitOrNull(cwd, ["merge-base", base, "HEAD"])?.trim();
+  const top = gitOrNull(cwd, ["rev-parse", "--show-toplevel"])?.trim();
+  if (!mergeBase || !top) return { ...SAFE_DEFAULTS, base_ref: base, reason: `no merge base with ${base}` };
 
-  const changed = names.split("\n").map((s) => s.trim()).filter(Boolean);
-  let added = 0, deleted = 0;
-  for (const line of numstat.split("\n")) {
-    const [a, d] = line.split("\t");
-    if (a === undefined) continue;
-    added += Number(a) || 0;               // "-" for binary files -> 0, matching awk
-    deleted += Number(d) || 0;
+  const names = gitOrNull(cwd, ["diff", "--name-only", mergeBase, ...PATHSPEC]);
+  const numstat = gitOrNull(cwd, ["diff", "--numstat", mergeBase, ...PATHSPEC]);
+  const others = gitOrNull(cwd, ["ls-files", "--others", "--exclude-standard", "--full-name", "-z", ...PATHSPEC]);
+  if (names === null || numstat === null || others === null) {
+    return { ...SAFE_DEFAULTS, base_ref: base, reason: `git diff against ${base} failed` };
   }
 
-  // Whitespace-only: the -w diff is empty while the plain diff is not.
-  const plainStat = gitOrNull(cwd, ["diff", "--shortstat", range]) ?? "";
-  const wStat = gitOrNull(cwd, ["diff", "--shortstat", "-w", range]) ?? "";
+  const tracked = names.split("\n").map((s) => s.trim()).filter(Boolean);
+  const untracked = others.split("\0").filter(Boolean);
+  let added = 0, deleted = 0, binary = 0;
+  for (const line of numstat.split("\n")) {
+    const [a, d] = line.split("\t");
+    if (a === undefined || d === undefined) continue;
+    if (a === "-") { binary++; continue; }  // git counts no lines in a binary file
+    added += Number(a) || 0;
+    deleted += Number(d) || 0;
+  }
+  const tooManyUntracked = untracked.length > UNTRACKED_READ_LIMIT;
+  if (!tooManyUntracked) {
+    for (const f of untracked) {
+      let buf;
+      try { buf = readFileSync(join(top, f)); } catch { continue; }
+      if (buf.subarray(0, 8000).includes(0)) binary++;
+      else added += countLines(buf);
+    }
+  }
+
+  // Whitespace-only: the -w diff is empty while the plain diff is not. A new file is content,
+  // never a reformat, so any untracked file rules it out.
+  const plainStat = gitOrNull(cwd, ["diff", "--shortstat", mergeBase, ...PATHSPEC]) ?? "";
+  const wStat = gitOrNull(cwd, ["diff", "--shortstat", "-w", mergeBase, ...PATHSPEC]) ?? "";
   const hasChanges = /insertion|deletion/.test(plainStat);
-  const whitespaceOnly = hasChanges && !/insertion|deletion/.test(wStat);
+  const whitespaceOnly = hasChanges && !/insertion|deletion/.test(wStat) && untracked.length === 0;
+
+  const changed = [...new Set([...tracked, ...untracked])];
+  const measured = added + deleted;
+  const sizeUnknown = changed.length === 0
+    ? `the diff against ${base} is empty — the change size is unknown at run start`
+    : tooManyUntracked
+      ? `${untracked.length} untracked files — too many to measure, so the change size is unknown`
+      : binary > 0
+        ? `the diff against ${base} has ${binary} binary file(s) git cannot count in lines — the change size is unknown`
+        : null;
 
   return {
-    loc_touched: added + deleted,
+    loc_touched: sizeUnknown ? SAFE_DEFAULTS.loc_touched : measured,
+    loc_measured: measured,
     added,
     deleted,
     has_migrations: changed.some((f) => MIGRATION_PATH.test(f)),
     config_only: changed.length > 0 && changed.every((f) => CONFIG_EXT.test(f)),
     whitespace_only: whitespaceOnly,
     changed_files: changed,
+    untracked_files: untracked.length,
+    binary_files: binary,
     empty_diff: changed.length === 0,
+    size_unknown: sizeUnknown,
     base_ref: base,
     degraded: false,
   };
@@ -120,10 +189,9 @@ Report any matches in your compact summary under a \`SECRET-LEAK CHECK:\` line
  * a phase the project already disabled via `skip_phases` was never a candidate. Returns the
  * applied list, the remaining phases, and any prompt injection a rule owes a phase.
  *
- * On an empty diff a rule gated on LOC_TOUCHED does not fire; if every OTHER condition held,
- * it lands in `withheld` instead, so the user hears which phase was kept and why. The
- * whitespace-only and config-only signals are false on an empty diff by construction, so
- * only typo-fix and lightweight-no-db can be withheld.
+ * A rule gated on LOC_TOUCHED does not fire while the size is unknown; if every OTHER condition
+ * held, it lands in `withheld` instead, so the user hears which phase was kept and why. A
+ * measured part already over the limit settles the rule without withholding anything.
  */
 export function applySkipRules(signals, { args = "", phases = [], forceBa = false, disabled = false } = {}) {
   const remaining = new Set(phases);
@@ -141,18 +209,22 @@ export function applySkipRules(signals, { args = "", phases = [], forceBa = fals
     applied.push({ rule, phase_skipped: phase, reason });
     return true;
   };
-  const loc = signals.loc_touched;
-  const sizeUnknown = signals.empty_diff === true;
   const withhold = (rule, phase) => {
-    if (!remaining.has(phase)) return;
-    withheld.push({ rule, phase_kept: phase, reason: `the diff against ${signals.base_ref ?? "the base ref"} is empty — the change size is unknown at run start` });
+    if (remaining.has(phase)) withheld.push({ rule, phase_kept: phase, reason: signals.size_unknown });
   };
+  /** true / false, or null when an unknown size leaves it open. */
+  const smallerThan = (n) => {
+    const atLeast = locAtLeast(signals, n);
+    return atLeast === null ? null : !atLeast;
+  };
+  const loc = signals.loc_touched;
 
   // 1 — typo-fix. "rename Foo to Bar" reads as a typo and can touch 28 files: the LOC bound is
-  // the guard, and an empty diff cannot satisfy it.
+  // the guard, and an unknown size cannot satisfy it.
   if (!forceBa && TYPO_ARGS.test(String(args).trim())) {
-    if (sizeUnknown) withhold("typo-fix", "business_analysis");
-    else if (loc < 30) drop("typo-fix", "business_analysis", `task reads as a typo/format fix; LOC_TOUCHED=${loc}`);
+    const small = smallerThan(30);
+    if (small === null) withhold("typo-fix", "business_analysis");
+    else if (small) drop("typo-fix", "business_analysis", `task reads as a typo/format fix; LOC_TOUCHED=${loc}`);
   }
   // 2 — whitespace-only
   if (signals.whitespace_only) {
@@ -160,14 +232,17 @@ export function applySkipRules(signals, { args = "", phases = [], forceBa = fals
     drop("whitespace-only", "qa", "diff is whitespace-only; post-pipeline formatting checks cover it");
   }
   // 3 — config-only
-  if (signals.config_only && loc < 200) {
-    drop("config-only", "qa", `all ${signals.changed_files.length} changed paths are config files; LOC_TOUCHED=${loc}`);
+  if (signals.config_only) {
+    const small = smallerThan(200);
+    if (small === null) withhold("config-only", "qa");
+    else if (small) drop("config-only", "qa", `all ${signals.changed_files.length} changed paths are config files; LOC_TOUCHED=${loc}`);
   }
   // 4 — lightweight-no-db. On an empty diff "no migrations, no sensitive paths" holds
   // vacuously: nothing has been written yet to contain them.
   if (!signals.has_migrations && !signals.changed_files.some((f) => SENSITIVE_PATH.test(f))) {
-    if (sizeUnknown) withhold("lightweight-no-db", "security");
-    else if (loc < 50 && drop("lightweight-no-db", "security", `LOC_TOUCHED=${loc}, no migrations, no security-sensitive paths`)) {
+    const small = smallerThan(50);
+    if (small === null) withhold("lightweight-no-db", "security");
+    else if (small && drop("lightweight-no-db", "security", `LOC_TOUCHED=${loc}, no migrations, no security-sensitive paths`)) {
       injections.development = SECURITY_LITE_INJECTION;
     }
   }

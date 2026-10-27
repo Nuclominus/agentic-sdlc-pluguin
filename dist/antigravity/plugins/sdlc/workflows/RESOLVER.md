@@ -186,28 +186,42 @@ profile default) when ANY of these hold:
   (`active_workflow`) already resolved a name.
 
 **Signals available at selection time** (computed by Step 0c's `computeDiffSignals`): `LOC_TOUCHED` (integer),
-`HAS_MIGRATIONS` (boolean), `CONFIG_ONLY` (boolean), and the raw `$ARGUMENTS` string.
+`SIZE_UNKNOWN` (reason or null), `HAS_MIGRATIONS` (boolean), `CONFIG_ONLY` (boolean), and the raw
+`$ARGUMENTS` string.
 
-**An empty diff is "size unknown", not "small"** (ADR-0040, issue #239). Step 0c runs at the start
-of the run, and a fresh feature branch (`git switch -c feat origin/develop` seconds earlier) has no
-commits yet: its diff against the base ref is empty and `LOC_TOUCHED` reads `0`. That `0` measures
-the branch, not the change, so on an empty diff (`EMPTY_DIFF == true`, i.e. the range changes no
-path):
+**What the diff measures.** The change is measured from the merge base with the base ref to the
+**working tree**, plus untracked files (their lines are counted) — not `<base>...HEAD`, which sees
+commits only. A branch with one small commit and many uncommitted files is a large change. The
+pipeline's own paths, `.sdlc/` and `docs/plans/`, are excluded: an untracked
+`.sdlc/sdlc.local.yaml` left by `/sdlc:init` is not the change.
 
-- a `loc_touched_max` / `loc_touched_min` condition is **not satisfied** — the recipe does not
-  match. When every *other* condition of its `match` block held, the recipe is reported as held
-  back: `🧭 Auto-select withheld '<name>' — its loc_touched bound needs a change size, and the diff
-  against <base> is empty. Pass --workflow=NAME to choose one.` Selection continues with the
-  remaining candidates and then tier 4. Recipes without a size bound are unaffected.
-- the Step 0c skip-rules that read `LOC_TOUCHED` — `typo-fix` and `lightweight-no-db` — do not
-  fire. Each one whose other conditions held is reported under `🛡️ Skip-rules withheld:` with the
-  phase it kept, and lands in `plan.skip_rules.withheld[]`. `whitespace-only` and `config-only`
-  cannot fire on an empty diff by construction (both require a changed path).
+**An unknown size is not a small one** (ADR-0040, issue #239). Step 0c runs at the start of the
+run, and a fresh feature branch (`git switch -c feat origin/develop` seconds earlier) has nothing
+to measure: its diff is empty, and a `0` there describes the branch, not the change. The size is
+also unknown when the diff has binary files (git counts no lines in them) or more than 500
+untracked files. Then `SIZE_UNKNOWN` carries the reason, `LOC_TOUCHED` takes the same sentinel as
+degraded signals (`999999`), and the count that *was* measured is kept as a lower bound
+(`loc_measured`). Every reader of the size goes through one helper (`locAtLeast` in
+`tools/resolve/skiprules.mjs`): a bound the lower bound already settles is judged as usual; any
+other is **unknown**.
+
+- **Recipe match.** A `loc_touched_max` / `loc_touched_min` condition that is unknown is not
+  satisfied, so the recipe does not match. But an unknown size must not decide the selection in
+  either direction: candidates are ranked (the tie-break below) **as if every unknown bound were
+  met**. If that winner matched outright, it is selected — the size changed nothing. If the winner
+  is a recipe the size held back, auto-selection **abstains** and Step 1 falls through to tier 4,
+  the profile default (the stack's full pipeline), printing
+  `🧭 Auto-select withheld '<name>' — its loc_touched bound cannot be judged: <reason>. Falling
+  back to the default workflow; pass --workflow=<name> to choose it.` Selecting the runner-up
+  instead would let the size decide: on a fresh branch "Fix crash …" would lose `bugfix` (which
+  runs security) to `debug` (which does not).
+- **Skip-rules.** A rule that reads `LOC_TOUCHED` — `typo-fix`, `config-only`, `lightweight-no-db`
+  — does not fire on an unknown size. Each one whose other conditions held is reported under
+  `🛡️ Skip-rules withheld:` with the phase it kept, and lands in `plan.skip_rules.withheld[]`.
 
 An explicit `--base-ref` changes *which* range is measured, not what an empty one means: an empty
-diff against a named ref is still size-unknown. Any non-empty diff is judged exactly as before.
-Uncommitted changes are not part of the `<base>...HEAD` range, so work that exists only in the
-working tree also reads as empty, and is kept conservative the same way.
+diff against a named ref is still size-unknown. A diff whose size is known is judged exactly as
+before.
 
 ### Candidate set
 
@@ -225,8 +239,8 @@ constraint). The conditions:
 | Key | Satisfied when |
 | --- | --- |
 | `arguments_pattern` | the ECMAScript regex, tested **case-insensitively**, finds a match in `$ARGUMENTS` |
-| `loc_touched_max` | `LOC_TOUCHED <= value` — never on an empty diff (see above) |
-| `loc_touched_min` | `LOC_TOUCHED >= value` — never on an empty diff (see above) |
+| `loc_touched_max` | `LOC_TOUCHED <= value` — never while the size is unknown (see above) |
+| `loc_touched_min` | `LOC_TOUCHED >= value` — never while the size is unknown (see above) |
 | `has_migrations: true` | `HAS_MIGRATIONS == true` |
 | `config_only: true` | `CONFIG_ONLY == true` |
 

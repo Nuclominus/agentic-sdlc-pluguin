@@ -354,7 +354,7 @@ test("issue #239: the dry run names the skip-rules an empty diff held back", () 
   const est = estimate(rows, UNPRICED);
   const withheld = [{ rule: "lightweight-no-db", phase_kept: "security", reason: "empty" }];
   const out = renderDryRun({ estimate: est, slots: 2, stack: "android", workflow: "w", cap: 10, skipWithheld: withheld });
-  assert.match(out, /Skip-rules applied: none\nSkip-rules withheld: lightweight-no-db — empty diff, change size unknown/);
+  assert.match(out, /Skip-rules applied: none\nSkip-rules withheld: lightweight-no-db — change size unknown/);
   assert.ok(!/withheld/.test(renderDryRun({ estimate: est, slots: 2, stack: "android", workflow: "w", cap: 10 })),
     "the line is absent when nothing was withheld");
 });

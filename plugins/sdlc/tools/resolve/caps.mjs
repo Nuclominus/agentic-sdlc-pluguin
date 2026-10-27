@@ -274,7 +274,7 @@ export function renderDryRun({ estimate: est, slots, stack, workflow, autoselect
   });
   lines.push(`Skip-rules applied: ${skipRules.length ? skipRules.map((s) => s.rule).join(", ") : "none"}`);
   if (skipWithheld.length) {
-    lines.push(`Skip-rules withheld: ${skipWithheld.map((w) => w.rule).join(", ")} — empty diff, change size unknown`);
+    lines.push(`Skip-rules withheld: ${skipWithheld.map((w) => w.rule).join(", ")} — change size unknown`);
   }
   if (healBlocks > 0 && !healEnabled) {
     lines.push(`⚙ Healing inactive on this stack — ${healBlocks} guarded phase(s) carry a heal: block, but the active profile supplies no heal_checks. Set heal_checks in .sdlc/sdlc.local.yaml to enable it.`);

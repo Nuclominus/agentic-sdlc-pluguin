@@ -361,8 +361,10 @@ test("issue #239: a 'fix' request on a fresh branch is not routed to a size-boun
   const w = bareWorld();
   try {
     execFileSync("git", ["update-ref", "refs/remotes/origin/main", "HEAD"], { cwd: w.proj, stdio: "ignore" });
-    const { plan, prints } = resolvePlan({ cwd: w.proj, args: "fix the purchase flow --dry-run", env: w.env });
-    assert.notEqual(plan.workflow.name, "bugfix", "bugfix's loc_touched_max cannot be judged on an empty diff");
+    // "crash" also matches `debug`, which runs no security: the held-back bugfix must not hand it the tie.
+    const { plan, prints } = resolvePlan({ cwd: w.proj, args: "Fix crash in the purchase flow --dry-run", env: w.env });
+    assert.equal(plan.workflow.name, "default", "the run falls back to the full pipeline");
+    assert.ok(plan.workflow.resolved_phases.some((p) => p.name === "security"), "security runs, as it did under bugfix");
     assert.ok(prints.some((p) => /Auto-select withheld 'bugfix'/.test(p)), "and the plan names what it held back");
     assert.ok(prints.some((p) => /Skip-rules withheld: lightweight-no-db/.test(p)), "the dry run carries it too");
   } finally { rmSync(w.dir, { recursive: true, force: true }); }

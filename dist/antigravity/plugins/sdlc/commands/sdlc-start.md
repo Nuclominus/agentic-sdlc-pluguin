@@ -94,7 +94,7 @@ Phases (N):
    2. development         → developer (sonnet)        ~$0.11
    ...
 Skip-rules applied: <...>
-Skip-rules withheld: <...> — empty diff, change size unknown   (only when a rule was held back)
+Skip-rules withheld: <...> — change size unknown   (only when a rule was held back)
 Estimated cost: ~$<expected>  (worst-case $<worst>)
 Cap: <caps.max_total_cost_usd or "none">  → WITHIN | ⚠️ EXCEEDS by $X
 ```
