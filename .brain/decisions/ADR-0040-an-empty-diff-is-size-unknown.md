@@ -68,7 +68,7 @@ established size of zero.
   decision makes the run-start answer safe. It does not make it precise.
 
 ## Related
-- Implemented by: #239 (issue). Telemetry field `skip_rules.withheld` is additive.
+- Implemented by: #246 (fixes issue #239). Telemetry field `skip_rules.withheld` is additive.
 - Relates to: [[decisions/ADR-0024-naming-a-recipe-is-an-explicit-request]],
   [[decisions/ADR-0019-the-run-start-is-one-command]], [[architecture/pipeline-orchestrator]],
   [[components/sdlc]]
