@@ -184,7 +184,7 @@ test("cap-breach and clock-drift warnings from enrichment are surfaced verbatim"
   assert.match(w, /exceeded the cost cap by \$1\.51/);
   assert.match(w, /exceeded-undetected/);
   assert.match(w, /overhead window fell back/);
-  assert.match(w, /no run window/);
+  assert.match(w, /no complete run window/);
   assert.match(w, /machine anchor says/);
 });
 

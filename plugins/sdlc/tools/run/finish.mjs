@@ -71,11 +71,11 @@ export function finishRun(runDir, opts = {}) {
     }
     if (r.overhead_window_fallback) {
       warnings.push("WARN: overhead window fell back to the full transcript — the run window looks " +
-        "wrong; verify the orchestration cost");
+        "wrong; the orchestration overhead may include other runs' turns and subagents; verify it");
     }
     if (r.overhead_window_missing) {
-      warnings.push("WARN: no run window — orchestration overhead priced over the whole session; " +
-        "it may include other runs' turns and subagents");
+      warnings.push("WARN: no complete run window — orchestration overhead priced over the whole " +
+        "session on at least one side; it may include other runs' turns and subagents");
     }
     if (r.cap_breach_usd != null) {
       warnings.push(`WARN: phase spend exceeded the cost cap by $${r.cap_breach_usd.toFixed(2)} ` +

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
@@ -1108,4 +1108,45 @@ test("when the window excludes every main-loop turn, nested falls back with it",
   const oh = readTel(run2).orchestration_overhead;
   assert.equal(oh.window.source, "unbounded-fallback");
   assert.equal(oh.nested_subagents.turns, 2);
+});
+
+test("with --session, a chained run's phase is priced from its own dispatch only", () => {
+  // Both runs dispatched a `development` phase in the same session; the phase name alone
+  // would hand run-2 both transcripts and double its phase cost (and its cap verdict).
+  const { run2, sess, paths } = buildChainedSession();
+  enrichTelemetry(run2, { sessionTranscript: sess, registry: reg });
+  const tel = readTel(run2);
+  const dev = tel.phases.find((p) => p.phase === "development");
+  assert.equal(dev.agent_id, "bbbb00000002");
+  assert.equal(dev.cost_usd, priceTranscripts([paths.phase2], reg).cost_usd);
+  assert.equal(tel.orchestration_overhead.nested_subagents.turns, 1);
+});
+
+test("with --session and no sibling telemetry, the anchored window still picks the run's dispatch", () => {
+  const { run2, run1, sess, paths } = buildChainedSession();
+  rmSync(join(run1, "_telemetry.json"));
+  enrichTelemetry(run2, { sessionTranscript: sess, registry: reg });
+  const dev = readTel(run2).phases.find((p) => p.phase === "development");
+  assert.equal(dev.cost_usd, priceTranscripts([paths.phase2], reg).cost_usd);
+});
+
+test("a window with only one bound is reported as missing, not as anchored", () => {
+  // No wall_clock_seconds and no completed_at: [start, ∞) would take in every later run.
+  const { run1, root } = buildChainedSession();
+  const tel = readTel(run1);
+  delete tel.wall_clock_seconds;
+  writeFileSync(join(run1, "_telemetry.json"), JSON.stringify(tel));
+  const r = enrichTelemetry(run1, { registry: reg, projectsRoot: root });
+  assert.equal(r.overhead_window_missing, true);
+  assert.equal(readTel(run1).orchestration_overhead.window.source, "open-ended");
+});
+
+test("enrich CLI warns when the overhead had no run window", () => {
+  const { run2, root } = buildChainedSession();
+  rmSync(join(run2, ".checkpoint", "_started_at"));
+  const CLI = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "plugins", "sdlc", "tools", "usage", "cli.mjs");
+  const r = spawnSync(process.execPath, [CLI, "enrich", run2, "--registry", REGISTRY, "--projects-root", root],
+    { encoding: "utf8", cwd: root });
+  assert.equal(r.status, 0);
+  assert.match(r.stderr, /WARN: no complete run window/);
 });

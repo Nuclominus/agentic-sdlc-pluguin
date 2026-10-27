@@ -437,7 +437,7 @@ function timelineSection(t) {
     const billed = billedOf(ml) + billedOf(oh.nested_subagents || {});
     // Priced with no run window: it may carry other runs' turns from the same session.
     const src = oh.window && oh.window.source;
-    const unwindowed = src === "none" || src === "unbounded-fallback"
+    const unwindowed = src === "none" || src === "open-ended" || src === "unbounded-fallback"
       ? `<span class="badge-warn">not run-windowed</span>` : "";
     ohRow = `<div class="tl-foot">
 <div class="tl-node ghost">⚙</div>

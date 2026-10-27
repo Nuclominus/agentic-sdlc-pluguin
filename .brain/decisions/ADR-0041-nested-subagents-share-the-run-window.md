@@ -40,12 +40,23 @@ chain, so a fourth run could report a cost-cap breach that never happened. Issue
    the window as wrong and reprices the main loop unbounded. The nested bucket now falls back with
    it — it was filtered by the same wrong window, and repricing only half the overhead would hide
    the loss behind `overhead_window_fallback`.
-4. **Say when there is no window.** With no anchor and no `started_at`/`completed_at`, overhead is
-   priced over the whole session (minus sibling phase agents). `enrichTelemetry` returns
+4. **Say when there is no complete window.** With no anchor and no `started_at`/`completed_at`,
+   overhead is priced over the whole session (minus sibling phase agents). With only one bound
+   (e.g. an anchor but neither `wall_clock_seconds` nor `completed_at`) the window is open-ended,
+   and on a chained session it takes in every run past the missing bound. Both cases return
    `overhead_window_missing: true`, and both `usage/cli.mjs enrich` and `run/cli.mjs finish` WARN.
-   The overhead block records where its window came from:
-   `orchestration_overhead.window = { source: "anchor" | "telemetry" | "none" | "unbounded-fallback",
-   since, until }`, and the HTML report badges an overhead row that is `not run-windowed`.
+   The fallback WARN in (3) also says the overhead may include other runs. The overhead block
+   records where its window came from: `orchestration_overhead.window = { source: "anchor" |
+   "telemetry" | "open-ended" | "none" | "unbounded-fallback", since, until }`, and the HTML
+   report badges any overhead row that is not bounded on both sides as `not run-windowed`.
+5. **Phase dispatches are attributed to their run too.** With `--session`, `deriveDispatchMap`
+   lists every `Phase N/M: <phase>` dispatch in the session, and chained runs reuse phase names, so
+   the name alone handed a later run the earlier run's `development` transcript as well. That
+   doubled its phase cost, which does feed `reconcileCapStatus`. A dispatch is now kept for a phase
+   only when it is not a sibling run's recorded agent and, under an anchored window, was made inside
+   this run's window (each dispatch carries its line's `timestamp`). A phase left with no dispatch
+   falls through to its recorded `agent_id` / checkpoint, as before. Every phase dispatch in the
+   session, whichever run made it, stays excluded from nested overhead.
 
 Rejected alternatives: **sibling-id exclusion alone** (catches sibling *phase* agents but not their
 nested helpers — a reviewer's research agent, an AAR, a session-recorder — so a chain still
@@ -65,13 +76,14 @@ wholly to whichever run it started in, and disagrees with how the main loop is w
   no `window` and renders as before.
 - The report's overhead row now counts nested-subagent tokens in its billed total — it already
   counted their cost.
-- Still open: with `--session`, `deriveDispatchMap` maps phase names to agent ids across the
-  **whole** session, so chained runs with a phase of the same name can share phase transcripts in a
-  backfill. The forward path (`run/cli.mjs finish`) prices from recorded `agent_id`s and is not
-  affected.
+- Known limit: **concurrent** runs in one session (a `/sdlc:batch` dispatching worktree-isolated
+  pipelines in parallel) have overlapping windows, and their telemetry lives under other
+  worktrees' `docs/plans/`, which the sibling scan cannot see. Time cannot separate them. That
+  takes per-dispatch lineage (which agent dispatched which) and is not recorded in the transcripts
+  today, so it is left out of this decision rather than approximated.
 
 ## Related
-- Implemented by: the PR closing issue #240.
+- Implemented by: #245 (closes issue #240).
 - Amends: [[decisions/ADR-0007-overhead-window-authoritative-anchor]]
 - Builds on: [[decisions/ADR-0005-transcript-derived-cost]]
 - Relates to: [[components/sdlc]]

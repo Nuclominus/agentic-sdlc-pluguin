@@ -381,6 +381,7 @@ test("the overhead row counts nested-subagent tokens alongside the main loop", (
 test("an overhead priced without a run window is flagged; an anchored one is not", () => {
   assert.match(withOverhead({ source: "none" }), /not run-windowed/);
   assert.match(withOverhead({ source: "unbounded-fallback" }), /not run-windowed/);
+  assert.match(withOverhead({ source: "open-ended" }), /not run-windowed/);
   assert.doesNotMatch(withOverhead({ source: "anchor" }), /not run-windowed/);
   assert.doesNotMatch(withOverhead(null), /not run-windowed/, "pre-#240 telemetry carries no window");
 });

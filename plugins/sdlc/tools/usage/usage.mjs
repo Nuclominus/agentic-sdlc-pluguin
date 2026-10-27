@@ -378,9 +378,10 @@ export function checkpointAgentId(runDir, phase) {
 
 /**
  * Parse an orchestrator session transcript into an ordered dispatch map:
- * one entry per Agent tool call — { index, phase, subagent_type, agent_id, description }.
+ * one entry per Agent tool call — { index, phase, subagent_type, agent_id, description, timestamp }.
  * `phase` is the pipeline phase name parsed from a "Phase N/M: <phase> ..."
  * description, or null for non-phase dispatches (e.g. session-recorder).
+ * `timestamp` is the dispatching line's own, or null when the line carries none.
  */
 export function deriveDispatchMap(sessionTranscriptPath) {
   const uses = new Map();   // tool_use_id -> { subagent_type, description }
@@ -396,7 +397,7 @@ export function deriveDispatchMap(sessionTranscriptPath) {
       if (!b || typeof b !== "object") continue;
       if (b.type === "tool_use" && b.name === "Agent") {
         const inp = b.input || {};
-        uses.set(b.id, { subagent_type: inp.subagent_type || null, description: inp.description || "" });
+        uses.set(b.id, { subagent_type: inp.subagent_type || null, description: inp.description || "", timestamp: d.timestamp || null });
         order.push(b.id);
       } else if (b.type === "tool_result" && b.tool_use_id) {
         const mm = String(JSON.stringify(b)).match(/agentId["'\s:]+([a-f0-9]{12,})/);
@@ -409,7 +410,8 @@ export function deriveDispatchMap(sessionTranscriptPath) {
     const phase = (u.description.match(/Phase\s+\d+\/\d+:\s*(\S+)/) || [])[1] || null;
     // `id` is the tool_use id. It is what lets a consumer holding the DISPATCH (its prompt, and
     // so what was mandated of it) find the agent that ran it, without joining on array position.
-    return { id, index, phase, subagent_type: u.subagent_type, agent_id: results.get(id) || null, description: u.description };
+    return { id, index, phase, subagent_type: u.subagent_type, agent_id: results.get(id) || null, description: u.description,
+      timestamp: u.timestamp ?? null };
   });
 }
 
@@ -497,7 +499,13 @@ export function phaseCost(agentIds, opts = {}) {
  *   own turns and any non-phase/nested subagents as `orchestration_overhead`,
  *   and locate transcripts in the session's own subagents dir.
  * When absent, each telemetry phase must carry a recorded `agent_id`
- *   (string or array); overhead is not computed.
+ *   (string or array), or a checkpoint must; the session is then recovered from a
+ *   resolved phase transcript and overhead is computed from it all the same.
+ *
+ * Both overhead buckets — main loop and nested subagents — are bounded per turn to the
+ * run window (ADR-0007, ADR-0041), and sibling runs' recorded phase agents are never
+ * nested overhead. `overhead_window_missing` / `overhead_window_fallback` report when
+ * that bound could not be applied.
  */
 export function enrichTelemetry(runDir, opts = {}) {
   const registry = opts.registry || loadRegistry(opts.registryPath);
@@ -507,6 +515,14 @@ export function enrichTelemetry(runDir, opts = {}) {
   const phases = tel.phases || [];
 
   let subagentsDir, dispatch, byPhase = new Map();
+  // Every phase dispatch in the session, whichever run it belongs to: a phase agent is
+  // never anyone's nested overhead.
+  const sessionPhaseIds = new Set();
+  // The run window, read before reconcileRunWindow below can touch the telemetry stamps.
+  const win = overheadWindow(runDir, tel);
+  // Phase agents recorded by OTHER runs under the same parent — read once, only on demand.
+  let siblingIds = null;
+  const siblings = () => (siblingIds ??= siblingRunAgentIds(runDir));
   // A `--session` that does not belong to this run is discarded rather than trusted:
   // see sessionOwnsRun. Nulling it here lets the recovery below (walk back from a
   // resolved phase transcript) find the session that actually ran the pipeline.
@@ -516,8 +532,20 @@ export function enrichTelemetry(runDir, opts = {}) {
   if (sessionArg) {
     subagentsDir = sessionSubagentsDir(sessionArg);
     dispatch = deriveDispatchMap(sessionArg);
+    // A session can carry several chained runs, each with its own `development` etc., so
+    // a phase name alone does not say which run dispatched it. Keep a dispatch only if it
+    // is not a sibling run's recorded agent and, under a machine-anchored window, was
+    // made inside this run's window (ADR-0041). A phase left with no dispatch falls
+    // through to the recorded agent_id / checkpoint path below.
+    const inWindow = (ts) => {
+      if (win.source !== "anchor" || !ts) return true;
+      const t = Date.parse(ts);
+      return !Number.isFinite(t) || (t >= Date.parse(win.since) && t <= Date.parse(win.until));
+    };
     for (const d of dispatch) {
       if (!d.phase || !d.agent_id) continue;
+      sessionPhaseIds.add(d.agent_id);
+      if (siblings().has(d.agent_id) || !inWindow(d.timestamp)) continue;
       if (!byPhase.has(d.phase)) byPhase.set(d.phase, []);
       byPhase.get(d.phase).push(d.agent_id);
     }
@@ -597,14 +625,13 @@ export function enrichTelemetry(runDir, opts = {}) {
   let overhead = null, overheadWindowFallback = false, overheadWindowMissing = false;
   if (sessionTranscript) {
     const paths = [];
-    const phaseIds = new Set([].concat(...[...byPhase.values()], ...phases.map((p) => (Array.isArray(p.agent_id) ? p.agent_id : p.agent_id ? [p.agent_id] : []))));
+    const phaseIds = new Set([...sessionPhaseIds, ...phases.flatMap((p) => (Array.isArray(p.agent_id) ? p.agent_id : p.agent_id ? [p.agent_id] : []))]);
     // A session can carry several chained runs, and they share one subagents dir. A
     // sibling run's phase agent is that run's cost, never this run's overhead (ADR-0041).
-    const siblingIds = siblingRunAgentIds(runDir);
     if (subagentsDir && existsSync(subagentsDir)) {
       for (const f of readdirSync(subagentsDir)) {
         const m = f.match(/^agent-([a-f0-9]{12,})\.jsonl$/);
-        if (m && !phaseIds.has(m[1]) && !siblingIds.has(m[1])) paths.push(join(subagentsDir, f));
+        if (m && !phaseIds.has(m[1]) && !siblings().has(m[1])) paths.push(join(subagentsDir, f));
       }
     }
     // Bound BOTH overhead buckets to the run window so a long-lived session (activity
@@ -614,7 +641,6 @@ export function enrichTelemetry(runDir, opts = {}) {
     // started_at/completed_at ISO strings — the orchestrator can transcribe those wrong,
     // and a window that misses the transcript silently zeroes the largest cost bucket
     // (ADR-0007). Nested transcripts are windowed per turn, like the main loop (ADR-0041).
-    const win = overheadWindow(runDir, tel);
     let source = win.source;
     let main = priceMainLoop(sessionTranscript, registry, win);
     let nested = priceTranscripts(paths, registry, win);
@@ -632,7 +658,9 @@ export function enrichTelemetry(runDir, opts = {}) {
         source = "unbounded-fallback";
       }
     }
-    overheadWindowMissing = source === "none";
+    // "open-ended" bounds only one side: on a chained session it still takes in the
+    // runs past the missing bound, so it is reported the same as no window at all.
+    overheadWindowMissing = source === "none" || source === "open-ended";
     overhead = {
       cost_usd: round2((main.cost_usd || 0) + (nested.cost_usd || 0)),
       main_loop: main,
@@ -717,12 +745,14 @@ function reconcileCapStatus(tel, phaseCostSum) {
  * fallible ISO-timestamp transcription in Step 5 — a wrong absolute start there used
  * to move the window off the real turns and zero the overhead (ADR-0007).
  *
- * `source` says where the window came from: "anchor", "telemetry", or "none" when
- * neither bound is known — overhead is then priced unbounded, and the caller says so.
+ * `source` says where the window came from: "anchor" or "telemetry" when both bounds
+ * are known, "open-ended" when only one is (e.g. no wall_clock_seconds and no
+ * completed_at), "none" when neither is. The last two leave overhead unbounded on at
+ * least one side, and the caller says so.
  */
 function overheadWindow(runDir, tel) {
   const { since, until, anchored } = machineRunWindow(runDir, tel);
-  const source = anchored ? "anchor" : since || until ? "telemetry" : "none";
+  const source = since && until ? (anchored ? "anchor" : "telemetry") : since || until ? "open-ended" : "none";
   return { since, until, source };
 }
 
