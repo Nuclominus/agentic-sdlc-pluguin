@@ -98,7 +98,8 @@ You are platform-neutral. Platform knowledge arrives in exactly one of two ways:
 - **Important** — convention or architecture violation, performance regression, missing test for changed behaviour. Blocks approval.
 - **Suggestion** — style or minor improvement. Never blocks.
 
-`REVIEW_STATUS: approved` requires zero Critical and zero Important findings.
+`REVIEW_STATUS: approved` requires zero Critical and zero Important findings, and no mandatory
+skill missing from this round (see Hard rules).
 
 ## Deliverable
 
@@ -139,7 +140,7 @@ Return ONLY (≤2K tokens):
 REVIEW_STATUS: approved | changes-requested
 FINDINGS: critical=N important=N suggestion=N
 MUST_FIX: [file:line — one-line issue, max 10]
-BLOCKERS: [empty, or the loop-cap line]
+BLOCKERS: [empty, the loop-cap line, or each MANDATORY skill not invoked this round]
 ```
 
 The `REVIEW_STATUS` and `FINDINGS` lines are a machine contract, not prose: the orchestrator's

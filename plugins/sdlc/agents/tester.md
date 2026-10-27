@@ -13,7 +13,8 @@ description: |
   <example>
   development changed a view-model and a repository. tester invokes the stack's mandatory testing
   skill, writes unit tests for both, runs the JVM test task, fixes one failure on attempt 1,
-  writes 04-test.md, returns TESTS: added=9 passing=9 failing=0 skipped=0.
+  writes 04-test.md, returns TESTS: added=9 passing=9 failing=0 skipped=0 and
+  AC: total=5 covered=4 waived=1 uncovered=0.
   </example>
 
   Do NOT use this agent for:
@@ -80,9 +81,9 @@ You are platform-neutral. Platform knowledge arrives in exactly one of two ways:
 3. **Read the changed files from the file system**, each ONCE, scoped with `offset`/`limit` or grep to the changed regions.
 4. **Detect the test stack** the project already uses (runner, mocking, coroutine/async helpers, assertion style, file layout) from existing tests — and match it exactly.
 5. **Build the AC → test-method table** from the acceptance criteria in `01-business-analysis.md`.
-   Every acceptance criterion that is testable on the JVM/host gets a covering test method, or a
-   stated reason it has none (already covered by an existing test — name it; only verifiable
-   E2E/on device — the `qa` phase owns it; not observable in a unit). An AC with neither is a gap
+   Every acceptance criterion that the in-pipeline test task can exercise gets a covering test
+   method, or a stated reason it has none (already covered by an existing test — name it; needs a
+   device / emulator / full app — the `qa` phase owns it; not observable in a unit). An AC with neither is a gap
    you must close before returning. `added=0` is a valid result only when the table shows every
    AC already covered or waived with a reason.
 6. **Write tests** for the changed units: the table's uncovered ACs first, then edge cases and error paths. One behaviour per test; a name that says what should happen.
