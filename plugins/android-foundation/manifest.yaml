@@ -499,8 +499,14 @@ pre_phase_commands: []
 # per build-file fingerprint, so the invocation counts above still hold after the first check.
 # `${CLAUDE_PLUGIN_ROOT}` is bound to THIS plugin's directory by the resolver at manifest load —
 # in the orchestrator's Bash the variable would name the sdlc plugin instead.
+# That binding ships in sdlc 3.3.0. Under an older core the token stays raw, the script is not
+# found, and a bare `sh <missing file>` exits 127, which the orchestrator records as a tool-
+# unavailable SKIP, the very silent pass #238 removed. Hence the `[ -f ]` guard: a missing script
+# FAILS with a message naming the version mismatch. It uses `false`, not `exit`, because these
+# commands run in the orchestrator's own Bash shell. The script's own 127 (no ./gradlew) still
+# passes through unchanged.
 heal_checks:
-  - sh "${CLAUDE_PLUGIN_ROOT}/scripts/gradle-variant-check.sh" compile
+  - 'if [ -f "${CLAUDE_PLUGIN_ROOT}/scripts/gradle-variant-check.sh" ]; then sh "${CLAUDE_PLUGIN_ROOT}/scripts/gradle-variant-check.sh" compile; else echo "ERROR gradle-variant-check.sh not found under ${CLAUDE_PLUGIN_ROOT}/scripts - android-foundation 3.3.0+ needs sdlc 3.3.0+, whose resolver binds this path" >&2; false; fi'
 
 # NO assembleDebug (full SDK), NO connectedAndroidTest (emulator). Lint + JVM unit tests + compile.
 #
@@ -510,6 +516,6 @@ heal_checks:
 # it never auto-iterates). A build that declares neither prints a visible
 # `WARN: … lint SKIPPED` line and exits 0 — absent tooling is a skip, not a pass.
 post_pipeline_checks:
-  - sh "${CLAUDE_PLUGIN_ROOT}/scripts/gradle-variant-check.sh" lint
-  - sh "${CLAUDE_PLUGIN_ROOT}/scripts/gradle-variant-check.sh" test
-  - sh "${CLAUDE_PLUGIN_ROOT}/scripts/gradle-variant-check.sh" compile
+  - 'if [ -f "${CLAUDE_PLUGIN_ROOT}/scripts/gradle-variant-check.sh" ]; then sh "${CLAUDE_PLUGIN_ROOT}/scripts/gradle-variant-check.sh" lint; else echo "ERROR gradle-variant-check.sh not found under ${CLAUDE_PLUGIN_ROOT}/scripts - android-foundation 3.3.0+ needs sdlc 3.3.0+, whose resolver binds this path" >&2; false; fi'
+  - 'if [ -f "${CLAUDE_PLUGIN_ROOT}/scripts/gradle-variant-check.sh" ]; then sh "${CLAUDE_PLUGIN_ROOT}/scripts/gradle-variant-check.sh" test; else echo "ERROR gradle-variant-check.sh not found under ${CLAUDE_PLUGIN_ROOT}/scripts - android-foundation 3.3.0+ needs sdlc 3.3.0+, whose resolver binds this path" >&2; false; fi'
+  - 'if [ -f "${CLAUDE_PLUGIN_ROOT}/scripts/gradle-variant-check.sh" ]; then sh "${CLAUDE_PLUGIN_ROOT}/scripts/gradle-variant-check.sh" compile; else echo "ERROR gradle-variant-check.sh not found under ${CLAUDE_PLUGIN_ROOT}/scripts - android-foundation 3.3.0+ needs sdlc 3.3.0+, whose resolver binds this path" >&2; false; fi'

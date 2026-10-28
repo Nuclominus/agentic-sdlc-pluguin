@@ -626,7 +626,7 @@ test("tree mode: no shipped manifest leaves the token unbound, and every bound s
   assert.ok(commands.length > 0);
   for (const c of commands) assert.ok(!c.includes(PLUGIN_ROOT_TOKEN), `unbound token in '${c}'`);
   const android = foundations.find((f) => f.doc.stack === "android");
-  const scripts = lists(android.doc).map((c) => c.match(/^sh "([^"]+)"/)?.[1]).filter(Boolean);
+  const scripts = lists(android.doc).map((c) => c.match(/\bsh "([^"]+\.sh)"/)?.[1]).filter(Boolean);
   assert.ok(scripts.length >= 4, "the android gates call the variant-check script (#238)");
   for (const s of scripts) assert.ok(existsSync(s), `${s} must exist — the gate would fail on a missing file`);
 });

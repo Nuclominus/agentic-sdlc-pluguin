@@ -4,6 +4,65 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+`sdlc` `3.2.2` → `3.3.0`, `android-foundation` `3.2.0` → `3.3.0` (minor: fixes from the After Action
+Review of three Android runs on sdlc 3.2.2. Gates that silently passed now fail, a fresh branch keeps
+its security phase, and chained runs stop billing each other. ADR-0039, ADR-0040, ADR-0041.)
+
+### Added
+
+- **`default_variant`** (optional, `.sdlc/sdlc.local.yaml`, ADR-0039): the product flavor the
+  Android gates compile and test, e.g. `dev` or `devDebug`. Without it the gates take each
+  module's unflavored task, else its first flavor.
+- **New telemetry fields:**
+  - `phases[].blockers` (#244): every phase's non-empty `BLOCKERS` items. It is also a new
+    checkpoint-schema field.
+  - `orchestration_overhead.window` (`source`, `since`, `until`) (#245, ADR-0041). When the
+    window is missing or one-sided, `enrich` / `finish` also return `overhead_window_missing` and
+    print a WARN. That flag is a command result, not a telemetry field.
+- **New resolver plan output:** `plan.skip_rules.withheld[]` (#246, ADR-0040). It lists each
+  size-gated skip-rule kept back because the diff size is unknown. It is printed at Step 0c and in
+  the dry-run, but not written to `_telemetry.json`.
+
+### Fixed
+
+- **Android Gradle gates are variant-aware** (#247, ADR-0039, android-foundation). Every heal and
+  post-pipeline gate calls `scripts/gradle-variant-check.sh <compile|test|lint>`.
+  - The script names one project-qualified variant task per module, such as
+    `:app:compileDevDebugKotlin`. Before this, on a flavored `:app` the gates skipped the module
+    and reported green.
+  - The flavor comes from `default_variant` (see Added).
+  - With no target task the gate fails. Lint violations now fail, instead of ending in `|| true`.
+  - A `./gradlew` without its exec bit runs through `sh` with a WARN instead of reading as a skip.
+- **A fresh branch keeps its security phase** (#246, ADR-0040).
+  - Step 0c measures the diff against the working tree, so uncommitted work counts.
+  - An unknown size (empty diff, binaries, too many untracked files) withholds the size-gated
+    skip-rules: `typo-fix`, `config-only` and `lightweight-no-db`. Withheld rules are printed.
+  - An unknown size makes recipe auto-selection abstain, rather than pick a smaller recipe
+    without security.
+- **Chained runs no longer bill each other's subagents** (#245, ADR-0041).
+  - Nested-subagent overhead is windowed per turn to the run's machine-anchored window.
+  - Sibling runs' phase agents are excluded by id.
+  - The overhead block records where its window came from (see Added). A missing window WARNs.
+- **Agent handoff contracts** (#244).
+  - Writing `detailed_output_path` is mandatory, even against a generic "no report files" rule.
+  - Mandatory skills re-run on every review-loop and remediation round.
+  - The tester delivers an AC → test-method table, with an `AC:` totals line in its summary.
+  - `review` and `test` get base prompts.
+  - Step 3d-2b reads every phase's `BLOCKERS` line (see Added).
+  - 3d-2 records the 3-attempt cap for `test` as well as `qa`.
+  - The documentation phase reads every prior phase report.
+
+### Changed
+
+- **The resolver binds `${CLAUDE_PLUGIN_ROOT}` in manifest command lists** (`heal_checks`,
+  `post_pipeline_checks`, `pre_phase_commands`) to the declaring plugin's directory (ADR-0039). A
+  project override binds it to the primary foundation.
+- **`android-foundation` 3.3.0 needs `sdlc` ≥ 3.3.0.** Its gates call the shipped script through
+  that binding. `plugin.json` dependencies stay bare names, so the requirement is enforced in the
+  gate commands themselves. Under an older core the script is not found, and every Android gate
+  FAILS with `… needs sdlc 3.3.0+ …` instead of exiting 127, which the orchestrator would record as
+  a silent SKIP.
+
 ## [4.3.0] — 2026-10-09
 
 `sdlc` `3.2.1` → `3.2.2` (patch: registry — `sonnet` cache-read corrected $0.20 → $0.10 per MTok,
