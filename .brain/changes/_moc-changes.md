@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-09-29 | #234 | `chore` | — | [[changes/2026-09-29-PR-234-promote-the-sonnet-tier-to-claude-sonnet-5-5-bump-sdlc-to-3]] |
 | 2026-09-29 | #228 | `feat` | — | [[changes/2026-09-29-PR-228-maintainer-sync-for-the-android-skill-matrix-adr-0036]] |
 | 2026-09-29 | #227 | `feat` | — | [[changes/2026-09-29-PR-227-audit-off-matrix-skill-use-after-the-run-adr-0037]] |
 | 2026-09-29 | #226 | `feat` | — | [[changes/2026-09-29-PR-226-sdlc-doctor-reports-skill-catalogs-adr-0036]] |
