@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-10-28 | #252 | `chore` | — | [[changes/2026-10-28-PR-252-bump-sdlc-to-3-3-0-and-android-foundation-to-3-3-0]] |
 | 2026-10-28 | #247 | `fix` | — | [[changes/2026-10-28-PR-247-flavor-aware-heal-and-post-pipeline-gradle-gates]] |
 | 2026-10-28 | #246 | `fix` | — | [[changes/2026-10-28-PR-246-an-empty-step-0-diff-is-size-unknown-so-it-keeps-security]] |
 | 2026-10-28 | #245 | `fix` | — | [[changes/2026-10-28-PR-245-window-nested-subagents-to-their-run]] |
