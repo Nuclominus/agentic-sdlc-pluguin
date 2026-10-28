@@ -23,7 +23,10 @@ checks: lint (detekt / ktlintCheck) + unit tests + compile-check (builds CI-defe
 [[decisions/ADR-0039-gradle-gates-name-the-variant-task-per-module]] every one of them goes through
 `scripts/gradle-variant-check.sh`. The script names one project-qualified variant task per module
 (`:app:compileDevDebugKotlin`), so a flavored `:app` is no longer silently skipped. It honours
-`default_variant` from `.sdlc/sdlc.local.yaml` and fails when no module has a target task.
+`default_variant` from `.sdlc/sdlc.local.yaml` and fails when no module has a target task. Each gate
+command first checks that the script exists. Since 3.3.0 the plugin needs `sdlc` ≥ 3.3.0, whose
+resolver binds `${CLAUDE_PLUGIN_ROOT}`. Under an older core the gate FAILS with a version message
+instead of exiting 127, which the orchestrator would record as a silent SKIP (#252).
 
 Since [[decisions/ADR-0026-embed-framework-providers-in-the-foundation]] (2026-09-20) this plugin
 also embeds all 7 additive Android frameworks directly, via a `frameworks:` array in its own
