@@ -88,6 +88,10 @@ knowing before reading any report:
 - `started_at` / `completed_at` are reconciled at enrichment against the machine anchor
   `.checkpoint/_started_at`; `wall_clock_seconds` is the anchor's own arithmetic and is authoritative
   ([[decisions/ADR-0007-overhead-window-authoritative-anchor]]).
+- `orchestration_overhead` (main loop + nested subagents) is bounded to that same window, per turn,
+  and sibling runs' phase agents are excluded by id — so runs chained in one session do not re-bill
+  each other. `orchestration_overhead.window.source` says whether it was windowed at all
+  ([[decisions/ADR-0041-nested-subagents-share-the-run-window]]).
 - `cost_usd` is only as current as `config/models.json`. A tier whose `model_id` lags the model
   actually serving sessions prices every phase on that tier to `null` — silently, because enrichment
   reports it as a missing transcript (open follow-up from #137). When a new model generation ships,

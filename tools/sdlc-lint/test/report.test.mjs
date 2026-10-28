@@ -360,3 +360,28 @@ test("a priced run is unaffected — real totals still render as numbers", () =>
   assert.notEqual(t["Output tokens"], "—");
   assert.match(t["Total cost"], /^\$/);
 });
+
+// Issue #240: the overhead row's cost covers main loop AND nested subagents, so its
+// token count must too — and an overhead priced with no run window must say so.
+const withOverhead = (window) => {
+  const t = JSON.parse(JSON.stringify(tel));
+  t.orchestration_overhead = {
+    cost_usd: 1.25,
+    main_loop: { model: "claude-opus-4-8", input_tokens: 1000, output_tokens: 200, cached_input_tokens: 0, cache_creation_tokens: 0, turns: 2 },
+    nested_subagents: { model: "claude-haiku-4-5-20251001", input_tokens: 300, output_tokens: 0, cached_input_tokens: 0, cache_creation_tokens: 0, turns: 1 },
+    ...(window ? { window } : {}),
+  };
+  return renderReport(t);
+};
+
+test("the overhead row counts nested-subagent tokens alongside the main loop", () => {
+  assert.match(withOverhead({ source: "anchor" }), /main-loop \+ nested · 1,500 billed tokens/);
+});
+
+test("an overhead priced without a run window is flagged; an anchored one is not", () => {
+  assert.match(withOverhead({ source: "none" }), /not run-windowed/);
+  assert.match(withOverhead({ source: "unbounded-fallback" }), /not run-windowed/);
+  assert.match(withOverhead({ source: "open-ended" }), /not run-windowed/);
+  assert.doesNotMatch(withOverhead({ source: "anchor" }), /not run-windowed/);
+  assert.doesNotMatch(withOverhead(null), /not run-windowed/, "pre-#240 telemetry carries no window");
+});
