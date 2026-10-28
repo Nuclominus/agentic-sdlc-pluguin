@@ -53,7 +53,14 @@ The orchestrator reads three summary lines into telemetry:
 - `BLOCKERS` from any phase lands in `phases[].blockers` (#244).
 
 Every MANDATORY skill in a role's expertise block runs again on each loop round; one the role
-cannot invoke is a blocker, never a silent skip. Headless automation gates on `_telemetry.json` state
+cannot invoke is a blocker, never a silent skip.
+
+Step 0c skip-rules and recipe auto-selection read the diff against the working tree. A size they
+cannot know (empty diff, binaries, too many untracked files) never drops a phase or picks a
+smaller recipe. Withheld rules are printed, not silent
+([[decisions/ADR-0040-an-empty-diff-is-size-unknown]], #246).
+
+Headless automation gates on `_telemetry.json` state
 (`aborted_at_phase`), never on printed output or the exit code — the SKILL.md is a prompt and can
 control neither, a constraint stated in Step 0a-1 and enforced doc-wide by sdlc-lint.
 

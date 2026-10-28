@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-10-28 | #246 | `fix` | — | [[changes/2026-10-28-PR-246-an-empty-step-0-diff-is-size-unknown-so-it-keeps-security]] |
 | 2026-10-28 | #245 | `fix` | — | [[changes/2026-10-28-PR-245-window-nested-subagents-to-their-run]] |
 | 2026-10-28 | #244 | `fix` | — | [[changes/2026-10-28-PR-244-agent-handoff-contracts-mandatory-handoff-file-review-test-b]] |
 | 2026-10-09 | #236 | `other` | — | [[changes/2026-10-09-PR-236-update-models-list-correct-sonnet-5-5-cache-read-rate-add-ha]] |
