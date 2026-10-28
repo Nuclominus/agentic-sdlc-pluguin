@@ -8,7 +8,7 @@ import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  applySkipRules, computeDiffSignals, resolveBaseRef, renderSkipPrint, SAFE_DEFAULTS,
+  applySkipRules, computeDiffSignals, resolveBaseRef, renderSkipPrint, SAFE_DEFAULTS, locAtLeast,
 } from "../../../plugins/sdlc/tools/resolve/skiprules.mjs";
 
 const PHASES = ["business_analysis", "development", "qa", "security", "documentation"];
@@ -141,4 +141,155 @@ test("the verbatim print is emitted only when a rule fired", () => {
   assert.equal(renderSkipPrint([]), null);
   const out = renderSkipPrint([{ rule: "config-only", phase_skipped: "qa", reason: "because" }]);
   assert.match(out, /^✂️ Skip-rules applied:\n {3}config-only → skipped qa: because$/);
+});
+
+// Issue #239 / ADR-0040 — a fresh feature branch has an empty diff at Step 0. That is "size
+// unknown", not "small": the 28-file change in the AAR lost its security phase this way.
+
+const UNKNOWN = { ...SAFE_DEFAULTS, degraded: false, has_migrations: false, loc_measured: 0, empty_diff: true,
+  base_ref: "origin/main", size_unknown: "the diff against origin/main is empty" };
+
+test("signals: an empty diff is size-unknown — the sentinel LOC, the measured 0 kept beside it", () => {
+  const { dir } = repo();
+  try {
+    const s = computeDiffSignals(dir);
+    assert.equal(s.degraded, false);
+    assert.equal(s.empty_diff, true);
+    assert.match(s.size_unknown, /diff against origin\/develop is empty/);
+    assert.equal(s.loc_touched, SAFE_DEFAULTS.loc_touched, "a reader that only compares LOC gets the safe answer");
+    assert.equal(s.loc_measured, 0);
+    assert.equal(locAtLeast(s, 1), null, "and the shared reading says it cannot tell");
+    assert.equal(s.whitespace_only, false, "whitespace-only cannot fire on an empty diff");
+    assert.equal(s.config_only, false, "config-only cannot fire on an empty diff");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("issue #239: a fresh branch (empty diff) keeps security and says why", () => {
+  const { dir } = repo();
+  try {
+    const r = applySkipRules(computeDiffSignals(dir), { args: "Add the purchase screens", phases: PHASES });
+    assert.deepEqual(r.applied, [], "an empty diff must not justify any skip");
+    assert.ok(r.phases.includes("security"));
+    assert.ok(!("development" in r.injections), "security runs, so no SECURITY-LITE check is owed");
+    assert.deepEqual(r.withheld.map((w) => [w.rule, w.phase_kept]), [["lightweight-no-db", "security"]]);
+    assert.match(r.withheld[0].reason, /diff against origin\/develop is empty/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("issue #239: a real small diff still skips security", () => {
+  const { dir, g } = repo();
+  try {
+    writeFileSync(join(dir, "Button.kt"), "class Button\n");
+    g("add", "-A"); g("commit", "-qm", "small");
+    const s = computeDiffSignals(dir);
+    assert.equal(s.size_unknown, null);
+    assert.equal(s.loc_touched, 1);
+    const r = applySkipRules(s, { phases: PHASES });
+    assert.ok(r.applied.some((a) => a.rule === "lightweight-no-db" && a.phase_skipped === "security"));
+    assert.deepEqual(r.withheld, []);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("issue #239: an explicit --base-ref changes the range, not the meaning of an empty one", () => {
+  const { dir, g } = repo();
+  try {
+    g("update-ref", "refs/remotes/origin/release", "HEAD");
+    const empty = computeDiffSignals(dir, { baseRef: "origin/release" });
+    assert.equal(empty.base_ref, "origin/release");
+    const kept = applySkipRules(empty, { phases: PHASES });
+    assert.deepEqual(kept.applied, [], "naming the base does not make an empty diff small");
+    assert.match(kept.withheld[0].reason, /origin\/release/, "the print names the ref the user chose");
+
+    writeFileSync(join(dir, "a.kt"), "val a = 1\n");
+    g("add", "-A"); g("commit", "-qm", "small");
+    const small = applySkipRules(computeDiffSignals(dir, { baseRef: "origin/release" }), { phases: PHASES });
+    assert.ok(small.applied.some((a) => a.phase_skipped === "security"), "a real diff against it behaves as before");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("review of #246: uncommitted and untracked work is part of the change", () => {
+  const { dir, g } = repo();
+  try {
+    writeFileSync(join(dir, "Scaffold.kt"), "class Scaffold\n");
+    g("add", "-A"); g("commit", "-qm", "3-line scaffold");
+    // 28 files of work nobody has committed yet: one tracked edit, the rest untracked.
+    writeFileSync(join(dir, "seed.txt"), "one\ntwo\nthree\nfour\n");
+    for (let i = 0; i < 27; i++) writeFileSync(join(dir, `Screen${i}.kt`), "class S\nfun a() {}\n");
+    const s = computeDiffSignals(dir);
+    assert.equal(s.changed_files.length, 29);
+    assert.equal(s.untracked_files, 27);
+    assert.equal(s.loc_touched, 1 + 1 + 27 * 2, "committed + uncommitted + untracked lines");
+    assert.ok(!applySkipRules(s, { phases: PHASES }).applied.some((a) => a.phase_skipped === "security"));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("review of #246: an untracked sensitive or migration path blocks the skip like a committed one", () => {
+  const { dir } = repo();
+  try {
+    mkdirSync(join(dir, "auth"));
+    writeFileSync(join(dir, "auth", "TokenStore.kt"), "class TokenStore\n");
+    const s = computeDiffSignals(dir);
+    assert.equal(s.empty_diff, false);
+    assert.equal(s.loc_touched, 1);
+    assert.ok(!applySkipRules(s, { phases: PHASES }).applied.some((a) => a.phase_skipped === "security"));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("review of #246: the pipeline's own files are not the change", () => {
+  const { dir } = repo();
+  try {
+    // /sdlc:init leaves this untracked; it must not turn a fresh branch into a small config diff.
+    mkdirSync(join(dir, ".sdlc"));
+    writeFileSync(join(dir, ".sdlc", "sdlc.local.yaml"), "skip_phases: []\n");
+    mkdirSync(join(dir, "docs", "plans", "x"), { recursive: true });
+    writeFileSync(join(dir, "docs", "plans", "x", "01-ba.md"), "# BA\n");
+    const s = computeDiffSignals(dir);
+    assert.deepEqual(s.changed_files, []);
+    assert.equal(s.empty_diff, true);
+    const r = applySkipRules(s, { phases: PHASES });
+    assert.deepEqual(r.applied, [], "neither config-only nor lightweight-no-db may fire");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("review of #246: a binary file makes the size unknown — a keystore is not 0 lines", () => {
+  const { dir, g } = repo();
+  try {
+    writeFileSync(join(dir, "release.keystore"), Buffer.from([0, 1, 2, 3, 0, 255]));
+    g("add", "-A"); g("commit", "-qm", "keystore");
+    const s = computeDiffSignals(dir);
+    assert.equal(s.binary_files, 1);
+    assert.match(s.size_unknown, /1 binary file/);
+    const r = applySkipRules(s, { phases: PHASES });
+    assert.ok(!r.applied.some((a) => a.phase_skipped === "security"));
+    assert.ok(r.withheld.some((w) => w.rule === "lightweight-no-db"));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a measured part already over the limit settles the rule without withholding it", () => {
+  const big = { ...UNKNOWN, empty_diff: false, loc_measured: 400, size_unknown: "the diff has 1 binary file(s)" };
+  assert.equal(locAtLeast(big, 50), true, "the measured count is a lower bound");
+  const r = applySkipRules(big, { phases: PHASES });
+  assert.deepEqual(r.applied, []);
+  assert.deepEqual(r.withheld, [], "400 LOC was never going to be skipped; nothing was held back");
+});
+
+test("issue #239: typo-fix is withheld on an empty diff — 'rename X to Y' can touch every file", () => {
+  const r = applySkipRules(UNKNOWN, { args: "rename Foo to Bar", phases: PHASES });
+  assert.ok(!r.applied.some((a) => a.rule === "typo-fix"));
+  assert.ok(r.withheld.some((w) => w.rule === "typo-fix" && w.phase_kept === "business_analysis"));
+  const forced = applySkipRules(UNKNOWN, { args: "rename Foo to Bar", phases: PHASES, forceBa: true });
+  assert.ok(!forced.withheld.some((w) => w.rule === "typo-fix"), "--force-ba keeps BA anyway, so nothing was held back");
+});
+
+test("a rule is reported withheld only for a phase that is present", () => {
+  const r = applySkipRules(UNKNOWN, { phases: PHASES.filter((p) => p !== "security") });
+  assert.deepEqual(r.withheld, [], "a phase the recipe never had was not kept by anyone");
+  assert.deepEqual(applySkipRules(UNKNOWN, { phases: PHASES, disabled: true }).withheld, []);
+});
+
+test("the print reports withheld rules, alone or after the applied ones", () => {
+  const withheld = [{ rule: "lightweight-no-db", phase_kept: "security", reason: "empty" }];
+  assert.match(renderSkipPrint([], withheld), /^🛡️ Skip-rules withheld:\n {3}lightweight-no-db → kept security: empty$/);
+  const both = renderSkipPrint([{ rule: "config-only", phase_skipped: "qa", reason: "because" }], withheld);
+  assert.match(both, /^✂️ Skip-rules applied:\n.*\n🛡️ Skip-rules withheld:\n/);
 });

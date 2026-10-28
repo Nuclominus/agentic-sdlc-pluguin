@@ -235,7 +235,7 @@ const money = (n) => `$${(n ?? 0).toFixed(2)}`;
 const moneyOrDash = (n, known) => (known ? money(n) : "$—");
 
 /** 1d-2 — the human dry-run block. Segments concatenate; only `‖ parallel` is exclusive. */
-export function renderDryRun({ estimate: est, slots, stack, workflow, autoselected, skipRules = [], cap, healEnabled, healBlocks = 0, resume = null }) {
+export function renderDryRun({ estimate: est, slots, stack, workflow, autoselected, skipRules = [], skipWithheld = [], cap, healEnabled, healBlocks = 0, resume = null }) {
   // `slots` counts RECIPE entries; the rows below count DISPATCHES, and a
   // parallel group is one of the former and several of the latter. Printing
   // `Phases (7):` over eight numbered rows made the header contradict the list
@@ -273,6 +273,9 @@ export function renderDryRun({ estimate: est, slots, stack, workflow, autoselect
     lines.push(`   ${i + 1}. ${r.phase}${r.aspect ? ` — ${r.aspect}` : ""}    → ${r.agent} (${r.tier})   ~${moneyOrDash(r.est, !r.unpriced)}${flags}`);
   });
   lines.push(`Skip-rules applied: ${skipRules.length ? skipRules.map((s) => s.rule).join(", ") : "none"}`);
+  if (skipWithheld.length) {
+    lines.push(`Skip-rules withheld: ${skipWithheld.map((w) => w.rule).join(", ")} — change size unknown`);
+  }
   if (healBlocks > 0 && !healEnabled) {
     lines.push(`⚙ Healing inactive on this stack — ${healBlocks} guarded phase(s) carry a heal: block, but the active profile supplies no heal_checks. Set heal_checks in .sdlc/sdlc.local.yaml to enable it.`);
   }

@@ -7,7 +7,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -459,4 +459,86 @@ test("the core debug recipe opens with the debugging phase, not with development
   assert.match(doc.description, /debugger/,
     "the description must not still claim vanilla ships no debugger agent");
   assert.ok(!/ships no dedicated debugger/.test(doc.description));
+});
+
+// Issue #239 / ADR-0040 — an unknown Step-0 size must not decide auto-selection either way.
+const EMPTY = { loc_touched: 999999, loc_measured: 0, has_migrations: false, config_only: false, empty_diff: true,
+  base_ref: "origin/develop", size_unknown: "the diff against origin/develop is empty" };
+
+test("issue #239: a loc_touched bound does not match while the size is unknown", () => {
+  assert.deepEqual(evaluateMatch({ loc_touched_max: 500 }, EMPTY),
+    { matched: false, satisfied: [], size_unknown: true, assumed: ["loc_touched_max"] },
+    "0 LOC on a fresh branch is not a small change");
+  assert.equal(evaluateMatch({ loc_touched_min: 1 }, EMPTY).matched, false, "nor a large one");
+  assert.deepEqual(evaluateMatch({ arguments_pattern: "fix", loc_touched_max: 500 }, EMPTY, "fix it").assumed,
+    ["arguments_pattern", "loc_touched_max"]);
+  assert.equal(evaluateMatch({ arguments_pattern: "fix", loc_touched_max: 500 }, EMPTY, "add it").size_unknown, undefined,
+    "a recipe that failed on another condition was not held back by the size");
+  assert.equal(evaluateMatch({ arguments_pattern: "fix" }, EMPTY, "fix it").matched, true, "no size bound, no change");
+  assert.equal(evaluateMatch({ loc_touched_min: 0 }, EMPTY).matched, true, "a bound the measured part settles still holds");
+  assert.equal(evaluateMatch({ loc_touched_max: 500 }, { ...EMPTY, size_unknown: null, loc_touched: 0 }).matched, true,
+    "a measured 0 still matches");
+});
+
+test("issue #239: when the unknown size would decide the winner, auto-select abstains", () => {
+  const recipes = [
+    { name: "bugfix", doc: { name: "bugfix", match: { arguments_pattern: "\\bfix\\b", loc_touched_max: 500 }, phases: ["a"] } },
+    { name: "hotfix", doc: { name: "hotfix", match: { arguments_pattern: "\\bfix\\b", loc_touched_max: 200 }, phases: ["a"] } },
+  ];
+  const r = resolveWorkflowName({ args: "fix the purchase flow", recipes, signals: EMPTY, profileDefault: "android-feature" });
+  assert.equal(r.name, "android-feature");
+  assert.equal(r.tier, "profile_default");
+  assert.equal(r.print, "🧭 Auto-select withheld 'bugfix' — its loc_touched bound cannot be judged: the diff against origin/develop is empty. Falling back to the default workflow; pass --workflow=bugfix to choose it.");
+
+  const real = resolveWorkflowName({ args: "fix the purchase flow", recipes, signals: { ...EMPTY, size_unknown: null, loc_touched: 40 }, profileDefault: "p" });
+  assert.equal(real.name, "bugfix", "with a known size the bounds are judged as before");
+});
+
+test("review of #246: a held-back recipe does not hand the tie to the runner-up", () => {
+  // The defect: on a fresh branch "Fix crash …" lost `bugfix` and fell to `debug`, which runs
+  // no security phase. The runner-up must not win a tie the unknown size decided.
+  const recipes = [
+    { name: "bugfix", doc: { name: "bugfix", match: { arguments_pattern: "crash", loc_touched_max: 500 }, phases: ["a"] } },
+    { name: "debug", doc: { name: "debug", match: { arguments_pattern: "crash" }, phases: ["a"] } },
+  ];
+  const r = resolveWorkflowName({ args: "crash on launch", recipes, signals: EMPTY, profileDefault: "p" });
+  assert.equal(r.name, "p");
+  assert.match(r.print, /^🧭 Auto-select withheld 'bugfix'/);
+});
+
+test("review of #246: a winner the unknown size did not affect is selected, with no withheld print", () => {
+  const recipes = [
+    { name: "bugfix", doc: { name: "bugfix", match: { arguments_pattern: "crash", loc_touched_max: 500 }, phases: ["a"] } },
+    { name: "android-debug", doc: { name: "android-debug", match: { arguments_pattern: "crash", priority: 10 }, phases: ["a"] } },
+  ];
+  const r = resolveWorkflowName({ args: "crash on launch", recipes, signals: EMPTY, profileDefault: "p" });
+  assert.equal(r.name, "android-debug", "priority wins whatever the size, so the size decided nothing");
+  assert.ok(!/withheld/.test(r.print));
+});
+
+test("review of #246: on the SHIPPED recipes, an unknown size never drops security a known small one keeps", () => {
+  // The guard the synthetic fixtures above could not give: the real recipe set, the real tie-breaks.
+  const load = (dir) => readdirSync(join(REPO, dir)).filter((f) => f.endsWith(".yaml")).map((f) => join(REPO, dir, f)).map((file) => {
+    const doc = parseYaml(readFileSync(file, "utf8"));
+    return { name: doc.name, doc, origin: "plugin", file };
+  });
+  const flat = (doc) => normalizePhases(doc.phases).flatMap((p) => (Array.isArray(p.parallel) ? p.parallel : [p.name]));
+  const stacks = [
+    { recipes: load("plugins/sdlc/workflows"), profileDefault: "default" },
+    { recipes: [...load("plugins/sdlc/workflows"), ...load("plugins/android-foundation/workflows")], profileDefault: "android-feature" },
+  ];
+  const requests = ["Fix crash when the purchase list is empty", "fix the login bug", "urgent hotfix for payments",
+    "production fix: emergency crash in checkout", "rename Foo to Bar", "Add the purchase screens"];
+  const SMALL = { ...EMPTY, empty_diff: false, size_unknown: null, loc_touched: 10, loc_measured: 10 };
+  for (const { recipes, profileDefault } of stacks) {
+    const phasesOf = (name) => flat(recipes.find((r) => r.name === name).doc);
+    for (const args of requests) {
+      const known = resolveWorkflowName({ args, recipes, signals: SMALL, profileDefault }).name;
+      const fresh = resolveWorkflowName({ args, recipes, signals: EMPTY, profileDefault }).name;
+      if (phasesOf(known).includes("security")) {
+        assert.ok(phasesOf(fresh).includes("security"),
+          `${profileDefault}: "${args}" keeps security on a small diff ('${known}') but not on a fresh branch ('${fresh}')`);
+      }
+    }
+  }
 });
