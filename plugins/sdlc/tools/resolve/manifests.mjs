@@ -20,7 +20,7 @@
 // not have to be resolved by heuristic — it never has to arise.
 
 import { existsSync, readFileSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { iterFiles } from "./fsglob.mjs";
 import { resolveConfigDir } from "./roots.mjs";
 import { parseYaml } from "./yaml.mjs";
@@ -140,11 +140,48 @@ function classify(records) {
   return { foundations, frameworks: deduped, errors, shadowed_frameworks };
 }
 
+// Issue #238 / ADR-0039: the command lists a manifest declares — the strings the orchestrator runs
+// verbatim through its own Bash. Embedded `frameworks:` rows carry the same keys (ADR-0026).
+const COMMAND_LISTS = ["pre_phase_commands", "post_pipeline_checks", "heal_checks"];
+export const PLUGIN_ROOT_TOKEN = "${CLAUDE_PLUGIN_ROOT}";
+export const bindCommand = (c, dir) => (typeof c === "string" ? c.split(PLUGIN_ROOT_TOKEN).join(dir) : c);
+
+/**
+ * Bind `${CLAUDE_PLUGIN_ROOT}` in a manifest's command lists to the DECLARING plugin's directory.
+ *
+ * The orchestrator runs these commands from the sdlc plugin's skill, where the variable — when the
+ * host exports it at all — names the sdlc plugin, not the foundation that wrote the command. Left
+ * unbound, `sh "${CLAUDE_PLUGIN_ROOT}/scripts/x.sh"` in android-foundation would resolve to a file
+ * that does not exist. The resolver is the one place that knows which plugin each manifest came
+ * from, so it substitutes the absolute path here, at load, the same way `role_expertise` rule
+ * paths come out absolute (profile.mjs `mergeRoleExpertise`). Every consumer — plan, dry-run,
+ * telemetry, lint — then sees the path the command will really use.
+ *
+ * Only the literal `${CLAUDE_PLUGIN_ROOT}` spelling is bound; it is the spelling Claude Code's own
+ * hooks.json uses for the same meaning. A project's `.sdlc/sdlc.local.yaml` override is not a
+ * manifest: `applyLocalOverrides` (profile.mjs) binds the same token there to the PRIMARY
+ * foundation's directory, the plugin whose defaults the override replaces.
+ */
+export function bindPluginRoot(doc, dir) {
+  if (!doc || typeof doc !== "object") return doc;
+  const bind = (obj) => {
+    for (const key of COMMAND_LISTS) {
+      if (!Array.isArray(obj[key])) continue;
+      obj[key] = obj[key].map((c) => bindCommand(c, dir));
+    }
+  };
+  bind(doc);
+  for (const row of Array.isArray(doc.frameworks) ? doc.frameworks : []) {
+    if (row && typeof row === "object") bind(row);
+  }
+  return doc;
+}
+
 function readManifest(file) {
   let raw;
   try { raw = readFileSync(file, "utf8"); }
   catch (e) { return { file, error: `read: ${e.message}` }; }
-  try { return { file, doc: parseYaml(raw) }; }
+  try { return { file, doc: bindPluginRoot(parseYaml(raw), dirname(resolve(file))) }; }
   catch (e) { return { file, error: `parse: ${e.message}` }; }
 }
 

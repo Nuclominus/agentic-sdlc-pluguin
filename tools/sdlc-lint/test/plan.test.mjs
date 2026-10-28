@@ -293,6 +293,16 @@ test("project overrides reach the plan, and the cap override is announced", () =
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
 
+// Issue #238 / ADR-0039: an override that keeps a foundation-shipped gate binds the token to the
+// foundation the override replaces — the plan must carry the path the orchestrator will run.
+test("${CLAUDE_PLUGIN_ROOT} in a project check override binds to the winning foundation", () => {
+  const w = world({ localYaml: 'heal_checks:\n  - sh "${CLAUDE_PLUGIN_ROOT}/scripts/gate.sh" compile\n' });
+  try {
+    const { plan } = resolvePlan({ cwd: w.proj, args: "", env: w.env });
+    assert.deepEqual(plan.profile.heal_checks, [`sh "${w.plug}/scripts/gate.sh" compile`]);
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
 test("--workflow beats the profile default, and an unknown name halts with the available list", () => {
   const w = world();
   try {

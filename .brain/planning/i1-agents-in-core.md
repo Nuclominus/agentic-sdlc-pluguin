@@ -93,7 +93,7 @@ Destinations in short: `manifest.yaml` = `role_expertise.<role>` (invariants and
 | android-developer | Mandatory Skills & Architecture Detection | plugins/android-foundation/skills/android-architecture/SKILL.md | `then follow it — never impose a pattern the project does not use.` |
 | android-developer | Knowledge sourcing (mandatory — before any code) | plugins/android-foundation/rules/documentation.md | `for every module it will touch` |
 | android-developer | Authoritative References | plugins/android-foundation/manifest.yaml | `forbidden patterns — read before the first edit` |
-| android-developer | Implementation | plugins/android-foundation/manifest.yaml | `./gradlew compileDebugKotlin, one attempt` |
+| android-developer | Implementation | plugins/android-foundation/manifest.yaml | `a bare compileDebugKotlin silently skips a flavored :app` |
 | android-developer | Reviewer ⇄ Developer Loop | plugins/sdlc/agents/developer.md | `every `MUST_FIX` item, not just the first` |
 | android-developer | Quality Checklist | plugins/android-foundation/manifest.yaml | `Every non-decorative composable gets a testTag` |
 | android-devops | Project Extensions | — | replaced by one `expertise --role devops` command (ADR-0014/0019) |

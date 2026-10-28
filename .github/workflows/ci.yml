@@ -58,5 +58,7 @@ jobs:
         run: bash tests/test-android-cli-check.sh
       - name: post-implement-check test
         run: bash tests/test-post-implement-check.sh
+      - name: gradle-variant-check test
+        run: bash tests/test-gradle-variant-check.sh
       - name: model-local schema test
         run: python3 tests/test-model-local-schema.py

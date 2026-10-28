@@ -43,9 +43,11 @@ file uses only the neutral override fields.
    # Project-local recipes: drop custom workflow YAMLs in .sdlc/sdlc-workflows/<name>.yaml
    # (they shadow plugin recipes of the same name). Author them with /sdlc:workflow-config.
 
+   # default_variant: devDebug             # build variant the stack's own checks target (Android: the product flavor)
+
    # post_pipeline_checks:                 # REPLACES the profile's defaults entirely
-   #   - "./gradlew testDebugUnitTest"
-   #   - "./gradlew lintDebug"
+   #   - "./gradlew :app:testDevDebugUnitTest"   # name the module + variant; a bare testDebugUnitTest skips a flavored :app
+   #   - "./gradlew :app:lintDevDebug"
 
    # phase_command_overrides:
    #   qa: "./gradlew connectedDebugAndroidTest"

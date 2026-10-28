@@ -25,6 +25,8 @@ skip_phases:
 frameworks:
   disable: [ktor]   # suppress a framework the resolver DID detect (see below)
 
+default_variant: devDebug         # build variant the stack's own checks target (see below)
+
 extra_phase_prompts:
   development: "Follow our internal module-structure.md"
 
@@ -102,6 +104,27 @@ whose dependency is absent means injecting guidance for a library the project do
 a framework's guidance, add its dependency. A stale `enable:` block warns rather than doing nothing
 quietly.
 
+### `default_variant` — the variant the stack's checks build
+
+The core reads nothing from this key; the active foundation's check commands do. On Android,
+`heal_checks` and `post_pipeline_checks` run `scripts/gradle-variant-check.sh`, which names one
+project-qualified variant task per module — `:app:compileDevDebugKotlin`, not a bare
+`compileDebugKotlin` that Gradle silently skips on an `:app` with product flavors ([#238]). Without
+the key it picks each module's unflavored task, else its alphabetically first flavor; with it,
+the named flavor wherever a module has it (`devDebug` and `dev` mean the same — the gates are all
+Debug). A value no module has prints a `WARN` and falls back. A project whose modules declare no
+variant task at all FAILS the check rather than passing it. To pin exact tasks instead, replace
+the lists themselves with `heal_checks:` / `post_pipeline_checks:`. A replaced list may keep a
+shipped gate by copying its line verbatim: `${CLAUDE_PLUGIN_ROOT}` in a project check list is
+bound to the active foundation's directory, the same as in the foundation's own manifest.
+
+```yaml
+post_pipeline_checks:               # keep the flavor-aware compile gate, drop lint and tests
+  - sh "${CLAUDE_PLUGIN_ROOT}/scripts/gradle-variant-check.sh" compile
+```
+
+[#238]: https://github.com/Nuclominus/agentic-sdlc-pluguin/issues/238
+
 ### Unknown keys are reported
 
 Every top-level key in `sdlc.local.yaml` that nothing reads produces one line per run:
@@ -112,8 +135,8 @@ WARN: .sdlc/sdlc.local.yaml: unknown key 'skip_phase' — ignored. Supported: ac
 
 A typo used to be ignored in complete silence, which is how a dead `frameworks:` block read as
 honoured for seven releases. The supported set is exactly: `active_workflow`,
-`convention_skills_extra`, `cost_caps`, `extensions`, `extra_phase_prompts`, `frameworks`,
-`heal_checks`, `phase_command_overrides`, `post_pipeline_checks`, `skip_phases`.
+`convention_skills_extra`, `cost_caps`, `default_variant`, `extensions`, `extra_phase_prompts`,
+`frameworks`, `heal_checks`, `phase_command_overrides`, `post_pipeline_checks`, `skip_phases`.
 
 [#197]: https://github.com/Nuclominus/agentic-sdlc-pluguin/issues/197
 

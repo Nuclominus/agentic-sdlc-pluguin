@@ -111,7 +111,7 @@ The dependency is resolved **by plugin name, not by marketplace** (`tools/resolv
 
 ## Project overrides
 
-The orchestrator honors a project-level `.sdlc/sdlc.local.yaml`. The supported top-level keys are exactly `post_pipeline_checks`, `phase_command_overrides`, `extra_phase_prompts`, `skip_phases`, `convention_skills_extra`, `extensions` (the Project Extension Manifest), `cost_caps`, `heal_checks`, `active_workflow` and `frameworks` (ADR-0027 — `disable` only). Anything else is reported once per run as an unknown key, so this list and `KNOWN_LOCAL_KEYS` in `tools/resolve/profile.mjs` must stay in step — see [Configuration & Local Overrides](../../docs/CONFIGURATION.md#local-overrides).
+The orchestrator honors a project-level `.sdlc/sdlc.local.yaml`. The supported top-level keys are exactly `post_pipeline_checks`, `phase_command_overrides`, `extra_phase_prompts`, `skip_phases`, `convention_skills_extra`, `extensions` (the Project Extension Manifest), `cost_caps`, `heal_checks`, `active_workflow`, `frameworks` (ADR-0027 — `disable` only) and `default_variant` (read by the foundation's check commands, not the core — ADR-0039). Anything else is reported once per run as an unknown key, so this list and `KNOWN_LOCAL_KEYS` in `tools/resolve/profile.mjs` must stay in step — see [Configuration & Local Overrides](../../docs/CONFIGURATION.md#local-overrides).
 
 ---
 

@@ -461,6 +461,7 @@ export function resolveProfile({ cwd = process.cwd(), args = "", env = process.e
   ]);
 
   const overridden = applyLocalOverrides(base, local, {
+    pluginRoot: primaryRecord?.file ? dirname(resolve(primaryRecord.file)) : null,
     availableSkills: deps.available_skills,
     unavailablePlugins: deps.flags,
     knownAgents,
