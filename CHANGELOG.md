@@ -4,6 +4,8 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+## [4.3.1] — 2026-10-28
+
 `sdlc` `3.2.2` → `3.3.0`, `android-foundation` `3.2.0` → `3.3.0` (minor: fixes from the After Action
 Review of three Android runs on sdlc 3.2.2. Gates that silently passed now fail, a fresh branch keeps
 its security phase, and chained runs stop billing each other. ADR-0039, ADR-0040, ADR-0041.)
