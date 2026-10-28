@@ -77,7 +77,7 @@ Values that stay with the model, and why the invariant does not reach them:
 |---|---|
 | `agent_id` | exists only in the Agent result envelope; no file records it |
 | `subagent_tokens`, `total_subagent_tokens` | the envelope's aggregate count. `finish` sums only `usage_source: "transcript"` phases and never writes this key — removing it would delete the value, not relocate it |
-| `qa_iterations_used`, `qa_status` | parsed from the agent's compact summary, which exists only in context |
+| `qa_iterations_used`, `qa_status`, `blockers` | parsed from the agent's compact summary, which exists only in context |
 | `compact_summary_chars` | the length of a string that exists only in context |
 | `model` | a registry *lookup* from the declared tier, not a value stored on disk under that key |
 | `CONTEXT.running_cost_usd` | feeds a decision **inside** the run. `phase-cost` returns each phase's number; the accumulation is the gate's own state |

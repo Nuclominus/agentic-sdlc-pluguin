@@ -38,6 +38,7 @@
     "compact_handoff_violation": { "type": "boolean" },
     "qa_iterations_used": { "type": "integer", "minimum": 0 },
     "qa_status": { "enum": ["completed", "capped"] },
+    "blockers": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Non-empty BLOCKERS items parsed from the phase's compact summary (Step 3d-2b) — e.g. a mandatory skill the role reported it could not invoke." },
     "heal_attempts_used": { "type": "integer", "minimum": 0 },
     "heal_status": { "enum": ["healed", "exhausted", "skipped", "pre-existing"] },
     "output_file": { "type": "string" },
