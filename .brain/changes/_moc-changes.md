@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-10-09 | #236 | `other` | — | [[changes/2026-10-09-PR-236-update-models-list-correct-sonnet-5-5-cache-read-rate-add-ha]] |
 | 2026-09-29 | #234 | `chore` | — | [[changes/2026-09-29-PR-234-promote-the-sonnet-tier-to-claude-sonnet-5-5-bump-sdlc-to-3]] |
 | 2026-09-29 | #228 | `feat` | — | [[changes/2026-09-29-PR-228-maintainer-sync-for-the-android-skill-matrix-adr-0036]] |
 | 2026-09-29 | #227 | `feat` | — | [[changes/2026-09-29-PR-227-audit-off-matrix-skill-use-after-the-run-adr-0037]] |
