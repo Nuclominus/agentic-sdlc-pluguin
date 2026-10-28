@@ -43,7 +43,17 @@ Guarded phases run a **self-healing micro-loop** (Track G1,
 `heal_checks` run; a failure re-dispatches the phase's own agent with the tool output (≤2 attempts),
 with an orchestrator-side pre-existing-breakage guard that classifies out-of-scope failures at zero
 attempt cost. Heal outcomes (`heal_attempts_used`/`heal_status`) land in checkpoints, telemetry, AAR
-metrics, and the HTML report. Headless automation gates on `_telemetry.json` state
+metrics, and the HTML report. Phase agents hand off through two channels:
+- a compact summary, whose machine lines the orchestrator parses;
+- a mandatory `detailed_output_path` file that later phases read.
+
+The orchestrator reads three summary lines into telemetry:
+- `REVIEW_STATUS` / `FINDINGS` drive the review loop;
+- `ITERATIONS_USED` / `STATUS` record the 3-attempt cap for both `qa` and `test`;
+- `BLOCKERS` from any phase lands in `phases[].blockers` (#244).
+
+Every MANDATORY skill in a role's expertise block runs again on each loop round; one the role
+cannot invoke is a blocker, never a silent skip. Headless automation gates on `_telemetry.json` state
 (`aborted_at_phase`), never on printed output or the exit code — the SKILL.md is a prompt and can
 control neither, a constraint stated in Step 0a-1 and enforced doc-wide by sdlc-lint.
 
