@@ -432,10 +432,16 @@ function timelineSection(t) {
   let ohRow = "";
   if (oh && oh.cost_usd != null) {
     const ml = oh.main_loop || {};
-    const billed = (ml.input_tokens || 0) + (ml.output_tokens || 0) + (ml.cached_input_tokens || 0) + (ml.cache_creation_tokens || 0);
+    // The row's cost covers both buckets, so its token count must too.
+    const billedOf = (u) => (u.input_tokens || 0) + (u.output_tokens || 0) + (u.cached_input_tokens || 0) + (u.cache_creation_tokens || 0);
+    const billed = billedOf(ml) + billedOf(oh.nested_subagents || {});
+    // Priced with no run window: it may carry other runs' turns from the same session.
+    const src = oh.window && oh.window.source;
+    const unwindowed = src === "none" || src === "open-ended" || src === "unbounded-fallback"
+      ? `<span class="badge-warn">not run-windowed</span>` : "";
     ohRow = `<div class="tl-foot">
 <div class="tl-node ghost">⚙</div>
-<div><span class="tl-name">orchestration</span> <span class="badge">overhead</span>
+<div><span class="tl-name">orchestration</span> <span class="badge">overhead</span>${unwindowed}
 <div class="tl-detail"><code>${esc(ml.model || "—")}</code> · main-loop + nested · ${fmtInt(billed)} billed tokens</div></div>
 <div class="metric-val big">${fmtUsd(oh.cost_usd)}</div>
 </div>`;

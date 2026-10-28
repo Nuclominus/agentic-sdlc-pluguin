@@ -492,6 +492,9 @@ like any other plain phase (`status ∈ {completed, skipped}` ⇒ done) — no c
 For a phase carrying `loop: {return_to, max_rounds}` (e.g. a review phase that bounces back to development):
 1. Run the loop phase normally (3a–3e, including 3b-0 and 3e-heal when the phase carries a
    `heal:` block — each round is a fresh dispatch with its own heal budget). Set `round = 1`.
+   Every dispatch of the loop phase carries `loop_round: {round}/{max_rounds}` in its per-call
+   context — that line, not `loop_findings` (which only the `return_to` phase receives), is how
+   the loop phase knows it is on a later round.
 2. Read the loop phase agent's COMPACT summary for an explicit verdict:
    - **approved / no findings** (e.g. "LGTM", empty findings list) → loop satisfied; advance to the next phase.
    - **changes requested / non-empty findings** → if `round < max_rounds`: re-dispatch the
@@ -597,6 +600,7 @@ Output language contract:
 - narrative artifacts (markdown reports, summaries): match the per-call narrative_language value below
 
 Compact handoff contract: return ONLY a COMPACT summary (≤2-3K tokens). The full deliverable goes to a per-call file path supplied below. Do NOT inline a previous phase's full output into your reasoning; read prior outputs from the file system as needed.
+The file at detailed_output_path is a pipeline handoff artifact read by later phases, not an optional report file. Writing it is mandatory and overrides any generic "do not write report/summary .md files" guidance; a phase that returns without writing it has not finished.
 
 Read discipline: your entire prompt prefix is re-read and billed on every turn, so
 what you pull into context costs on every subsequent turn, not once.
@@ -628,6 +632,8 @@ phase_command_overrides:
   {phase_command_overrides[phase] as a key:value list, or "none"}
 availability_flags:
   {csv of CONTEXT.{plugin}_unavailable=true flags, or "all dependencies available"}
+{IF loop phase (3-loop):}
+loop_round: {round}/{max_rounds}
 {IF aspect-aware:}
 aspect_constraint: |
   Your scope is limited to '{aspect}'. Do NOT touch other aspects' files
@@ -1074,12 +1080,21 @@ gate as a measured zero. Step 5b re-derives the same numbers from the same trans
 the run, so this step never competes with it: it moves the identical computation earlier, where the
 gate can still act on it.
 
-**3d-2. QA-specific telemetry** — when running the `qa` phase, parse the agent's compact summary for the lines `ITERATIONS_USED: N` (max 3, hard cap from the agent prompt) and `STATUS: complete | incomplete-blocked`. Record:
+**3d-2. Test-cap telemetry** — when running the `qa` OR `test` phase (both carry the 3-attempt cap), parse the agent's compact summary for the lines `ITERATIONS_USED: N` (max 3, hard cap from the agent prompt) and `STATUS: complete | incomplete-blocked`. Record:
 
 - `qa_iterations_used: N`
 - `qa_status: "completed"` when STATUS is `complete`, or `"capped"` when STATUS is `incomplete-blocked`.
 
-Both fields go into the QA phase entry of `phases[]`.
+Both fields go into that phase's entry of `phases[]` (the `qa_` prefix is historical — on a `test`
+entry they mean the same capped test-writing loop). When `qa_status` is `"capped"`, print
+`⚠️ {phase} hit the 3-attempt cap — unresolved failures: see {output_file}` so the cap is visible
+before the next phase runs, not only in the Step 4 report.
+
+**3d-2b. Blockers** — for EVERY phase, parse the compact summary for a `BLOCKERS:` line. When it is
+present and non-empty, print `⚠️ {phase} blockers: {items}` and record them as `blockers: [...]`
+(one string per item) in that phase's `phases[]` entry. A blocker naming a MANDATORY skill that
+could not be invoked is a compliance miss the role reported about itself: record it, and on a loop
+phase never treat that round as approved, whatever its verdict line says.
 
 **3d-cap. Cost-cap gate (real runs)** — enforce `caps.max_total_cost_usd` from the active
 workflow recipe. This check sits at the **end of Step 3d, gating the next iteration of the
@@ -1912,6 +1927,59 @@ RETURN ONLY a COMPACT summary (≤3K tokens):
 - Any blockers or open questions for the next phase
 ```
 
+### review
+
+```
+Review the changes described in: docs/plans/{task_slug}/02-development.md
+Scope and acceptance criteria: docs/plans/{task_slug}/01-business-analysis.md
+Read the actual changed files via the file system; the diff is not in this prompt and any
+copy of it would be stale. When loop_round below is 2 or later, read your own earlier report
+at detailed_output_path first, review only what changed since it, and say for each earlier
+finding whether it is resolved — then overwrite the report with this round's.
+
+You are READ-ONLY on production code: report findings with file:line and a concrete
+suggestion; the development phase applies them in the next round. Security is the
+security phase's dimension, not yours.
+
+Invoke every MANDATORY skill in your Stack expertise block for THIS round, in this
+dispatch, before you write the report — a later round never inherits round 1's. One you
+cannot invoke goes under BLOCKERS, and that round is not an approval.
+
+Write the review report to the detailed_output_path below.
+
+RETURN ONLY the compact summary exactly as your agent definition's "Return value" block
+specifies. Its REVIEW_STATUS and FINDINGS lines are a machine contract the review loop
+(3-loop) reads, and its BLOCKERS line is read by 3d-2b: emit them verbatim, with explicit
+zeros when you find nothing.
+```
+
+### test
+
+```
+Write and run unit / integration tests for the changes described in:
+docs/plans/{task_slug}/02-development.md
+Acceptance criteria: docs/plans/{task_slug}/01-business-analysis.md
+
+Read the actual changed files via the file system; do not rely on getting the diff in this prompt.
+
+Build an AC → test-method table first: every acceptance criterion that the in-pipeline test
+task can exercise gets a covering test, or a stated reason it has none (already covered —
+name the test; needs a device / emulator / full app — the qa phase owns it). An AC with
+neither is a gap to close before you return.
+
+In-pipeline scope: fast, host-independent tests only (the Stack expertise block names the
+task to run). Instrumentation / UI / on-device tests are the qa phase's or CI's.
+
+🛑 HARD LIMIT: You have a maximum of 3 ATTEMPTS to fix failing tests.
+After attempt #3, STOP and report unresolved failures. Do NOT iterate further.
+
+Write the test report, including its "AC traceability" section, to the detailed_output_path below.
+
+RETURN ONLY the compact summary exactly as your agent definition's "Return value" block
+specifies. Its ITERATIONS_USED and STATUS lines are read by 3d-2, its BLOCKERS line (if any)
+by 3d-2b — emit them verbatim.
+```
+
 ### qa
 
 ```
@@ -2012,18 +2080,21 @@ RETURN ONLY a COMPACT summary (≤2K tokens):
 ```
 Create a Pull Request for this feature.
 
-Inputs:
-- docs/plans/{task_slug}/01-business-analysis.md (scope)
-- docs/plans/{task_slug}/02-development.md (implementation)
-- docs/plans/{task_slug}/03-qa.md (tests)
-- docs/plans/{task_slug}/04-security.md (security review)
+Inputs: every prior phase output listed under inputs_available below — read each one that
+exists. Typically:
+- 01-business-analysis.md (scope)
+- 02-development.md (implementation)
+- the review report (final verdict and any finding left open)
+- the test report (including its "AC traceability" table)
+- the qa report (tests / verification)
+- the security report (security review) and the remediation report, if they ran
 
 Use Bash with `gh pr create` (or the github MCP equivalent if available).
 
 PR description must include:
 - Summary (1 paragraph)
 - What changed (bulleted, file-grouped)
-- Testing notes (how to verify)
+- Testing notes (how to verify; acceptance-criteria coverage from the AC traceability table, when present)
 - Security notes (any reviewed concerns)
 - Linked issue (if mentioned in $ARGUMENTS)
 

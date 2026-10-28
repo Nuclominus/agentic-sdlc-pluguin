@@ -113,7 +113,10 @@ if (cmd === "phase-cost") {
           console.log(`  total_cost_usd: $${(r.total_cost_usd ?? 0).toFixed(2)}` +
             (r.overhead_cost_usd != null ? `  (orchestration overhead $${r.overhead_cost_usd.toFixed(2)})` : ""));
           if (r.overhead_window_fallback) {
-            console.error(`WARN: overhead window fell back to the full transcript — telemetry started_at/completed_at look wrong; verify orchestration cost`);
+            console.error(`WARN: overhead window fell back to the full transcript — the run window looks wrong; orchestration overhead (main loop + nested subagents) may include other runs in this session; verify it`);
+          }
+          if (r.overhead_window_missing) {
+            console.error(`WARN: no complete run window (no .checkpoint/_started_at + wall_clock_seconds, no started_at/completed_at) — orchestration overhead priced over the whole session on at least one side; it may include other runs`);
           }
           if (r.cap_breach_usd != null) {
             console.error(`WARN: phase spend exceeded the cost cap by $${r.cap_breach_usd.toFixed(2)} (cap_status: ${r.cap_status})` +
