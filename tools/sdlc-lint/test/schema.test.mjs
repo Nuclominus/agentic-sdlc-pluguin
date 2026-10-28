@@ -1,11 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
 import { checkSchemas } from "../lib/schema.mjs";
 import Ajv from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import YAML from "yaml";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
@@ -308,6 +310,12 @@ test("android heal_checks exclude unit tests", () => {
   }
 });
 
+// Every android gate has one shape: run the shipped script when it exists, otherwise FAIL with a
+// version message. The guard exists because sdlc < 3.3.0 never binds the plugin-root token, and a
+// bare `sh <missing file>` exits 127, which the orchestrator records as a SKIP (#252 review).
+const GATE = /^if \[ -f "\$\{CLAUDE_PLUGIN_ROOT\}\/scripts\/gradle-variant-check\.sh" \]; then sh "\$\{CLAUDE_PLUGIN_ROOT\}\/scripts\/gradle-variant-check\.sh" (compile|test|lint); else echo "[^"]*sdlc 3\.3\.0\+[^"]*" >&2; false; fi$/;
+const gateMode = (c) => (GATE.exec(c) || [])[1];
+
 test("android heal_checks are trimmed to compile-only — lint stays in post_pipeline_checks", () => {
   const m = YAML.parse(readFileSync(resolve(REPO, "plugins/android-foundation/manifest.yaml"), "utf8"));
   // G1 perf fix: heal_checks fires after EVERY guarded-phase dispatch (not just on failure), so
@@ -315,14 +323,14 @@ test("android heal_checks are trimmed to compile-only — lint stays in post_pip
   // style debt, not a mechanical build break, and is still fully covered (unconditionally) by
   // post_pipeline_checks below. Exactly one entry, and it must be able to fail (no `|| true`).
   assert.equal(m.heal_checks.length, 1, "heal_checks should carry exactly the compile check");
-  assert.match(m.heal_checks[0], /gradle-variant-check\.sh"? compile$/);
+  assert.equal(gateMode(m.heal_checks[0]), "compile");
   assert.doesNotMatch(m.heal_checks[0], /\|\|\s*true\b/, "the heal compile check must be able to fail");
   for (const c of m.heal_checks) {
-    assert.doesNotMatch(c, /detekt|ktlintCheck|\blint$/,
+    assert.doesNotMatch(c, /detekt|ktlintCheck/,
       "lint is no longer part of the heal loop — it still runs unconditionally in post_pipeline_checks");
   }
   // The claim the perf fix relies on: lint coverage is not lost overall, only ungated mid-pipeline.
-  assert.ok(m.post_pipeline_checks.some((c) => /gradle-variant-check\.sh"? lint$/.test(c)),
+  assert.ok(m.post_pipeline_checks.some((c) => gateMode(c) === "lint"),
     "post_pipeline_checks must still run the full detekt/ktlintCheck sweep at the end of every run");
 });
 
@@ -335,13 +343,31 @@ test("android Gradle gates are flavor-aware and can fail (#238)", () => {
   const m = YAML.parse(readFileSync(resolve(REPO, "plugins/android-foundation/manifest.yaml"), "utf8"));
   const gates = [...m.heal_checks, ...m.post_pipeline_checks];
   for (const c of gates) {
-    assert.match(c, /^sh "\$\{CLAUDE_PLUGIN_ROOT\}\/scripts\/gradle-variant-check\.sh" (compile|test|lint)$/,
-      `'${c}' must call the plugin's variant-check script, never a bare Gradle task`);
+    assert.match(c, GATE,
+      `'${c}' must call the plugin's variant-check script behind the missing-script guard, never a bare Gradle task`);
     assert.doesNotMatch(c, /\|\|\s*true\b/, `'${c}' must be able to fail`);
+    assert.doesNotMatch(c, /\bexit\b/, `'${c}' runs in the orchestrator's own shell — no exit`);
   }
-  assert.deepEqual(m.post_pipeline_checks.map((c) => c.split(" ").pop()), ["lint", "test", "compile"]);
+  assert.deepEqual(m.post_pipeline_checks.map(gateMode), ["lint", "test", "compile"]);
   assert.ok(existsSync(resolve(REPO, "plugins/android-foundation/scripts/gradle-variant-check.sh")),
     "the script the gates call must ship inside the plugin");
+});
+
+test("an android gate under an unbound plugin root FAILS with a version message, never 127", () => {
+  const m = YAML.parse(readFileSync(resolve(REPO, "plugins/android-foundation/manifest.yaml"), "utf8"));
+  const cwd = mkdtempSync(join(tmpdir(), "gate-"));
+  try {
+    for (const c of [...m.heal_checks, ...m.post_pipeline_checks]) {
+      // sdlc < 3.3.0: the token reaches the shell raw and names a plugin without the script.
+      const old = spawnSync("sh", ["-c", c], { cwd, encoding: "utf8", env: { ...process.env, CLAUDE_PLUGIN_ROOT: join(cwd, "sdlc") } });
+      assert.equal(old.status, 1, `'${gateMode(c)}' under an old core must fail, not skip (got ${old.status})`);
+      assert.match(old.stderr, /needs sdlc 3\.3\.0\+/);
+      // sdlc >= 3.3.0: the bound path reaches the real script, whose own 127 (no ./gradlew) passes through.
+      const bound = spawnSync("sh", ["-c", c.split("${CLAUDE_PLUGIN_ROOT}").join(resolve(REPO, "plugins/android-foundation"))],
+        { cwd, encoding: "utf8" });
+      assert.equal(bound.status, 127, `'${gateMode(c)}' with no ./gradlew must still report tool-unavailable`);
+    }
+  } finally { rmSync(cwd, { recursive: true, force: true }); }
 });
 
 // Cost caps are sized against MEASURED transcript cost (p90 of 56 transcript-priced phases across
