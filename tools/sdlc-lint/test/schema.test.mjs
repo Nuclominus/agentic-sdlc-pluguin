@@ -186,6 +186,27 @@ test("checkpoint.schema accepts heal result fields", () => {
   }));
 });
 
+test("checkpoint.schema accepts blockers and capped test-phase fields", () => {
+  const v = compile("schemas/checkpoint.schema.json");
+  assert.ok(v({
+    phase: "test", status: "completed", completed_at: "2026-10-27T10:00:00Z",
+    qa_iterations_used: 3, qa_status: "capped",
+    blockers: ["superpowers:verification-before-completion not invoked this round"],
+  }));
+});
+
+test("checkpoint.schema rejects blockers that are not a list of strings", () => {
+  const v = compile("schemas/checkpoint.schema.json");
+  assert.equal(v({
+    phase: "review", status: "completed", completed_at: "2026-10-27T10:00:00Z",
+    blockers: "mandatory skill skipped",
+  }), false);
+  assert.equal(v({
+    phase: "review", status: "completed", completed_at: "2026-10-27T10:00:00Z",
+    blockers: [""],
+  }), false);
+});
+
 test("checkpoint.schema rejects an unknown heal_status", () => {
   const v = compile("schemas/checkpoint.schema.json");
   assert.equal(v({

@@ -27,6 +27,14 @@ Step 5b · Render HTML run-report
 Step 6  · Close the session: dispatch `session-recorder` → append entry to docs/plans/_journal.md
 ```
 
+**Skip-rules and an unknown size (Step 0c).** The diff signals are measured at run start, from
+the merge base to the working tree plus untracked files, excluding `.sdlc/` and `docs/plans/`. A
+fresh feature branch reads an empty diff, and binary files cannot be counted in lines. Both make
+the size **unknown**, not "small". The LOC-gated skip-rules (`typo-fix`, `config-only`,
+`lightweight-no-db`) do not fire, and the plan prints them as `🛡️ Skip-rules withheld:`. Recipe
+auto-selection abstains to the profile default when an unknown `loc_touched_*` bound would have
+decided the winner. See [[decisions/ADR-0040-an-empty-diff-is-size-unknown]].
+
 **Run clock (Step 2 + Step 5).** Step 2 records a write-once epoch anchor
 `docs/plans/{slug}/.checkpoint/_started_at`; Step 5 computes `wall_clock_seconds` = now − start and
 renders `started_at`/`completed_at` from it. This measured timing (not an estimate) flows into

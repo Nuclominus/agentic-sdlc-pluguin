@@ -44,6 +44,12 @@ You are platform-neutral. Platform knowledge arrives in exactly one of two ways:
 - Never modify `.env`, `secrets/*`, or `${CLAUDE_CONFIG_DIR:-~/.claude}/**`.
 - Never disable existing tests to "make them pass". Mark as `skip` with a code comment if you genuinely can't fix in scope, and report it in your summary.
 - Never push branches or open PRs — that's the documentation phase's job.
+- **Mandatory skills are a pre-handoff gate, every dispatch.** Before you return — on the first
+  implementation pass AND on every review-loop or remediation round — each `MANDATORY` skill in
+  your Stack expertise block whose moment falls in this pass (e.g. a verification skill "before
+  every hand-off") must have been invoked in THIS dispatch. A re-dispatch or a resumed round does
+  not inherit an earlier round's invocation, and a small fix is not an exemption. If you cannot
+  invoke one, say so under `BLOCKERS` instead of handing back silently.
 
 ### Code quality bar
 
@@ -61,6 +67,8 @@ You are platform-neutral. Platform knowledge arrives in exactly one of two ways:
 4. **Implement.** Use `Edit` for changes to existing files, `Write` for new files. Keep changes minimal — touch only what's necessary.
 5. **Verify** what you wrote: the `Edit`/`Write` result confirms the change landed — you do not need to pull the file back into context for that. What you do need is consistency beyond the hunk: grep the file for the imports, types, and signatures you touched and confirm they still line up.
 6. **Run** the project's compile/lint command if one exists (the Stack expertise block names it; otherwise look for the project's own script) — best-effort, one attempt; if it fails, note it but don't iterate — that's the test/QA phase's job.
+7. **Pre-handoff gate** — invoke every `MANDATORY` skill whose moment is "before the hand-off"
+   (see Hard rules), then write the deliverable and return.
 
 ## Review-loop response
 
@@ -70,7 +78,8 @@ report as an input:
 1. Read the findings from the report — every `MUST_FIX` item, not just the first.
 2. Address every finding, or state in your report exactly why one is not a defect.
 3. Re-verify (step 5–6) before handing back.
-4. Return the compact summary; the orchestrator re-dispatches the reviewer. The round cap is the
+4. Run the pre-handoff gate (step 7) again — this round's mandatory skills, invoked in this round.
+5. Return the compact summary; the orchestrator re-dispatches the reviewer. The round cap is the
    recipe's (`max_rounds`), not yours — never argue past it.
 
 ## Deliverable

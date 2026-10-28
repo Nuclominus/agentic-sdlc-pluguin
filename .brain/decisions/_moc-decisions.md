@@ -2,6 +2,8 @@
 
 > One note per architecture decision. Newest first.
 
+- [[decisions/ADR-0041-nested-subagents-share-the-run-window]]
+- [[decisions/ADR-0040-an-empty-diff-is-size-unknown]]
 - [[decisions/ADR-0039-gradle-gates-name-the-variant-task-per-module]]
 - [[decisions/ADR-0038-the-sonnet-tier-moves-to-sonnet-5-5]]
 - [[decisions/ADR-0037-off-matrix-skill-use-is-audited-not-blocked]]

@@ -349,6 +349,37 @@ test("headless --dry-run emits the machine line instead of the block", () => {
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
 
+test("issue #239: a fresh branch (empty diff) keeps security, and the plan says why", () => {
+  const w = world({
+    recipe: "name: demo-flow\nphases:\n  - business_analysis\n  - development\n  - security\n",
+  });
+  try {
+    // `git switch -c feat origin/main` seconds before the run: the branch has no commits yet.
+    execFileSync("git", ["update-ref", "refs/remotes/origin/main", "HEAD"], { cwd: w.proj, stdio: "ignore" });
+
+    const { plan, prints } = resolvePlan({ cwd: w.proj, args: "Add the purchase screens", env: w.env });
+    assert.equal(plan.skip_rules.signals.empty_diff, true);
+    assert.deepEqual(plan.skip_rules.applied, []);
+    assert.deepEqual(plan.skip_rules.withheld.map((x) => x.phase_kept), ["security"]);
+    assert.ok(plan.workflow.resolved_phases.some((p) => p.name === "security"), "security stays in the plan");
+    assert.ok(!plan.profile.phase_prompts_injection?.development?.includes("SECURITY-LITE"), "no lite check stands in for it");
+    assert.ok(prints.some((p) => p.startsWith("🛡️ Skip-rules withheld:") && p.includes("diff against origin/main is empty")));
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("issue #239: a 'fix' request on a fresh branch is not routed to a size-bounded recipe", () => {
+  const w = bareWorld();
+  try {
+    execFileSync("git", ["update-ref", "refs/remotes/origin/main", "HEAD"], { cwd: w.proj, stdio: "ignore" });
+    // "crash" also matches `debug`, which runs no security: the held-back bugfix must not hand it the tie.
+    const { plan, prints } = resolvePlan({ cwd: w.proj, args: "Fix crash in the purchase flow --dry-run", env: w.env });
+    assert.equal(plan.workflow.name, "default", "the run falls back to the full pipeline");
+    assert.ok(plan.workflow.resolved_phases.some((p) => p.name === "security"), "security runs, as it did under bugfix");
+    assert.ok(prints.some((p) => /Auto-select withheld 'bugfix'/.test(p)), "and the plan names what it held back");
+    assert.ok(prints.some((p) => /Skip-rules withheld: lightweight-no-db/.test(p)), "the dry run carries it too");
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
 test("a skip-rule removes a phase and says so, once", () => {
   const w = world({
     recipe: "name: demo-flow\nphases:\n  - business_analysis\n  - development\n  - security\n",

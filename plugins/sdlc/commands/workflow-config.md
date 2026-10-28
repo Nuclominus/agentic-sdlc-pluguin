@@ -52,7 +52,10 @@ it never runs the pipeline.
 
 7. **Optional `match` block.** Ask whether this recipe should auto-select. If yes, collect any of:
    `arguments_pattern` (ECMAScript regex, matched case-insensitively against the task text),
-   `loc_touched_min` / `loc_touched_max` (integers ≥ 0), `has_migrations` (bool), `config_only` (bool),
+   `loc_touched_min` / `loc_touched_max` (integers ≥ 0 — never satisfied while the change size is
+   unknown, e.g. on the empty diff of a fresh branch; a size-bounded recipe that would otherwise
+   win makes auto-select fall back to the profile default; ADR-0040),
+   `has_migrations` (bool), `config_only` (bool),
    `priority` (integer, default 0 — the FIRST tie-break: raise it to force this recipe to win an
    auto-select tie over a competing recipe, e.g. a project recipe that must beat a built-in one).
    Omit the whole block if the user declines. (This command only AUTHORS the match data; the

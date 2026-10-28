@@ -15,6 +15,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
 import { parseYaml } from "./yaml.mjs";
 import { PROJECT_DIR } from "./roots.mjs";
+import { locAtLeast } from "./skiprules.mjs";
 
 const NAME_RE = /^[a-z][a-z0-9-]*$/;
 const SEVERITIES = ["critical", "high", "medium", "low"];
@@ -167,13 +168,22 @@ export function validateAcyclic(phases, workflowName, file) {
   return errors;
 }
 
-/** Which of a recipe's `match` conditions hold. Absent conditions are not constraints. */
+/**
+ * Which of a recipe's `match` conditions hold. Absent conditions are not constraints.
+ *
+ * A `loc_touched_*` bound is judged through `locAtLeast` (ADR-0040): while the change size is
+ * unknown — a fresh branch's empty diff above all — a bound the measured part does not settle
+ * cannot be met, so the recipe does not match. When every OTHER condition held it reports
+ * `size_unknown: true` and `assumed`, the conditions it WOULD satisfy if the bound were met,
+ * so the selector can rank it as it would have ranked it before.
+ */
 export function evaluateMatch(match, signals, args = "") {
   if (!isPlainObject(match)) return null;
   const conditions = Object.keys(match).filter((k) => k !== "priority");
   if (conditions.length === 0) return null;                 // empty block -> never auto-selected
 
   const satisfied = [];
+  const unknown = [];
   for (const key of conditions) {
     const v = match[key];
     switch (key) {
@@ -182,8 +192,14 @@ export function evaluateMatch(match, signals, args = "") {
         if (!re.test(String(args))) return { matched: false, satisfied: [] };
         break;
       }
-      case "loc_touched_max": if (!(signals.loc_touched <= v)) return { matched: false, satisfied: [] }; break;
-      case "loc_touched_min": if (!(signals.loc_touched >= v)) return { matched: false, satisfied: [] }; break;
+      case "loc_touched_max":
+      case "loc_touched_min": {
+        // `LOC <= v` is `not LOC >= v+1`; null means the size cannot answer.
+        const atLeast = locAtLeast(signals, key === "loc_touched_max" ? v + 1 : v);
+        if (atLeast === null) { unknown.push(key); continue; }
+        if (key === "loc_touched_max" ? atLeast : !atLeast) return { matched: false, satisfied: [] };
+        break;
+      }
       // A `false` here imposes no constraint, per RESOLVER.md.
       case "has_migrations": if (v === true && signals.has_migrations !== true) return { matched: false, satisfied: [] }; break;
       case "config_only": if (v === true && signals.config_only !== true) return { matched: false, satisfied: [] }; break;
@@ -191,6 +207,7 @@ export function evaluateMatch(match, signals, args = "") {
     }
     satisfied.push(key);
   }
+  if (unknown.length) return { matched: false, satisfied: [], size_unknown: true, assumed: [...satisfied, ...unknown] };
   return { matched: true, satisfied };
 }
 
@@ -200,13 +217,22 @@ export function evaluateMatch(match, signals, args = "") {
  * Tie-break order is load-bearing and applied in full: explicit priority, then specificity,
  * then the most conservative cap (no cap is +∞, so a present cap always beats none), then
  * alphabetical as the final backstop. Every stage exists because the one before it can tie.
+ *
+ * An unknown change size must not decide the outcome in EITHER direction (ADR-0040). Treating
+ * it as small picks a size-bounded recipe on a guess; treating it as large hands the tie to
+ * whatever is left — on a fresh branch "Fix crash …" lost `bugfix` and fell to `debug`, which
+ * runs no security. So candidates are ranked as if every unknown bound were met: when that
+ * winner matched outright, the unknown size changed nothing and it is selected; when the winner
+ * is a recipe the size held back, selection ABSTAINS (`name: null`) and Step 1 falls through to
+ * the profile default, the stack's full pipeline.
  */
 export function autoSelect(recipes, signals, args = "") {
   const candidates = [];
   for (const r of recipes) {
     if (!r.doc) continue;
     const m = evaluateMatch(r.doc.match, signals, args);
-    if (m?.matched) candidates.push({ recipe: r, satisfied: m.satisfied });
+    if (m?.matched) candidates.push({ recipe: r, satisfied: m.satisfied, held: false });
+    else if (m?.size_unknown) candidates.push({ recipe: r, satisfied: m.assumed, held: true });
   }
   if (candidates.length === 0) return null;
 
@@ -219,6 +245,13 @@ export function autoSelect(recipes, signals, args = "") {
 
   const winner = candidates[0];
   const name = winner.recipe.doc.name ?? winner.recipe.name;
+  if (winner.held) {
+    return {
+      name: null,
+      withheld: name,
+      print: `🧭 Auto-select withheld '${name}' — its loc_touched bound cannot be judged: ${signals.size_unknown}. Falling back to the default workflow; pass --workflow=${name} to choose it.`,
+    };
+  }
   return {
     name,
     satisfied: winner.satisfied,
@@ -395,12 +428,15 @@ export function resolveWorkflowName({ args = "", activeWorkflow = null, recipes 
   if (named?.name) return { name: named.name, tier: "named_in_prose", autoselected: false, print: named.print, warnings };
 
   if (activeWorkflow) return { name: activeWorkflow, tier: "active_workflow", autoselected: false, print: null, warnings };
+  // An abstaining auto-select (ADR-0040) still owes its print; the name comes from tier 4.
+  let withheldPrint = null;
   if (signals && !/--no-auto-workflow\b/.test(String(args))) {
     const auto = autoSelect(recipes, signals, args);
-    if (auto) return { name: auto.name, tier: "auto", autoselected: true, satisfied: auto.satisfied, print: auto.print, warnings };
+    if (auto?.name) return { name: auto.name, tier: "auto", autoselected: true, satisfied: auto.satisfied, print: auto.print, warnings };
+    if (auto) withheldPrint = auto.print;
   }
-  if (profileDefault) return { name: profileDefault, tier: "profile_default", autoselected: false, print: null, warnings };
-  return { name: "default", tier: "fallback", autoselected: false, print: null, warnings };
+  if (profileDefault) return { name: profileDefault, tier: "profile_default", autoselected: false, print: withheldPrint, warnings };
+  return { name: "default", tier: "fallback", autoselected: false, print: withheldPrint, warnings };
 }
 
 /**
