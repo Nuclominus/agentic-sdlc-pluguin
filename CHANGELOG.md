@@ -4,6 +4,8 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+## [4.4.0] — 2026-11-23
+
 `sdlc` `3.3.1` → `3.4.0`, `android-foundation` `3.3.1` → `3.4.0` (minor: `/sdlc:brief`, `/sdlc:start
 --brief`, `/sdlc:ask-me` and the read-only `project-researcher` agent from #258 and #260, plus the
 researcher's Android expertise block and the narrower lint-config guard.)
