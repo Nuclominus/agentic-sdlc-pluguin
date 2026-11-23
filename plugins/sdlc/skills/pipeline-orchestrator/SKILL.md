@@ -66,7 +66,7 @@ The pipeline must produce consistent artifacts regardless of which language the 
 - **Match user's language:** narrative content in `docs/plans/{slug}/0X-*.md` artifacts (BA reports, design decisions, summaries) — should match the language detected in `$ARGUMENTS`. If `$ARGUMENTS` is mixed or ambiguous, default to English.
 - **PR description:** English regardless of input language. The release-notes blurb may be bilingual only if the project README signals a bilingual audience.
 
-When `plan.brief` is set, `CONTEXT.narrative_language = plan.brief.narrative_language` and the heuristic below is skipped. Otherwise, language detection heuristic: if the majority of word characters in `$ARGUMENTS` are Cyrillic, set `CONTEXT.narrative_language = "uk"`; otherwise `"en"`. Persist this in telemetry.
+When `plan.brief` is set, `CONTEXT.narrative_language = plan.brief.narrative_language` and the heuristic below is skipped. On `--resume=<slug>` there is no `plan.brief`; Resume mode takes the language from the saved `_brief.md` (its `narrative_language` frontmatter, else the heuristic over its text). Otherwise, language detection heuristic: if the majority of word characters in `$ARGUMENTS` are Cyrillic, set `CONTEXT.narrative_language = "uk"`; otherwise `"en"`. Persist this in telemetry.
 
 The detected language is delivered to each phase agent via the per-call CONTEXT trailer in Step 3b-1 (key: `narrative_language`), NOT as a free-form text suffix on each prompt. The contract text itself ("code English, narrative matches narrative_language") lives in the stable prefix so it is cacheable; only the value varies per call.
 
@@ -358,7 +358,7 @@ since: 2026-07-06
       ❌ Cannot resume "{task_slug}": the run lives on branch {runBranch}, current branch is {currentBranch}.
          Run `git worktree list` and check for an existing checkout of {runBranch} first (Step 2
          item 5) — switch to that worktree if one exists. Only run `git checkout {runBranch}` in
-         this workspace if no worktree holds it. Then /sdlc:start --resume
+         this workspace if no worktree holds it. Then /sdlc:start --resume={task_slug}
       ```
       Do not proceed. This is the one way `--resume` can silently apply completed-phase context to
       the wrong tree — never resume onto the wrong branch, no exceptions. Never `git checkout` a
@@ -391,6 +391,9 @@ since: 2026-07-06
 3. Do NOT recreate `_brief.md`. Read the existing one (it is the SSOT description for agents). If a
    non-empty description was passed AND it differs from `_brief.md`, print
    `⚠️ --resume: description differs from saved _brief.md; using saved brief` and continue with the saved brief.
+   Set `CONTEXT.narrative_language` from it: if `_brief.md` opens with YAML frontmatter carrying
+   `narrative_language`, use that value; otherwise apply the Cyrillic heuristic to the `_brief.md` text
+   (not to the resume arguments).
 3b. Delete `docs/plans/{task_slug}/.checkpoint/_post-implement-check.json` if present — before
     item 4 reads `.checkpoint/*.json` below, so it is never mistaken for a unit checkpoint. This
     is a plain resume, not "start fresh" above — its `rm -f .checkpoint/*.json` already covers

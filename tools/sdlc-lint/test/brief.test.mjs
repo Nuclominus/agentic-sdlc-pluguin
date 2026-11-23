@@ -39,7 +39,7 @@ test("brief plus --resume is rejected", () => {
   const cwd = project({ "docs/briefs/x.md": VALID });
   const r = readBrief({ cwd, args: "--brief=docs/briefs/x.md --resume" });
   assert.match(r.error, /cannot be combined with --resume/);
-  assert.equal(r.error, "--brief cannot be combined with --resume (a resumed run already has its _brief.md)");
+  assert.equal(r.error, "--brief cannot be combined with --resume (a resumed run already has its _brief.md; use --resume=<slug>)");
 });
 
 test("a missing file is reported by path", () => {
@@ -108,4 +108,13 @@ test("missing slug and missing narrative_language are errors naming the key", ()
 
 test("briefArgs strips leading dashes so a title cannot act as a flag", () => {
   assert.equal(briefArgs("--brief=a.md --dry-run", "Drop --resume support"), '"Drop resume support" --dry-run');
+});
+
+test("the space form and an empty value are rejected with the = hint", () => {
+  const cwd = project({ "docs/briefs/x.md": VALID });
+  for (const args of ["--brief docs/briefs/x.md --dry-run", "--dry-run --brief", "--brief=", "--brief= --dry-run"]) {
+    const r = readBrief({ cwd, args });
+    assert.equal(r.requested, true, args);
+    assert.equal(r.error, "--brief: give the path as --brief=<path>", args);
+  }
 });

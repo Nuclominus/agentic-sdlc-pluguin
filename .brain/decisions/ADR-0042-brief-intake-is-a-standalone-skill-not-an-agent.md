@@ -71,7 +71,7 @@ orchestrator consumes the file through a `--brief=<path>` flag.**
    orchestrator's algorithm, and the user confirms it. If the file exists, the user chooses: refine
    it (read it as the seed) or pick another slug. The skill never touches git or `.gitignore`.
 7. **End.** The skill saves the file, prints a short summary (slug, language, number of open
-   questions) and `/sdlc:start --brief docs/briefs/<slug>.md`. It does not run that command.
+   questions) and `/sdlc:start --brief=docs/briefs/<slug>.md`. It does not run that command.
 8. **The `--brief` contract.** With `--brief=<path>`, the orchestrator takes `task_slug` from
    `slug`, applies the recipe `match` rules to `title`, takes `narrative_language` from the
    frontmatter instead of the heuristic, and copies the whole file into `_brief.md`. Combining

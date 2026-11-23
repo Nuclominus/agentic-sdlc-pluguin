@@ -34,7 +34,7 @@ for `--stack=NAME` and `--dry-run`.
 Print verbatim:
 ```
 ▶ /sdlc:start
-   Description: <the cleaned-up description>
+   Description: <the cleaned-up description; for a --brief-only run, echo --brief=<path> instead (the title comes from the resolver's print line)>
    Forced stack: <forced_stack or "auto-detect">
 ```
 

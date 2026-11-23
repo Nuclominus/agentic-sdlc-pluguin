@@ -10,6 +10,7 @@ const inside = (root, abs) => abs === root || abs.startsWith(root + sep);
 
 export function readBrief({ cwd, args }) {
   const given = opt(args, "--brief");
+  if (given === null && /(^|\s)--brief=?(\s|$)/.test(String(args))) return { requested: true, error: "--brief: give the path as --brief=<path>" };
   if (given === null) return { requested: false };
   const fail = (msg) => ({ requested: true, error: `--brief=${given}: ${msg}` });
 
@@ -26,10 +27,10 @@ export function readBrief({ cwd, args }) {
   try { raw = readFileSync(real, "utf8"); } catch (e) { return fail(`cannot read ${given}: ${e.code ?? e.message}`); }
   const text = raw.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
   const m = /^---\n([\s\S]*?)\n---(?:\n|$)/.exec(text);
-  if (!m) return fail("no frontmatter (expected a leading --- block with title, slug)");
+  if (!m) return fail("no frontmatter (expected a leading --- block with title, slug, narrative_language)");
   let fmatter;
   try { fmatter = parseYaml(m[1]); } catch (e) { return fail(`invalid frontmatter: ${e.message}`); }
-  if (!fmatter || typeof fmatter !== "object") return fail("no frontmatter (expected a leading --- block with title, slug)");
+  if (!fmatter || typeof fmatter !== "object") return fail("no frontmatter (expected a leading --- block with title, slug, narrative_language)");
 
   const title = typeof fmatter.title === "string" ? fmatter.title.trim() : "";
   if (!title) return fail("frontmatter `title` is required and must be non-empty");
@@ -41,7 +42,7 @@ export function readBrief({ cwd, args }) {
   if (!LANGS.includes(lang)) return fail(`frontmatter \`narrative_language\` must be one of ${LANGS.join(", ")}`);
 
   if (briefOf(args)) return { requested: true, error: "--brief: use either --brief=<path> or a description, not both" };
-  if (/(^|\s)--resume(=|\s|$)/.test(String(args))) return { requested: true, error: "--brief cannot be combined with --resume (a resumed run already has its _brief.md)" };
+  if (/(^|\s)--resume(=|\s|$)/.test(String(args))) return { requested: true, error: "--brief cannot be combined with --resume (a resumed run already has its _brief.md; use --resume=<slug>)" };
 
   return { requested: true, path: relative(root, real).split(sep).join("/"), title, slug, narrative_language: lang };
 }

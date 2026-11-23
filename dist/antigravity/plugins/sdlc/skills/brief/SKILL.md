@@ -21,7 +21,7 @@ disallowed-tools: [Edit, NotebookEdit, Bash]
 
 Read the project, interview the user, write one brief file, print the next command, stop.
 
-**Hard limits, for the whole conversation (not only this turn):**
+**Hard limits, until the brief is saved or the user abandons it (not only this turn):**
 
 - The only file you create or change is `docs/briefs/<slug>.md`. Nothing else, no scratch files.
 - Never touch git or `.gitignore`. Never edit code.

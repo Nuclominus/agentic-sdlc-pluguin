@@ -1076,7 +1076,7 @@ test("--brief: combining it with a description or --resume halts with the exact 
     assert.equal(both.plan, null);
     assert.equal(both.halt, "❌ --brief: use either --brief=<path> or a description, not both");
     const resume = run("--brief=docs/briefs/b.md --resume --dry-run");
-    assert.equal(resume.halt, "❌ --brief cannot be combined with --resume (a resumed run already has its _brief.md)");
+    assert.equal(resume.halt, "❌ --brief cannot be combined with --resume (a resumed run already has its _brief.md; use --resume=<slug>)");
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
 
@@ -1095,6 +1095,15 @@ test("--brief: an existing docs/plans/<slug>/ is warned about, not blocked", () 
     const { halt, warnings } = run("--brief=docs/briefs/b.md --dry-run");
     assert.equal(halt, null);
     assert.ok(warnings.includes("WARN: --brief: docs/plans/empty-list-crash/ already exists — a new run will overwrite its _brief.md"));
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("--brief with a space instead of = halts instead of running the path as a description", () => {
+  const { w, run } = withBrief("Hotfix crash on empty list");
+  try {
+    const r = run("--brief docs/briefs/b.md --dry-run");
+    assert.equal(r.plan, null);
+    assert.equal(r.halt, "❌ --brief: give the path as --brief=<path>");
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
 
