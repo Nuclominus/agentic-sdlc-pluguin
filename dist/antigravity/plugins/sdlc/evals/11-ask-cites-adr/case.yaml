@@ -1,0 +1,24 @@
+schema_version: "1.0"
+name: 11-ask-cites-adr
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: /sdlc:ask "I am not a contributor to this project. Why do payments go through a queue instead of being charged directly at checkout?"
+  max_turns: 30
+  timeout_seconds: 600
+  model: sonnet
+  allowed_tools: [Skill, Read, Glob, Grep, Agent, "Bash(git:*)"]
+runs: 3
+graders:
+  - { type: tool_used, name: dispatched, tool: Agent, input_match: '"subagent_type":"sdlc:project-researcher"', min: 1, arm: with-only }
+  - { type: regex, name: cites, target: last_message, pattern: 'ADR-0001' }
+  - { type: regex, name: tldr, target: last_message, pattern: 'TL;DR' }
+  - { type: file_exists, name: no-files, path: "docs/answers/**", exists: false }
+  - type: llm
+    name: sources-real
+    focus: trace
+    criteria: >-
+      Grade the final answer's Sources section. PASS only if every file:line entry in Sources was
+      actually read in the trace (a Read, Grep or researcher result that shows that file and line)
+      and the cited content supports the claim it is attached to. A source that was never read,
+      or whose content does not back the claim, is FAIL. An answer with no file:line sources is FAIL.
