@@ -27,6 +27,7 @@ Clarify, research through read-only agents, write the answer yourself.
 
 - Write no file, except `docs/answers/<slug>.md` when the user asks to save the answer.
 - Never touch git or `.gitignore`. Never edit code. Never prescribe a fix.
+- Never answer from your own reading while `project-researcher` can be dispatched: every question gets at least one researcher, however small the project.
 
 The argument is the question. Without one, ask for it in one sentence first.
 
@@ -67,7 +68,7 @@ Consent does not carry over to the next question.
 
 ## Step 5 — Dispatch
 
-Always dispatch at least one `project-researcher`, however small the project or the question. Send all researchers in one message, as parallel `Agent` calls with
+Dispatch at least one `project-researcher` (hard limit above). Send all researchers in one message, as parallel `Agent` calls with
 `subagent_type: "sdlc:project-researcher"`. Each prompt carries:
 
 - `sub_question` — one sub-question from Step 3;
