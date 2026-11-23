@@ -67,7 +67,7 @@ Consent does not carry over to the next question.
 
 ## Step 5 — Dispatch
 
-Send all researchers in one message, as parallel `Agent` calls with
+Always dispatch at least one `project-researcher`, however small the project or the question. Send all researchers in one message, as parallel `Agent` calls with
 `subagent_type: "sdlc:project-researcher"`. Each prompt carries:
 
 - `sub_question` — one sub-question from Step 3;
@@ -78,7 +78,7 @@ Send all researchers in one message, as parallel `Agent` calls with
 Each returns **Findings** (sourced, marked `confirmed` or `inferred`), **Gaps** and
 **Suggested visuals**.
 
-**No dispatch possible** (the agent is not available on this host, or the `Agent` tool is missing):
+**No dispatch possible** (only when the dispatch itself fails, the agent is not available on this host, or the `Agent` tool is missing; never because the project looks small):
 research the sub-questions yourself with Read, Glob and Grep, in the same order (vault and docs,
 ADRs, code, tests and config). Say in **Assumptions & gaps** that the answer was researched without
 the researcher agent and that git history and PRs were not checked.
