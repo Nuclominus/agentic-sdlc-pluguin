@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-11-23 | #256 | `chore` | — | [[changes/2026-11-23-PR-256-bump-sdlc-and-android-foundation-to-3-3-1]] |
 | 2026-11-23 | #254 | `feat` | — | [[changes/2026-11-23-PR-254-stack-level-device-gradle-cache-resume-cost-and-worktree-gua]] |
 | 2026-10-28 | #252 | `chore` | — | [[changes/2026-10-28-PR-252-bump-sdlc-to-3-3-0-and-android-foundation-to-3-3-0]] |
 | 2026-10-28 | #247 | `fix` | — | [[changes/2026-10-28-PR-247-flavor-aware-heal-and-post-pipeline-gradle-gates]] |
