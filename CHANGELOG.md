@@ -4,6 +4,8 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+## [4.3.2] — 2026-11-23
+
 ### Added
 
 - **Device driving goes through the `android` CLI** (android-foundation). The `qa` and `debugging`
