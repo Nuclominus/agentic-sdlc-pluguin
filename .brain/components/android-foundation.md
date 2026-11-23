@@ -87,6 +87,12 @@ Device work in `qa` and `debugging` goes through the `android` CLI when the bina
 pre-existing, because cached outputs can carry another checkout's absolute paths
 (`rules/snippets/gradle-commands.md`).
 
+The lint-config guard (`hooks/config-protection.sh`,
+[[decisions/ADR-0033-lint-config-edits-are-gated-during-a-run]]) lets a run edit detekt, ktlint,
+checkstyle or `.editorconfig` only when the run's brief asks for it. With a structured `--brief`
+brief (frontmatter present), only the `title`, Goal and In-scope part count, so a Constraints line
+like "do not relax detekt rules" does not unlock the guard (#258).
+
 Rule files here are read by agents that live in `sdlc`, so they never name the plugin-root variable —
 the resolver emits each `role_expertise.<role>.rules` path **absolute** instead.
 

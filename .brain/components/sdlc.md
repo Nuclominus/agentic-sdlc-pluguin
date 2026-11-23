@@ -68,6 +68,13 @@ mode** (Step 2 item 2a): the orchestrator writes `docs/plans` files itself, incl
 `=== DELIVERABLE ===` of Bash-less agents, and every phase trailer carries a
 `handoff_write_workaround:` block.
 
+A run can start from a structured brief instead of one line (#258,
+[[decisions/ADR-0042-brief-intake-is-a-standalone-skill-not-an-agent]]). `/sdlc:brief` interviews
+the user and writes `docs/briefs/<slug>.md`. `/sdlc:start --brief=<path>` then takes `task_slug`,
+`narrative_language` and the recipe-match text from the brief's frontmatter (`plan.brief`) and copies
+the file to `_brief.md`. The resolver halts on `--brief` combined with a description or `--resume`,
+and on a slug whose workspace already holds checkpoints.
+
 Headless automation gates on `_telemetry.json` state
 (`aborted_at_phase`), never on printed output or the exit code — the SKILL.md is a prompt and can
 control neither, a constraint stated in Step 0a-1 and enforced doc-wide by sdlc-lint.
@@ -88,6 +95,8 @@ control neither, a constraint stated in Step 0a-1 and enforced doc-wide by sdlc-
 - `plugins/sdlc/tools/report/` (HTML run report; refuses to render a cap verdict on an unpriced run)
 - `plugins/sdlc/tools/run/` (`finish` — seals a run in one call: machine clock, enrichment, report;
   the orchestrator's whole Step 5b, see [[decisions/ADR-0014-the-run-tail-is-one-command]])
+- `plugins/sdlc/tools/resolve/brief.mjs` (`readBrief` / `briefArgs`, the `--brief` contract) and
+  `plugins/sdlc/skills/brief/SKILL.md` (the intake interview)
 - `tools/sdlc-lint/lib/read-discipline.mjs`
 - `tools/sdlc-lint/lib/plugin-paths.mjs`
 
@@ -119,6 +128,7 @@ knowing before reading any report:
 - [[decisions/ADR-0009-plugin-root-resolution]]
 - [[decisions/ADR-0010-self-healing-micro-loop]]
 - [[decisions/ADR-0012-unpriced-runs-must-not-render-a-cap-verdict]]
+- [[decisions/ADR-0042-brief-intake-is-a-standalone-skill-not-an-agent]]
 
 ## Change history
 _Backlinks from `changes/` accumulate here._
