@@ -80,6 +80,13 @@ After a run, the seal checks the matrix against what each role actually loaded
 skill shows up as a scope-leak finding in `/sdlc:aar`. The fix goes into this plugin's
 `skill-sets/android-skills.yaml`, or into the role's `when` text.
 
+Device work in `qa` and `debugging` goes through the `android` CLI when the binary is on PATH
+(`install --install-options=-r,-d`, `run`, `layout --pretty`, `screen capture`); `adb` keeps
+`pm clear`, input, `am start`, Logcat and heap dumps, and is the full fallback without the binary
+(#254). A lint/test failure is re-run with `--rerun-tasks --no-build-cache` before it may be called
+pre-existing, because cached outputs can carry another checkout's absolute paths
+(`rules/snippets/gradle-commands.md`).
+
 Rule files here are read by agents that live in `sdlc`, so they never name the plugin-root variable —
 the resolver emits each `role_expertise.<role>.rules` path **absolute** instead.
 
