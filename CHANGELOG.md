@@ -4,6 +4,8 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+## [4.3.3] — 2026-11-23
+
 `sdlc` `3.3.0` → `3.3.1`, `android-foundation` `3.3.0` → `3.3.1` (patch: the device, Gradle-cache,
 re-entry and worktree-guard rules from #254 shipped in marketplace v4.3.2 without a plugin version
 bump, so installed copies could miss them.)
