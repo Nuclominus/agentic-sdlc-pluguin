@@ -23,7 +23,7 @@ sdlc/
 │          migrate,aar}/
 ├── hooks/{hooks.json,enforce-agent-model.sh}
 ├── runtime-dependencies.json                # declares superpowers (external, warn)
-└── agents/  (the whole 12-agent roster)
+└── agents/  (the whole 13-agent roster)
 ```
 
 ---
@@ -57,6 +57,7 @@ the active foundation supplies through `role_expertise`.
 | `devops` | `sonnet` | `medium` | **yes** | Build config, signing, shrinking, distribution |
 | `cicd` | `sonnet` | `medium` | **yes** | CI workflow definitions, stages, caching, release automation |
 | `aar-analyst` | `sonnet` | `medium` | no | Read-only retrospective for `/sdlc:aar` |
+| `project-researcher` | `sonnet` | `medium` | no | Read-only evidence gathering for `/sdlc:ask` project Q&A; reports findings, gaps and visual data, never fixes |
 
 Every agent declares an explicit `tools:` allowlist in its frontmatter. An agent that omits `tools:`
 inherits **every** tool — which is how a read-only reviewer ends up quietly editing the code it is

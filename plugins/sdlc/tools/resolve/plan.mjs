@@ -780,7 +780,7 @@ export function resolvePlan({ cwd = process.cwd(), args: rawArgs = "", env = pro
       //
       // Scope is the agents THIS RUN WILL DISPATCH that have a block — not every agent holding
       // one. `prompt_blocks` deliberately covers the on-demand roster (debugger, devops, cicd,
-      // aar-analyst) so `expertise --role` can serve them, but 3b-1a pastes nothing for those:
+      // aar-analyst, project-researcher) so `expertise --role` can serve them, but 3b-1a pastes nothing for those:
       // they fetch their own. Counting them would make a `/sdlc:aar` in the same session an
       // expected dispatch that can never match, and report a compliant run as short.
       expertise_block_agents: [...dispatchedAgents]

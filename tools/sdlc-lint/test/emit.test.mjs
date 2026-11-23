@@ -214,7 +214,7 @@ test("every emitted agent carries a host model id, never a tier tag", () => {
   const { outputs, errors } = emitPlugin(REPO, "sdlc", ANTIGRAVITY);
   assert.deepEqual(errors, []);
   const agents = [...outputs].filter(([p]) => /\/agents\/[^/]+\.md$/.test(p));
-  assert.equal(agents.length, 12);
+  assert.equal(agents.length, 13);
   for (const [path, entry] of agents) {
     const fm = frontmatter(entry.content);
     const model = fm.match(/^model:\s*(\S+)$/m)?.[1];
@@ -227,13 +227,13 @@ test("ADR-0018: read-only agents keep an Edit-free tools allowlist through emiss
   // The tools: key is what carries "reviewers do not write code" on this host,
   // so the transform must not touch it.
   const { outputs } = emitPlugin(REPO, "sdlc", ANTIGRAVITY);
-  for (const role of ["reviewer", "security-analyst", "debugger", "aar-analyst"]) {
+  for (const role of ["reviewer", "security-analyst", "debugger", "aar-analyst", "project-researcher"]) {
     const entry = outputs.get(`dist/antigravity/plugins/sdlc/agents/${role}.md`);
     assert.ok(entry, `${role} was not emitted`);
     const tools = parseTools(frontmatter(entry.content));
     assert.ok(Array.isArray(tools) && tools.length, `${role} lost its tools allowlist`);
     assert.equal(tools.includes("Edit"), false, `${role} gained Edit`);
-    assert.equal(tools.includes("Write") && role !== "reviewer" && role !== "security-analyst" && role !== "debugger" && role !== "aar-analyst", false);
+    assert.equal(tools.includes("Write") && role !== "reviewer" && role !== "security-analyst" && role !== "debugger" && role !== "aar-analyst" && role !== "project-researcher", false);
   }
 });
 

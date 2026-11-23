@@ -739,7 +739,7 @@ or installing/uninstalling a referenced skill's plugin. Do NOT splice any per-ca
 (task_slug, timestamps) into either block.
 
 Note: this covers the **pipeline phase agents** the orchestrator dispatches. ON-DEMAND agents that
-run outside the orchestrator (debugger / devops / cicd / aar-analyst) obtain the SAME two blocks by
+run outside the orchestrator (debugger / devops / cicd / aar-analyst / project-researcher) obtain the SAME two blocks by
 running one command themselves — `node {SDLC_PLUGIN_ROOT}/tools/resolve/cli.mjs expertise --role <name>` —
 as their `.md` body instructs. There is no self-read of `rules/skills.md` or `sdlc.local.yaml` any more.
 
@@ -827,7 +827,7 @@ since: 2026-09-29
 > none, and is scored `n/a` rather than passed.
 >
 > The scope is narrower than "every agent holding a block", deliberately. `prompt_blocks` also
-> covers the on-demand roster (debugger, devops, cicd, aar-analyst) so `expertise --role` can serve
+> covers the on-demand roster (debugger, devops, cicd, aar-analyst, project-researcher) so `expertise --role` can serve
 > them, but this step pastes nothing for those — they fetch their own. Counting them would make a
 > `/sdlc:aar` in the same session an expected dispatch that can never match, and report a compliant
 > run as short. The audit is bounded by the run's own `started_at`/`completed_at` for the same

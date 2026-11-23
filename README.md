@@ -136,7 +136,7 @@ The full board — every track, status and landing PR — is generated from the 
 
 | Plugin               | Type               | Stack / Technology                                                    |
 | -------------------- | ------------------ | --------------------------------------------------------------------- |
-| `sdlc`               | Core               | Platform-agnostic orchestrator + the entire 12-agent roster            |
+| `sdlc`               | Core               | Platform-agnostic orchestrator + the entire 13-agent roster            |
 | `android-foundation` | Stack provider     | Android (Kotlin + Gradle) — expertise for 11 roles: 20 skills, MASVS, vault, house rules, **plus 7 embedded frameworks** (ADR-0026): Retrofit, Ktor, Room, Proto DataStore, Dagger/Hilt, Koin, WorkManager — each conditionally activates via its own `enriches_aspect`/`dependency` row in `manifest.yaml`'s `frameworks:` array, no separate install |
 
 ### Optional external dependencies

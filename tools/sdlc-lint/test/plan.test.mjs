@@ -121,7 +121,7 @@ function world({ localYaml = null, modelJson = null, recipe = null, roleExpertis
     "  business_analysis: business-analyst",
     "  development: developer",
     "  qa: qa-engineer",
-    "on_demand_agents: [debugger]",
+    "on_demand_agents: [debugger, project-researcher]",
     "",
   ].join("\n"));
   write(join(core, "agents", "developer.md"), "---\nname: developer\nmodel: sonnet\n---\n");
@@ -516,7 +516,7 @@ test("role_expertise reaches the plan as absolute rule paths and pre-rendered pr
     // `expertise --role` command can serve them, but the orchestrator pastes nothing for them —
     // they fetch it themselves. Counting them would make `/sdlc:aar` in the same session an
     // expected dispatch that can never match, failing a fully compliant run.
-    for (const onDemand of ["debugger", "devops", "cicd", "aar-analyst"]) {
+    for (const onDemand of ["debugger", "devops", "cicd", "aar-analyst", "project-researcher"]) {
       assert.ok(!scoped.includes(onDemand),
         `${onDemand} runs on demand and is never handed a pasted block — it cannot be in the denominator`);
     }
@@ -636,6 +636,10 @@ test("cli.mjs expertise --role prints the block, exits 2 on an unknown role, and
     const vanilla = run(["expertise", "--role", "developer", "--stack=vanilla"]);
     assert.equal(vanilla.code, 0);
     assert.match(vanilla.out, /^no stack expertise for developer \(stack: vanilla\)$/m);
+
+    const researcher = run(["expertise", "--role", "project-researcher", "--stack=vanilla"]);
+    assert.equal(researcher.code, 0);
+    assert.match(researcher.out, /^no stack expertise for project-researcher \(stack: vanilla\)$/m);
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
 

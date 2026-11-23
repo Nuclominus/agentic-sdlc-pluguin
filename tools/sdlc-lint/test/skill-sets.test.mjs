@@ -10,7 +10,7 @@ import {
 } from "../lib/skill-sets.mjs";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
-const CORE_ROLES = ["business-analyst", "developer", "reviewer", "security-analyst", "tester", "qa-engineer", "debugger", "document-writer", "devops", "cicd", "aar-analyst"];
+const CORE_ROLES = ["business-analyst", "developer", "reviewer", "security-analyst", "tester", "qa-engineer", "debugger", "document-writer", "devops", "cicd", "aar-analyst", "project-researcher"];
 
 function set(overrides = {}) {
   return {
