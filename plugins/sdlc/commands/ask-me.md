@@ -3,7 +3,7 @@ description: Answer a question about the project — structure, logic, why it is
 argument-hint: "<question>"
 ---
 
-# /sdlc:ask
+# /sdlc:ask-me
 
 Project Q&A. Invoke the **`sdlc:ask`** skill.
 

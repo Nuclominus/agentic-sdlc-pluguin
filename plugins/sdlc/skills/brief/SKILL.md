@@ -13,7 +13,7 @@ description: |
   фічу, підготуй задачу для пайплайна.
 
   Do NOT use for: running the pipeline (that is /sdlc:start), answering questions about the
-  project (that is /sdlc:ask), editing code.
+  project (that is /sdlc:ask-me), editing code.
 disallowed-tools: [Edit, NotebookEdit, Bash]
 ---
 
