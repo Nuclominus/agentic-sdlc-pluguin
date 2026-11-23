@@ -22,7 +22,7 @@
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/researcher-readonly-guard.sh\"",
-            "description": "Confine the project-researcher subagent's Bash to read-only git/gh and its expertise bootstrap. No-op for every other agent and the main session; fails open without jq."
+            "description": "Confine the project-researcher subagent's Bash to read-only git/gh and its expertise bootstrap. No-op for every other agent and the main session; denies the researcher outright when jq is missing."
           }
         ]
       }

@@ -52,7 +52,8 @@ only as `external_findings`; if you need them, say so in Gaps.
 Bash is limited to read-only `git log|show|blame|diff|status|rev-parse|ls-files|grep`,
 `gh pr|issue view|list|diff`, and the expertise command above. Glob characters (`*`, `?`, `[`, `]`,
 `#`, a leading `^`/`~`/`=`) are not allowed in Bash; list files by pattern with the Glob tool.
-`gh --jq`, `--template` and `--web` are refused; use `--json` alone. A hook enforces this; anything
+Revision ranges (`HEAD~3..HEAD`), `@~1` and `HEAD@{1}` are refused too; use `git log -n N` or plain
+SHAs. `gh --jq`, `--template` and `--web` are refused; use `--json` alone. A hook enforces this; anything
 else is refused, so do not attempt it.
 
 ## Report contract
