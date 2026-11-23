@@ -196,19 +196,24 @@ maestro test .maestro/flows/
 
 ## Driving a device
 
-Drive physical and virtual test devices with the `android-cli` skill's `android` binary. Read the
-skill's `references/interact.md` before the first device command.
+When the `android` binary is on PATH, drive physical and virtual test devices with it (the
+`android-cli` skill). Read the skill's `references/interact.md` before the first device command.
 
 ```bash
 android info
 android install --device <serial> --apks app-debug.apk --install-options=-r,-d   # -d: versionCode downgrade
+adb -s <serial> shell pm clear <applicationId>   # after a downgrade, before the first launch
 android run --device <serial> --apks app-debug.apk
 android layout --device <serial> --pretty
 android screen capture --device <serial> -o screen.png
 ```
 
-`adb` stays only for `adb shell pm clear <applicationId>` and `adb shell input …`. Maestro stays the
-flow runner.
+`-r` keeps the installed build's data, so a downgrade without `pm clear` launches the older build on
+the newer schema and crashes for a reason the change under test did not cause.
+
+`adb` stays for what the CLI has no command for: `shell pm clear`, `shell input`, `shell am start`
+(intents and deep links) and `logcat`. Without the `android` binary, fall back to `adb install -r`,
+`adb shell am start` and `adb exec-out screencap -p`. Maestro stays the flow runner.
 
 ## Android E2E quality checklist
 

@@ -8,26 +8,31 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 - **Device driving goes through the `android` CLI** (android-foundation). The `qa` and `debugging`
   steps, the `android-e2e` and `android-debugging` skills, and the qa-engineer and debugger
-  invariants now name the `android-cli` skill for physical and virtual devices: `info`,
-  `install --install-options=-r,-d` (versionCode downgrades), `run`, `layout --pretty`,
-  `screen capture`. Read the skill's `references/interact.md` first. `adb` stays for `pm clear`
-  and `shell input` (plus Logcat and heap dumps when debugging); Maestro stays the flow runner.
+  invariants now name the `android-cli` skill for physical and virtual devices when the `android`
+  binary is on PATH: `info`, `install --install-options=-r,-d` (versionCode downgrades, followed
+  by `pm clear` before launch), `run`, `layout --pretty`, `screen capture`. Read the skill's
+  `references/interact.md` first. `adb` stays for `pm clear`, `shell input`, `am start` and
+  Logcat (plus heap dumps when debugging), and is the full fallback without the binary. Maestro
+  stays the flow runner.
 - **Gradle stale-cache check** (android-foundation, `rules/snippets/gradle-commands.md`). Before a
   lint, ktlint or test failure is recorded as pre-existing, re-run it with
   `--rerun-tasks --no-build-cache`. Cached outputs can carry absolute paths from another checkout.
 - **Harness worktree guard mode** (sdlc orchestrator, Step 2 item 2a). A run started from a
   `.claude/worktrees/<name>` session, with `docs/plans` resolving into the main checkout, sets
-  `worktree_guard`. Every phase prompt then gets a `handoff_write_workaround:` trailer block (heredoc
-  writes, simple commands, scratchpad check, vault commit from the main checkout). The orchestrator
-  writes its own `docs/plans` files the same way, and the final summary says where to commit.
+  `worktree_guard`, on fresh and `--resume` runs alike. Every phase prompt and the session-recorder
+  then get a `handoff_write_workaround:` block (heredoc writes, simple commands, scratchpad check,
+  vault commit from the main checkout). An agent with no Bash returns its deliverable under
+  `=== DELIVERABLE ===` and the orchestrator writes it. The orchestrator writes its own
+  `docs/plans` files with a heredoc. Stack commands run verbatim, and a refused one is a FAIL. The
+  final summary says where to commit.
 
 ### Changed
 
-- **`SendMessage` resume has limits** (sdlc orchestrator, 3c-crash). Resume a hot agent at most
-  twice, only while its carried prefix is under ~100k tokens, and never across a human approval
-  gate. Otherwise spawn a fresh agent from the plan and phase report on disk. A rejected
-  development plan is always re-planned by a fresh agent. `recovery` records the mechanism that
-  actually ran.
+- **Re-entering a returned agent has limits** (sdlc orchestrator, 3c-crash). Crash recovery stays
+  resume-first. Sending an agent that already returned back to rework via `SendMessage` is allowed
+  at most twice, only while its carried prefix is under ~100k tokens, and never across a human
+  approval gate. Otherwise a fresh agent starts from the plan and phase report on disk. A rejected
+  development plan is always re-planned by a fresh agent.
 
 ## [4.3.1] — 2026-10-28
 

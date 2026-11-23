@@ -306,8 +306,18 @@ since: 2026-07-06
    compound `Bash` commands. From here on, when the flag is set:
    - write every file under `docs/plans/` — this step's `_brief.md`, checkpoints, telemetry — with a
      `Bash` heredoc (`cat > docs/plans/{task_slug}/_brief.md <<'EOF'`), never `Write`/`Edit`;
-   - keep every `Bash` command simple: one command, no `&&` / `;` chains, no subshells;
-   - add the `handoff_write_workaround:` block to every phase prompt's trailer (3b-1);
+   - keep every `Bash` command YOU compose simple: one command, no `&&` / `;` chains, no subshells.
+     Item 4's write-once clock becomes two calls: `test -f …/_started_at` and, only when that fails,
+     `date -u +%s > …/_started_at`;
+   - run stack-supplied commands (`heal_checks`, `pre_phase_commands`, `post_pipeline_checks`)
+     verbatim — never rewrite them. If the harness refuses one, record it as
+     `refused (worktree guard)`: a FAIL in the report, never a skip and never a pass, and it starts
+     no heal dispatch;
+   - add the `handoff_write_workaround:` block to every phase prompt's trailer (3b-1) and to the
+     Step 6 `session-recorder` prompt;
+   - when a phase agent with no `Bash` tool returns a `=== DELIVERABLE ===` section (the trailer
+     block tells it to), write that section to its `detailed_output_path` yourself with a heredoc
+     before 3d's file check;
    - add the worktree-guard note to the final summary (Step 5).
    The clean alternative is to run pipelines from the main checkout or from a sibling worktree outside
    `.claude/worktrees/`; say so once when the flag is set, then continue.
@@ -334,6 +344,8 @@ since: 2026-07-06
 1. Resolve `task_slug` from `resume_slug` or derive it from `$ARGUMENTS` (same algorithm as item 1).
 2. If `docs/plans/{task_slug}/` does not exist → HALT:
    `⛔ Nothing to resume: docs/plans/{task_slug}/ not found. Run without --resume to start fresh.`
+2a. Detect the harness worktree guard exactly as in the fresh-run list, item 2a, and apply all of
+    its rules from here on — a resumed run in a guarded worktree needs them as much as a fresh one.
 2b. Run the resume preflight (ADR-0031 — closes the "resume onto the wrong branch" gap `start.md`'s
     Non-goal paragraph otherwise leaves fully unguarded, plus a staleness gate):
     ```bash
@@ -658,6 +670,8 @@ handoff_write_workaround: |
   Write/Edit under both, git inside the vault repo, and compound Bash commands.
   - Write every handoff or artifact file with a Bash heredoc:
     cat > docs/plans/{task_slug}/0N-x.md <<'EOF'
+  - No Bash tool? Append the full deliverable to your return, after the compact
+    summary, under a line reading `=== DELIVERABLE ===`; the orchestrator writes it.
   - Keep each Bash command simple: one command, no && or ; chains.
   - Before returning, check your scratchpad for deliverables that landed there and
     move them to their docs/plans path.
@@ -1834,7 +1848,9 @@ here — with:
 - model tier: `haiku`, resolved through 3b-3 like any other agent.
 - `description`: `"Close SDLC session — journal entry for {task_slug}"`.
 - `prompt` (per-call context): `task_slug`, `journal_path: docs/plans/_journal.md`,
-  `telemetry_path: docs/plans/{task_slug}/_telemetry.json`.
+  `telemetry_path: docs/plans/{task_slug}/_telemetry.json`, plus the 3b-1
+  `handoff_write_workaround:` block when `CONTEXT.worktree_guard` is set (the journal sits under
+  `docs/plans/`).
 
 Rules:
 - Runs on both normal and `--resume` completions (each close appends/refreshes its entry;
