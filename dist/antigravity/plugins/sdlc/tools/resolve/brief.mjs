@@ -47,4 +47,4 @@ export function readBrief({ cwd, args }) {
   return { requested: true, path: relative(root, real).split(sep).join("/"), title, slug, narrative_language: lang };
 }
 
-export const briefArgs = (args, title) => String(args).replace(/--brief=[^\s]+/, () => JSON.stringify(String(title).replace(/(^|\s)-+/g, "$1")));
+export const briefArgs = (args, title) => String(args).replace(/--brief=[^\s]+/, () => JSON.stringify(String(title).replace(/(^|\s)-+/g, "$1").replace(/-{2,}/g, " ")));

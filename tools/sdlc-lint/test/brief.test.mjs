@@ -110,6 +110,12 @@ test("briefArgs strips leading dashes so a title cannot act as a flag", () => {
   assert.equal(briefArgs("--brief=a.md --dry-run", "Drop --resume support"), '"Drop resume support" --dry-run');
 });
 
+test("briefArgs strips mid-word double dashes so a quoted title cannot smuggle a flag", () => {
+  const out = briefArgs("--brief=a.md --dry-run", 'x"--workflow=evil a--b');
+  assert.doesNotMatch(out, /--workflow/);
+  assert.equal(out, '"x\\" workflow=evil a b" --dry-run');
+});
+
 test("the space form and an empty value are rejected with the = hint", () => {
   const cwd = project({ "docs/briefs/x.md": VALID });
   for (const args of ["--brief docs/briefs/x.md --dry-run", "--dry-run --brief", "--brief=", "--brief= --dry-run"]) {
