@@ -65,6 +65,11 @@ table() {
   check "project-researcher" 'gh pr view 1 --web=true' 2
   check "project-researcher" 'gh pr view 1 -cw' 2
   check "project-researcher" 'gh pr list --json title,number' 0
+  check "project-researcher" 'gh pr view 1 -cq env' 2
+  check "project-researcher" 'gh pr view 1 -ct x' 2
+  check "project-researcher" 'gh pr list -Lq env' 2
+  check "project-researcher" 'gh pr list -L 5 --json title' 0
+  check "project-researcher" 'gh pr list -R owner/repo --json number' 0
   check "project-researcher" 'git grep ^foo' 2
   check "project-researcher" 'git log a~b' 2
   check "project-researcher" 'git log =ls' 2

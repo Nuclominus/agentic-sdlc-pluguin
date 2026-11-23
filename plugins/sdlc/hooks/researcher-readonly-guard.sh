@@ -46,9 +46,10 @@ for tok in $cmd; do
   esac
   if [ "$is_gh" -eq 1 ]; then
     case "$tok" in
-      --jq|--jq=*|--template|--template=*|--web|--web=*|-q*|-t*) deny ;;
+      --jq|--jq=*|--template|--template=*|--web|--web=*) deny ;;
       --*) ;;
-      -*w*) deny ;;
+      # pflag clusters short flags, so -cq env is -c -q env.
+      -*[qtw]*) deny ;;
     esac
   fi
   case "$tok" in
