@@ -5,7 +5,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, appendFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, appendFileSync, cpSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -1130,5 +1130,19 @@ test("no --brief leaves plan.brief null", () => {
   try {
     const { plan } = resolvePlan({ cwd: w.proj, args: '"Add dark mode" --dry-run', env: w.env });
     assert.equal(plan.brief, null);
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("the shipped android foundation serves project-researcher a block that points at the vault and :feature: modules", () => {
+  const w = world();
+  try {
+    const android = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "plugins", "android-foundation");
+    cpSync(android, w.plug, { recursive: true });
+    const r = resolveExpertise({ cwd: w.proj, args: "--stack=android", env: w.env, role: "project-researcher" });
+    assert.equal(r.ok, true, r.error);
+    assert.equal(r.stack, "android");
+    assert.ok(r.block.includes(".obsidian-vault/"), r.block);
+    assert.ok(r.block.includes(":feature:"), r.block);
+    assert.equal(r.skills_block, null, "a read-only researcher is handed no mandatory skills");
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
