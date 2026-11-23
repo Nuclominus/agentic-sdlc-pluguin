@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # PreToolUse(Bash) hook — confines the project-researcher subagent to read-only git/gh and its expertise bootstrap.
-# Exit 2 blocks (stderr reaches the agent); without jq it denies the researcher outright, and fails open on unreadable input.
+# Exit 2 blocks (stderr reaches the agent); without jq, or on a payload jq cannot parse, it denies the researcher outright.
 set -uo pipefail
 
 deny() {
@@ -9,14 +9,14 @@ deny() {
 }
 
 payload=$(cat)
+researcher_re='"agent_type"[[:space:]]*:[[:space:]]*"([^"]*:)?project-researcher"'
 if ! command -v jq >/dev/null 2>&1; then
-  researcher_re='"agent_type"[[:space:]]*:[[:space:]]*"([^"]*:)?project-researcher"'
   [[ $payload =~ $researcher_re ]] && deny
   exit 0
 fi
-agent=$(printf '%s' "$payload" | jq -r '.agent_type // empty' 2>/dev/null) || exit 0
+agent=$(printf '%s' "$payload" | jq -r '.agent_type // empty' 2>/dev/null) || { [[ $payload =~ $researcher_re ]] && deny; exit 0; }
 [ "${agent##*:}" = "project-researcher" ] || exit 0
-cmd=$(printf '%s' "$payload" | jq -r '.tool_input.command // empty' 2>/dev/null) || exit 0
+cmd=$(printf '%s' "$payload" | jq -r '.tool_input.command // empty' 2>/dev/null) || deny
 
 tail_args=' expertise --role project-researcher'
 # shellcheck disable=SC2016
@@ -53,7 +53,7 @@ for tok in $cmd; do
     esac
   fi
   case "$tok" in
-    --oneline) ;;
+    --oneline|--others|--exclude-standard|--exit-code|--text) ;;
     --no-index) deny ;;
     --o*|--ex*|--te*) deny ;;
     --*) ;;

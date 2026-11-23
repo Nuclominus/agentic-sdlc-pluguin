@@ -10,7 +10,7 @@ execution:
   allowed_tools: [Skill, Read, Glob, Grep, Agent, "Bash(git:*)", "Bash(node:*)"]
 runs: 3
 graders:
-  - { type: tool_used, name: fired, tool: Skill, input_match: ask, arm: with-only }
+  - { type: tool_used, name: fired, tool: Skill, input_match: '"sdlc:ask"', arm: with-only }
   - { type: regex, name: skill-body-loaded, target: trace, pattern: 'Never answer from your own reading', arm: with-only }
   - { type: tool_used, name: dispatched, tool: Agent, input_match: '"subagent_type":"sdlc:project-researcher"', min: 1, arm: with-only }
   - { type: regex, name: cites, target: last_message, pattern: 'ADR-0001' }

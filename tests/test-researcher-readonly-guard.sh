@@ -79,6 +79,10 @@ table() {
   check "project-researcher" 'git show HEAD^' 0
   check "project-researcher" 'git log main~2^ -1' 0
   check "project-researcher" 'git log --author==ls' 2
+  check "project-researcher" 'git ls-files --others --exclude-standard' 0
+  check "project-researcher" 'git diff --exit-code HEAD' 0
+  check "project-researcher" 'git grep --text foo' 0
+  check "project-researcher" 'git ls-files --other' 2
 }
 
 plain=$(mktemp -d); trap_dir=$(mktemp -d)
@@ -96,6 +100,14 @@ case "$stderr" in
   "project-researcher is read-only: allowed are git log|show|blame|diff|status|rev-parse|ls-files|grep, gh pr|issue view|list|diff, and the expertise bootstrap") echo "PASS: block message" ;;
   *) echo "FAIL: block message: $stderr"; fails=$((fails+1)) ;;
 esac
+
+check_raw() {  # $1 = raw payload, $2 = expected exit
+  printf '%s' "$1" | bash "$HOOK" >/dev/null 2>&1
+  local code=$?
+  if [ "$code" = "$2" ]; then echo "PASS: [raw] $1 -> $code"; else echo "FAIL: [raw] $1 expected $2 got $code"; fails=$((fails+1)); fi
+}
+check_raw '{"agent_type":"project-researcher","tool_input":{"command":"rm -rf build"' 2
+check_raw '{"agent_type":"debugger","tool_input":{"command":"rm -rf build"' 0
 
 nojq=$(mktemp -d)
 ln -s "$(command -v cat)" "$nojq/cat"

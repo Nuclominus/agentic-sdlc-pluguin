@@ -31,20 +31,20 @@ Clarify, research through read-only agents, write the answer yourself.
 
 The argument is the question. Without one, ask for it in one sentence first.
 
-## Step 1 — Clarify
+## Step 1 — Route
+
+- A reported failure, crash or wrong behaviour is a bug: say it belongs to `debugger`, and stop.
+- A request for new behaviour is a feature: say it belongs to `business-analyst` (or
+  `/sdlc:brief` to shape it first), and stop.
+- If only part of the question is a bug or a feature, answer the rest and route that part.
+
+## Step 2 — Clarify
 
 - A clear question is answered straight away. Ask only when it is ambiguous (two readings that
   lead to different research).
 - If the wording does not show the audience, ask once: **participant** (works on the project) or
   **outsider** (stakeholder, reviewer from another team, newcomer).
 - Put every clarifying point in one message.
-
-## Step 2 — Route
-
-- A reported failure, crash or wrong behaviour is a bug: say it belongs to `debugger`, and stop.
-- A request for new behaviour is a feature: say it belongs to `business-analyst` (or
-  `/sdlc:brief` to shape it first), and stop.
-- If only part of the question is a bug or a feature, answer the rest and route that part.
 
 ## Step 3 — Decompose
 
@@ -116,7 +116,7 @@ from the project's sources, list what was checked under Assumptions & gaps, and 
 
 Answer a follow-up from the Findings already gathered. Dispatch new researchers (Step 5) only for
 an aspect or sub-question they do not cover. A follow-up that is a bug or a feature is routed as in
-Step 2. The hard limits still hold.
+Step 1. The hard limits still hold.
 
 ## Step 8 — Save on request
 
