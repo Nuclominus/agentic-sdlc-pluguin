@@ -43,7 +43,8 @@ You are the SDLC Pipeline Orchestrator. You coordinate specialist agents to deli
 
 ## Inputs
 
-- `$ARGUMENTS` — feature description from `/sdlc:start`. May contain `--stack=NAME` override.
+- `$ARGUMENTS` — feature description from `/sdlc:start`. May contain `--stack=NAME` override, or `--brief=<path>` instead of a description: the resolver reads
+  the file and returns `plan.brief` (`{ path, title, slug, narrative_language }`), null otherwise.
   When this skill is selected from a natural-language request instead of the slash command,
   `$ARGUMENTS` is **the change the user described, in their own words**, reconstructed into the
   same one-line brief the slash form would have carried, plus any flag the preview rule below
@@ -65,7 +66,7 @@ The pipeline must produce consistent artifacts regardless of which language the 
 - **Match user's language:** narrative content in `docs/plans/{slug}/0X-*.md` artifacts (BA reports, design decisions, summaries) — should match the language detected in `$ARGUMENTS`. If `$ARGUMENTS` is mixed or ambiguous, default to English.
 - **PR description:** English regardless of input language. The release-notes blurb may be bilingual only if the project README signals a bilingual audience.
 
-Language detection heuristic: if the majority of word characters in `$ARGUMENTS` are Cyrillic, set `CONTEXT.narrative_language = "uk"`; otherwise `"en"`. Persist this in telemetry.
+When `plan.brief` is set, `CONTEXT.narrative_language = plan.brief.narrative_language` and the heuristic below is skipped. On `--resume=<slug>` there is no `plan.brief`; Resume mode takes the language from the saved `_brief.md` (its `narrative_language` frontmatter, else the heuristic over its text). Otherwise, language detection heuristic: if the majority of word characters in `$ARGUMENTS` are Cyrillic, set `CONTEXT.narrative_language = "uk"`; otherwise `"en"`. Persist this in telemetry.
 
 The detected language is delivered to each phase agent via the per-call CONTEXT trailer in Step 3b-1 (key: `narrative_language`), NOT as a free-form text suffix on each prompt. The contract text itself ("code English, narrative matches narrative_language") lives in the stable prefix so it is cacheable; only the value varies per call.
 
@@ -157,7 +158,7 @@ Run this, substituting the path, and nothing else:
 
 ```bash
 F=<the tool-results path>
-jq -r '.prints[], "=== CONTEXT ===", (.plan | {roots, deps_preflight, availability_flags, stack, headless, plugin_version, cost_cap, cost_cap_source, models, skip_rules: .skip_rules.applied, workflow, profile: (.profile | del(.prompt_blocks))} | tojson)' "$F"
+jq -r '.prints[], "=== CONTEXT ===", (.plan | {roots, deps_preflight, availability_flags, stack, headless, plugin_version, cost_cap, cost_cap_source, models, skip_rules: .skip_rules.applied, workflow, brief, profile: (.profile | del(.prompt_blocks))} | tojson)' "$F"
 ```
 
 One call yields both obligations above: `prints[]` to echo verbatim, then every `CONTEXT` value in
@@ -231,6 +232,7 @@ that status is available to a wrapper script, but it is not the hosting session'
 | `models` | `CONTEXT.model_overrides` | Step 3b-3 tier precedence |
 | `cost_cap`, `cost_cap_source` | `CONTEXT.cost_cap`, `CONTEXT.cost_cap_source` *(**Step 1d-0**)* | Step 3d-cap, Step 5 |
 | `headless` | `CONTEXT.headless_mode` | every headless rule |
+| `brief` | `CONTEXT.brief` — `null`, or `{path, title, slug, narrative_language}` | Output language policy, Step 2 items 1 and 3 |
 
 `CONTEXT.cost_cap` is resolved in exactly one place — inside the command — and read everywhere
 else. That single-source property is what makes the Step 3d-cap gate auditable; never recompute it.
@@ -295,7 +297,7 @@ cardinality: once-per-run
 since: 2026-07-06
 ```
 
-1. Generate `task_slug` from `$ARGUMENTS`: lowercase, alphanumerics + dashes, max 40 chars.
+1. Generate `task_slug` from `$ARGUMENTS`: lowercase, alphanumerics + dashes, max 40 chars. When `plan.brief` is set, `task_slug = plan.brief.slug`.
 2. Create directory `docs/plans/{task_slug}/` if it does not exist.
 2a. **Detect the harness worktree guard.** Run three plain commands, one `Bash` call each:
    `pwd -P`, `git rev-parse --show-toplevel`, `realpath docs/plans`. Set
@@ -321,7 +323,11 @@ since: 2026-07-06
    - add the worktree-guard note to the final summary (Step 5).
    The clean alternative is to run pipelines from the main checkout or from a sibling worktree outside
    `.claude/worktrees/`; say so once when the flag is set, then continue.
-3. Create `docs/plans/{task_slug}/_brief.md` with the original `$ARGUMENTS`.
+3. Create `docs/plans/{task_slug}/_brief.md` with the original `$ARGUMENTS`. When `plan.brief` is set, it is a copy of the file at `plan.brief.path` (`cat "<plan.brief.path>" > docs/plans/{task_slug}/_brief.md` via `Bash`, never `Write` in worktree-guard mode).
+   **Exception — reached from Resume mode's "start fresh":** keep the existing `_brief.md`; do not
+   rewrite it. There `$ARGUMENTS` is only `--resume=<slug>` and `plan.brief` is null, so a rewrite
+   would replace the real brief with the flag. Set `CONTEXT.narrative_language` from that file
+   exactly as Resume mode item 3 does (frontmatter `narrative_language`, else the heuristic over its text).
 4. **Start the real clock (write-once).** Capture a measured start timestamp so elapsed time is
    real, not estimated — consumed by Step 5 (`wall_clock_seconds`) and the Step 6 journal. Run via
    `Bash`:
@@ -357,7 +363,7 @@ since: 2026-07-06
       ❌ Cannot resume "{task_slug}": the run lives on branch {runBranch}, current branch is {currentBranch}.
          Run `git worktree list` and check for an existing checkout of {runBranch} first (Step 2
          item 5) — switch to that worktree if one exists. Only run `git checkout {runBranch}` in
-         this workspace if no worktree holds it. Then /sdlc:start --resume
+         this workspace if no worktree holds it. Then /sdlc:start --resume={task_slug}
       ```
       Do not proceed. This is the one way `--resume` can silently apply completed-phase context to
       the wrong tree — never resume onto the wrong branch, no exceptions. Never `git checkout` a
@@ -381,8 +387,9 @@ since: 2026-07-06
           rm -f docs/plans/{task_slug}/.checkpoint/*.json
           ```
           **Then** treat exactly as "no --resume": go to the non-resume Step 2 algorithm with the
-          SAME `task_slug` (this overwrites `_brief.md`; `_started_at`, which is not a `.json` file,
-          is left alone so elapsed time still spans from the task's original start).
+          SAME `task_slug`. Item 3 there keeps the existing `_brief.md` and takes
+          `narrative_language` from it (its "start fresh" exception); `_started_at`, which is not a
+          `.json` file, is left alone so elapsed time still spans from the task's original start.
         - **abort** → stop. Print nothing further.
       - **Headless** (`CONTEXT.headless_mode` is `true`): behave as **start fresh** (clear the
         checkpoints exactly as above before falling through), and emit to stderr:
@@ -390,6 +397,9 @@ since: 2026-07-06
 3. Do NOT recreate `_brief.md`. Read the existing one (it is the SSOT description for agents). If a
    non-empty description was passed AND it differs from `_brief.md`, print
    `⚠️ --resume: description differs from saved _brief.md; using saved brief` and continue with the saved brief.
+   Set `CONTEXT.narrative_language` from it: if `_brief.md` opens with YAML frontmatter carrying
+   `narrative_language`, use that value; otherwise apply the Cyrillic heuristic to the `_brief.md` text
+   (not to the resume arguments).
 3b. Delete `docs/plans/{task_slug}/.checkpoint/_post-implement-check.json` if present — before
     item 4 reads `.checkpoint/*.json` below, so it is never mistaken for a unit checkpoint. This
     is a plain resume, not "start fresh" above — its `rm -f .checkpoint/*.json` already covers

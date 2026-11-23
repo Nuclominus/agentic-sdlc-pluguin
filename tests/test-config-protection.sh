@@ -79,4 +79,33 @@ out=$(run_hook "$p/detekt.yml" "$p")
 code=$(printf '%s' "$out" | grep -o 'EXIT:[0-9]*' | cut -d: -f2)
 [ "$code" = "2" ] && echo "PASS: blocked (multi-run, most-recent brief does not mention the tool)" || { echo "FAIL: expected 2 got $code"; fails=$((fails+1)); }
 
+structured_brief() {  # $1 = Goal line, $2 = In-scope bullet, $3 = Out-of-scope bullet, $4 = Constraints line
+  printf -- '---\ntitle: "Add offline sync"\nslug: add-offline-sync\nnarrative_language: en\n---\n\n# Add offline sync\n\n## Goal\n%s\n\n## Context\nThe app has no cache today.\n\n## In scope / Out of scope\n**In scope**\n- %s\n\n**Out of scope**\n- %s\n\n## Constraints\n%s\n\n## Done looks like\n- Works offline\n\n## Open questions & risks\nn/a\n' "$1" "$2" "$3" "$4"
+}
+
+p=$(mk_project "$(structured_brief "Cache feed items locally." "Room cache for the feed" "Settings screen" "Do not relax detekt rules.")" "no")
+out=$(run_hook "$p/detekt.yml" "$p")
+code=$(printf '%s' "$out" | grep -o 'EXIT:[0-9]*' | cut -d: -f2)
+[ "$code" = "2" ] && echo "PASS: blocked (structured brief mentions detekt only in Constraints)" || { echo "FAIL: expected 2 got $code"; fails=$((fails+1)); }
+
+p=$(mk_project "$(structured_brief "Cache feed items locally." "Room cache for the feed" "Changing detekt.yml" "None.")" "no")
+out=$(run_hook "$p/detekt.yml" "$p")
+code=$(printf '%s' "$out" | grep -o 'EXIT:[0-9]*' | cut -d: -f2)
+[ "$code" = "2" ] && echo "PASS: blocked (structured brief mentions detekt only in Out of scope)" || { echo "FAIL: expected 2 got $code"; fails=$((fails+1)); }
+
+p=$(mk_project "$(structured_brief "Tune detekt rules for the new module." "Room cache for the feed" "Settings screen" "None.")" "no")
+out=$(run_hook "$p/detekt.yml" "$p")
+code=$(printf '%s' "$out" | grep -o 'EXIT:[0-9]*' | cut -d: -f2)
+[ "$code" = "0" ] && echo "PASS: allowed (structured brief mentions detekt in Goal)" || { echo "FAIL: expected 0 got $code"; fails=$((fails+1)); }
+
+p=$(mk_project "$(structured_brief "Cache feed items locally." "Adjust detekt thresholds for the cache module" "Settings screen" "None.")" "no")
+out=$(run_hook "$p/detekt.yml" "$p")
+code=$(printf '%s' "$out" | grep -o 'EXIT:[0-9]*' | cut -d: -f2)
+[ "$code" = "0" ] && echo "PASS: allowed (structured brief mentions detekt in In scope)" || { echo "FAIL: expected 0 got $code"; fails=$((fails+1)); }
+
+p=$(mk_project "Fix the dark mode toggle; do not relax detekt rules" "no")
+out=$(run_hook "$p/detekt.yml" "$p")
+code=$(printf '%s' "$out" | grep -o 'EXIT:[0-9]*' | cut -d: -f2)
+[ "$code" = "0" ] && echo "PASS: allowed (legacy one-line brief still matched as a whole)" || { echo "FAIL: expected 0 got $code"; fails=$((fails+1)); }
+
 [ "$fails" -eq 0 ] && { echo "ALL PASS"; exit 0; } || { echo "$fails FAILURE(S)"; exit 1; }

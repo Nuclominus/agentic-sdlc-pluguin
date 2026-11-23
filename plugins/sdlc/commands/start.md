@@ -1,6 +1,6 @@
 ---
 description: Run the full SDLC pipeline (BA → Dev → QA → Security → Remediation? → Docs) for a feature, with auto-detection of the framework stack.
-argument-hint: "<feature description> [--stack=NAME] [--dry-run] [--resume[=slug]]"
+argument-hint: "<feature description> [--stack=NAME] [--brief=PATH] [--dry-run] [--resume[=slug]]"
 ---
 
 # /sdlc:start
@@ -14,6 +14,9 @@ You MUST follow these steps **in order**, **printing each announcement verbatim*
 ### Step 1 — Validate input
 
 If `$ARGUMENTS` is empty: ask the user for a feature description and stop. Do NOT proceed.
+
+`--brief=<path>` alone is valid input: the resolve command reads the file (`docs/briefs/<slug>.md`) and takes
+slug, language and title from it. Leave it in `$ARGUMENTS`; it cannot be combined with a description or `--resume`.
 
 If `$ARGUMENTS` contains `--stack=NAME`: remember the value for the echo below, but **leave it in the
 description** — the resolve command parses it itself (`tools/resolve/detect.mjs`, `forceStack`), and
@@ -31,7 +34,7 @@ for `--stack=NAME` and `--dry-run`.
 Print verbatim:
 ```
 ▶ /sdlc:start
-   Description: <the cleaned-up description>
+   Description: <the cleaned-up description; for a --brief-only run, echo --brief=<path> instead (the title comes from the resolver's print line)>
    Forced stack: <forced_stack or "auto-detect">
 ```
 
@@ -73,6 +76,7 @@ If any phase fails fatally (e.g. agent crashes, post-validation impossible to sa
 ```
 /sdlc:start "Add subscription billing with Stripe"
 /sdlc:start "Add /healthz endpoint" --stack=vanilla
+/sdlc:start --brief=docs/briefs/add-billing.md
 /sdlc:start "Fix typo in README"
 /sdlc:start "Add dark mode" --dry-run
 ```

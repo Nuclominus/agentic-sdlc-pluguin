@@ -239,7 +239,7 @@ Tiers are declared in each agent's frontmatter `model:`/`effort:` and enforced b
 
 ```
 docs/plans/<task-slug>/
-├── _brief.md                       # the task brief
+├── _brief.md                       # the task brief (a copy of docs/briefs/<slug>.md under --brief)
 ├── 01-business-analysis.md
 ├── 02-development-plan.md          # plan pass (approval gate)
 ├── 02-development.md               # implement pass

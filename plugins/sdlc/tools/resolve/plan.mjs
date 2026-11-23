@@ -26,6 +26,8 @@ import { resolveCostCap, renderCapOverridePrint, expandRows, estimate, renderDry
 import { loadCheckpoints, doneUnitIds } from "../run/reentry.mjs";
 import { parseYaml } from "./yaml.mjs";
 import { scanLegacyLocation } from "../migrate/migrate.mjs";
+import { slugify, briefOf, SLUG_RE } from "./slug.mjs";
+import { readBrief, briefArgs } from "./brief.mjs";
 
 /**
  * Immediate children of the given roots that are plugins.
@@ -174,26 +176,6 @@ function frontmatterTiers(installs, enabled) {
   }
   return tiers;
 }
-
-/** Step 2's slug rule, in code: lowercase, alphanumerics + dashes, max 40 chars. */
-const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40).replace(/-+$/, "");
-
-/**
- * Flags whose value is a SEPARATE token (`--mode tree`), as `cli.mjs`'s `tokenOpt` reads them.
- * Their value is not part of the description and must not reach the slug — `--mode tree "Add dark
- * mode"` otherwise derives `tree-add-dark-mode`, which matches no workspace.
- */
-const TOKEN_VALUE_FLAGS = ["--mode", "--role", "--skills", "--base-ref", "--workflow"];
-
-/** `$ARGUMENTS` with every flag, flag value and quote stripped — the description Step 2 slugifies. */
-const briefOf = (args) => {
-  let out = String(args);
-  for (const f of TOKEN_VALUE_FLAGS) out = out.replace(new RegExp(`(^|\\s)${f}\\s+\\S+`, "g"), " ");
-  return out.replace(/--[a-z][a-z0-9-]*(=[^\s]*)?/g, " ").replace(/["'`]/g, " ").replace(/\s+/g, " ").trim();
-};
-
-/** A slug is a directory name under docs/plans/ — never a path, never a traversal. */
-const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
 
 /**
  * Which units a `--resume` would skip, so the preview can price them at $0 (issue #168).
@@ -623,6 +605,10 @@ export function resolveSkillScope({ cwd = process.cwd(), env = process.env, mode
   return scope && Object.keys(scope).length ? scope : null;
 }
 
+function hasCheckpoints(dir) {
+  try { return readdirSync(dir).some((f) => f.endsWith(".json")); } catch { return false; }
+}
+
 /**
  * Resolve everything Steps 0 → 1d resolve, in one pass.
  *
@@ -637,13 +623,25 @@ export function resolveSkillScope({ cwd = process.cwd(), env = process.env, mode
  * That is how "⚠️ Failed to parse .sdlc/sdlc.local.yaml" became silent. The duplicate key
  * survives for machine consumers that want the diagnostics without pattern-matching prose.
  */
-export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env, mode = "installed" } = {}) {
+export function resolvePlan({ cwd = process.cwd(), args: rawArgs = "", env = process.env, mode = "installed" } = {}) {
+  const brief = readBrief({ cwd, args: rawArgs });
+  if (brief.error) return { plan: null, prints: [], warnings: [], halt: `❌ ${brief.error}` };
+  const briefDir = brief.requested ? join(cwd, "docs", "plans", brief.slug) : null;
+  if (briefDir && hasCheckpoints(join(briefDir, ".checkpoint"))) {
+    return { plan: null, prints: [], warnings: [], halt: `❌ --brief: docs/plans/${brief.slug}/ already holds a run — resume it with --resume=${brief.slug}, or remove that directory to start over` };
+  }
+  const args = brief.requested ? briefArgs(rawArgs, brief.title) : rawArgs;
   const resolved = resolveProfile({ cwd, args, env, mode });
   const { prints, warnings, headless, roots, installs, enabled, deps, stack, local, effective, models } = resolved;
   if (resolved.halt) return { plan: null, prints, warnings, halt: resolved.halt };
   /** Record a diagnostic in both channels — see the note above. */
   const warn = (msg) => { warnings.push(msg); prints.push(msg); };
   const warnAll = (msgs) => { for (const m of msgs) warn(m); };
+
+  if (brief.requested) {
+    prints.push(`📄 Brief: ${brief.path} → slug ${brief.slug}, narrative_language ${brief.narrative_language}`);
+    if (existsSync(briefDir)) warn(`WARN: --brief: docs/plans/${brief.slug}/ already exists — this run will overwrite its _brief.md`);
+  }
 
   // ---- Step 0c: diff signals
   const signals = computeDiffSignals(cwd, { baseRef: opt(args, "--base-ref") });
@@ -721,6 +719,7 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
   if (capPrint) prints.push(capPrint);
 
   const plan = {
+    brief: brief.requested ? { path: brief.path, title: brief.title, slug: brief.slug, narrative_language: brief.narrative_language } : null,
     roots,
     deps_preflight: deps.deps_preflight,
     skills_source: deps.skills_source,

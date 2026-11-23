@@ -2,6 +2,7 @@
 
 > One note per architecture decision. Newest first.
 
+- [[decisions/ADR-0042-brief-intake-is-a-standalone-skill-not-an-agent]]
 - [[decisions/ADR-0041-nested-subagents-share-the-run-window]]
 - [[decisions/ADR-0040-an-empty-diff-is-size-unknown]]
 - [[decisions/ADR-0039-gradle-gates-name-the-variant-task-per-module]]

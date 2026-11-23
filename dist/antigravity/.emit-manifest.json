@@ -7,6 +7,6 @@
     "android-foundation",
     "sdlc"
   ],
-  "files": 240,
+  "files": 247,
   "regenerate": "node tools/sdlc-lint/cli.mjs emit --host antigravity"
 }

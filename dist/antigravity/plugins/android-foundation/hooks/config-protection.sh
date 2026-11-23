@@ -88,7 +88,31 @@ done
 # (permissions, race between the check above and here) must also fail open, not fall through
 # to the BLOCK branch below.
 [ -r "$active_brief" ] || exit 0
-if grep -qiE 'detekt|ktlint|checkstyle|editorconfig|lint config|linter config' "$active_brief" 2>/dev/null; then
+
+# Structured brief: only title, Goal and In scope count, so "do not relax detekt" in Constraints cannot unlock it.
+brief_intent() {
+  awk '
+    { sub(/\r$/, "") }
+    NR == 1 { if ($0 != "---") exit 3; fm = 1; next }
+    fm { if ($0 == "---") { fm = 0; closed = 1; next } if ($0 ~ /^title:/) print; next }
+    /^## / {
+      h = tolower($0); sub(/[ \t]+$/, "", h); sec = ""
+      if (h == "## goal") sec = "goal"
+      else if (h == "## in scope" || h ~ /^## in scope[ \t]*\//) sec = "in"
+      next
+    }
+    sec == "in" && tolower($0) ~ /out of scope/ { sec = ""; next }
+    sec != "" { print }
+    END { if (!closed) exit 3 }
+  ' "$1"
+}
+
+if intent=$(brief_intent "$active_brief" 2>/dev/null); then
+  scope_text="$intent"
+else
+  scope_text=$(cat "$active_brief" 2>/dev/null) || exit 0
+fi
+if printf '%s\n' "$scope_text" | grep -qiE 'detekt|ktlint|checkstyle|editorconfig|lint config|linter config'; then
   exit 0
 fi
 

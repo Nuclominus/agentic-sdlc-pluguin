@@ -121,7 +121,8 @@ The full board — every track, status and landing PR — is generated from the 
 | ------------------------------- | ------------------------------------------------------------------ |
 | `/sdlc:init`                    | Detect platform(s), scaffold `.sdlc/sdlc.local.yaml`, optionally seed `CLAUDE.md` |
 | `/sdlc:extension [--list]`      | Author the Project Extension Manifest step-by-step (per-agent Skill mappings)       |
-| `/sdlc:start "feature"`         | Run the pipeline (auto-selects the profile's workflow)             |
+| `/sdlc:brief ["idea"]`          | Interview you about a rough idea and write `docs/briefs/<slug>.md` (writes only the brief) |
+| `/sdlc:start "feature"`         | Run the pipeline (auto-selects the profile's workflow); `--brief=docs/briefs/<slug>.md` starts from a brief |
 | `/sdlc:batch "task1" "task2"`   | Run pipelines in parallel for multiple tasks (isolated worktrees)  |
 | `/sdlc:report`                  | Cross-run cost rollup over all runs → `docs/plans/rollup/index.html` + digest (deterministic, no LLM) |
 | `/sdlc:aar`                     | After Action Review of a run — token cost + agent cooperation; persists approved lessons |

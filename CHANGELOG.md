@@ -4,6 +4,16 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+### Added
+
+- **`/sdlc:start --brief=<path>`** takes the task from a brief file (`docs/briefs/<slug>.md`). The
+  resolver returns `plan.brief`; the orchestrator uses its slug and `narrative_language` and copies
+  the file to `_brief.md`.
+- **`/sdlc:brief`** turns a rough idea into a brief before a run. It reads the project, interviews
+  you in rounds of numbered questions with a recommended answer for each, writes
+  `docs/briefs/<slug>.md`, and prints `/sdlc:start --brief=docs/briefs/<slug>.md`. It writes only
+  the brief, never touches git, and never starts the run (ADR-0042).
+
 ## [4.3.3] — 2026-11-23
 
 `sdlc` `3.3.0` → `3.3.1`, `android-foundation` `3.3.0` → `3.3.1` (patch: the device, Gradle-cache,
