@@ -42,7 +42,7 @@ table() {
   check "project-researcher" 'git log --out=/tmp/x' 2
   check "project-researcher" 'git show --ext HEAD' 2
   check "project-researcher" 'git show --textconv HEAD' 2
-  check "project-researcher" 'git log --grep=fix#12' 0
+  check "project-researcher" 'git log --grep=fix#12' 2
   check "project-researcher" "git ls-files '*.kt'" 2
   check "project-researcher" 'node /tmp/tools/resolve/cli.mjs expertise --role project-researcher' 2
   check "project-researcher" $'git log\nrm x' 2
@@ -59,6 +59,21 @@ table() {
   check "project-researcher" 'git log --oneline -5' 0
   check "project-researcher" 'git grep -n "foo bar"' 0
   check "project-researcher" 'gh pr view 12 --json title,body' 0
+  check "project-researcher" 'gh pr list --json title --jq env' 2
+  check "project-researcher" 'gh pr list --json title -q env' 2
+  check "project-researcher" 'gh pr view 1 --template x' 2
+  check "project-researcher" 'gh pr view 1 --web=true' 2
+  check "project-researcher" 'gh pr view 1 -cw' 2
+  check "project-researcher" 'gh pr list --json title,number' 0
+  check "project-researcher" 'git grep ^foo' 2
+  check "project-researcher" 'git log a~b' 2
+  check "project-researcher" 'git log =ls' 2
+  check "project-researcher" 'git log ~' 2
+  check "project-researcher" 'git grep -n "a#b"' 2
+  check "project-researcher" 'git log HEAD~1' 0
+  check "project-researcher" 'git show HEAD^' 0
+  check "project-researcher" 'git log main~2^ -1' 0
+  check "project-researcher" 'git log --author==ls' 2
 }
 
 plain=$(mktemp -d); trap_dir=$(mktemp -d)
@@ -76,5 +91,16 @@ case "$stderr" in
   "project-researcher is read-only: allowed are git log|show|blame|diff|status|rev-parse|ls-files|grep, gh pr|issue view|list|diff, and the expertise bootstrap") echo "PASS: block message" ;;
   *) echo "FAIL: block message: $stderr"; fails=$((fails+1)) ;;
 esac
+
+nojq=$(mktemp -d)
+ln -s "$(command -v cat)" "$nojq/cat"
+check_nojq() {  # $1 = raw payload, $2 = expected exit
+  printf '%s' "$1" | PATH="$nojq" "$BASH" "$HOOK" >/dev/null 2>&1
+  local code=$?
+  if [ "$code" = "$2" ]; then echo "PASS: [no jq] $1 -> $code"; else echo "FAIL: [no jq] $1 expected $2 got $code"; fails=$((fails+1)); fi
+}
+check_nojq '{"agent_type": "sdlc:project-researcher","tool_input":{"command":"git log"}}' 2
+check_nojq '{"agent_type":"debugger","tool_input":{"command":"rm -rf build"}}' 0
+rm "$nojq/cat"; rmdir "$nojq"
 
 [ "$fails" -eq 0 ] && echo "ALL PASS" || { echo "$fails FAILED"; exit 1; }
