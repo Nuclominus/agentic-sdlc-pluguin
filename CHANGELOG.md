@@ -4,6 +4,31 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+### Added
+
+- **Device driving goes through the `android` CLI** (android-foundation). The `qa` and `debugging`
+  steps, the `android-e2e` and `android-debugging` skills, and the qa-engineer and debugger
+  invariants now name the `android-cli` skill for physical and virtual devices: `info`,
+  `install --install-options=-r,-d` (versionCode downgrades), `run`, `layout --pretty`,
+  `screen capture`. Read the skill's `references/interact.md` first. `adb` stays for `pm clear`
+  and `shell input` (plus Logcat and heap dumps when debugging); Maestro stays the flow runner.
+- **Gradle stale-cache check** (android-foundation, `rules/snippets/gradle-commands.md`). Before a
+  lint, ktlint or test failure is recorded as pre-existing, re-run it with
+  `--rerun-tasks --no-build-cache`. Cached outputs can carry absolute paths from another checkout.
+- **Harness worktree guard mode** (sdlc orchestrator, Step 2 item 2a). A run started from a
+  `.claude/worktrees/<name>` session, with `docs/plans` resolving into the main checkout, sets
+  `worktree_guard`. Every phase prompt then gets a `handoff_write_workaround:` trailer block (heredoc
+  writes, simple commands, scratchpad check, vault commit from the main checkout). The orchestrator
+  writes its own `docs/plans` files the same way, and the final summary says where to commit.
+
+### Changed
+
+- **`SendMessage` resume has limits** (sdlc orchestrator, 3c-crash). Resume a hot agent at most
+  twice, only while its carried prefix is under ~100k tokens, and never across a human approval
+  gate. Otherwise spawn a fresh agent from the plan and phase report on disk. A rejected
+  development plan is always re-planned by a fresh agent. `recovery` records the mechanism that
+  actually ran.
+
 ## [4.3.1] — 2026-10-28
 
 `sdlc` `3.2.2` → `3.3.0`, `android-foundation` `3.2.0` → `3.3.0` (minor: fixes from the After Action

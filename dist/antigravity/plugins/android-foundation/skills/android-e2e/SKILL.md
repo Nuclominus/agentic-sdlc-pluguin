@@ -1,6 +1,6 @@
 ---
 name: android-e2e
-description: Android E2E and UI automation — Compose UI Test (createAndroidComposeRule, testTag selectors, list matchers), Maestro YAML flows, accessibility/TalkBack audits, adb and instrumented Gradle tasks. Invoke before writing or running end-to-end, instrumented, or accessibility tests on an Android project.
+description: Android E2E and UI automation — Compose UI Test (createAndroidComposeRule, testTag selectors, list matchers), Maestro YAML flows, accessibility/TalkBack audits, device driving with the `android` CLI, and instrumented Gradle tasks. Invoke before writing or running end-to-end, instrumented, or accessibility tests on an Android project.
 ---
 
 # android-e2e
@@ -194,9 +194,21 @@ fun feature_passesA11y() {
 maestro test .maestro/flows/
 ```
 
-`adb` (from the SDK platform-tools) is available for lower-level device control when needed:
-`adb devices`, `adb install`, `adb shell input`, `adb shell am start`, `adb logcat`,
-`adb shell screencap`.
+## Driving a device
+
+Drive physical and virtual test devices with the `android-cli` skill's `android` binary. Read the
+skill's `references/interact.md` before the first device command.
+
+```bash
+android info
+android install --device <serial> --apks app-debug.apk --install-options=-r,-d   # -d: versionCode downgrade
+android run --device <serial> --apks app-debug.apk
+android layout --device <serial> --pretty
+android screen capture --device <serial> -o screen.png
+```
+
+`adb` stays only for `adb shell pm clear <applicationId>` and `adb shell input …`. Maestro stays the
+flow runner.
 
 ## Android E2E quality checklist
 

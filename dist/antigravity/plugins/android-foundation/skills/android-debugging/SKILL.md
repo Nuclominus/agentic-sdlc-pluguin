@@ -27,6 +27,13 @@ the crash, filtered by the project's log tag; check recent changes with `git log
 identify the originating layer (UI screen, ViewModel/store, `:feature:<name>` repository, or data
 source).
 
+**Reproduce on a device** — use the `android-cli` skill's `android` binary and read its
+`references/interact.md` first: `android info`, `android install --device <serial> --apks <apk>
+--install-options=-r,-d` (`-d` permits a versionCode downgrade), `android run --device <serial> …`,
+`android layout --device <serial> --pretty`, `android screen capture --device <serial> -o <file>`.
+Keep `adb` for `shell pm clear`, `shell input`, Logcat and heap dumps — the CLI has no command for
+those.
+
 **Isolate** — narrow to the exact layer, then check, in order: coroutine scope (cancelled
 prematurely? wrong dispatcher?); state management (is the correct reducer branch firing? is the
 state actually changing, or is equality blocking emission?); Compose (recomposition skipping or

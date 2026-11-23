@@ -72,6 +72,18 @@ E2E on the project's debug variant: Compose UI Test, Maestro flows, accessibilit
 `architecture/ui-patterns.md` index. An instrumented run needs a device or emulator — when none is
 available, say so rather than reporting an untested pass.
 
+**Driving a device.** For physical and virtual test devices use the `android-cli` skill and its
+`android` binary; read the skill's `references/interact.md` before the first device command.
+
+- `android info` — SDK and device facts.
+- `android install --device <serial> --apks <apk> --install-options=-r,-d` — `-d` permits a
+  versionCode downgrade.
+- `android run --device <serial> …` — install and launch.
+- `android layout --device <serial> --pretty` — UI tree; prefer it over screenshots.
+- `android screen capture --device <serial> -o <file>` — screenshot.
+
+`adb` stays only for `adb shell pm clear` and `adb shell input`. Maestro stays the flow runner.
+
 ## documentation
 
 The Obsidian vault Definition of Done gates the PR: no `<!-- STUB -->` marker survives, typed edges
@@ -88,7 +100,9 @@ the phase does both, escalate that run's tier deliberately and record why.
 
 Read-only root-cause analysis; the prescribed fix goes to the development phase in the next step,
 where it passes through the normal review loop. The Android symptom→cause tables, Logcat filters and
-heap-dump commands are the `android-debugging` skill.
+heap-dump commands are the `android-debugging` skill. Reproduce on a device the same way as the `qa`
+step above: the `android` CLI for install, launch, layout and screenshots; `adb` only for
+`pm clear`, `shell input`, Logcat and heap dumps, which the CLI does not cover.
 
 ## Out of pipeline
 
