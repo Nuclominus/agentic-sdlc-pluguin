@@ -3,7 +3,7 @@ name: 11-ask-cites-adr
 context:
   scaffold_script: scaffold.sh
 execution:
-  prompt: /sdlc:ask "I am not a contributor to this project. Why do payments go through a queue instead of being charged directly at checkout?"
+  prompt: /sdlc:ask-me "I am not a contributor to this project. Why do payments go through a queue instead of being charged directly at checkout?"
   max_turns: 30
   timeout_seconds: 600
   model: sonnet
