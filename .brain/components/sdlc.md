@@ -60,6 +60,14 @@ cannot know (empty diff, binaries, too many untracked files) never drops a phase
 smaller recipe. Withheld rules are printed, not silent
 ([[decisions/ADR-0040-an-empty-diff-is-size-unknown]], #246).
 
+Re-entering an agent that already returned is capped (3c-crash, #254): at most two `SendMessage`
+reworks, only while its carried prefix is under ~100k tokens, never across a human approval gate —
+otherwise a fresh agent starts from the plan and phase report. A run started from
+`.claude/worktrees/<name>` whose `docs/plans` resolves outside the worktree enters **worktree guard
+mode** (Step 2 item 2a): the orchestrator writes `docs/plans` files itself, including the
+`=== DELIVERABLE ===` of Bash-less agents, and every phase trailer carries a
+`handoff_write_workaround:` block.
+
 Headless automation gates on `_telemetry.json` state
 (`aborted_at_phase`), never on printed output or the exit code — the SKILL.md is a prompt and can
 control neither, a constraint stated in Step 0a-1 and enforced doc-wide by sdlc-lint.
