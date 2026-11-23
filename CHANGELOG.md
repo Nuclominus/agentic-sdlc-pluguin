@@ -13,6 +13,11 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
   you in rounds of numbered questions with a recommended answer for each, writes
   `docs/briefs/<slug>.md`, and prints `/sdlc:start --brief=docs/briefs/<slug>.md`. It writes only
   the brief, never touches git, and never starts the run (ADR-0042).
+- **`/sdlc:ask`** answers a question about the project: its structure, its logic and why it is
+  built that way. It clarifies only an ambiguous question, fans the research out to one to three
+  read-only `project-researcher` agents, and writes one answer with TL;DR, the answer by aspect,
+  Sources, Assumptions & gaps, optional Observations and follow-ups. It writes nothing unless you
+  ask to save `docs/answers/<slug>.md`, and never touches git (ADR-0043).
 
 ## [4.3.3] — 2026-11-23
 

@@ -12,9 +12,9 @@ sdlc/
 ├── manifest.yaml                            # vanilla profile (kind: foundation, priority 0, detect *)
 ├── config/aspects.yaml                       # aspect vocabulary (platform + functional)
 ├── PLUGIN-PATHS.md                          # path-resolution contract (ADR-0009) — no literal `~`
-├── commands/{init,start,brief,doctor,list-stacks,batch,security-init,
+├── commands/{init,start,brief,ask,doctor,list-stacks,batch,security-init,
 │             aar,extension,model-config,report,workflow-config}.md
-├── skills/{pipeline-orchestrator,brief,aar,create-pluguin}/SKILL.md
+├── skills/{pipeline-orchestrator,brief,ask,aar,create-pluguin}/SKILL.md
 ├── workflows/{default,bugfix,hotfix,refactor,docs-only,
 │             analysis,testing,debug}.yaml + RESOLVER.md
 ├── manifest.yaml                            # stack: vanilla — the ONLY agents_per_phase map
