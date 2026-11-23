@@ -37,15 +37,21 @@ one to three read-only `project-researcher` agents, and writes the answer itself
 2. **The agent.** `project-researcher` is a new core agent in `plugins/sdlc/agents/`, on demand
    only (not a pipeline phase and in no recipe). It runs on `model: sonnet` with `effort: medium`
    and has `tools: [Read, Glob, Grep, Bash, WebFetch, Skill]`.
-   - `Bash` is for read-only `git log/show/blame` and `gh pr/issue view/list`.
+   - `Bash` is for read-only `git log|show|blame|diff|status|rev-parse|ls-files|grep`,
+     `gh pr|issue view|list|diff`, and the stack expertise bootstrap
+     (`node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs expertise --role project-researcher`).
    - `WebFetch` is for the documentation of libraries the project uses.
    - `Skill` lets the agent invoke a MANDATORY skill that a stack's `role_expertise` block names.
    - Read-only is enforced by a plugin-level `PreToolUse` hook that allowlists read-only git/gh
      commands for this agent. The hook identifies the caller by the documented `agent_type` field of
      the hook input (Claude Code `hooks.md`). Plugin agents cannot carry their own `hooks:`
      frontmatter (Claude Code `sub-agents.md`), which is why the hook is plugin-level.
-     The hook allows only a strict character set and rejects glob characters and write-capable option prefixes
-     (`--o…`, `--ex…`, `--te…`, `-…O`), so syntax and option tricks fail closed.
+     The hook allows only a strict character set and refuses glob and zsh-pattern characters
+     (`*?[]#`, a leading `^`/`~`/`=`; `^`/`~` only as a revision suffix like `HEAD~1`), `gh`'s
+     `--jq`, `--template` and `--web`, and write-capable option prefixes (`--o…`, `--ex…`,
+     `--te…`, `-…O`), so syntax and option tricks fail closed. When `jq` is missing it denies the
+     researcher every Bash call rather than failing open. Antigravity drops plugin hooks, so there
+     the agent's instruction alone carries the read-only rule.
    - MCP sources (Jira, Confluence, Notion) are not in the agent's tool list. Each user's MCP tool
      names differ, so the skill queries them, with the user's consent for that question, and passes
      the findings in as context.
@@ -111,9 +117,10 @@ Rejected alternatives:
   and the main session pays for the synthesis. No pipeline run pays anything.
 - Verification:
   - the roster lint covers the agent's frontmatter and its expertise slot;
-  - an eval case runs the agent on this repo with a question that has a known answer ("why is
-    brief intake a skill, not an agent") and checks that the report cites ADR-0042 and that every
-    `file:line` it cites exists;
+  - an eval case (`11-ask-cites-adr`) runs `/sdlc:ask` on a scaffolded fixture project with a
+    question its ADR-0001 answers, and checks that a researcher was dispatched, that the answer
+    cites the fixture's ADR-0001 (not this repo or ADR-0042), and that every `file:line` in
+    Sources was actually read;
   - the skill's end-to-end answer is checked by hand on a real project.
 
 ## Related
