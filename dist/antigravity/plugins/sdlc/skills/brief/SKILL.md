@@ -56,11 +56,15 @@ stories or acceptance criteria: that is the `business-analyst` phase's job.
 The interview ends when every section of the template below is filled or marked `n/a`. Then show
 the full draft once and ask for corrections before saving.
 
+If the user asks to finish early ("just write it", "enough"), put every unresolved point under
+**Open questions & risks**, mark empty sections `n/a`, then show the draft and save as normal. If
+the user abandons before confirming the draft, write nothing.
+
 ## Step 3 — The template
 
 ```markdown
 ---
-title: <one-line title>
+title: "<one-line title>"
 slug: <slug>
 narrative_language: <uk | en>
 ---
@@ -93,7 +97,8 @@ narrative_language: <uk | en>
 
 ## Step 5 — Write
 
-Write `docs/briefs/<slug>.md` from the template. `title` is the agreed title, `slug` the confirmed
+Write `docs/briefs/<slug>.md` from the template. `title` is the agreed title, always in double
+quotes, with any `"` or `\` inside it escaped as `\"` and `\\`; `slug` the confirmed
 slug, `narrative_language` the conversation's language (`uk` for Ukrainian, `en` otherwise). The
 body is written in that same language; the frontmatter keys and section headings stay as in the
 template.
