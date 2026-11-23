@@ -92,14 +92,15 @@ terms and the big picture; a participant gets file paths and specifics. Sections
 2. **The answer by aspect** — one subsection per aspect researched. Draw tables or Mermaid diagrams
    from the researchers' Suggested visuals where they make the answer clearer.
 3. **Sources** — `file:line`, ADR ids, PR numbers, commits. Every entry comes from a researcher
-   Finding (or your own reads in the no-dispatch fallback). Nothing else.
+   Finding, a Step 4 external fact cited by its link, or your own reads in the no-dispatch
+   fallback. Nothing else.
 4. **Assumptions & gaps** — every `inferred` claim, labelled as an inference, and every Gap that
    matters to the question.
 5. **Observations** (optional) — inconsistencies the researchers noticed, stated as facts with
    their source. No fix.
 6. **Follow-ups** — two or three questions the user could ask next.
 
-Never state a claim that no Finding supports. Two Findings that contradict each other go to
+Never state a claim that no Finding or external fact supports. Two Findings that contradict each other go to
 Assumptions & gaps with both sources.
 
 **Every researcher returned only Gaps:** answer with what is known, even if it is only where the
