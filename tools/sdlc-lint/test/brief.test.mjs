@@ -75,7 +75,7 @@ test("an unsupported narrative_language is rejected", () => {
 
 test("CRLF line endings and a leading BOM parse like LF", () => {
   const body = "---\r\ntitle: T\r\nslug: ok\r\nnarrative_language: en\r\n---\r\n\r\nBody\r\n";
-  const cwd = project({ "a.md": "﻿" + body });
+  const cwd = project({ "a.md": "\uFEFF" + body });
   const r = readBrief({ cwd, args: "--brief=a.md" });
   assert.equal(r.error, undefined);
   assert.equal(r.title, "T");
@@ -89,4 +89,23 @@ test("a path escaping the project is rejected", () => {
 
 test("briefArgs replaces the token with a JSON-quoted title", () => {
   assert.equal(briefArgs("--brief=a.md --dry-run", 'Fix "x" (urgent)'), '"Fix \\"x\\" (urgent)" --dry-run');
+});
+
+test("a directory or the project root is not a file", () => {
+  const cwd = project({ "docs/briefs/x.md": VALID });
+  assert.match(readBrief({ cwd, args: "--brief=docs" }).error, /^--brief=docs: not a file: docs$/);
+  assert.match(readBrief({ cwd, args: "--brief=." }).error, /not a file/);
+});
+
+test("missing slug and missing narrative_language are errors naming the key", () => {
+  const cwd = project({
+    "a.md": fm("title: T\nnarrative_language: en"),
+    "b.md": fm("title: T\nslug: ok"),
+  });
+  assert.equal(readBrief({ cwd, args: "--brief=a.md" }).error, "--brief=a.md: missing slug");
+  assert.equal(readBrief({ cwd, args: "--brief=b.md" }).error, "--brief=b.md: missing narrative_language");
+});
+
+test("briefArgs strips leading dashes so a title cannot act as a flag", () => {
+  assert.equal(briefArgs("--brief=a.md --dry-run", "Drop --resume support"), '"Drop resume support" --dry-run');
 });
