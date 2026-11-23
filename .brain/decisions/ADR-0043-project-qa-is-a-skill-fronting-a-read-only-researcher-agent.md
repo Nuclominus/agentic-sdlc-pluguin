@@ -27,8 +27,9 @@ benefits from a fixed procedure and fixed read-only rights. That is what subagen
 
 ## Decision
 
-**Project Q&A is a core skill, `/sdlc:ask`, that clarifies the question, fans the research out to
-one to three read-only `project-researcher` agents, and writes the answer itself.**
+**Project Q&A is a core skill, `sdlc:ask`, that clarifies the question, fans the research out to
+one to three read-only `project-researcher` agents, and writes the answer itself.** Users invoke it
+as `/sdlc:ask-me`: the command has its own name so it does not share `sdlc:ask` with the skill.
 
 1. **Split of work.** The skill runs in the main session. It clarifies the question, queries any
    external MCP sources, dispatches researchers and writes the answer. The agent only researches.
@@ -36,11 +37,12 @@ one to three read-only `project-researcher` agents, and writes the answer itself
    needs a separate session.
 2. **The agent.** `project-researcher` is a new core agent in `plugins/sdlc/agents/`, on demand
    only (not a pipeline phase and in no recipe). It runs on `model: sonnet` with `effort: medium`
-   and has `tools: [Read, Glob, Grep, Bash, WebFetch, Skill]`.
+   and has `tools: [Read, Glob, Grep, Bash, Skill]`.
    - `Bash` is for read-only `git log|show|blame|diff|status|rev-parse|ls-files|grep`,
      `gh pr|issue view|list|diff`, and the stack expertise bootstrap
      (`node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs expertise --role project-researcher`).
-   - `WebFetch` is for the documentation of libraries the project uses.
+   - No network tool: third-party library docs and MCP sources are fetched by the skill and passed
+     in as `external_findings`, so prompt-injected content cannot exfiltrate through the agent.
    - `Skill` lets the agent invoke a MANDATORY skill that a stack's `role_expertise` block names.
    - Read-only is enforced by a plugin-level `PreToolUse` hook that allowlists read-only git/gh
      commands for this agent. The hook identifies the caller by the documented `agent_type` field of
@@ -68,8 +70,9 @@ one to three read-only `project-researcher` agents, and writes the answer itself
    PRs, git) and **Behavior** (how it works: flows, tests, config) form the checklist that no aspect
    is missed, not a fixed count of three.
 6. **Sources.** By default: code, the vault or `docs/`, ADRs, README, CLAUDE.md, git history, and PRs
-   and issues through `gh` when available. External MCP sources need consent per question. Web
-   search is only for third-party library documentation.
+   and issues through `gh` when available. External MCP sources need consent per question. Third-party
+   library documentation is fetched by the skill in the main session, under the normal permission
+   prompts, never by a researcher.
 7. **Researcher report.** It is compact and not addressed to the end user:
    - **Findings**: each claim has a source and is marked `confirmed` or `inferred`;
    - **Gaps**: what was not found;
@@ -117,7 +120,7 @@ Rejected alternatives:
   and the main session pays for the synthesis. No pipeline run pays anything.
 - Verification:
   - the roster lint covers the agent's frontmatter and its expertise slot;
-  - an eval case (`11-ask-cites-adr`) runs `/sdlc:ask` on a scaffolded fixture project with a
+  - an eval case (`11-ask-cites-adr`) runs `/sdlc:ask-me` on a scaffolded fixture project with a
     question its ADR-0001 answers, and checks that a researcher was dispatched, that the answer
     cites the fixture's ADR-0001 (not this repo or ADR-0042), and that every `file:line` in
     Sources was actually read;
