@@ -24,15 +24,20 @@ done
 
 # Allowlist, not denylist: any shell metacharacter, newline or tab fails closed.
 case "$cmd" in
-  ''|*[!A-Za-z0-9\ _./:=@,+%^~*?#\"\'\[\]-]*) deny ;;
+  ''|*[!A-Za-z0-9\ _./:=@,+%^~#\"\'-]*) deny ;;
 esac
 
 # Git accepts unique long-option prefixes, so deny whole prefixes of the write-capable options.
+set -f
+is_gh=0
+case "$cmd" in "gh "*) is_gh=1 ;; esac
 for tok in $cmd; do
   tok=${tok//\"/}
   tok=${tok//\'/}
   case "$tok" in
     --oneline) ;;
+    --no-index) deny ;;
+    --web|-w) [ "$is_gh" -eq 1 ] && deny ;;
     --o*|--ex*|--te*) deny ;;
     --*) ;;
     -*O*) deny ;;

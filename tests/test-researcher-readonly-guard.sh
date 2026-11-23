@@ -16,37 +16,60 @@ check() {  # $1 = agent_type ("" = none), $2 = command, $3 = expected exit
   if [ "$code" = "$3" ]; then echo "PASS: [$1] $2 -> $code"; else echo "FAIL: [$1] $2 expected $3 got $code"; fails=$((fails+1)); fi
 }
 
-check "" 'rm -rf build' 0
-check "sdlc:project-researcher" 'git log --oneline -5' 0
-check "project-researcher" 'gh pr view 12' 0
-check "project-researcher" 'node "${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs" expertise --role project-researcher' 0
-check "project-researcher" 'node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs expertise --role project-researcher' 0
-check "project-researcher" 'git log; rm -rf build' 2
-check "project-researcher" 'git log && touch x' 2
-check "project-researcher" 'git log | tee x' 2
-check "project-researcher" 'git show $(rm x)' 2
-check "project-researcher" 'git diff --output=/tmp/x' 2
-check "project-researcher" 'git grep -O foo' 2
-check "project-researcher" 'git show --ext-diff HEAD' 2
-check "project-researcher" 'git checkout main' 2
-check "project-researcher" 'gh pr merge 12' 2
-check "project-researcher" 'git log & rm x' 2
-check "project-researcher" 'git log &rm x' 2
-check "project-researcher" 'git grep --open=rm bar' 2
-check "project-researcher" 'git grep --open-files=touch bar' 2
-check "project-researcher" 'git grep -nOrm foo' 2
-check "project-researcher" 'git grep -iO foo' 2
-check "project-researcher" 'git log --format="%h %s"' 0
-check "project-researcher" 'git log "--output=/tmp/x"' 2
-check "project-researcher" 'git log --out=/tmp/x' 2
-check "project-researcher" 'git show --ext HEAD' 2
-check "project-researcher" 'git show --textconv HEAD' 2
-check "project-researcher" 'git log --grep=fix#12' 0
-check "project-researcher" "git ls-files '*.kt'" 0
-check "project-researcher" 'node /tmp/tools/resolve/cli.mjs expertise --role project-researcher' 2
-check "project-researcher" $'git log\nrm x' 2
-CLAUDE_PLUGIN_ROOT=/opt/p check "project-researcher" 'node "/opt/p/tools/resolve/cli.mjs" expertise --role project-researcher' 0
-check "debugger" 'git checkout main' 0
+table() {
+  check "" 'rm -rf build' 0
+  check "sdlc:project-researcher" 'git log --oneline -5' 0
+  check "project-researcher" 'gh pr view 12' 0
+  check "project-researcher" 'node "${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs" expertise --role project-researcher' 0
+  check "project-researcher" 'node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs expertise --role project-researcher' 0
+  check "project-researcher" 'git log; rm -rf build' 2
+  check "project-researcher" 'git log && touch x' 2
+  check "project-researcher" 'git log | tee x' 2
+  check "project-researcher" 'git show $(rm x)' 2
+  check "project-researcher" 'git diff --output=/tmp/x' 2
+  check "project-researcher" 'git grep -O foo' 2
+  check "project-researcher" 'git show --ext-diff HEAD' 2
+  check "project-researcher" 'git checkout main' 2
+  check "project-researcher" 'gh pr merge 12' 2
+  check "project-researcher" 'git log & rm x' 2
+  check "project-researcher" 'git log &rm x' 2
+  check "project-researcher" 'git grep --open=rm bar' 2
+  check "project-researcher" 'git grep --open-files=touch bar' 2
+  check "project-researcher" 'git grep -nOrm foo' 2
+  check "project-researcher" 'git grep -iO foo' 2
+  check "project-researcher" 'git log --format="%h %s"' 0
+  check "project-researcher" 'git log "--output=/tmp/x"' 2
+  check "project-researcher" 'git log --out=/tmp/x' 2
+  check "project-researcher" 'git show --ext HEAD' 2
+  check "project-researcher" 'git show --textconv HEAD' 2
+  check "project-researcher" 'git log --grep=fix#12' 0
+  check "project-researcher" "git ls-files '*.kt'" 2
+  check "project-researcher" 'node /tmp/tools/resolve/cli.mjs expertise --role project-researcher' 2
+  check "project-researcher" $'git log\nrm x' 2
+  CLAUDE_PLUGIN_ROOT=/opt/p check "project-researcher" 'node "/opt/p/tools/resolve/cli.mjs" expertise --role project-researcher' 0
+  check "debugger" 'git checkout main' 0
+  check "project-researcher" 'git grep "-"?sh foo' 2
+  check "project-researcher" 'git grep "-"[N-P]sh foo' 2
+  check "project-researcher" 'git grep "--"* foo' 2
+  check "project-researcher" 'git grep *""Osh foo' 2
+  check "project-researcher" 'git diff --no-index /etc/hosts /dev/null' 2
+  check "project-researcher" 'gh pr view 1 --web' 2
+  check "project-researcher" 'gh pr view 1 -w' 2
+  check "project-researcher" 'git diff -w HEAD' 0
+  check "project-researcher" 'git log --oneline -5' 0
+  check "project-researcher" 'git grep -n "foo bar"' 0
+  check "project-researcher" 'gh pr view 12 --json title,body' 0
+}
+
+plain=$(mktemp -d); trap_dir=$(mktemp -d)
+: > "$trap_dir/-Osh"
+for cwd in "$REPO_ROOT" "$plain" "$trap_dir"; do
+  echo "== cwd: $cwd"
+  cd "$cwd" || exit 1
+  table
+done
+cd "$REPO_ROOT" || exit 1
+rm -r "$plain" "$trap_dir"
 
 stderr=$(printf '%s' '{"agent_type":"project-researcher","tool_input":{"command":"ls"}}' | bash "$HOOK" 2>&1 >/dev/null)
 case "$stderr" in

@@ -47,7 +47,7 @@ Go in this order and stop as soon as the sub-question is answered with evidence:
 `WebFetch` is only for documentation of libraries this project uses.
 
 Bash is limited to read-only `git log|show|blame|diff|status|rev-parse|ls-files|grep`,
-`gh pr|issue view|list|diff`, and the expertise command above. A hook enforces this; anything
+`gh pr|issue view|list|diff`, and the expertise command above. Glob characters (`*`, `?`, `[`, `]`) are not allowed in Bash; list files by pattern with the Glob tool. A hook enforces this; anything
 else is refused, so do not attempt it.
 
 ## Report contract
