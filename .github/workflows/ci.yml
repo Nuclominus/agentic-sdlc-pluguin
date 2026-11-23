@@ -52,6 +52,8 @@ jobs:
         run: bash tests/test-resume-preflight.sh
       - name: pre-commit-guard test
         run: bash tests/test-pre-commit-guard.sh
+      - name: researcher-readonly-guard test
+        run: bash tests/test-researcher-readonly-guard.sh
       - name: config-protection test
         run: bash tests/test-config-protection.sh
       - name: android-cli-check test

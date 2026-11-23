@@ -37,6 +37,7 @@ export const DISPATCH_TOOLS = ["Agent", "Task", "SendMessage", "Workflow"];
 export const READ_ONLY_AGENTS = [
   "aar-analyst",
   "debugger",
+  "project-researcher",
   "reviewer",
   "security-analyst",
 ];

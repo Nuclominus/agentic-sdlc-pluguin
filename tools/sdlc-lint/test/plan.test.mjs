@@ -5,7 +5,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, appendFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, appendFileSync, cpSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -121,7 +121,7 @@ function world({ localYaml = null, modelJson = null, recipe = null, roleExpertis
     "  business_analysis: business-analyst",
     "  development: developer",
     "  qa: qa-engineer",
-    "on_demand_agents: [debugger]",
+    "on_demand_agents: [debugger, project-researcher]",
     "",
   ].join("\n"));
   write(join(core, "agents", "developer.md"), "---\nname: developer\nmodel: sonnet\n---\n");
@@ -516,7 +516,7 @@ test("role_expertise reaches the plan as absolute rule paths and pre-rendered pr
     // `expertise --role` command can serve them, but the orchestrator pastes nothing for them —
     // they fetch it themselves. Counting them would make `/sdlc:aar` in the same session an
     // expected dispatch that can never match, failing a fully compliant run.
-    for (const onDemand of ["debugger", "devops", "cicd", "aar-analyst"]) {
+    for (const onDemand of ["debugger", "devops", "cicd", "aar-analyst", "project-researcher"]) {
       assert.ok(!scoped.includes(onDemand),
         `${onDemand} runs on demand and is never handed a pasted block — it cannot be in the denominator`);
     }
@@ -636,6 +636,10 @@ test("cli.mjs expertise --role prints the block, exits 2 on an unknown role, and
     const vanilla = run(["expertise", "--role", "developer", "--stack=vanilla"]);
     assert.equal(vanilla.code, 0);
     assert.match(vanilla.out, /^no stack expertise for developer \(stack: vanilla\)$/m);
+
+    const researcher = run(["expertise", "--role", "project-researcher", "--stack=vanilla"]);
+    assert.equal(researcher.code, 0);
+    assert.match(researcher.out, /^no stack expertise for project-researcher \(stack: vanilla\)$/m);
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
 
@@ -1126,5 +1130,19 @@ test("no --brief leaves plan.brief null", () => {
   try {
     const { plan } = resolvePlan({ cwd: w.proj, args: '"Add dark mode" --dry-run', env: w.env });
     assert.equal(plan.brief, null);
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("the shipped android foundation serves project-researcher a block that points at the vault and :feature: modules", () => {
+  const w = world();
+  try {
+    const android = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "plugins", "android-foundation");
+    cpSync(android, w.plug, { recursive: true });
+    const r = resolveExpertise({ cwd: w.proj, args: "--stack=android", env: w.env, role: "project-researcher" });
+    assert.equal(r.ok, true, r.error);
+    assert.equal(r.stack, "android");
+    assert.ok(r.block.includes(".obsidian-vault/"), r.block);
+    assert.ok(r.block.includes(":feature:"), r.block);
+    assert.equal(r.skills_block, null, "a read-only researcher is handed no mandatory skills");
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });

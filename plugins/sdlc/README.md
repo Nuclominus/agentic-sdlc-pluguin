@@ -12,9 +12,9 @@ sdlc/
 ├── manifest.yaml                            # vanilla profile (kind: foundation, priority 0, detect *)
 ├── config/aspects.yaml                       # aspect vocabulary (platform + functional)
 ├── PLUGIN-PATHS.md                          # path-resolution contract (ADR-0009) — no literal `~`
-├── commands/{init,start,brief,doctor,list-stacks,batch,security-init,
+├── commands/{init,start,brief,ask,doctor,list-stacks,batch,security-init,
 │             aar,extension,model-config,report,workflow-config}.md
-├── skills/{pipeline-orchestrator,brief,aar,create-pluguin}/SKILL.md
+├── skills/{pipeline-orchestrator,brief,ask,aar,create-pluguin}/SKILL.md
 ├── workflows/{default,bugfix,hotfix,refactor,docs-only,
 │             analysis,testing,debug}.yaml + RESOLVER.md
 ├── manifest.yaml                            # stack: vanilla — the ONLY agents_per_phase map
@@ -23,7 +23,7 @@ sdlc/
 │          migrate,aar}/
 ├── hooks/{hooks.json,enforce-agent-model.sh}
 ├── runtime-dependencies.json                # declares superpowers (external, warn)
-└── agents/  (the whole 12-agent roster)
+└── agents/  (the whole 13-agent roster)
 ```
 
 ---
@@ -57,6 +57,7 @@ the active foundation supplies through `role_expertise`.
 | `devops` | `sonnet` | `medium` | **yes** | Build config, signing, shrinking, distribution |
 | `cicd` | `sonnet` | `medium` | **yes** | CI workflow definitions, stages, caching, release automation |
 | `aar-analyst` | `sonnet` | `medium` | no | Read-only retrospective for `/sdlc:aar` |
+| `project-researcher` | `sonnet` | `medium` | no | Read-only evidence gathering for `/sdlc:ask-me` project Q&A; reports findings, gaps and visual data, never fixes |
 
 Every agent declares an explicit `tools:` allowlist in its frontmatter. An agent that omits `tools:`
 inherits **every** tool — which is how a read-only reviewer ends up quietly editing the code it is

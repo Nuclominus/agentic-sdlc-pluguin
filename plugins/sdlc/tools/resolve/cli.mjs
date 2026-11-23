@@ -7,7 +7,7 @@
 //     model executed as ~24 turns and 14 tool calls, for a measured median of $1.31 per run
 //     (ADR-0019).
 //   node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs expertise --role <name> [--json] [--stack=NAME]
-//     invoked by an ON-DEMAND agent (debugger, devops, cicd, aar-analyst) that runs outside the
+//     invoked by an ON-DEMAND agent (debugger, devops, cicd, aar-analyst, project-researcher) that runs outside the
 //     orchestrator. It prints the same `Stack expertise for <role>` and `Skills for this role`
 //     blocks a pipeline dispatch would have carried in its stable prefix (ADR-0021) — one
 //     command, once per invocation, in place of "self-read rules/skills.md and sdlc.local.yaml".

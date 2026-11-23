@@ -33,6 +33,7 @@ status: in-progress
 | I1 | agents in the core, expertise in the foundations (`role_expertise`, ADR-0021) | done, validated on a real run | #139, #140, #141, #142 |
 | J1 | multi-host portability — one SSOT, emitted host packages (ADR-0029) | in-progress — Phases 1 and 3 met on Antigravity: full vanilla pipeline sealed on `agy` 1.1.27, package widened to all nine plugins and re-verified on 1.1.28. Codex (Phase 2) still unprobed | — |
 | K1 | standalone brief intake `/sdlc:brief` + `/sdlc:start --brief` (ADR-0042) | done | #258 |
+| K2 | project Q&A `/sdlc:ask-me` + read-only `project-researcher` agent (ADR-0043) | planned | — |
 
 _Open: E1, E3, E4, E7, E8, F1, F2, G2, and the two Track H re-measurements. (`kotlinx.serialization`
 stays deferred under C2 — it needs a `serialization` aspect decision before it can land as a

@@ -47,7 +47,7 @@ fully-qualified Skill ids (`<plugin>:<skill>`) to the agents that should invoke 
   (Step 3b-1a), merged and de-duplicated with whatever skills the active stack profile declares for
   that role. `policy: mandatory` means the agent must invoke it; `recommended` (the default) means
   consider it.
-- **On-demand agents** that run outside the orchestrator (debugger / devops / cicd / aar-analyst)
+- **On-demand agents** that run outside the orchestrator (debugger / devops / cicd / aar-analyst / project-researcher)
   obtain the same merged list with one command,
   `node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs expertise --role <name>`.
 - `agents: "all"` targets every agent. An extension skill whose plugin is not installed is

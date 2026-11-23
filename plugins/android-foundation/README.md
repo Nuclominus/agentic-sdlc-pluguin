@@ -59,6 +59,7 @@ the same from `node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs expertise --role
 | `devops` | on-demand | `android-build-release` | Gradle/`build-logic`/version catalog, signing hygiene, KSP over KAPT |
 | `cicd` | on-demand | `android-ci` | CI stage order, caching, secrets from the CI store, pinned versions |
 | `aar-analyst` | `/sdlc:aar` | — | What to audit an Android run against; workflow scope only |
+| `project-researcher` | on-demand | — | Read the vault first, then `:feature:` modules, `@Serializable` routes and DI modules; read-only |
 
 Convention skills (`android-compose-ui`, `android-architecture`, `android-data`, `android-navigation`)
 are declared separately under `convention_skills` and reach the development phase as before; the 7
@@ -97,7 +98,7 @@ Every core agent declares an explicit `tools:` allowlist in its frontmatter. An 
 `tools:` key inherits **every** tool, which is how a read-only reviewer ends up silently editing the
 code it is reviewing — so the allowlist is mandatory, not optional (ADR-0018).
 
-The reviewing roles (`reviewer`, `security-analyst`, `debugger`, `aar-analyst`) have **no `Edit` tool
+The reviewing roles (`reviewer`, `security-analyst`, `debugger`, `aar-analyst`, `project-researcher`) have **no `Edit` tool
 by design**. `Write` is still granted to the first three for exactly one purpose: their own report
 under `docs/plans/{task_slug}/`. This is what keeps the review loop meaningful — a reviewer that
 repairs the code it reviews leaves no independent verifier behind, and its edits land outside the
@@ -176,4 +177,4 @@ Install with `android update` → `android init` → `android skills add --all -
 
 Agents detect the project's stack at runtime (module pattern, applicationId, build variants) via Architecture Detection. Project-level tuning uses the **generic** `.sdlc/sdlc.local.yaml` overrides — there is intentionally no Android-specific block in the core (that would break core platform-agnosticism).
 
-**Status:** complete — `role_expertise` for all eleven core roles, the extracted skills, rules, MASVS security, vault lifecycle (`manage-vault`) and hooks are in place; the orchestrator executes the full DAG (review-loop + parallel) generically against the core roster.
+**Status:** complete — `role_expertise` for all twelve core roles, the extracted skills, rules, MASVS security, vault lifecycle (`manage-vault`) and hooks are in place; the orchestrator executes the full DAG (review-loop + parallel) generically against the core roster.

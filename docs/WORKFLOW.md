@@ -30,7 +30,7 @@ flowchart LR
     subgraph CORE["sdlc (core, platform-agnostic)"]
       ORC["pipeline-orchestrator skill<br/>generic control flow:<br/>phases, review-loops, parallel groups"]
       WF["generic workflows<br/>default / bugfix / hotfix / refactor / docs-only"]
-      FB["the whole 12-agent roster<br/>platform-neutral"]
+      FB["the whole 13-agent roster<br/>platform-neutral"]
     end
     subgraph AND["android-foundation (stack provider, aspect: android)"]
       AST["manifest.yaml<br/>kind: foundation<br/>workflow: android-feature"]
@@ -173,7 +173,7 @@ flowchart LR
   `android-debug` / `android-bugfix` recipes route the fix to `developer` in the next
   phase, where it passes through the normal review loop.
 - On-demand agents (not in the pipeline; invoke directly): `devops`, `cicd`,
-  `aar-analyst`. `debugger` is on-demand **and** wired as the `debugging` phase of the `debug` and
+  `aar-analyst`, `project-researcher`. `debugger` is on-demand **and** wired as the `debugging` phase of the `debug` and
   `android-debug` recipes (`agents_per_phase.debugging → debugger`, in the core manifest).
 
 Every phase→agent binding lives in [`plugins/sdlc/manifest.yaml`](../plugins/sdlc/manifest.yaml) —

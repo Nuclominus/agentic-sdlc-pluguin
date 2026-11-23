@@ -2,6 +2,7 @@
 
 > One note per architecture decision. Newest first.
 
+- [[decisions/ADR-0043-project-qa-is-a-skill-fronting-a-read-only-researcher-agent]]
 - [[decisions/ADR-0042-brief-intake-is-a-standalone-skill-not-an-agent]]
 - [[decisions/ADR-0041-nested-subagents-share-the-run-window]]
 - [[decisions/ADR-0040-an-empty-diff-is-size-unknown]]

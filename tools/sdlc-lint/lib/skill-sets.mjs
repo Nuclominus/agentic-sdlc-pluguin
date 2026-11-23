@@ -96,7 +96,7 @@ export function validateSkillSet(doc, { coreRoles, shippedSkills = new Set() }) 
 const ABBR = {
   "business-analyst": "BA", developer: "DEV", reviewer: "REV", "security-analyst": "SEC",
   tester: "TST", "qa-engineer": "QA", debugger: "DBG", "document-writer": "DOC",
-  devops: "OPS", cicd: "CI", "aar-analyst": "AAR",
+  devops: "OPS", cicd: "CI", "aar-analyst": "AAR", "project-researcher": "RS",
 };
 const abbr = (r) => ABBR[r] ?? r;
 

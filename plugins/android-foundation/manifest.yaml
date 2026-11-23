@@ -230,7 +230,7 @@ frameworks:
 
 # Android expertise, per CORE role (ADR-0021). Keys are agent names from plugins/sdlc/manifest.yaml,
 # NOT phase names: `developer` serves both development and remediation, and debugger/devops/cicd/
-# aar-analyst have no phase at all. `invariants` rides in every turn's stable prefix, so it is capped
+# aar-analyst/project-researcher have no phase at all. `invariants` rides in every turn's stable prefix, so it is capped
 # at 1400 characters and holds only non-negotiables — the long checklists are the skills below.
 # `rules` paths are relative to THIS file and are emitted absolute, because the agent reading them
 # lives in plugins/sdlc, where ${CLAUDE_PLUGIN_ROOT} would resolve to the wrong plugin.
@@ -459,6 +459,16 @@ role_expertise:
       - { path: rules/workflow.md, note: "the Android DAG and per-step specifics you audit against" }
     skills:
       - { skill: superpowers:verification-before-completion, policy: recommended, when: "before returning findings — every claim cites transcript evidence" }
+
+  project-researcher:
+    invariants: |
+      Answering questions about an Android project is read-only: cite file paths, never change them.
+      Read `.obsidian-vault/` first when it exists: its notes and the generated dependency graph
+      are the project's own map. Treat a vault note as a lead and confirm it against the code.
+      Map the feature modules from the `:feature:<name>` entries in `settings.gradle(.kts)`, then
+      read each module's own sources. Find navigation routes through the `@Serializable` route
+      types, and the DI wiring in the project's DI modules. Use the Glob tool to list files; do not
+      run Gradle or shell globs.
 
 # ADR-0036: Google's Android CLI skill catalog, triaged per core role. Its rows join each role's
 # `skills` above at resolve time (bare ids, gated against the project); runtime-dependencies.json

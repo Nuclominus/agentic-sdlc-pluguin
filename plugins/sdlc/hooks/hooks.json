@@ -18,6 +18,11 @@
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-commit-guard.sh\"",
             "description": "Block staged secrets and --no-verify on git commit/push/gh pr create. Fails open; scans the current content of files staged/changed in this commit/push, not just added lines or history."
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/researcher-readonly-guard.sh\"",
+            "description": "Confine the project-researcher subagent's Bash to read-only git/gh and its expertise bootstrap. No-op for every other agent and the main session; denies the researcher outright when jq is missing."
           }
         ]
       }

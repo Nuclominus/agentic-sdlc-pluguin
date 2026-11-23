@@ -79,7 +79,7 @@ needs to be unique.
   the roster is the core's, and what a stack provider contributes is what those core roles need to know.
   For each CORE role the platform has something to say about — `business-analyst`, `developer`,
   `reviewer`, `tester`, `qa-engineer`, `security-analyst`, `document-writer`, `debugger`, `devops`,
-  `cicd`, `aar-analyst` — ask for up to three things:
+  `cicd`, `aar-analyst`, `project-researcher` — ask for up to three things:
   - `invariants` — the always-on non-negotiables. Capped at **1400 characters** because this text rides
     in every turn's stable prefix; a long checklist belongs in a skill instead.
   - `rules` — paths (relative to the manifest) the role may `Read`, each with a `note` saying when.

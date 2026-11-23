@@ -122,6 +122,7 @@ The full board — every track, status and landing PR — is generated from the 
 | `/sdlc:init`                    | Detect platform(s), scaffold `.sdlc/sdlc.local.yaml`, optionally seed `CLAUDE.md` |
 | `/sdlc:extension [--list]`      | Author the Project Extension Manifest step-by-step (per-agent Skill mappings)       |
 | `/sdlc:brief ["idea"]`          | Interview you about a rough idea and write `docs/briefs/<slug>.md` (writes only the brief) |
+| `/sdlc:ask-me "question"`       | Answer a question about the project from read-only research, every claim sourced (writes nothing unless asked) |
 | `/sdlc:start "feature"`         | Run the pipeline (auto-selects the profile's workflow); `--brief=docs/briefs/<slug>.md` starts from a brief |
 | `/sdlc:batch "task1" "task2"`   | Run pipelines in parallel for multiple tasks (isolated worktrees)  |
 | `/sdlc:report`                  | Cross-run cost rollup over all runs → `docs/plans/rollup/index.html` + digest (deterministic, no LLM) |
@@ -136,7 +137,7 @@ The full board — every track, status and landing PR — is generated from the 
 
 | Plugin               | Type               | Stack / Technology                                                    |
 | -------------------- | ------------------ | --------------------------------------------------------------------- |
-| `sdlc`               | Core               | Platform-agnostic orchestrator + the entire 12-agent roster            |
+| `sdlc`               | Core               | Platform-agnostic orchestrator + the entire 13-agent roster            |
 | `android-foundation` | Stack provider     | Android (Kotlin + Gradle) — expertise for 11 roles: 20 skills, MASVS, vault, house rules, **plus 7 embedded frameworks** (ADR-0026): Retrofit, Ktor, Room, Proto DataStore, Dagger/Hilt, Koin, WorkManager — each conditionally activates via its own `enriches_aspect`/`dependency` row in `manifest.yaml`'s `frameworks:` array, no separate install |
 
 ### Optional external dependencies
