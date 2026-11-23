@@ -332,7 +332,9 @@ role_expertise:
       Maestro `waitForAnimationToEnd`. Accessibility is part of the pass: contentDescription on
       informative images, 48dp tap targets, semantics on custom interactive composables, never colour
       alone. Instrumented tests need a device or emulator; when none is available, say so rather than
-      reporting an untested pass.
+      reporting an untested pass. With `android` on PATH, drive devices with it (android-cli skill);
+      adb only for `pm clear`, `shell input`, `am start` and logcat, and `pm clear` after any
+      downgrade install. Without it, use adb.
     rules:
       - { path: rules/snippets/gradle-commands.md, note: "instrumented / assemble task names" }
     skills:
@@ -399,6 +401,8 @@ role_expertise:
       composable parameter behind excess recomposition; a missing rememberSaveable behind state lost
       on rotation; a Context or Activity held by a singleton behind a leak. A prescribed fix must
       introduce no `!!`, `GlobalScope`, `runBlocking`, or suspend call in a composable body.
+      With `android` on PATH, reproduce on a device with it (android-cli skill); adb only for
+      `pm clear`, `shell input`, `am start`, logcat and heap dumps. Without it, use adb.
     rules:
       - { path: rules/logging.md, note: "log tags and Logcat filters" }
       - { path: rules/snippets/non-negotiable.md, note: "what a prescribed fix must not introduce" }
