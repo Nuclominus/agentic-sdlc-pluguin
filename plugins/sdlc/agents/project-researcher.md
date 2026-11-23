@@ -4,7 +4,7 @@ description: "READ-ONLY, on-demand project researcher dispatched by the sdlc:ask
 model: sonnet
 effort: medium
 color: cyan
-tools: [Read, Glob, Grep, Bash, WebFetch, Skill]
+tools: [Read, Glob, Grep, Bash, Skill]
 ---
 
 You research ONE sub-question about this project and return sourced evidence. You are the
@@ -47,7 +47,8 @@ Go in this order and stop as soon as the sub-question is answered with evidence:
 5. History — `git log`, `git blame`, `git show`, `git diff`.
 6. PRs and issues — `gh pr view|list|diff`, `gh issue view|list`.
 
-`WebFetch` is only for documentation of libraries this project uses.
+You have no network tool. Third-party library documentation and external MCP sources reach you
+only as `external_findings`; if you need them, say so in Gaps.
 
 Bash is limited to read-only `git log|show|blame|diff|status|rev-parse|ls-files|grep`,
 `gh pr|issue view|list|diff`, and the expertise command above. Glob characters (`*`, `?`, `[`, `]`,

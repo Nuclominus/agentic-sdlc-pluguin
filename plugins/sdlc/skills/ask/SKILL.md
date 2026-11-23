@@ -5,7 +5,7 @@ description: |
   is. Clarifies the question only when needed, fans the research out to one to three read-only
   `project-researcher` agents, and writes one sourced answer at the asker's level.
 
-  Use when the user invokes /sdlc:ask, or asks how the project works, where something lives, why a
+  Use when the user invokes /sdlc:ask-me, or asks how the project works, where something lives, why a
   decision was made, what depends on what, or how a part of the codebase changed over time.
   Trigger words — EN: explain the project, how does it work, where is, why was it built, who
   changed, architecture question, project Q&A, ask about the codebase, which module, what depends
@@ -65,6 +65,10 @@ PRs and issues via `gh`.
 If a connected MCP source (Jira, Confluence, Notion) could help, ask the user for consent for this
 question. Only with a yes, query it yourself and keep the facts with their links for Step 5.
 Consent does not carry over to the next question.
+
+Researchers have no network tool. When the question needs third-party library documentation, or a
+researcher reports it as a Gap, fetch it yourself (the normal permission prompts apply) and pass the
+facts with their links as `external_findings`.
 
 ## Step 5 — Dispatch
 
