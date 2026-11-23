@@ -605,6 +605,10 @@ export function resolveSkillScope({ cwd = process.cwd(), env = process.env, mode
   return scope && Object.keys(scope).length ? scope : null;
 }
 
+function hasCheckpoints(dir) {
+  try { return readdirSync(dir).some((f) => f.endsWith(".json")); } catch { return false; }
+}
+
 /**
  * Resolve everything Steps 0 → 1d resolve, in one pass.
  *
@@ -622,6 +626,10 @@ export function resolveSkillScope({ cwd = process.cwd(), env = process.env, mode
 export function resolvePlan({ cwd = process.cwd(), args: rawArgs = "", env = process.env, mode = "installed" } = {}) {
   const brief = readBrief({ cwd, args: rawArgs });
   if (brief.error) return { plan: null, prints: [], warnings: [], halt: `❌ ${brief.error}` };
+  const briefDir = brief.requested ? join(cwd, "docs", "plans", brief.slug) : null;
+  if (briefDir && hasCheckpoints(join(briefDir, ".checkpoint"))) {
+    return { plan: null, prints: [], warnings: [], halt: `❌ --brief: docs/plans/${brief.slug}/ already holds a run — resume it with --resume=${brief.slug}, or remove that directory to start over` };
+  }
   const args = brief.requested ? briefArgs(rawArgs, brief.title) : rawArgs;
   const resolved = resolveProfile({ cwd, args, env, mode });
   const { prints, warnings, headless, roots, installs, enabled, deps, stack, local, effective, models } = resolved;
@@ -632,7 +640,7 @@ export function resolvePlan({ cwd = process.cwd(), args: rawArgs = "", env = pro
 
   if (brief.requested) {
     prints.push(`📄 Brief: ${brief.path} → slug ${brief.slug}, narrative_language ${brief.narrative_language}`);
-    if (existsSync(join(cwd, "docs", "plans", brief.slug))) warn(`WARN: --brief: docs/plans/${brief.slug}/ already exists — a new run will overwrite its _brief.md`);
+    if (existsSync(briefDir)) warn(`WARN: --brief: docs/plans/${brief.slug}/ already exists — this run will overwrite its _brief.md`);
   }
 
   // ---- Step 0c: diff signals

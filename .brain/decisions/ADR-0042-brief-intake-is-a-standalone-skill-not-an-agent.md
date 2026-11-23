@@ -101,8 +101,14 @@ it can be added later).
   language and recipe come from the frontmatter). The skill itself is covered by the `doc-refs`
   lint and `emit --check`, since no skill-frontmatter lint exists. The interview itself is checked by hand on a real project, because a scripted interview tests the
   script, not the skill.
-- The flag is spelled `--brief=<path>` because the resolver's `opt()` reads only the `--x=VALUE`
-  form. The round format is written in our own words rather than borrowed.
+- The flag is spelled `--brief=<path>` because the resolver reads flags in the `--x=VALUE` form.
+  It counts only as a standalone token outside quoted text, so a quoted description that mentions
+  `--brief` stays a description. The round format is written in our own words rather than borrowed.
+- A brief whose `docs/plans/<slug>/.checkpoint/` already holds checkpoints halts: a fresh run there
+  would inherit the old run's completed phases on a later `--resume`. The user resumes or removes
+  the directory; nothing is deleted automatically.
+- Android's lint-config guard reads only the title, Goal and In scope of a structured `_brief.md`,
+  so a Constraints or Out-of-scope mention of a linter does not unlock a config edit.
 
 ## Related
 - Implemented by: (pending)

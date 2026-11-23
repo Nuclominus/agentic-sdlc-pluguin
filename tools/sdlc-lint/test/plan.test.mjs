@@ -669,7 +669,7 @@ test("the orchestrator's 0-large jq projection names only real plan keys", () =>
     // Every CONTEXT key the map owes must survive the projection. `profile` is carried whole
     // (minus the blocks), so its rows are covered by the parent name.
     for (const owed of ["roots", "deps_preflight", "availability_flags", "stack", "workflow",
-                        "models", "cost_cap", "cost_cap_source", "headless", "plugin_version"]) {
+                        "models", "cost_cap", "cost_cap_source", "headless", "plugin_version", "brief"]) {
       assert.ok(projected.includes(owed), `the key map owes CONTEXT.${owed}; 0-large does not project it`);
     }
     // The exclusion is the point of the projection: the blocks are read one agent at a time.
@@ -1088,13 +1088,27 @@ test("--brief: a bad brief halts with its reason", () => {
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
 
-test("--brief: an existing docs/plans/<slug>/ is warned about, not blocked", () => {
+test("--brief: an existing docs/plans/<slug>/ without checkpoints is warned about, not blocked", () => {
   const { w, run } = withBrief("Hotfix crash on empty list");
   try {
-    mkdirSync(join(w.proj, "docs", "plans", "empty-list-crash"), { recursive: true });
+    mkdirSync(join(w.proj, "docs", "plans", "empty-list-crash", ".checkpoint"), { recursive: true });
+    writeFileSync(join(w.proj, "docs", "plans", "empty-list-crash", ".checkpoint", "_started_at"), "1\n");
     const { halt, warnings } = run("--brief=docs/briefs/b.md --dry-run");
     assert.equal(halt, null);
-    assert.ok(warnings.includes("WARN: --brief: docs/plans/empty-list-crash/ already exists — a new run will overwrite its _brief.md"));
+    assert.ok(warnings.includes("WARN: --brief: docs/plans/empty-list-crash/ already exists — this run will overwrite its _brief.md"));
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("--brief: a docs/plans/<slug>/ holding checkpoints halts instead of inheriting them", () => {
+  const { w, run } = withBrief("Hotfix crash on empty list");
+  const cp = join(w.proj, "docs", "plans", "empty-list-crash", ".checkpoint");
+  try {
+    mkdirSync(cp, { recursive: true });
+    writeFileSync(join(cp, "development.json"), "{}\n");
+    const r = run("--brief=docs/briefs/b.md --dry-run");
+    assert.equal(r.plan, null);
+    assert.equal(r.halt, "❌ --brief: docs/plans/empty-list-crash/ already holds a run — resume it with --resume=empty-list-crash, or remove that directory to start over");
+    assert.ok(existsSync(join(cp, "development.json")), "nothing is deleted automatically");
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
 

@@ -158,7 +158,7 @@ Run this, substituting the path, and nothing else:
 
 ```bash
 F=<the tool-results path>
-jq -r '.prints[], "=== CONTEXT ===", (.plan | {roots, deps_preflight, availability_flags, stack, headless, plugin_version, cost_cap, cost_cap_source, models, skip_rules: .skip_rules.applied, workflow, profile: (.profile | del(.prompt_blocks))} | tojson)' "$F"
+jq -r '.prints[], "=== CONTEXT ===", (.plan | {roots, deps_preflight, availability_flags, stack, headless, plugin_version, cost_cap, cost_cap_source, models, skip_rules: .skip_rules.applied, workflow, brief, profile: (.profile | del(.prompt_blocks))} | tojson)' "$F"
 ```
 
 One call yields both obligations above: `prints[]` to echo verbatim, then every `CONTEXT` value in
@@ -232,6 +232,7 @@ that status is available to a wrapper script, but it is not the hosting session'
 | `models` | `CONTEXT.model_overrides` | Step 3b-3 tier precedence |
 | `cost_cap`, `cost_cap_source` | `CONTEXT.cost_cap`, `CONTEXT.cost_cap_source` *(**Step 1d-0**)* | Step 3d-cap, Step 5 |
 | `headless` | `CONTEXT.headless_mode` | every headless rule |
+| `brief` | `CONTEXT.brief` — `null`, or `{path, title, slug, narrative_language}` | Output language policy, Step 2 items 1 and 3 |
 
 `CONTEXT.cost_cap` is resolved in exactly one place — inside the command — and read everywhere
 else. That single-source property is what makes the Step 3d-cap gate auditable; never recompute it.
@@ -323,6 +324,10 @@ since: 2026-07-06
    The clean alternative is to run pipelines from the main checkout or from a sibling worktree outside
    `.claude/worktrees/`; say so once when the flag is set, then continue.
 3. Create `docs/plans/{task_slug}/_brief.md` with the original `$ARGUMENTS`. When `plan.brief` is set, it is a copy of the file at `plan.brief.path` (`cat "<plan.brief.path>" > docs/plans/{task_slug}/_brief.md` via `Bash`, never `Write` in worktree-guard mode).
+   **Exception — reached from Resume mode's "start fresh":** keep the existing `_brief.md`; do not
+   rewrite it. There `$ARGUMENTS` is only `--resume=<slug>` and `plan.brief` is null, so a rewrite
+   would replace the real brief with the flag. Set `CONTEXT.narrative_language` from that file
+   exactly as Resume mode item 3 does (frontmatter `narrative_language`, else the heuristic over its text).
 4. **Start the real clock (write-once).** Capture a measured start timestamp so elapsed time is
    real, not estimated — consumed by Step 5 (`wall_clock_seconds`) and the Step 6 journal. Run via
    `Bash`:
@@ -382,8 +387,9 @@ since: 2026-07-06
           rm -f docs/plans/{task_slug}/.checkpoint/*.json
           ```
           **Then** treat exactly as "no --resume": go to the non-resume Step 2 algorithm with the
-          SAME `task_slug` (this overwrites `_brief.md`; `_started_at`, which is not a `.json` file,
-          is left alone so elapsed time still spans from the task's original start).
+          SAME `task_slug`. Item 3 there keeps the existing `_brief.md` and takes
+          `narrative_language` from it (its "start fresh" exception); `_started_at`, which is not a
+          `.json` file, is left alone so elapsed time still spans from the task's original start.
         - **abort** → stop. Print nothing further.
       - **Headless** (`CONTEXT.headless_mode` is `true`): behave as **start fresh** (clear the
         checkpoints exactly as above before falling through), and emit to stderr:

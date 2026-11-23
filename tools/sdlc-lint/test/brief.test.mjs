@@ -124,3 +124,16 @@ test("the space form and an empty value are rejected with the = hint", () => {
     assert.equal(r.error, "--brief: give the path as --brief=<path>", args);
   }
 });
+
+test("a quoted description that mentions the flag is not a --brief request", () => {
+  const cwd = project({ "docs/briefs/x.md": VALID });
+  for (const args of ['"Document the --brief flag in WORKFLOW.md"', '"Add a --brief=<path> option"',
+                      "'Explain --brief=docs/briefs/x.md' --dry-run", 'x--brief=docs/briefs/x.md']) {
+    assert.deepEqual(readBrief({ cwd, args }), { requested: false }, args);
+  }
+});
+
+test("briefArgs replaces only the standalone flag, not a quoted mention", () => {
+  assert.equal(briefArgs('--dry-run --brief=a.md', "T"), '--dry-run "T"');
+  assert.equal(briefArgs('"see --brief=b.md" --brief=a.md', "T"), '"see --brief=b.md" "T"');
+});

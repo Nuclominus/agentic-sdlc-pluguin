@@ -3,15 +3,26 @@ import { relative, resolve, sep } from "node:path";
 import { parseYaml } from "./yaml.mjs";
 import { briefOf, SLUG_RE } from "./slug.mjs";
 
-const opt = (args, name) => (new RegExp(`${name}=([^\\s]+)`).exec(String(args)) ?? [])[1] ?? null;
+const blankQuoted = (text) => text.replace(/"[^"]*"|'[^']*'/g, (q) => " ".repeat(q.length));
+
+function briefToken(args) {
+  const text = String(args);
+  const m = /(^|\s)--brief(=\S*)?(?=\s|$)/.exec(blankQuoted(text));
+  if (!m) return null;
+  const start = m.index + m[1].length;
+  const end = m.index + m[0].length;
+  return { start, end, value: m[2] ? text.slice(start + "--brief=".length, end) : "" };
+}
+
 const LANGS = ["uk", "en"];
 
 const inside = (root, abs) => abs === root || abs.startsWith(root + sep);
 
 export function readBrief({ cwd, args }) {
-  const given = opt(args, "--brief");
-  if (given === null && /(^|\s)--brief=?(\s|$)/.test(String(args))) return { requested: true, error: "--brief: give the path as --brief=<path>" };
-  if (given === null) return { requested: false };
+  const token = briefToken(args);
+  if (!token) return { requested: false };
+  const given = token.value;
+  if (!given) return { requested: true, error: "--brief: give the path as --brief=<path>" };
   const fail = (msg) => ({ requested: true, error: `--brief=${given}: ${msg}` });
 
   const root = realpathSync(cwd);
@@ -47,4 +58,10 @@ export function readBrief({ cwd, args }) {
   return { requested: true, path: relative(root, real).split(sep).join("/"), title, slug, narrative_language: lang };
 }
 
-export const briefArgs = (args, title) => String(args).replace(/--brief=[^\s]+/, () => JSON.stringify(String(title).replace(/(^|\s)-+/g, "$1").replace(/-{2,}/g, " ")));
+export function briefArgs(args, title) {
+  const text = String(args);
+  const token = briefToken(text);
+  if (!token) return text;
+  const quoted = JSON.stringify(String(title).replace(/(^|\s)-+/g, "$1").replace(/-{2,}/g, " "));
+  return text.slice(0, token.start) + quoted + text.slice(token.end);
+}
