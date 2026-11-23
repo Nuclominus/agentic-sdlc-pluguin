@@ -30,6 +30,22 @@ check "project-researcher" 'git grep -O foo' 2
 check "project-researcher" 'git show --ext-diff HEAD' 2
 check "project-researcher" 'git checkout main' 2
 check "project-researcher" 'gh pr merge 12' 2
+check "project-researcher" 'git log & rm x' 2
+check "project-researcher" 'git log &rm x' 2
+check "project-researcher" 'git grep --open=rm bar' 2
+check "project-researcher" 'git grep --open-files=touch bar' 2
+check "project-researcher" 'git grep -nOrm foo' 2
+check "project-researcher" 'git grep -iO foo' 2
+check "project-researcher" 'git log --format="%h %s"' 0
+check "project-researcher" 'git log "--output=/tmp/x"' 2
+check "project-researcher" 'git log --out=/tmp/x' 2
+check "project-researcher" 'git show --ext HEAD' 2
+check "project-researcher" 'git show --textconv HEAD' 2
+check "project-researcher" 'git log --grep=fix#12' 0
+check "project-researcher" "git ls-files '*.kt'" 0
+check "project-researcher" 'node /tmp/tools/resolve/cli.mjs expertise --role project-researcher' 2
+check "project-researcher" $'git log\nrm x' 2
+CLAUDE_PLUGIN_ROOT=/opt/p check "project-researcher" 'node "/opt/p/tools/resolve/cli.mjs" expertise --role project-researcher' 0
 check "debugger" 'git checkout main' 0
 
 stderr=$(printf '%s' '{"agent_type":"project-researcher","tool_input":{"command":"ls"}}' | bash "$HOOK" 2>&1 >/dev/null)

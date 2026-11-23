@@ -14,12 +14,31 @@ deny() {
   exit 2
 }
 
+tail_args=' expertise --role project-researcher'
+# shellcheck disable=SC2016
+for root in '${CLAUDE_PLUGIN_ROOT}' "${CLAUDE_PLUGIN_ROOT:-}"; do
+  [ -n "$root" ] || continue
+  [ "$cmd" = "node \"$root/tools/resolve/cli.mjs\"$tail_args" ] && exit 0
+  [ "$cmd" = "node $root/tools/resolve/cli.mjs$tail_args" ] && exit 0
+done
+
+# Allowlist, not denylist: any shell metacharacter, newline or tab fails closed.
 case "$cmd" in
-  *';'*|*'&&'*|*'|'*|*'>'*|*'<'*|*'`'*|*"\$("*|*$'\n'*) deny ;;
+  ''|*[!A-Za-z0-9\ _./:=@,+%^~*?#\"\'\[\]-]*) deny ;;
 esac
-printf '%s' "$cmd" | grep -qE -- '--output|--ext-diff|--open-files-in-pager|(^|[[:space:]])-O' && deny
+
+# Git accepts unique long-option prefixes, so deny whole prefixes of the write-capable options.
+for tok in $cmd; do
+  tok=${tok//\"/}
+  tok=${tok//\'/}
+  case "$tok" in
+    --oneline) ;;
+    --o*|--ex*|--te*) deny ;;
+    --*) ;;
+    -*O*) deny ;;
+  esac
+done
 
 printf '%s' "$cmd" | grep -qE '^git (log|show|blame|diff|status|rev-parse|ls-files|grep)( |$)' && exit 0
 printf '%s' "$cmd" | grep -qE '^gh (pr|issue) (view|list|diff)( |$)' && exit 0
-printf '%s' "$cmd" | grep -qE '^node "?[^ "]*/tools/resolve/cli\.mjs"? expertise --role project-researcher$' && exit 0
 deny

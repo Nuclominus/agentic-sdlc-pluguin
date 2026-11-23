@@ -44,6 +44,8 @@ one to three read-only `project-researcher` agents, and writes the answer itself
      commands for this agent. The hook identifies the caller by the documented `agent_type` field of
      the hook input (Claude Code `hooks.md`). Plugin agents cannot carry their own `hooks:`
      frontmatter (Claude Code `sub-agents.md`), which is why the hook is plugin-level.
+     The hook allows only a strict character set and rejects write-capable option prefixes
+     (`--o…`, `--ex…`, `--te…`, `-…O`), so syntax and option tricks fail closed.
    - MCP sources (Jira, Confluence, Notion) are not in the agent's tool list. Each user's MCP tool
      names differ, so the skill queries them, with the user's consent for that question, and passes
      the findings in as context.
