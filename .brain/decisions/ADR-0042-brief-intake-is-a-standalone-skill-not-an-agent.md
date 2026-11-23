@@ -1,6 +1,6 @@
 ---
 adr: 42
-status: proposed
+status: accepted
 date: 2026-11-23
 supersedes: null
 ---
@@ -111,7 +111,7 @@ it can be added later).
   so a Constraints or Out-of-scope mention of a linter does not unlock a config edit.
 
 ## Related
-- Implemented by: (pending)
+- Implemented by: #258
 - Relates to: [[decisions/ADR-0018-reviewers-do-not-write-code]] (another role with deliberately
   narrow write access), [[decisions/ADR-0019-the-run-start-is-one-command]] (the run start the
   `--brief` flag extends), [[components/sdlc]]
