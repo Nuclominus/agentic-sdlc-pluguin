@@ -4,6 +4,12 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+### Added
+
+- **`/sdlc:start --brief=<path>`** takes the task from a brief file (`docs/briefs/<slug>.md`). The
+  resolver returns `plan.brief`; the orchestrator uses its slug and `narrative_language` and copies
+  the file to `_brief.md`.
+
 ## [4.3.2] — 2026-11-23
 
 ### Added

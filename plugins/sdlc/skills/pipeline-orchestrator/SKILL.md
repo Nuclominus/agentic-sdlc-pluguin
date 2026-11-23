@@ -43,7 +43,8 @@ You are the SDLC Pipeline Orchestrator. You coordinate specialist agents to deli
 
 ## Inputs
 
-- `$ARGUMENTS` — feature description from `/sdlc:start`. May contain `--stack=NAME` override.
+- `$ARGUMENTS` — feature description from `/sdlc:start`. May contain `--stack=NAME` override, or `--brief=<path>` instead of a description: the resolver reads
+  the file and returns `plan.brief` (`{ path, title, slug, narrative_language }`), null otherwise.
   When this skill is selected from a natural-language request instead of the slash command,
   `$ARGUMENTS` is **the change the user described, in their own words**, reconstructed into the
   same one-line brief the slash form would have carried, plus any flag the preview rule below
@@ -65,7 +66,7 @@ The pipeline must produce consistent artifacts regardless of which language the 
 - **Match user's language:** narrative content in `docs/plans/{slug}/0X-*.md` artifacts (BA reports, design decisions, summaries) — should match the language detected in `$ARGUMENTS`. If `$ARGUMENTS` is mixed or ambiguous, default to English.
 - **PR description:** English regardless of input language. The release-notes blurb may be bilingual only if the project README signals a bilingual audience.
 
-Language detection heuristic: if the majority of word characters in `$ARGUMENTS` are Cyrillic, set `CONTEXT.narrative_language = "uk"`; otherwise `"en"`. Persist this in telemetry.
+When `plan.brief` is set, `CONTEXT.narrative_language = plan.brief.narrative_language` and the heuristic below is skipped. Otherwise, language detection heuristic: if the majority of word characters in `$ARGUMENTS` are Cyrillic, set `CONTEXT.narrative_language = "uk"`; otherwise `"en"`. Persist this in telemetry.
 
 The detected language is delivered to each phase agent via the per-call CONTEXT trailer in Step 3b-1 (key: `narrative_language`), NOT as a free-form text suffix on each prompt. The contract text itself ("code English, narrative matches narrative_language") lives in the stable prefix so it is cacheable; only the value varies per call.
 
@@ -295,7 +296,7 @@ cardinality: once-per-run
 since: 2026-07-06
 ```
 
-1. Generate `task_slug` from `$ARGUMENTS`: lowercase, alphanumerics + dashes, max 40 chars.
+1. Generate `task_slug` from `$ARGUMENTS`: lowercase, alphanumerics + dashes, max 40 chars. When `plan.brief` is set, `task_slug = plan.brief.slug`.
 2. Create directory `docs/plans/{task_slug}/` if it does not exist.
 2a. **Detect the harness worktree guard.** Run three plain commands, one `Bash` call each:
    `pwd -P`, `git rev-parse --show-toplevel`, `realpath docs/plans`. Set
@@ -321,7 +322,7 @@ since: 2026-07-06
    - add the worktree-guard note to the final summary (Step 5).
    The clean alternative is to run pipelines from the main checkout or from a sibling worktree outside
    `.claude/worktrees/`; say so once when the flag is set, then continue.
-3. Create `docs/plans/{task_slug}/_brief.md` with the original `$ARGUMENTS`.
+3. Create `docs/plans/{task_slug}/_brief.md` with the original `$ARGUMENTS`. When `plan.brief` is set, it is a copy of the file at `plan.brief.path` (`cat "<plan.brief.path>" > docs/plans/{task_slug}/_brief.md` via `Bash`, never `Write` in worktree-guard mode).
 4. **Start the real clock (write-once).** Capture a measured start timestamp so elapsed time is
    real, not estimated — consumed by Step 5 (`wall_clock_seconds`) and the Step 6 journal. Run via
    `Bash`:
