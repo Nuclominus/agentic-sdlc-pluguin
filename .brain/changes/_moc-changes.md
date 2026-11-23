@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-11-23 | #260 | `feat` | — | [[changes/2026-11-23-PR-260-sdlc-ask-me-project-q-a-with-a-read-only-researcher-agent]] |
 | 2026-11-23 | #258 | `feat` | — | [[changes/2026-11-23-PR-258-sdlc-brief-intake-and-sdlc-start-brief]] |
 | 2026-11-23 | #256 | `chore` | — | [[changes/2026-11-23-PR-256-bump-sdlc-and-android-foundation-to-3-3-1]] |
 | 2026-11-23 | #254 | `feat` | — | [[changes/2026-11-23-PR-254-stack-level-device-gradle-cache-resume-cost-and-worktree-gua]] |
