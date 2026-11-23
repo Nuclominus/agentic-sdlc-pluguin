@@ -27,6 +27,7 @@ import { loadCheckpoints, doneUnitIds } from "../run/reentry.mjs";
 import { parseYaml } from "./yaml.mjs";
 import { scanLegacyLocation } from "../migrate/migrate.mjs";
 import { slugify, briefOf, SLUG_RE } from "./slug.mjs";
+import { readBrief, briefArgs } from "./brief.mjs";
 
 /**
  * Immediate children of the given roots that are plugins.
@@ -618,13 +619,21 @@ export function resolveSkillScope({ cwd = process.cwd(), env = process.env, mode
  * That is how "⚠️ Failed to parse .sdlc/sdlc.local.yaml" became silent. The duplicate key
  * survives for machine consumers that want the diagnostics without pattern-matching prose.
  */
-export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env, mode = "installed" } = {}) {
+export function resolvePlan({ cwd = process.cwd(), args: rawArgs = "", env = process.env, mode = "installed" } = {}) {
+  const brief = readBrief({ cwd, args: rawArgs });
+  if (brief.error) return { plan: null, prints: [], warnings: [], halt: `❌ ${brief.error}` };
+  const args = brief.requested ? briefArgs(rawArgs, brief.title) : rawArgs;
   const resolved = resolveProfile({ cwd, args, env, mode });
   const { prints, warnings, headless, roots, installs, enabled, deps, stack, local, effective, models } = resolved;
   if (resolved.halt) return { plan: null, prints, warnings, halt: resolved.halt };
   /** Record a diagnostic in both channels — see the note above. */
   const warn = (msg) => { warnings.push(msg); prints.push(msg); };
   const warnAll = (msgs) => { for (const m of msgs) warn(m); };
+
+  if (brief.requested) {
+    prints.push(`📄 Brief: ${brief.path} → slug ${brief.slug}, narrative_language ${brief.narrative_language}`);
+    if (existsSync(join(cwd, "docs", "plans", brief.slug))) warn(`WARN: --brief: docs/plans/${brief.slug}/ already exists — a new run will overwrite its _brief.md`);
+  }
 
   // ---- Step 0c: diff signals
   const signals = computeDiffSignals(cwd, { baseRef: opt(args, "--base-ref") });
@@ -702,6 +711,7 @@ export function resolvePlan({ cwd = process.cwd(), args = "", env = process.env,
   if (capPrint) prints.push(capPrint);
 
   const plan = {
+    brief: brief.requested ? { path: brief.path, title: brief.title, slug: brief.slug, narrative_language: brief.narrative_language } : null,
     roots,
     deps_preflight: deps.deps_preflight,
     skills_source: deps.skills_source,

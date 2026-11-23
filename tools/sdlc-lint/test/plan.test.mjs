@@ -1030,3 +1030,78 @@ test("resolveSkillScope audits against the stack the RUN used, not today's detec
     assert.equal(resolveSkillScope({ cwd: w.proj, env: w.env, stack: "demo --force-preflight" }), null, "a malformed name is not spliced into args");
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
+
+// --brief: the title feeds recipe auto-selection, the frontmatter supplies slug and language.
+
+function withBrief(title, { slug = "empty-list-crash", extra = [] } = {}) {
+  const w = withCheckpoints("unused", {});
+  write(join(w.proj, "docs", "briefs", "b.md"), `---\ntitle: ${JSON.stringify(title)}\nslug: ${slug}\nnarrative_language: uk\n---\nBody.\n`);
+  const run = (args) => resolvePlan({ cwd: w.proj, args, env: w.env });
+  return { w, run };
+}
+
+test("--brief: the title drives recipe auto-selection and the frontmatter supplies the slug", () => {
+  const { w, run } = withBrief("Hotfix crash on empty list");
+  try {
+    const { plan, halt, prints } = run("--brief=docs/briefs/b.md --dry-run");
+    assert.equal(halt, null);
+    assert.equal(plan.workflow.name, "hotfix");
+    assert.deepEqual(plan.brief, { path: "docs/briefs/b.md", title: "Hotfix crash on empty list", slug: "empty-list-crash", narrative_language: "uk" });
+    assert.ok(prints.includes("📄 Brief: docs/briefs/b.md → slug empty-list-crash, narrative_language uk"));
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("--brief: an explicit --workflow still wins over the title match", () => {
+  const { w, run } = withBrief("Hotfix crash on empty list");
+  try {
+    const { plan, halt } = run("--brief=docs/briefs/b.md --workflow=docs-only --dry-run");
+    assert.equal(halt, null);
+    assert.equal(plan.workflow.name, "docs-only");
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("--brief: a title with quotes and parentheses does not break the match", () => {
+  const { w, run } = withBrief('Urgent: "empty" list (crash)');
+  try {
+    const { plan, halt } = run("--brief=docs/briefs/b.md --dry-run");
+    assert.equal(halt, null);
+    assert.equal(plan.workflow.name, "hotfix");
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("--brief: combining it with a description or --resume halts with the exact copy", () => {
+  const { w, run } = withBrief("Hotfix crash on empty list");
+  try {
+    const both = run('"Add dark mode" --brief=docs/briefs/b.md --dry-run');
+    assert.equal(both.plan, null);
+    assert.equal(both.halt, "❌ --brief: use either --brief=<path> or a description, not both");
+    const resume = run("--brief=docs/briefs/b.md --resume --dry-run");
+    assert.equal(resume.halt, "❌ --brief cannot be combined with --resume (a resumed run already has its _brief.md)");
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("--brief: a bad brief halts with its reason", () => {
+  const { w, run } = withBrief("x");
+  try {
+    const r = run("--brief=docs/briefs/missing.md --dry-run");
+    assert.equal(r.halt, "❌ --brief=docs/briefs/missing.md: file not found: docs/briefs/missing.md");
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("--brief: an existing docs/plans/<slug>/ is warned about, not blocked", () => {
+  const { w, run } = withBrief("Hotfix crash on empty list");
+  try {
+    mkdirSync(join(w.proj, "docs", "plans", "empty-list-crash"), { recursive: true });
+    const { halt, warnings } = run("--brief=docs/briefs/b.md --dry-run");
+    assert.equal(halt, null);
+    assert.ok(warnings.includes("WARN: --brief: docs/plans/empty-list-crash/ already exists — a new run will overwrite its _brief.md"));
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("no --brief leaves plan.brief null", () => {
+  const w = withCheckpoints("unused", {});
+  try {
+    const { plan } = resolvePlan({ cwd: w.proj, args: '"Add dark mode" --dry-run', env: w.env });
+    assert.equal(plan.brief, null);
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});

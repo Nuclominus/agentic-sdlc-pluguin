@@ -33,7 +33,7 @@ const jsonOut = argv.includes("--json");
 
 function usage() {
   console.error("usage: cli.mjs plan [--json] [--dry-run] [--workflow=NAME] [--no-auto-workflow]");
-  console.error("                    [--force-preflight] [--skills <csv>] [--no-skip-rules] [--force-ba]");
+  console.error("                    [--brief=<path>] [--force-preflight] [--skills <csv>] [--no-skip-rules] [--force-ba]");
   console.error("                    [--base-ref <ref>] [--mode tree|installed]");
   console.error("       cli.mjs expertise --role <name> [--json] [--stack=NAME] [--mode tree|installed]");
   console.error("       cli.mjs deps [--json] [--probe] [--mode tree|installed]");
