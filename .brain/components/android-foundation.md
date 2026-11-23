@@ -93,6 +93,11 @@ checkstyle or `.editorconfig` only when the run's brief asks for it. With a stru
 brief (frontmatter present), only the `title`, Goal and In-scope part count, so a Constraints line
 like "do not relax detekt rules" does not unlock the guard (#258).
 
+`role_expertise.project-researcher` (#260) points the on-demand researcher at `.obsidian-vault/`
+first, then at the `:feature:*` module map from `settings.gradle(.kts)`, `@Serializable` routes and
+the DI modules. It uses the Glob tool rather than shell globs, because the researcher's Bash guard
+rejects glob characters.
+
 Rule files here are read by agents that live in `sdlc`, so they never name the plugin-root variable —
 the resolver emits each `role_expertise.<role>.rules` path **absolute** instead.
 

@@ -75,6 +75,14 @@ the user and writes `docs/briefs/<slug>.md`. `/sdlc:start --brief=<path>` then t
 the file to `_brief.md`. The resolver halts on `--brief` combined with a description or `--resume`,
 and on a slug whose workspace already holds checkpoints.
 
+Questions about the project go to `/sdlc:ask-me` (#260,
+[[decisions/ADR-0043-project-qa-is-a-skill-fronting-a-read-only-researcher-agent]]). The `sdlc:ask`
+skill clarifies, fans out one to three read-only `project-researcher` agents (Structure / Rationale /
+Behavior), and writes one sourced answer. The researcher's read-only rights are enforced by the
+`researcher-readonly-guard.sh` PreToolUse hook, keyed on `agent_type`. It allows only a strict
+character set, read-only git/gh verbs and the expertise bootstrap, and it denies the researcher
+outright without jq.
+
 Headless automation gates on `_telemetry.json` state
 (`aborted_at_phase`), never on printed output or the exit code — the SKILL.md is a prompt and can
 control neither, a constraint stated in Step 0a-1 and enforced doc-wide by sdlc-lint.
@@ -97,6 +105,8 @@ control neither, a constraint stated in Step 0a-1 and enforced doc-wide by sdlc-
   the orchestrator's whole Step 5b, see [[decisions/ADR-0014-the-run-tail-is-one-command]])
 - `plugins/sdlc/tools/resolve/brief.mjs` (`readBrief` / `briefArgs`, the `--brief` contract) and
   `plugins/sdlc/skills/brief/SKILL.md` (the intake interview)
+- `plugins/sdlc/skills/ask/SKILL.md` + `plugins/sdlc/agents/project-researcher.md` (project Q&A) and
+  `plugins/sdlc/hooks/researcher-readonly-guard.sh` (its read-only guard)
 - `tools/sdlc-lint/lib/read-discipline.mjs`
 - `tools/sdlc-lint/lib/plugin-paths.mjs`
 
@@ -129,6 +139,7 @@ knowing before reading any report:
 - [[decisions/ADR-0010-self-healing-micro-loop]]
 - [[decisions/ADR-0012-unpriced-runs-must-not-render-a-cap-verdict]]
 - [[decisions/ADR-0042-brief-intake-is-a-standalone-skill-not-an-agent]]
+- [[decisions/ADR-0043-project-qa-is-a-skill-fronting-a-read-only-researcher-agent]]
 
 ## Change history
 _Backlinks from `changes/` accumulate here._

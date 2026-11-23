@@ -1,6 +1,6 @@
 ---
 adr: 43
-status: proposed
+status: accepted
 date: 2026-11-23
 supersedes: null
 ---
@@ -127,7 +127,7 @@ Rejected alternatives:
   - the skill's end-to-end answer is checked by hand on a real project.
 
 ## Related
-- Implemented by: (pending)
+- Implemented by: #260
 - Relates to: [[decisions/ADR-0042-brief-intake-is-a-standalone-skill-not-an-agent]],
   [[decisions/ADR-0021-agents-live-in-the-core-foundations-carry-expertise]],
   [[decisions/ADR-0018-reviewers-do-not-write-code]], [[components/sdlc]],
