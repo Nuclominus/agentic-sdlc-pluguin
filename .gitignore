@@ -1,9 +1,11 @@
 .DS_Store
 *.log
-docs/plans/_*.json
-docs/plans/_*.log
 node_modules/
-docs/plans/**/.checkpoint/
+
+# Local process artifacts: pipeline run workspaces, development-workflow plans/specs and reports.
+docs/plans/
+docs/superpowers/
+docs/reports/
 
 # Eval run output: one report.html + aggregate-result.json per run, regenerated on every invocation.
 plugins/*/evals/results/
