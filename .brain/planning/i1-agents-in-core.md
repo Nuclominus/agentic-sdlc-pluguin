@@ -5,7 +5,8 @@ status: done
 # I1 — Agents in the core, expertise in the foundations
 
 > Track note for [[decisions/ADR-0021-agents-live-in-the-core-foundations-carry-expertise]].
-> The design spec is `docs/superpowers/specs/2026-09-05-agents-in-core-design.md`; this note carries
+> The design spec was `docs/superpowers/specs/2026-09-05-agents-in-core-design.md` (removed from the
+> tree in #264; read it from git history); this note carries
 > the PR ledger and the expertise-coverage table that PR-2 and PR-3 are gated on.
 
 **Amended 2026-09-06, after PR-1's review:** the original design carried a one-release alias layer

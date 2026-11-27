@@ -35,4 +35,4 @@ for the overview and quickstart; the pages below go deep on each topic.
 
 > Not documentation: `docs/plans/` (per-run pipeline workspace — phase outputs, checkpoints,
 > telemetry) and `docs/superpowers/` (plan + spec artifacts from the development workflow) are
-> process/machine artifacts, not reference docs.
+> local process artifacts and are not kept in this repository.
