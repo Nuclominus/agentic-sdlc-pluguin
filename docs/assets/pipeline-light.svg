@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="240" viewBox="0 0 960 240" role="img" aria-label="Pipeline: analyze, then build and review in a loop of up to three rounds, then security and tests in parallel, then QA verification, then a pull request" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#59636e"/></marker></defs>
+  <rect x="0.5" y="0.5" width="959" height="239" rx="10" fill="#f6f8fa" stroke="#d1d9e0"/>
+  <rect x="20" y="92" width="130" height="56" rx="8" fill="#ffffff" stroke="#d1d9e0"/>
+  <text x="85" y="117" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328">Analyze</text>
+  <text x="85" y="135" text-anchor="middle" font-size="12" fill="#59636e">business-analyst</text>
+  <line x1="154" y1="120" x2="172" y2="120" stroke="#59636e" stroke-width="1.5" marker-end="url(#a)"/>
+  <rect x="178" y="92" width="110" height="56" rx="8" fill="#ffffff" stroke="#d1d9e0"/>
+  <text x="233" y="117" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328">Build</text>
+  <text x="233" y="135" text-anchor="middle" font-size="12" fill="#59636e">developer</text>
+  <text x="303" y="126" text-anchor="middle" font-size="18" font-weight="600" fill="#1a7f37">⇄</text>
+  <rect x="318" y="92" width="110" height="56" rx="8" fill="#ffffff" stroke="#d1d9e0"/>
+  <text x="373" y="117" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328">Review</text>
+  <text x="373" y="135" text-anchor="middle" font-size="12" fill="#59636e">reviewer</text>
+  <text x="303" y="172" text-anchor="middle" font-size="11" fill="#1a7f37">up to 3 rounds</text>
+  <line x1="432" y1="120" x2="450" y2="120" stroke="#59636e" stroke-width="1.5" marker-end="url(#a)"/>
+  <rect x="456" y="40" width="160" height="160" rx="10" fill="none" stroke="#8c959f" stroke-dasharray="5 4"/>
+  <rect x="470" y="52" width="132" height="52" rx="8" fill="#ffffff" stroke="#d4a72c"/>
+  <text x="536" y="75" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328">Secure</text>
+  <text x="536" y="93" text-anchor="middle" font-size="12" fill="#59636e">security-analyst</text>
+  <rect x="470" y="112" width="132" height="52" rx="8" fill="#ffffff" stroke="#d1d9e0"/>
+  <text x="536" y="135" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328">Test</text>
+  <text x="536" y="153" text-anchor="middle" font-size="12" fill="#59636e">tester</text>
+  <text x="536" y="186" text-anchor="middle" font-size="11" fill="#59636e">in parallel</text>
+  <line x1="620" y1="120" x2="638" y2="120" stroke="#59636e" stroke-width="1.5" marker-end="url(#a)"/>
+  <rect x="644" y="92" width="130" height="56" rx="8" fill="#ffffff" stroke="#d1d9e0"/>
+  <text x="709" y="117" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328">Verify</text>
+  <text x="709" y="135" text-anchor="middle" font-size="12" fill="#59636e">qa-engineer</text>
+  <line x1="778" y1="120" x2="796" y2="120" stroke="#59636e" stroke-width="1.5" marker-end="url(#a)"/>
+  <rect x="802" y="92" width="138" height="56" rx="8" fill="#0b1220" stroke="#0b1220"/>
+  <text x="871" y="117" text-anchor="middle" font-size="14" font-weight="600" fill="#f5f7fa">Ship</text>
+  <text x="871" y="135" text-anchor="middle" font-size="12" fill="#3ddc84">pull request</text>
+</svg>
