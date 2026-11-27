@@ -1,4 +1,18 @@
-# 🎬 End-to-end walkthrough — Android
+<h1 align="center">
+  <img src="assets/headers/walkthrough.svg" alt="End-to-end walkthrough" width="100%">
+</h1>
+
+<p align="center">
+  <a href="../README.md">Overview</a> ·
+  <a href="WORKFLOW.md">How it works</a> ·
+  <b>Walkthrough</b> ·
+  <a href="RECIPES.md">Recipes</a> ·
+  <a href="COST-AND-MODELS.md">Cost &amp; models</a> ·
+  <a href="CONFIGURATION.md">Configuration</a> ·
+  <a href="INSTALLATION.md">Installation</a>
+</p>
+
+---
 
 A complete run of the `android-feature` pipeline on a simple, realistic task. This traces every phase,
 the two-pass development gate, the review loop firing once, the parallel security/test group, and the
@@ -228,3 +242,9 @@ STATUS: PR ready
 - **The parallel group** dispatching security and test together.
 - **Platform standard injection** — security ran MASVS/MASTG, not web-OWASP, with zero core changes.
 - **Compact handoffs** — each phase returns a small summary; full detail lives in `docs/plans/<slug>/`.
+
+---
+
+<p align="center">
+  <a href="WORKFLOW.md">← How it works</a> · <a href="README.md">All docs</a> · <a href="RECIPES.md">Recipes →</a>
+</p>

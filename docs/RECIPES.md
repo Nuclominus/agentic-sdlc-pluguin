@@ -1,4 +1,18 @@
-# 🧭 Dynamic Workflow Recipes
+<h1 align="center">
+  <img src="assets/headers/recipes.svg" alt="Workflow recipes" width="100%">
+</h1>
+
+<p align="center">
+  <a href="../README.md">Overview</a> ·
+  <a href="WORKFLOW.md">How it works</a> ·
+  <a href="WALKTHROUGH.md">Walkthrough</a> ·
+  <b>Recipes</b> ·
+  <a href="COST-AND-MODELS.md">Cost &amp; models</a> ·
+  <a href="CONFIGURATION.md">Configuration</a> ·
+  <a href="INSTALLATION.md">Installation</a>
+</p>
+
+---
 
 A **workflow recipe** is a YAML file declaring which phases to run and in what shape. Recipes are
 discovered across **all** plugins (`**/workflows/*.yaml`), validated against
@@ -97,3 +111,9 @@ These are discovered with **highest precedence**: a project recipe **shadows** a
 ```
 
 Selection precedence with a project recipe: `--workflow=NAME` resolves the name, then the resolver prefers `<project>/.sdlc/sdlc-workflows/NAME.yaml` over any plugin's `workflows/NAME.yaml`.
+
+---
+
+<p align="center">
+  <a href="WALKTHROUGH.md">← Walkthrough</a> · <a href="README.md">All docs</a> · <a href="COST-AND-MODELS.md">Cost &amp; models →</a>
+</p>

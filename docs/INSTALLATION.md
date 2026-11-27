@@ -1,4 +1,18 @@
-# 📦 Installation & Requirements
+<h1 align="center">
+  <img src="assets/headers/installation.svg" alt="Installation &amp; requirements" width="100%">
+</h1>
+
+<p align="center">
+  <a href="../README.md">Overview</a> ·
+  <a href="WORKFLOW.md">How it works</a> ·
+  <a href="WALKTHROUGH.md">Walkthrough</a> ·
+  <a href="RECIPES.md">Recipes</a> ·
+  <a href="COST-AND-MODELS.md">Cost &amp; models</a> ·
+  <a href="CONFIGURATION.md">Configuration</a> ·
+  <b>Installation</b>
+</p>
+
+---
 
 The [Quickstart](../README.md#quickstart) covers the fast path. This page is the full step-by-step
 install, optional dependencies, and requirements.
@@ -143,3 +157,9 @@ minor version; every skill this marketplace declares exists at that pin.
 - API Tier 2+ or Claude Max — a medium feature uses a large token volume; lower tiers may be throttled.
 - A Git repository for `document-writer` (PR creation).
 - **Android:** JDK + Gradle wrapper. Builds (`assembleDebug`) and instrumented tests are CI-deferred; in-pipeline verification is detekt + JVM unit tests + Kotlin compile-check.
+
+---
+
+<p align="center">
+  <a href="CONFIGURATION.md">← Configuration</a> · <a href="README.md">All docs</a> · <a href="../CONTRIBUTING.md">Contributing →</a>
+</p>

@@ -1,4 +1,18 @@
-# ⚙️ Configuration & Local Overrides
+<h1 align="center">
+  <img src="assets/headers/configuration.svg" alt="Configuration &amp; local overrides" width="100%">
+</h1>
+
+<p align="center">
+  <a href="../README.md">Overview</a> ·
+  <a href="WORKFLOW.md">How it works</a> ·
+  <a href="WALKTHROUGH.md">Walkthrough</a> ·
+  <a href="RECIPES.md">Recipes</a> ·
+  <a href="COST-AND-MODELS.md">Cost &amp; models</a> ·
+  <b>Configuration</b> ·
+  <a href="INSTALLATION.md">Installation</a>
+</p>
+
+---
 
 Adapt the pipeline to a project **without editing any plugin**, via a `.sdlc/sdlc.local.yaml` at
 the project root.
@@ -140,3 +154,8 @@ honoured for seven releases. The supported set is exactly: `active_workflow`,
 
 [#197]: https://github.com/Nuclominus/agentic-sdlc-pluguin/issues/197
 
+---
+
+<p align="center">
+  <a href="COST-AND-MODELS.md">← Cost &amp; models</a> · <a href="README.md">All docs</a> · <a href="INSTALLATION.md">Installation →</a>
+</p>
