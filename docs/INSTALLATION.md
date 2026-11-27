@@ -1,6 +1,6 @@
-<p align="center">
+<h1 align="center">
   <img src="assets/headers/installation.svg" alt="Installation &amp; requirements" width="100%">
-</p>
+</h1>
 
 <p align="center">
   <a href="../README.md">Overview</a> ·

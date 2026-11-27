@@ -1,6 +1,6 @@
-<p align="center">
+<h1 align="center">
   <img src="docs/assets/banner.svg" alt="Agentic SDLC for Android — a multi-agent development pipeline for Claude Code" width="100%">
-</p>
+</h1>
 
 <p>
   <a href="https://github.com/Nuclominus/agentic-sdlc-pluguin/releases/latest"><img src="https://img.shields.io/github/v/release/Nuclominus/agentic-sdlc-pluguin?label=release&color=3ddc84" alt="Latest release"></a>
@@ -18,7 +18,7 @@ core drives the pipeline; **Android Foundation** adds the platform knowledge on 
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/pipeline-dark.svg">
-  <img src="docs/assets/pipeline-light.svg" alt="Pipeline: analyze, then build and review in a loop of up to three rounds, then security and tests in parallel, then QA verification, then a pull request" width="100%">
+  <img src="docs/assets/pipeline-light.svg" alt="Pipeline: analyze, then build and review in a loop of up to three rounds, then security and tests in parallel, then a fix pass only on High or Critical findings, then QA verification, then a pull request" width="100%">
 </picture>
 
 <p align="center"><sub>The default <code>android-feature</code> workflow. Recipes can add phases, parallel groups and review loops.</sub></p>
@@ -67,9 +67,9 @@ Step-by-step guide, optional dependencies and upgrading an existing install →
 | `/sdlc:extension [--list]` | Author the Project Extension Manifest |
 | `/sdlc:report` | Cost rollup across all runs (deterministic, no LLM) |
 | `/sdlc:aar` | After Action Review of the last run |
-| `/sdlc:doctor` | Preflight: dependencies, skills, detection, config migration |
+| `/sdlc:doctor` | Preflight: dependencies, skills, detection; after an upgrade, migrates config that names retired agents or skills |
 | `/sdlc:list-stacks` | Detected stack profiles and priorities |
-| `/sdlc:security-init` | Materialize security patterns |
+| `/sdlc:security-init` | Materialize security patterns for the optional `security-guidance` plugin |
 
 ## Plugins
 
@@ -89,7 +89,8 @@ Security and the optional project vault are covered in
 
 [Walkthrough](docs/WALKTHROUGH.md) · [Workflow recipes](docs/RECIPES.md) ·
 [Cost & models](docs/COST-AND-MODELS.md) · [Configuration](docs/CONFIGURATION.md) ·
-[Installation & upgrading](docs/INSTALLATION.md) · [Changelog](CHANGELOG.md)
+[Installation & upgrading](docs/INSTALLATION.md) · [Changelog](CHANGELOG.md) ·
+[All docs](docs/README.md)
 
 This repo's own architecture, decisions and per-PR history live in the [`.brain/`](.brain/README.md)
 Obsidian vault.

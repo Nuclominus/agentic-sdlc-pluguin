@@ -1,6 +1,6 @@
-<p align="center">
+<h1 align="center">
   <img src="assets/headers/configuration.svg" alt="Configuration &amp; local overrides" width="100%">
-</p>
+</h1>
 
 <p align="center">
   <a href="../README.md">Overview</a> ·
