@@ -1,4 +1,18 @@
-# 🧩 How the system works
+<p align="center">
+  <img src="assets/headers/workflow.svg" alt="How the system works" width="100%">
+</p>
+
+<p align="center">
+  <a href="../README.md">Overview</a> ·
+  <b>How it works</b> ·
+  <a href="WALKTHROUGH.md">Walkthrough</a> ·
+  <a href="RECIPES.md">Recipes</a> ·
+  <a href="COST-AND-MODELS.md">Cost &amp; models</a> ·
+  <a href="CONFIGURATION.md">Configuration</a> ·
+  <a href="INSTALLATION.md">Installation</a>
+</p>
+
+---
 
 This document shows the moving parts of the Agentic SDLC marketplace and how a run flows through them.
 The diagrams are Mermaid (rendered natively by GitHub).
@@ -185,20 +199,19 @@ are tabulated in [`plugins/sdlc/README.md`](../plugins/sdlc/README.md#the-roster
 The same roster runs when no foundation matches; what is missing on a vanilla project is the
 *expertise*, not the agents. The `default` recipe:
 
-```
-Phase 1: BA       → business-analyst (opus/high)
-          ↓ docs/plans/{slug}/01-business-analysis.md
-Phase 2: Dev      → developer (sonnet/medium) — two-pass: plan, approve, implement
-          ↓ docs/plans/{slug}/02-development.md
-Phase 3: QA       → qa-engineer (sonnet/medium, max 3 attempts)
-          ↓ docs/plans/{slug}/03-qa.md
-Phase 4: Security → security-analyst (opus/high, platform-neutral baseline; READ-ONLY)
-          ↓ docs/plans/{slug}/04-security.md
-Phase 5: Remediation → developer (GATED — only on Critical/High findings)
-          ↓ docs/plans/{slug}/0X-remediation.md
-Phase 6: Docs     → document-writer (haiku/low)
-          ↓ Pull Request
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/pipeline-vanilla-dark.svg">
+  <img src="assets/pipeline-vanilla-light.svg" alt="Default recipe: analyze, build, QA verification, security review, a fix pass only on High or Critical findings, documentation, then a pull request" width="100%">
+</picture>
+
+| # | Phase | Agent (model / effort) | Writes |
+| - | ----- | ---------------------- | ------ |
+| 1 | BA | `business-analyst` (opus / high) | `docs/plans/{slug}/01-business-analysis.md` |
+| 2 | Dev | `developer` (sonnet / medium) — two-pass: plan, approve, implement | `docs/plans/{slug}/02-development.md` |
+| 3 | QA | `qa-engineer` (sonnet / medium, max 3 attempts) | `docs/plans/{slug}/03-qa.md` |
+| 4 | Security | `security-analyst` (opus / high, platform-neutral baseline; read-only) | `docs/plans/{slug}/04-security.md` |
+| 5 | Remediation | `developer` — **gated**, only on Critical/High findings | `docs/plans/{slug}/0X-remediation.md` |
+| 6 | Docs | `document-writer` (haiku / low) | the pull request |
 
 Phase 5 is skipped at zero cost when security reports nothing at High or above, which is the
 common case. It exists so that a read-only reviewer's findings reach someone who can act on them:
@@ -276,3 +289,9 @@ node tools/sdlc-lint/cli.mjs resume docs/plans/<slug>
 ```
 
 **Non-goal:** resume trusts the code on disk; it does not restore git state.
+
+---
+
+<p align="center">
+  <a href="../README.md">← Overview</a> · <a href="README.md">All docs</a> · <a href="WALKTHROUGH.md">Walkthrough →</a>
+</p>

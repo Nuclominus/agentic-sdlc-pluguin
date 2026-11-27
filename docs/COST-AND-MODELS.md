@@ -1,4 +1,18 @@
-# 💰 Cost & Models
+<p align="center">
+  <img src="assets/headers/cost-and-models.svg" alt="Cost &amp; models" width="100%">
+</p>
+
+<p align="center">
+  <a href="../README.md">Overview</a> ·
+  <a href="WORKFLOW.md">How it works</a> ·
+  <a href="WALKTHROUGH.md">Walkthrough</a> ·
+  <a href="RECIPES.md">Recipes</a> ·
+  <b>Cost &amp; models</b> ·
+  <a href="CONFIGURATION.md">Configuration</a> ·
+  <a href="INSTALLATION.md">Installation</a>
+</p>
+
+---
 
 How the pipeline enforces per-agent model tiers, and how cost is controlled and reported.
 
@@ -184,3 +198,9 @@ cooperated) from its telemetry + session transcript, proposes improvements, and 
 approval — appends curated lessons to `.sdlc/sdlc-lessons.md`. The orchestrator injects those
 lessons into later runs' phase prompts (cache-safe, in the stable prefix), closing a lightweight
 learning loop.
+
+---
+
+<p align="center">
+  <a href="RECIPES.md">← Recipes</a> · <a href="README.md">All docs</a> · <a href="CONFIGURATION.md">Configuration →</a>
+</p>
