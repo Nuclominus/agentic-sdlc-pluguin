@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-11-28 | #268 | `chore` | — | [[changes/2026-11-28-PR-268-bump-sdlc-to-3-4-1]] |
 | 2026-11-28 | #266 | `perf` | — | [[changes/2026-11-28-PR-266-fold-the-plan-digest-and-worktree-guard-into-resolve]] |
 | 2026-11-27 | #264 | `docs` | — | [[changes/2026-11-27-PR-264-redesign-the-front-page-with-banner-and-pipeline-diagram]] |
 | 2026-11-23 | #262 | `chore` | — | [[changes/2026-11-23-PR-262-bump-sdlc-and-android-foundation-to-3-4-0]] |
