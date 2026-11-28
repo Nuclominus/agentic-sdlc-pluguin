@@ -131,6 +131,11 @@ test("the space form never leaks the path into the description", () => {
   assert.equal(briefArgs('"see --brief=b.md" --brief a.md', "T"), '"see --brief=b.md" "T"');
 });
 
+test("a flag glued to the closing quote stays a separate flag after the title swap", () => {
+  assert.equal(briefArgs('--brief="docs/briefs/x.md"--dry-run', "T"), '"T" --dry-run');
+  assert.equal(briefArgs("--brief 'docs/briefs/x.md'--dry-run", "T"), '"T" --dry-run');
+});
+
 test("an empty value, a following flag or an unclosed quote is rejected with both forms named", () => {
   const cwd = project({ "docs/briefs/x.md": VALID });
   for (const args of ["--dry-run --brief", "--brief", "--brief --dry-run", "--brief=", "--brief= --dry-run", "--brief='docs/briefs/x.md", "--brief ''"]) {

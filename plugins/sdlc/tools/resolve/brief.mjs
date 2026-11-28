@@ -80,5 +80,6 @@ export function briefArgs(args, title) {
   const token = briefToken(text);
   if (!token) return text;
   const quoted = JSON.stringify(String(title).replace(/(^|\s)-+/g, "$1").replace(/-{2,}/g, " "));
-  return text.slice(0, token.start) + quoted + text.slice(token.end);
+  const tail = text.slice(token.end);
+  return text.slice(0, token.start) + quoted + (tail && !/^\s/.test(tail) ? " " : "") + tail;
 }
