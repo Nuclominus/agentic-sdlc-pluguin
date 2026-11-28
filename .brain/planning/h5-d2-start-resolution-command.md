@@ -287,7 +287,7 @@ shim exists to prevent.
 6. `sdlc-lint compliance` shows the new `0-resolve` contract with a real denominator, and no
    pre-existing rate falls.
 
-## Closing the last call (2026-11-28)
+## Closing the last call (2026-11-28, #266)
 
 Run 5 (2026-09-08) measured the start window at **4 API calls** — Skill, resolve, a digest read,
 the anchor — one outside the 2–3 DoD (see [[planning/roadmap]], Track H). Two leaks remained, both

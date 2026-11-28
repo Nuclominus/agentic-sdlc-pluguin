@@ -19,7 +19,10 @@ cost-tiered agent roster — `business-analyst` (Opus), `developer`, `reviewer`,
 agent. A foundation contributes `role_expertise` instead; the resolver merges it and pre-renders
 `profile.prompt_blocks[agent]`, which the orchestrator pastes verbatim into the phase prompt's
 stable prefix, and `resolve/cli.mjs expertise --role <name>` prints the same blocks for an agent
-invoked outside the pipeline. `resolve/cli.mjs deps` is `/sdlc:doctor`'s entry to the same
+invoked outside the pipeline. Step 0 runs `resolve/cli.mjs plan --json --digest` (#266): a plan
+that fits prints whole; a larger one goes to a per-run private `plan_file` and the orchestrator
+reads each agent's blocks at dispatch with `resolve/cli.mjs block`, keeping the start window at one
+resolve call ([[decisions/ADR-0019-the-run-start-is-one-command]]). `resolve/cli.mjs deps` is `/sdlc:doctor`'s entry to the same
 dependency preflight, read-only (no stamp, no enforcement), plus a per-catalog report for
 `kind: skill-catalog` dependencies (`resolve/catalogs.mjs`, ADR-0036). The run seal
 (`run/finish.mjs`) also audits every catalog `Skill` call against the static role matrix
@@ -64,7 +67,7 @@ Re-entering an agent that already returned is capped (3c-crash, #254): at most t
 reworks, only while its carried prefix is under ~100k tokens, never across a human approval gate —
 otherwise a fresh agent starts from the plan and phase report. A run started from
 `.claude/worktrees/<name>` whose `docs/plans` resolves outside the worktree enters **worktree guard
-mode** (Step 2 item 2a): the orchestrator writes `docs/plans` files itself, including the
+mode** (Step 2 item 2a; the resolver computes the flag as `plan.worktree_guard` since #266): the orchestrator writes `docs/plans` files itself, including the
 `=== DELIVERABLE ===` of Bash-less agents, and every phase trailer carries a
 `handoff_write_workaround:` block.
 
@@ -103,6 +106,8 @@ control neither, a constraint stated in Step 0a-1 and enforced doc-wide by sdlc-
 - `plugins/sdlc/tools/report/` (HTML run report; refuses to render a cap verdict on an unpriced run)
 - `plugins/sdlc/tools/run/` (`finish` — seals a run in one call: machine clock, enrichment, report;
   the orchestrator's whole Step 5b, see [[decisions/ADR-0014-the-run-tail-is-one-command]])
+- `plugins/sdlc/tools/resolve/digest.mjs` (`plan --digest`, `block`, `digest --from`) and
+  `plugins/sdlc/tools/resolve/guard.mjs` (the worktree-guard check)
 - `plugins/sdlc/tools/resolve/brief.mjs` (`readBrief` / `briefArgs`, the `--brief` contract) and
   `plugins/sdlc/skills/brief/SKILL.md` (the intake interview)
 - `plugins/sdlc/skills/ask/SKILL.md` + `plugins/sdlc/agents/project-researcher.md` (project Q&A) and
