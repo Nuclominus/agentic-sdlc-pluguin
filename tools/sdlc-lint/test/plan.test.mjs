@@ -5,12 +5,13 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, appendFileSync, cpSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, appendFileSync, cpSync, symlinkSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolvePlan, resolveExpertise, resolveResume, resolveDeps, resolveSkillScope } from "../../../plugins/sdlc/tools/resolve/plan.mjs";
+import { detectWorktreeGuard, renderWorktreeGuardPrint } from "../../../plugins/sdlc/tools/resolve/guard.mjs";
 
 function write(file, content) {
   mkdirSync(join(file, ".."), { recursive: true });
@@ -643,44 +644,92 @@ test("cli.mjs expertise --role prints the block, exits 2 on an unknown role, and
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
 
-// ---- 0-large: the prescribed digest must keep naming keys the plan actually has ---------------
+// ---- 0-blocks: `plan --json --digest` keeps the start window at one resolve call ---------------
 
-test("the orchestrator's 0-large jq projection names only real plan keys", () => {
-  // Run 4 spent five of its nine start-window tool calls probing the plan file for its shape
-  // (`keys[]`, then `.prints[]`, then two subset projections) before it could read it. Step 0-large
-  // now states the projection once so no run has to rediscover it — which makes that literal a
-  // contract with `resolvePlan`'s output. A renamed plan key would otherwise drop a CONTEXT value
-  // silently, with every test still green. This is the guard for that.
-  const skillPath = resolve(dirname(fileURLToPath(import.meta.url)),
-    "..", "..", "..", "plugins", "sdlc", "skills", "pipeline-orchestrator", "SKILL.md");
-  const skill = readFileSync(skillPath, "utf8");
-  const m = skill.match(/=== CONTEXT ===", \(\.plan \| \{([^}]*?), profile: \(\.profile \| del\(\.prompt_blocks\)\)\}/);
-  assert.ok(m, "Step 0-large must carry the `.plan | {…}` digest projection verbatim");
+const RESOLVE_CLI = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "plugins", "sdlc", "tools", "resolve", "cli.mjs");
+const runPlan = (w, argv) => JSON.parse(execFileSync("node", [RESOLVE_CLI, "plan", ...argv], {
+  cwd: w.proj, env: { ...process.env, ...w.env }, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+}));
 
-  // `a, b, skip_rules: .skip_rules.applied` -> the names on the LEFT of any colon.
-  const projected = m[1].split(",").map((s) => s.trim().split(":")[0].trim()).filter(Boolean);
-
+test("--digest prints every CONTEXT key inline and moves prompt_blocks to plan_file", () => {
   const w = world({ roleExpertise: true });
   try {
-    const { plan, halt } = resolvePlan({ cwd: w.proj, args: "--dry-run", env: w.env });
-    assert.equal(halt, null);
-    for (const key of projected) {
-      assert.ok(key in plan, `0-large projects '${key}', which resolvePlan does not emit`);
-    }
-    // The one nested path in the projection, checked as a path rather than as a name.
-    assert.ok(plan.skip_rules && "applied" in plan.skip_rules, "0-large reads .skip_rules.applied");
+    const full = runPlan(w, ["--json", "add a thing"]);
+    const digest = runPlan(w, ["--json", "--digest", "add a thing"]);
+    assert.equal(digest.ok, true);
+    assert.deepEqual(digest.prints, full.prints);
+    assert.equal(full.plan_file, undefined, "--json alone keeps its envelope unchanged");
+    assert.ok(full.plan.profile.prompt_blocks.developer?.expertise, "the fixture must render a block, or this test proves nothing");
 
-    // Every CONTEXT key the map owes must survive the projection. `profile` is carried whole
-    // (minus the blocks), so its rows are covered by the parent name.
-    for (const owed of ["roots", "deps_preflight", "availability_flags", "stack", "workflow",
-                        "models", "cost_cap", "cost_cap_source", "headless", "plugin_version", "brief"]) {
-      assert.ok(projected.includes(owed), `the key map owes CONTEXT.${owed}; 0-large does not project it`);
+    for (const owed of ["roots", "deps_preflight", "availability_flags", "stack", "skip_rules", "workflow", "models",
+                        "cost_cap", "cost_cap_source", "headless", "plugin_version", "brief", "worktree_guard"]) {
+      assert.ok(owed in digest.plan, `the key map owes CONTEXT.${owed}; the digest does not carry it`);
     }
-    // The exclusion is the point of the projection: the blocks are read one agent at a time.
-    assert.ok(!projected.includes("prompt_blocks"));
+    assert.ok(!("prompt_blocks" in digest.plan.profile), "the blocks are read one agent at a time, never inline");
+    const { prompt_blocks: _b, ...profileWithoutBlocks } = full.plan.profile;
+    assert.deepEqual(digest.plan.profile, profileWithoutBlocks);
+
+    assert.ok(digest.plan_file && existsSync(digest.plan_file));
+    const onDisk = JSON.parse(readFileSync(digest.plan_file, "utf8"));
+    assert.deepEqual(onDisk.plan.profile.prompt_blocks, full.plan.profile.prompt_blocks,
+      "the 0-blocks jq path (.plan.profile.prompt_blocks[agent]) must resolve in plan_file");
+    rmSync(dirname(digest.plan_file), { recursive: true, force: true });
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
 
+test("--digest writes no plan_file on --dry-run, which dispatches nothing", () => {
+  const w = world({ roleExpertise: true });
+  try {
+    const r = runPlan(w, ["--json", "--digest", "--dry-run", "add a thing"]);
+    assert.equal(r.ok, true);
+    assert.equal(r.plan_file, null);
+    assert.ok(r.plan.dry_run, "the preview still renders");
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("the orchestrator's Step 0 asks for the digest, and its 0-blocks jq reads the real path", () => {
+  const skill = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)),
+    "..", "..", "..", "plugins", "sdlc", "skills", "pipeline-orchestrator", "SKILL.md"), "utf8");
+  assert.match(skill, /resolve\/cli\.mjs" plan --json --digest "\$ARGUMENTS"/);
+  assert.match(skill, /jq -r '\.plan\.profile\.prompt_blocks\["\{agent\}"\]/);
+  assert.ok(!/realpath docs\/plans/.test(skill), "Step 2a no longer runs its own detection commands");
+});
+
+// ---- worktree guard: Step 2a's rule, computed by the resolver ------------------------------------
+
+test("worktree_guard is active only in a harness worktree whose docs/plans points outside it", () => {
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-guard-"));
+  try {
+    const main = join(dir, "main");
+    mkdirSync(join(main, "docs", "plans"), { recursive: true });
+    const wt = join(dir, "main-wt", ".claude", "worktrees", "feat");
+    mkdirSync(join(wt, "docs"), { recursive: true });
+    execFileSync("git", ["init", "-q"], { cwd: wt });
+    symlinkSync(join(main, "docs", "plans"), join(wt, "docs", "plans"));
+
+    const guarded = detectWorktreeGuard(wt);
+    assert.equal(guarded.active, true, JSON.stringify(guarded));
+    assert.match(renderWorktreeGuardPrint(guarded), /^⚠️ Worktree guard: docs\/plans resolves outside this worktree/);
+
+    rmSync(join(wt, "docs", "plans"));
+    assert.equal(detectWorktreeGuard(wt).active, false, "no docs/plans yet: Step 2 creates a plain one");
+    mkdirSync(join(wt, "docs", "plans"));
+    assert.equal(detectWorktreeGuard(wt).active, false, "docs/plans inside the worktree is not guarded");
+    assert.equal(renderWorktreeGuardPrint(detectWorktreeGuard(wt)), null);
+
+    execFileSync("git", ["init", "-q"], { cwd: main });
+    assert.equal(detectWorktreeGuard(main).active, false, "outside .claude/worktrees/ nothing is guarded");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("the plan carries worktree_guard for the key map", () => {
+  const w = world();
+  try {
+    const { plan, halt } = resolvePlan({ cwd: w.proj, args: "", env: w.env });
+    assert.equal(halt, null);
+    assert.equal(plan.worktree_guard.active, false);
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
 
 test("config left in the pre-rename location is reported, not read", () => {
   // The rename to <project>/.sdlc/ ships with no fallback read, on purpose —

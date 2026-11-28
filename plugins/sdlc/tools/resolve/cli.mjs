@@ -2,7 +2,7 @@
 // Dependency-free entry for resolving a run, shipped inside the sdlc plugin.
 //
 // Three commands:
-//   node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs plan [--json] [--dry-run] [--workflow=NAME] …
+//   node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs plan [--json [--digest]] [--dry-run] [--workflow=NAME] …
 //     invoked by pipeline-orchestrator Steps 0 → 1d. It replaces ~926 lines of prose that the
 //     model executed as ~24 turns and 14 tool calls, for a measured median of $1.31 per run
 //     (ADR-0019).
@@ -22,7 +22,10 @@
 // orchestrator echoes `prints[]` verbatim rather than filling a template, which is
 // ADR-0015's machine-value invariant applied to prose instead of arithmetic.
 
-import { resolvePlan, resolveExpertise, resolveDeps } from "./plan.mjs";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { resolvePlan, resolveExpertise, resolveDeps, digestOf } from "./plan.mjs";
 import { renderCatalogReport } from "./catalogs.mjs";
 import { renderPreflightPrint } from "./deps.mjs";
 
@@ -32,7 +35,7 @@ const rest = argv.slice(1).join(" ");
 const jsonOut = argv.includes("--json");
 
 function usage() {
-  console.error("usage: cli.mjs plan [--json] [--dry-run] [--workflow=NAME] [--no-auto-workflow]");
+  console.error("usage: cli.mjs plan [--json [--digest]] [--dry-run] [--workflow=NAME] [--no-auto-workflow]");
   console.error("                    [--brief=<path>] [--force-preflight] [--skills <csv>] [--no-skip-rules] [--force-ba]");
   console.error("                    [--base-ref <ref>] [--mode tree|installed]");
   console.error("       cli.mjs expertise --role <name> [--json] [--stack=NAME] [--mode tree|installed]");
@@ -114,8 +117,17 @@ try {
 
 const { plan, prints, warnings, halt, deps_abort: depsAbort } = result;
 
-if (jsonOut) {
-  console.log(JSON.stringify({ ok: !halt, plan, prints, warnings, halt: halt ?? null }));
+const envelope = { ok: !halt, plan, prints, warnings, halt: halt ?? null };
+if (jsonOut && argv.includes("--digest")) {
+  // The full plan overflows the harness's inline output limit; a spill costs the run a read call.
+  let planFile = null;
+  if (plan && !halt && !/(^|\s)--dry-run(\s|=|$)/.test(rest)) {
+    planFile = join(mkdtempSync(join(tmpdir(), "sdlc-plan-")), "plan.json");
+    writeFileSync(planFile, JSON.stringify(envelope));
+  }
+  console.log(JSON.stringify({ ...envelope, plan: digestOf(plan), plan_file: planFile }));
+} else if (jsonOut) {
+  console.log(JSON.stringify(envelope));
 } else {
   // `warnings` is a subset of `prints` (see resolvePlan) — echoing it here too would print
   // every diagnostic twice. It stays in the JSON envelope for machine consumers only.

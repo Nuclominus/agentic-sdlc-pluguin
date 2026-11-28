@@ -287,6 +287,30 @@ shim exists to prevent.
 6. `sdlc-lint compliance` shows the new `0-resolve` contract with a real denominator, and no
    pre-existing rate falls.
 
+## Closing the last call (2026-11-28)
+
+Run 5 (2026-09-08) measured the start window at **4 API calls** — Skill, resolve, a digest read,
+the anchor — one outside the 2–3 DoD (see [[planning/roadmap]], Track H). Two leaks remained, both
+deterministic:
+
+- **The digest read.** A plan carrying a full stack profile (54,746 characters on run 5, mostly
+  `profile.prompt_blocks`) overflows the inline tool-output limit; the harness spills it to
+  `tool-results/` and Step 0-large spent a `jq` call to read `CONTEXT` back. Now
+  `resolve/cli.mjs plan --json --digest` writes the full envelope to a temp `plan_file` and prints
+  the plan minus `prompt_blocks` inline (`digestOf` in `plan.mjs`). Blocks are read per agent at
+  3b-1 from `plan_file` with the same one-line `jq` as before. No file on `--dry-run` or a halt;
+  `--json` alone is unchanged.
+- **Step 2a's three commands.** The worktree-guard check (#254, 2026-11-23 — after run 5) ran
+  `pwd -P`, `git rev-parse --show-toplevel` and `realpath docs/plans` *before* the anchor, so the
+  window had silently grown to ~7. The resolver now computes `plan.worktree_guard`
+  (`tools/resolve/guard.mjs`) and prints the notice once; Step 2a runs nothing. The write-once clock
+  also moved to Step 2's first tool call, so nothing sits between resolve and the anchor.
+
+Expected: **3 API calls** (Skill, resolve, anchor). In worktree-guard mode the clock is two calls by
+rule (`test -f`, then `date >`), so a guarded run measures 4 — known, and not a regression. **DoD
+item 5 stays open until run 6 is measured** with `sdlc-lint start-window` on a clean session (one
+`/sdlc:start`, no dry run).
+
 ## Open questions
 
 - ~~**The manifest root must be a parameter.**~~ **Resolved** — `manifests.mjs` has two modes,

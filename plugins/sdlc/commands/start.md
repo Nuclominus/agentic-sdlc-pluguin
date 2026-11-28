@@ -63,7 +63,7 @@ If any phase fails fatally (e.g. agent crashes, post-validation impossible to sa
 
 (For your reference — the skill itself contains the authoritative algorithm.)
 
-1. **Step 0** — one command (`tools/resolve/cli.mjs plan --json`) resolves the whole run: plugin roots, dependency preflight, stack detection (highest-priority foundation, or the one `--stack=NAME` names), skip-rules, profile merge, project overrides, model tiers, workflow and cost cap. The orchestrator echoes what it returns; it does not re-derive any of it (ADR-0019).
+1. **Step 0** — one command (`tools/resolve/cli.mjs plan --json --digest`) resolves the whole run: plugin roots, dependency preflight, stack detection (highest-priority foundation, or the one `--stack=NAME` names), skip-rules, profile merge, project overrides, model tiers, workflow and cost cap. The orchestrator echoes what it returns; it does not re-derive any of it (ADR-0019).
 2. **Step 2** — generate `task_slug`, create `docs/plans/{task_slug}/`.
 3. **Step 3** — execute each phase (BA → Dev → [extras] → QA → Sec → Docs) via specialist agents. Compact handoffs.
 4. **Step 4** — post-pipeline checks (lint, tests, route:list).

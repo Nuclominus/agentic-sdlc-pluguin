@@ -28,7 +28,7 @@ status: in-progress
 | H3 | machine-value invariant + lint (`sdlc-lint machine-values`) | done | #104 |
 | H4 | deterministic control flow (gated on H1) | gated, leaning against | — |
 | H5 | prompt surface reduction / JIT procedure loading | measured, not decided | #110, #117 |
-| H5-D2 | the run start is one command (`resolve/cli.mjs plan`, ADR-0019) | landed, DoD unmeasured | #119, #121, #125 |
+| H5-D2 | the run start is one command (`resolve/cli.mjs plan`, ADR-0019) | landed; digest + worktree guard folded into the command (2026-11-28), DoD awaits run 6 | #119, #121, #125 |
 | H6 | `Stop` hook sealing the run (deterministic tail) | done | #107 |
 | I1 | agents in the core, expertise in the foundations (`role_expertise`, ADR-0021) | done, validated on a real run | #139, #140, #141, #142 |
 | J1 | multi-host portability — one SSOT, emitted host packages (ADR-0029) | in-progress — Phases 1 and 3 met on Antigravity: full vanilla pipeline sealed on `agy` 1.1.27, package widened to all nine plugins and re-verified on 1.1.28. Codex (Phase 2) still unprobed | — |

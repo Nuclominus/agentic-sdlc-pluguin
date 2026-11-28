@@ -28,6 +28,7 @@ import { parseYaml } from "./yaml.mjs";
 import { scanLegacyLocation } from "../migrate/migrate.mjs";
 import { slugify, briefOf, SLUG_RE } from "./slug.mjs";
 import { readBrief, briefArgs } from "./brief.mjs";
+import { detectWorktreeGuard, renderWorktreeGuardPrint } from "./guard.mjs";
 
 /**
  * Immediate children of the given roots that are plugins.
@@ -643,6 +644,10 @@ export function resolvePlan({ cwd = process.cwd(), args: rawArgs = "", env = pro
     if (existsSync(briefDir)) warn(`WARN: --brief: docs/plans/${brief.slug}/ already exists — this run will overwrite its _brief.md`);
   }
 
+  const worktreeGuard = detectWorktreeGuard(cwd);
+  const guardPrint = renderWorktreeGuardPrint(worktreeGuard);
+  if (guardPrint) warn(guardPrint);
+
   // ---- Step 0c: diff signals
   const signals = computeDiffSignals(cwd, { baseRef: opt(args, "--base-ref") });
   if (signals.degraded) warn(`WARN: skip-rule signals unavailable (${signals.reason ?? "git"}) — no rule will fire`);
@@ -791,6 +796,7 @@ export function resolvePlan({ cwd = process.cwd(), args: rawArgs = "", env = pro
     cost_cap: cap.cost_cap,
     cost_cap_source: cap.cost_cap_source,
     headless,
+    worktree_guard: worktreeGuard,
     plugin_version: null,
   };
 
@@ -832,4 +838,11 @@ export function resolvePlan({ cwd = process.cwd(), args: rawArgs = "", env = pro
   }
 
   return { plan, prints, warnings, halt: deps.abort ? deps.stdout.join("\n") : null, deps_abort: deps.abort };
+}
+
+/** The plan minus `profile.prompt_blocks`: what `plan --json --digest` prints inline. */
+export function digestOf(plan) {
+  if (!plan) return plan;
+  const { prompt_blocks: _blocks, ...profile } = plan.profile ?? {};
+  return { ...plan, profile };
 }
