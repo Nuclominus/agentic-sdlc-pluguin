@@ -27,6 +27,13 @@ Step 5b · Render HTML run-report
 Step 6  · Close the session: dispatch `session-recorder` → append entry to docs/plans/_journal.md
 ```
 
+**Run start is one command (ADR-0019).** Steps 0 → 1d above now run inside
+`resolve/cli.mjs plan --json --digest`; the orchestrator echoes `prints[]` and carries `plan` into
+`CONTEXT`. Since #266 the output stays inline — a large plan's `prompt_blocks` go to a per-run
+private `plan_file`, read per agent at dispatch with `resolve/cli.mjs block` — and the Step 2a
+worktree guard is computed by the resolver, so the measured start window is Skill → resolve →
+`_started_at` anchor. See [[decisions/ADR-0019-the-run-start-is-one-command]].
+
 **Skip-rules and an unknown size (Step 0c).** The diff signals are measured at run start, from
 the merge base to the working tree plus untracked files, excluding `.sdlc/` and `docs/plans/`. A
 fresh feature branch reads an empty diff, and binary files cannot be counted in lines. Both make
