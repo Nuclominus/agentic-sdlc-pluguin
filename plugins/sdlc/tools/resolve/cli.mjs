@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Dependency-free entry for resolving a run, shipped inside the sdlc plugin.
 //
-// Three commands:
+// Four commands:
 //   node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs plan [--json [--digest]] [--dry-run] [--workflow=NAME] …
 //     invoked by pipeline-orchestrator Steps 0 → 1d. It replaces ~926 lines of prose that the
 //     model executed as ~24 turns and 14 tool calls, for a measured median of $1.31 per run
@@ -11,6 +11,8 @@
 //     orchestrator. It prints the same `Stack expertise for <role>` and `Skills for this role`
 //     blocks a pipeline dispatch would have carried in its stable prefix (ADR-0021) — one
 //     command, once per invocation, in place of "self-read rules/skills.md and sdlc.local.yaml".
+//   node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs block --from <plan_file> --agent <name> [--planning]
+//     invoked by pipeline-orchestrator 3b-1a: one agent's pre-rendered blocks from Step 0's plan_file.
 //   node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs deps [--json] [--probe]
 //     invoked by /sdlc:doctor. The run's own dependency preflight, read-only (no stamp, no
 //     enforcement), plus the per-catalog report for `kind: skill-catalog` dependencies (ADR-0036).
@@ -22,10 +24,8 @@
 // orchestrator echoes `prints[]` verbatim rather than filling a template, which is
 // ADR-0015's machine-value invariant applied to prose instead of arithmetic.
 
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { resolvePlan, resolveExpertise, resolveDeps, digestOf } from "./plan.mjs";
+import { resolvePlan, resolveExpertise, resolveDeps } from "./plan.mjs";
+import { digestEnvelope, blocksFrom } from "./digest.mjs";
 import { renderCatalogReport } from "./catalogs.mjs";
 import { renderPreflightPrint } from "./deps.mjs";
 
@@ -39,6 +39,7 @@ function usage() {
   console.error("                    [--brief=<path>] [--force-preflight] [--skills <csv>] [--no-skip-rules] [--force-ba]");
   console.error("                    [--base-ref <ref>] [--mode tree|installed]");
   console.error("       cli.mjs expertise --role <name> [--json] [--stack=NAME] [--mode tree|installed]");
+  console.error("       cli.mjs block --from <plan_file> --agent <name> [--planning]");
   console.error("       cli.mjs deps [--json] [--probe] [--mode tree|installed]");
   return 2;
 }
@@ -49,7 +50,20 @@ function tokenOpt(name) {
   return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : null;
 }
 
-if (cmd !== "plan" && cmd !== "expertise" && cmd !== "deps") process.exit(usage());
+if (!["plan", "expertise", "deps", "block"].includes(cmd)) process.exit(usage());
+
+if (cmd === "block") {
+  const from = tokenOpt("--from");
+  const agent = tokenOpt("--agent");
+  if (!from || !agent) process.exit(usage());
+  const r = blocksFrom(from, agent, { planning: argv.includes("--planning") });
+  if (!r.ok) {
+    console.error(`❌ block: ${r.error}`);
+    process.exit(r.code);
+  }
+  if (r.text) console.log(r.text);
+  process.exit(0);
+}
 
 const mode = tokenOpt("--mode") ?? "installed";
 
@@ -119,13 +133,7 @@ const { plan, prints, warnings, halt, deps_abort: depsAbort } = result;
 
 const envelope = { ok: !halt, plan, prints, warnings, halt: halt ?? null };
 if (jsonOut && argv.includes("--digest")) {
-  // The full plan overflows the harness's inline output limit; a spill costs the run a read call.
-  let planFile = null;
-  if (plan && !halt && !/(^|\s)--dry-run(\s|=|$)/.test(rest)) {
-    planFile = join(mkdtempSync(join(tmpdir(), "sdlc-plan-")), "plan.json");
-    writeFileSync(planFile, JSON.stringify(envelope));
-  }
-  console.log(JSON.stringify({ ...envelope, plan: digestOf(plan), plan_file: planFile }));
+  console.log(JSON.stringify(digestEnvelope(envelope, { cwd: process.cwd(), dryRun: /(^|\s)--dry-run(\s|=|$)/.test(rest) })));
 } else if (jsonOut) {
   console.log(JSON.stringify(envelope));
 } else {

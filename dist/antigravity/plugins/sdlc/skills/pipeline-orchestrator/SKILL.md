@@ -149,27 +149,36 @@ Then do exactly three things:
    exactly what
    [ADR-0019](../../../../.brain/decisions/ADR-0019-the-run-start-is-one-command.md) removed.
 
-#### 0-blocks. The per-agent blocks live in `plan_file` — read one at dispatch time
+#### 0-blocks. Where each agent's blocks come from — `plan_file`, or the plan itself
 
-`--digest` keeps the output inline: `plan` is the full plan **minus `profile.prompt_blocks`**, the
-largest thing in it, and the complete envelope is written to the path in `plan_file`. The digest
-carries every `CONTEXT` value in the key map below, so Step 0 is **one** call — do not open
-`plan_file` now, and do not explore it. Read the entry you need at 3b-1, when you dispatch that
-agent:
+`--digest` keeps Step 0 to **one** inline call. The output always carries every `CONTEXT` value in
+the key map below; what differs is where `profile.prompt_blocks` lives:
 
-```bash
-jq -r '.plan.profile.prompt_blocks["{agent}"] | .expertise // empty, "---", .skills // empty' "<plan_file>"
-```
+- **`plan_file` is a path** — the plan was too large to print whole, so `plan` is the digest
+  (no `prompt_blocks`) and the full envelope is in that file. Do not open or explore it. At 3b-1,
+  when you dispatch an agent, read its blocks with one dependency-free command:
 
-For the development phase's Pass 1 only (3b-special), read `.skills_planning` in place of `.skills`.
-The `---` separator is there so an empty `expertise` cannot be mistaken for the start of the skills
-block; drop it when you paste, and omit either block entirely when its side is empty. `plan_file`
-is `null` on `--dry-run` and on a halt — nothing is dispatched there.
+  ```bash
+  node "${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs" block --from "<plan_file>" --agent "{agent}"
+  ```
+
+  For the development phase's Pass 1 only (3b-special) add `--planning`: it prints
+  `.skills_planning` in place of `.skills`. The output is the text to paste — expertise block, a
+  blank line, skills block — with either side omitted when empty, and nothing at all when the agent
+  has neither.
+- **`plan_file` is `null` on a run that dispatches** — the plan fit inline whole (or the file could
+  not be written, which `prints[]` says in a `WARN:`), so `plan.profile.prompt_blocks` is right
+  there: paste from it, no extra call.
+- On `--dry-run` and on a halt `plan_file` is `null` and the plan carries no blocks — nothing is
+  dispatched.
+
+If the harness saves the output to a `tool-results/` file anyway, that file is the same JSON: read
+it once in full, carry `CONTEXT` from it, and pass that path as `--from` at 3b-1.
 
 **Why the command does this rather than you.** Without `--digest` a plan carrying a full stack
 profile (54,746 characters on the run measured) overflows the inline tool-output limit; the harness
 spills it to `tool-results/` and the run then pays a read call to get its own `CONTEXT` back. Run 4
-spent five calls discovering that file's shape; run 5, with the projection stated here, still spent
+spent five calls discovering that file's shape; run 5, with a fixed projection to run, still spent
 one — the call that kept ADR-0019's start window at 4 API calls against a 2–3 target.
 
 The command reads the CONSUMER's project from the current working directory and loads only itself
@@ -212,7 +221,7 @@ that status is available to a wrapper script, but it is not the hosting session'
 | `profile.convention_skills` | `EFFECTIVE_PROFILE.convention_skills` | Step 3b-1a |
 | `profile.phase_prompts_injection` | `EFFECTIVE_PROFILE.phase_prompts_injection` | Step 3b-1 |
 | `profile.extension_skills` | `EFFECTIVE_PROFILE.extension_skills` *(**Step 1b-ext**)* | Step 3b-1a |
-| `plan_file` *(top level, not under `plan`)* | `EFFECTIVE_PROFILE.prompt_blocks[agent]`, read from that file per agent *(**ADR-0021**, 0-blocks)* | Step 3b-1 — `.expertise` and `.skills` pasted verbatim (`.skills_planning` replaces `.skills` for development Pass 1 only, 3b-special) |
+| `plan_file` *(top level, not under `plan`)*, else `profile.prompt_blocks` | `EFFECTIVE_PROFILE.prompt_blocks[agent]` — via `cli.mjs block` when `plan_file` is set, from the plan when it is `null` *(**ADR-0021**, 0-blocks)* | Step 3b-1 — `.expertise` and `.skills` pasted verbatim (`.skills_planning` replaces `.skills` for development Pass 1 only, 3b-special) |
 | `profile.expertise_block_agents` | `EFFECTIVE_PROFILE.expertise_block_agents` *(**ADR-0021**)* | Step 5 telemetry, under the SAME key — copy the array; never recount it from `prompt_blocks` |
 | `profile.post_pipeline_checks` | `EFFECTIVE_PROFILE.post_pipeline_checks` *(**Step 1b**)* | Step 4 |
 | `profile.heal_checks` | `EFFECTIVE_PROFILE.heal_checks` | Step 3e-heal |
@@ -290,7 +299,10 @@ since: 2026-07-06
    Then **start the real clock (write-once)** as this step's FIRST tool call — see item 4, which
    explains it. It is first so nothing sits between Step 0's resolve call and the anchor that
    closes ADR-0019's measured start window. Its `mkdir -p …/.checkpoint` also creates
-   `docs/plans/{task_slug}/`.
+   `docs/plans/{task_slug}/`. **When `CONTEXT.worktree_guard` is set** (item 2a) the harness
+   refuses item 4's compound command, so run it as three simple calls instead:
+   `mkdir -p docs/plans/{task_slug}/.checkpoint`, `test -f docs/plans/{task_slug}/.checkpoint/_started_at`,
+   and — only when that test fails — `date -u +%s > docs/plans/{task_slug}/.checkpoint/_started_at`.
 2. Create directory `docs/plans/{task_slug}/` if it does not exist (item 1 already did).
 2a. **The harness worktree guard.** `CONTEXT.worktree_guard` comes from `plan.worktree_guard.active`
    — the resolve command already ran the check (real cwd under `/.claude/worktrees/` AND real
@@ -302,8 +314,7 @@ since: 2026-07-06
    - write every file under `docs/plans/` — this step's `_brief.md`, checkpoints, telemetry — with a
      `Bash` heredoc (`cat > docs/plans/{task_slug}/_brief.md <<'EOF'`), never `Write`/`Edit`;
    - keep every `Bash` command YOU compose simple: one command, no `&&` / `;` chains, no subshells.
-     Item 4's write-once clock becomes two calls: `test -f …/_started_at` and, only when that fails,
-     `date -u +%s > …/_started_at`;
+     Item 4's write-once clock is split as item 1 states;
    - run stack-supplied commands (`heal_checks`, `pre_phase_commands`, `post_pipeline_checks`)
      verbatim — never rewrite them. If the harness refuses one, record it as
      `refused (worktree guard)`: a FAIL in the report, never a skip and never a pass, and it starts
@@ -699,8 +710,8 @@ The two `===` delimiters are part of the prompt — agents are instructed (via t
 
 **3b-1a. Paste the two pre-rendered blocks** (`role_expertise_block` and `skills_block`, ADR-0021).
 
-Both blocks are **rendered by the resolve command**, not by you, and read from `plan_file` one agent
-at a time with the Step 0-blocks `jq`. `EFFECTIVE_PROFILE.prompt_blocks` carries one entry per agent
+Both blocks are **rendered by the resolve command**, not by you, and reach you as Step 0-blocks
+says: `cli.mjs block` per agent when `plan_file` is set, the plan itself when it is `null`. `EFFECTIVE_PROFILE.prompt_blocks` carries one entry per agent
 the core manifest binds (phase agents and on-demand agents alike):
 
 ```

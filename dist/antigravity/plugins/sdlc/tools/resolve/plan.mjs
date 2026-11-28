@@ -839,10 +839,3 @@ export function resolvePlan({ cwd = process.cwd(), args: rawArgs = "", env = pro
 
   return { plan, prints, warnings, halt: deps.abort ? deps.stdout.join("\n") : null, deps_abort: deps.abort };
 }
-
-/** The plan minus `profile.prompt_blocks`: what `plan --json --digest` prints inline. */
-export function digestOf(plan) {
-  if (!plan) return plan;
-  const { prompt_blocks: _blocks, ...profile } = plan.profile ?? {};
-  return { ...plan, profile };
-}

@@ -296,18 +296,23 @@ deterministic:
 - **The digest read.** A plan carrying a full stack profile (54,746 characters on run 5, mostly
   `profile.prompt_blocks`) overflows the inline tool-output limit; the harness spills it to
   `tool-results/` and Step 0-large spent a `jq` call to read `CONTEXT` back. Now
-  `resolve/cli.mjs plan --json --digest` writes the full envelope to a temp `plan_file` and prints
-  the plan minus `prompt_blocks` inline (`digestOf` in `plan.mjs`). Blocks are read per agent at
-  3b-1 from `plan_file` with the same one-line `jq` as before. No file on `--dry-run` or a halt;
-  `--json` alone is unchanged.
+  `resolve/cli.mjs plan --json --digest` (`tools/resolve/digest.mjs`) prints the plan whole when it
+  fits under 20,000 characters — blocks inline, no extra call per dispatch — and otherwise writes
+  the full envelope to one per-project temp `plan_file` (overwritten each run) and prints a digest
+  without `prompt_blocks` or `skip_rules.signals.changed_files`, the one unbounded list. Blocks are
+  then read per agent at 3b-1 with `cli.mjs block --from <plan_file> --agent <name>` — dependency-free,
+  where the old path needed `jq`. A failed write keeps the plan whole and inline with a `WARN:`. No
+  file on `--dry-run` or a halt; `--json` alone is unchanged. Android fixture: 44,446 → 11,251
+  characters.
 - **Step 2a's three commands.** The worktree-guard check (#254, 2026-11-23 — after run 5) ran
   `pwd -P`, `git rev-parse --show-toplevel` and `realpath docs/plans` *before* the anchor, so the
   window had silently grown to ~7. The resolver now computes `plan.worktree_guard`
   (`tools/resolve/guard.mjs`) and prints the notice once; Step 2a runs nothing. The write-once clock
   also moved to Step 2's first tool call, so nothing sits between resolve and the anchor.
 
-Expected: **3 API calls** (Skill, resolve, anchor). In worktree-guard mode the clock is two calls by
-rule (`test -f`, then `date >`), so a guarded run measures 4 — known, and not a regression. **DoD
+Expected: **3 API calls** (Skill, resolve, anchor). In worktree-guard mode the harness refuses the
+compound clock command, so it runs as `mkdir -p`, `test -f`, then `date >` and a guarded run
+measures up to 5 — known, and not a regression. **DoD
 item 5 stays open until run 6 is measured** with `sdlc-lint start-window` on a clean session (one
 `/sdlc:start`, no dry run).
 
