@@ -15,7 +15,7 @@ You MUST follow these steps **in order**, **printing each announcement verbatim*
 
 If `$ARGUMENTS` is empty: ask the user for a feature description and stop. Do NOT proceed.
 
-`--brief=<path>` alone is valid input: the resolve command reads the file (`docs/briefs/<slug>.md`) and takes
+`--brief=<path>` alone is valid input (`--brief <path>` and a quoted path are read the same way): the resolve command reads the file (`docs/briefs/<slug>.md`) and takes
 slug, language and title from it. Leave it in `$ARGUMENTS`; it cannot be combined with a description or `--resume`.
 
 If `$ARGUMENTS` contains `--stack=NAME`: remember the value for the echo below, but **leave it in the

@@ -116,13 +116,33 @@ test("briefArgs strips mid-word double dashes so a quoted title cannot smuggle a
   assert.equal(out, '"x\\" workflow=evil a b" --dry-run');
 });
 
-test("the space form and an empty value are rejected with the = hint", () => {
+test("the space form and a quoted path resolve like --brief=<path>", () => {
   const cwd = project({ "docs/briefs/x.md": VALID });
-  for (const args of ["--brief docs/briefs/x.md --dry-run", "--dry-run --brief", "--brief=", "--brief= --dry-run"]) {
+  const want = readBrief({ cwd, args: "--brief=docs/briefs/x.md" });
+  for (const args of ["--brief docs/briefs/x.md --dry-run", "--brief='docs/briefs/x.md'", '--brief="docs/briefs/x.md" --dry-run',
+                      "--brief 'docs/briefs/x.md'", '--dry-run --brief  "docs/briefs/x.md"']) {
+    assert.deepEqual(readBrief({ cwd, args }), want, args);
+  }
+});
+
+test("the space form never leaks the path into the description", () => {
+  assert.equal(briefArgs("--brief docs/briefs/x.md --dry-run", "T"), '"T" --dry-run');
+  assert.equal(briefArgs("--brief 'docs/briefs/x.md'", "T"), '"T"');
+  assert.equal(briefArgs('"see --brief=b.md" --brief a.md', "T"), '"see --brief=b.md" "T"');
+});
+
+test("an empty value, a following flag or an unclosed quote is rejected with both forms named", () => {
+  const cwd = project({ "docs/briefs/x.md": VALID });
+  for (const args of ["--dry-run --brief", "--brief", "--brief --dry-run", "--brief=", "--brief= --dry-run", "--brief='docs/briefs/x.md", "--brief ''"]) {
     const r = readBrief({ cwd, args });
     assert.equal(r.requested, true, args);
-    assert.equal(r.error, "--brief: give the path as --brief=<path>", args);
+    assert.equal(r.error, "--brief: give a path — --brief=<path> or --brief <path>", args);
   }
+});
+
+test("a quoted path with spaces is read whole and reported by its full name", () => {
+  const r = readBrief({ cwd: project(), args: '--brief="docs/my brief.md"' });
+  assert.equal(r.error, "--brief=docs/my brief.md: file not found: docs/my brief.md");
 });
 
 test("a quoted description that mentions the flag is not a --brief request", () => {

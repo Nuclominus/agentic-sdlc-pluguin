@@ -1369,12 +1369,17 @@ test("--brief: a docs/plans/<slug>/ holding checkpoints halts instead of inherit
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
 
-test("--brief with a space instead of = halts instead of running the path as a description", () => {
+test("--brief with a space or a quoted path resolves the same plan as --brief=<path>", () => {
   const { w, run } = withBrief("Hotfix crash on empty list");
   try {
-    const r = run("--brief docs/briefs/b.md --dry-run");
-    assert.equal(r.plan, null);
-    assert.equal(r.halt, "❌ --brief: give the path as --brief=<path>");
+    const want = run("--brief=docs/briefs/b.md --dry-run");
+    assert.equal(want.halt, null);
+    for (const args of ["--brief docs/briefs/b.md --dry-run", "--brief='docs/briefs/b.md' --dry-run"]) {
+      const r = run(args);
+      assert.equal(r.halt, null, args);
+      assert.deepEqual(r.plan.brief, want.plan.brief, args);
+      assert.equal(r.plan.workflow.name, want.plan.workflow.name, `${args}: the path never reaches recipe matching as description text`);
+    }
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
 
