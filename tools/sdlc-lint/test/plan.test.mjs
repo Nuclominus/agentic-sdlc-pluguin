@@ -725,6 +725,7 @@ test("a failed prune after a successful write is not reported as a failed write"
     assert.ok(!second.prints.some((p) => /could not write the plan file/.test(p)));
     assert.ok(existsSync(first.plan_file));
   } finally {
+    try { chmodSync(planFileDir(dir), 0o700); } catch { /* never created */ }
     rmSync(w.dir, { recursive: true, force: true });
     rmSync(dir, { recursive: true, force: true });
   }
@@ -794,6 +795,7 @@ test("digest --from recovers CONTEXT from a spilled output file and points block
     const contextHalf = run("--section=context");
     assert.deepEqual(printsHalf.prints, envelope.prints);
     assert.ok(!("plan" in printsHalf));
+    assert.ok(!("warnings" in printsHalf), "warnings is a subset of prints[]; repeating it only grows the half");
     for (const owed of OWED) assert.ok(owed in contextHalf.plan, `--section context drops CONTEXT.${owed}`);
     assert.equal(contextHalf.plan_file, "/run/plan.json");
     assert.ok(!("prints" in contextHalf));

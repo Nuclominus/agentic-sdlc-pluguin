@@ -198,7 +198,10 @@ node "${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs" digest --from "<the tool-resu
 It prints the same envelope as a digest — `prints[]` to echo, every `CONTEXT` value — and a
 `plan_file` you then use with `block` exactly as above. If **that** output is saved to a file too,
 the digest itself is over the limit: run the same command twice instead, with `--section prints`
-(echo it) and then `--section context` (carry it), each about half the size.
+(echo it) and then `--section context` (carry it). The split is uneven — `prints` is small and
+`context` carries almost all of the size — so if the `context` output is saved to a file as well,
+that is this command's known limit: read that one saved file once, in full, and carry `CONTEXT`
+from it. Do not explore it piecemeal.
 
 **Why the command does this rather than you.** Without `--digest` a plan carrying a full stack
 profile (54,746 characters on the run measured) overflows the inline tool-output limit; the harness

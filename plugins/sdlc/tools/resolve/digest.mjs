@@ -82,7 +82,7 @@ function readEnvelope(file) {
   }
 }
 
-/** The digest of a saved envelope; `section` halves it when the digest alone overflowed the inline limit. */
+/** The digest of a saved envelope; `section` splits it when the digest alone overflowed the inline limit. */
 export function digestFrom(file, { section = null } = {}) {
   const { envelope, error } = readEnvelope(file);
   if (error) return error;
@@ -90,7 +90,7 @@ export function digestFrom(file, { section = null } = {}) {
   const hasBlocks = Boolean(envelope.plan?.profile?.prompt_blocks);
   const out = { ...envelope, plan: digestOf(envelope.plan), plan_file: hasBlocks ? file : (envelope.plan_file ?? null) };
   if (section === null) return { ok: true, code: 0, envelope: out };
-  if (section === "prints") return { ok: true, code: 0, envelope: { ok: out.ok, halt: out.halt ?? null, prints: out.prints, warnings: out.warnings } };
+  if (section === "prints") return { ok: true, code: 0, envelope: { ok: out.ok, halt: out.halt ?? null, prints: out.prints } };
   if (section === "context") return { ok: true, code: 0, envelope: { ok: out.ok, halt: out.halt ?? null, plan: out.plan, plan_file: out.plan_file } };
   return { ok: false, code: 2, error: `unknown --section '${section}' — prints or context` };
 }
