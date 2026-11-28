@@ -1,9 +1,9 @@
 // `plan --json --digest`: keep Step 0's output under the harness's inline limit (ADR-0019 start window).
 
-import { createHash } from "node:crypto";
-import { readFileSync, renameSync, writeFileSync } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
+import { lstatSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 // Under Claude Code's ~30k-char inline Bash output limit, with margin for the harness's own framing.
 export const INLINE_LIMIT = 20000;
@@ -19,13 +19,24 @@ export function digestOf(plan) {
   return out;
 }
 
+const uid = typeof process.getuid === "function" ? process.getuid() : null;
+
 export function planFilePath(cwd, dir = tmpdir()) {
-  return join(dir, `sdlc-plan-${createHash("sha256").update(String(cwd)).digest("hex").slice(0, 16)}.json`);
+  return join(dir, `sdlc-plan-${uid ?? "user"}`, `${createHash("sha256").update(String(cwd)).digest("hex").slice(0, 16)}.json`);
+}
+
+// tmpdir() is a shared, world-writable /tmp on Linux: the file must live in a directory only we control.
+function ensurePrivateDir(d) {
+  try { mkdirSync(d, { mode: 0o700 }); } catch (e) { if (e.code !== "EEXIST") throw e; }
+  const st = lstatSync(d);
+  if (!st.isDirectory()) throw new Error(`${d} is not a directory`);
+  if (uid !== null && (st.uid !== uid || (st.mode & 0o077) !== 0)) throw new Error(`${d} is not private to this user (needs owner ${uid}, mode 0700)`);
 }
 
 function writeAtomic(path, text) {
-  const tmp = `${path}.${process.pid}.tmp`;
-  writeFileSync(tmp, text);
+  ensurePrivateDir(dirname(path));
+  const tmp = `${path}.${randomBytes(8).toString("hex")}.tmp`;
+  writeFileSync(tmp, text, { flag: "wx", mode: 0o600 });
   renameSync(tmp, path);
 }
 

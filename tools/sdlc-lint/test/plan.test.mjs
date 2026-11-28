@@ -5,7 +5,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, appendFileSync, cpSync, symlinkSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, appendFileSync, cpSync, symlinkSync, statSync, chmodSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -687,6 +687,27 @@ test("a large plan goes to plan_file; the digest carries every CONTEXT key and n
 
     const again = digestEnvelope(envelope, { cwd: w.proj, limit: 0, dir });
     assert.equal(again.plan_file, out.plan_file, "one file per project, overwritten — never an accumulating temp dir");
+  } finally {
+    rmSync(w.dir, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("plan_file lives in a private 0700 directory, is 0600, and refuses a directory someone else can write", { skip: process.platform === "win32" }, () => {
+  const w = world({ roleExpertise: true });
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-planfile-"));
+  try {
+    const envelope = runPlan(w, ["--json", "add a thing"]);
+    const out = digestEnvelope(envelope, { cwd: w.proj, limit: 0, dir });
+    assert.equal(statSync(dirname(out.plan_file)).mode & 0o777, 0o700);
+    assert.equal(statSync(out.plan_file).mode & 0o777, 0o600);
+
+    rmSync(dirname(out.plan_file), { recursive: true, force: true });
+    mkdirSync(dirname(out.plan_file), { mode: 0o777 });
+    chmodSync(dirname(out.plan_file), 0o777);
+    const unsafe = digestEnvelope(envelope, { cwd: w.proj, limit: 0, dir });
+    assert.equal(unsafe.plan_file, null, "a shared-writable directory is never trusted with the plan");
+    assert.match(unsafe.prints.at(-1), /not private to this user/);
   } finally {
     rmSync(w.dir, { recursive: true, force: true });
     rmSync(dir, { recursive: true, force: true });

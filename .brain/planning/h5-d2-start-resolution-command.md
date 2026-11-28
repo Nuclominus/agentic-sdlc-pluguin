@@ -298,7 +298,7 @@ deterministic:
   `tool-results/` and Step 0-large spent a `jq` call to read `CONTEXT` back. Now
   `resolve/cli.mjs plan --json --digest` (`tools/resolve/digest.mjs`) prints the plan whole when it
   fits under 20,000 characters — blocks inline, no extra call per dispatch — and otherwise writes
-  the full envelope to one per-project temp `plan_file` (overwritten each run) and prints a digest
+  the full envelope to one per-project `plan_file` (overwritten each run) inside a per-user 0700 directory under tmpdir, written 0600 with an exclusive create and prints a digest
   without `prompt_blocks` or `skip_rules.signals.changed_files`, the one unbounded list. Blocks are
   then read per agent at 3b-1 with `cli.mjs block --from <plan_file> --agent <name>` — dependency-free,
   where the old path needed `jq`. A failed write keeps the plan whole and inline with a `WARN:`. No
