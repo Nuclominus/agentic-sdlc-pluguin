@@ -4,6 +4,7 @@
 
 | Date | PR | Type | Roadmap | Note |
 |------|----|------|---------|------|
+| 2026-11-28 | #270 | `fix` | — | [[changes/2026-11-28-PR-270-accept-brief-path-and-a-quoted-brief-path]] |
 | 2026-11-28 | #268 | `chore` | — | [[changes/2026-11-28-PR-268-bump-sdlc-to-3-4-1]] |
 | 2026-11-28 | #266 | `perf` | — | [[changes/2026-11-28-PR-266-fold-the-plan-digest-and-worktree-guard-into-resolve]] |
 | 2026-11-27 | #264 | `docs` | — | [[changes/2026-11-27-PR-264-redesign-the-front-page-with-banner-and-pipeline-diagram]] |
