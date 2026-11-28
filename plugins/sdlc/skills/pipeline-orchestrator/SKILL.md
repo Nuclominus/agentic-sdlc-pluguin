@@ -155,25 +155,48 @@ Then do exactly three things:
 the key map below; what differs is where `profile.prompt_blocks` lives:
 
 - **`plan_file` is a path** — the plan was too large to print whole, so `plan` is the digest
-  (no `prompt_blocks`) and the full envelope is in that file. Do not open or explore it. At 3b-1,
-  when you dispatch an agent, read its blocks with one dependency-free command:
+  (no `prompt_blocks`) and the full envelope is in that file, private to this run. Do not open or
+  explore it. At 3b-1, when you dispatch an agent, read its blocks with one dependency-free command:
 
   ```bash
   node "${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs" block --from "<plan_file>" --agent "{agent}"
   ```
 
-  For the development phase's Pass 1 only (3b-special) add `--planning`: it prints
-  `.skills_planning` in place of `.skills`. The output is the text to paste — expertise block, a
-  blank line, skills block — with either side omitted when empty, and nothing at all when the agent
-  has neither.
+  For the development phase's Pass 1 only (3b-special) add `--planning`: the skills section is then
+  `.skills_planning`. The output is two sections, each introduced by a marker line:
+
+  ```
+  === role_expertise_block ===
+  <text for the role_expertise_block placeholder — may be empty>
+  === skills_block ===
+  <text for the skills_block placeholder — may be empty>
+  ```
+
+  Paste each section's text, verbatim, at **its own** placeholder in the 3b-1 template — they sit
+  in different places, and pasting them together reorders the stable prefix. Never paste a marker
+  line. An empty section means that placeholder is omitted entirely.
+
+  **If `block` prints `❌ block:` instead:** `cannot read plan file` means `plan_file` is gone (a
+  tmp cleaner, a reboot) — re-run the Step 0 command once, take the new `plan_file`, and retry; if
+  that fails too, dispatch without the two blocks and say so in one `⚠️` line. `unknown agent`
+  means the core manifest binds no block for that agent — dispatch without the two blocks. Never
+  reconstruct a block yourself.
 - **`plan_file` is `null` on a run that dispatches** — the plan fit inline whole (or the file could
   not be written, which `prints[]` says in a `WARN:`), so `plan.profile.prompt_blocks` is right
-  there: paste from it, no extra call.
+  there: paste `.expertise` and `.skills` (`.skills_planning` for Pass 1) at their placeholders, no
+  extra call.
 - On `--dry-run` and on a halt `plan_file` is `null` and the plan carries no blocks — nothing is
   dispatched.
 
-If the harness saves the output to a `tool-results/` file anyway, that file is the same JSON: read
-it once in full, carry `CONTEXT` from it, and pass that path as `--from` at 3b-1.
+**If the harness saves Step 0's output to a `tool-results/` file anyway** (only after one of the
+`WARN:` lines above), do not explore that file. Run, once:
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs" digest --from "<the tool-results path>"
+```
+
+It prints the same envelope as a digest — `prints[]` to echo, every `CONTEXT` value — and a
+`plan_file` you then use with `block` exactly as above.
 
 **Why the command does this rather than you.** Without `--digest` a plan carrying a full stack
 profile (54,746 characters on the run measured) overflows the inline tool-output limit; the harness
@@ -711,7 +734,8 @@ The two `===` delimiters are part of the prompt — agents are instructed (via t
 **3b-1a. Paste the two pre-rendered blocks** (`role_expertise_block` and `skills_block`, ADR-0021).
 
 Both blocks are **rendered by the resolve command**, not by you, and reach you as Step 0-blocks
-says: `cli.mjs block` per agent when `plan_file` is set, the plan itself when it is `null`. `EFFECTIVE_PROFILE.prompt_blocks` carries one entry per agent
+says: `cli.mjs block` per agent when `plan_file` is set (one section per placeholder), the plan
+itself when it is `null`. `EFFECTIVE_PROFILE.prompt_blocks` carries one entry per agent
 the core manifest binds (phase agents and on-demand agents alike):
 
 ```

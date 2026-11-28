@@ -5,7 +5,8 @@ import { realpathSync } from "node:fs";
 import { join, sep } from "node:path";
 
 const real = (p) => { try { return realpathSync(p); } catch { return null; } };
-const posix = (p) => (p == null ? null : p.split(sep).join("/"));
+// Windows paths are case-insensitive: git and realpath can disagree on the drive letter's case.
+const posix = (p) => (p == null ? null : process.platform === "win32" ? p.split(sep).join("/").toLowerCase() : p.split(sep).join("/"));
 
 export function detectWorktreeGuard(cwd) {
   const cwdReal = posix(real(cwd));

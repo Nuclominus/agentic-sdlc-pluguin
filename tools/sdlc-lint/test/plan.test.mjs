@@ -5,14 +5,14 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, appendFileSync, cpSync, symlinkSync, statSync, chmodSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, appendFileSync, cpSync, symlinkSync, statSync, chmodSync, utimesSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolvePlan, resolveExpertise, resolveResume, resolveDeps, resolveSkillScope } from "../../../plugins/sdlc/tools/resolve/plan.mjs";
 import { detectWorktreeGuard, renderWorktreeGuardPrint } from "../../../plugins/sdlc/tools/resolve/guard.mjs";
-import { digestEnvelope, planFilePath, blocksFrom, INLINE_LIMIT } from "../../../plugins/sdlc/tools/resolve/digest.mjs";
+import { digestEnvelope, digestFrom, planFileDir, blocksFrom, BLOCK_MARKERS, INLINE_LIMIT } from "../../../plugins/sdlc/tools/resolve/digest.mjs";
 
 function write(file, content) {
   mkdirSync(join(file, ".."), { recursive: true });
@@ -20,7 +20,7 @@ function write(file, content) {
 }
 
 /** A consumer machine: config dir + one installed plugin + a git project. */
-function world({ localYaml = null, modelJson = null, recipe = null, roleExpertise = false, frameworks = false } = {}) {
+function world({ localYaml = null, modelJson = null, recipe = null, roleExpertise = false, frameworks = false, expertisePad = 0 } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "sdlc-plan-"));
   const cfg = join(dir, "cfg");
   const plug = join(dir, "cache", "demo", "1.0.0");
@@ -56,6 +56,7 @@ function world({ localYaml = null, modelJson = null, recipe = null, roleExpertis
       "  developer:",
       "    invariants: |",
       "      Demo house rule: never block main.",
+      ...Array.from({ length: expertisePad }, (_, i) => `      Padding rule ${i}: ${"x".repeat(80)}`),
       "    rules:",
       "      - { path: rules/house.md, note: \"house rules\" }",
       "    skills:",
@@ -680,17 +681,87 @@ test("a large plan goes to plan_file; the digest carries every CONTEXT key and n
     assert.ok(!("prompt_blocks" in out.plan.profile), "the blocks are read one agent at a time, never inline");
     assert.ok(!("changed_files" in out.plan.skip_rules.signals), "an unbounded file list would overflow the inline limit again");
     assert.deepEqual(out.plan.skip_rules.applied, envelope.plan.skip_rules.applied);
+    assert.match(out.prints.at(-1), /^WARN: the plan digest is \d+ characters, over the 0-character inline budget/);
 
-    assert.equal(out.plan_file, planFilePath(w.proj, dir));
-    const onDisk = JSON.parse(readFileSync(out.plan_file, "utf8"));
-    assert.deepEqual(onDisk, envelope);
+    assert.equal(dirname(out.plan_file), planFileDir(dir));
+    assert.deepEqual(JSON.parse(readFileSync(out.plan_file, "utf8")), envelope);
 
-    const again = digestEnvelope(envelope, { cwd: w.proj, limit: 0, dir });
-    assert.equal(again.plan_file, out.plan_file, "one file per project, overwritten — never an accumulating temp dir");
+    const second = digestEnvelope(envelope, { cwd: w.proj, limit: 0, dir });
+    assert.notEqual(second.plan_file, out.plan_file, "a second run in the same checkout never overwrites the first run's blocks");
+    assert.ok(existsSync(out.plan_file) && existsSync(second.plan_file));
   } finally {
     rmSync(w.dir, { recursive: true, force: true });
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("plan files older than a week are pruned on the next write", () => {
+  const w = world({ roleExpertise: true });
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-planfile-"));
+  try {
+    const envelope = runPlan(w, ["--json", "add a thing"]);
+    const first = digestEnvelope(envelope, { cwd: w.proj, limit: 0, dir });
+    const old = new Date(Date.now() - 8 * 24 * 3600 * 1000);
+    utimesSync(first.plan_file, old, old);
+    const second = digestEnvelope(envelope, { cwd: w.proj, limit: 0, dir });
+    assert.ok(!existsSync(first.plan_file), "an abandoned run's file does not accumulate");
+    assert.ok(existsSync(second.plan_file));
+  } finally {
+    rmSync(w.dir, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("end to end: a plan over the inline budget prints a digest and a plan_file the block command reads", () => {
+  const w = world({ roleExpertise: true, expertisePad: 300 });
+  let file = null;
+  try {
+    const full = runPlan(w, ["--json", "add a thing"]);
+    assert.ok(JSON.stringify(full).length > INLINE_LIMIT, "the padded fixture must exceed the budget, or this test measures the other branch");
+    const digest = runPlan(w, ["--json", "--digest", "add a thing"]);
+    file = digest.plan_file;
+    assert.ok(file && existsSync(file));
+    assert.ok(JSON.stringify(digest).length <= INLINE_LIMIT, "the digest itself fits");
+    assert.ok(!("prompt_blocks" in digest.plan.profile));
+    const out = execFileSync("node", [RESOLVE_CLI, "block", "--from", file, "--agent", "developer", "--part", "expertise"], { encoding: "utf8" });
+    assert.equal(out, `${full.plan.profile.prompt_blocks.developer.expertise}\n`);
+  } finally {
+    if (file) rmSync(file, { force: true });
+    rmSync(w.dir, { recursive: true, force: true });
+  }
+});
+
+test("a halt or a deps abort never writes a plan file and never prints blocks", () => {
+  const w = world({ roleExpertise: true });
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-planfile-"));
+  try {
+    const envelope = runPlan(w, ["--json", "add a thing"]);
+    const halted = digestEnvelope({ ...envelope, ok: false, halt: "❌ blocked" }, { cwd: w.proj, limit: 0, dir });
+    assert.equal(halted.plan_file, null);
+    assert.ok(!("prompt_blocks" in halted.plan.profile));
+    assert.equal(halted.halt, "❌ blocked");
+    const nothing = digestEnvelope({ ...envelope, plan: null, ok: false, halt: "❌ no recipe" }, { cwd: w.proj, limit: 0, dir });
+    assert.equal(nothing.plan, null);
+    assert.equal(nothing.plan_file, null);
+  } finally {
+    rmSync(w.dir, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("digest --from recovers CONTEXT from a spilled output file and points block at it", () => {
+  const w = world({ roleExpertise: true });
+  const spilled = join(w.dir, "tool-results.txt");
+  try {
+    const envelope = runPlan(w, ["--json", "add a thing"]);
+    writeFileSync(spilled, JSON.stringify(envelope));
+    const r = JSON.parse(execFileSync("node", [RESOLVE_CLI, "digest", "--from", spilled], { encoding: "utf8" }));
+    assert.deepEqual(r.prints, envelope.prints);
+    for (const owed of OWED) assert.ok(owed in r.plan, `digest --from drops CONTEXT.${owed}`);
+    assert.ok(!("prompt_blocks" in r.plan.profile));
+    assert.equal(r.plan_file, spilled, "the spilled file still holds the blocks");
+    assert.deepEqual(digestFrom(join(w.dir, "missing.txt")).code, 1);
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
 
 test("plan_file lives in a private 0700 directory, is 0600, and refuses a directory someone else can write", { skip: process.platform === "win32" }, () => {
@@ -737,7 +808,7 @@ test("--digest on --dry-run writes nothing and prints no blocks", () => {
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
 
-test("cli.mjs block prints one agent's pasteable blocks from a plan file, dependency-free", () => {
+test("cli.mjs block prints each block in its own marked section, or one raw with --part", () => {
   const w = world({ roleExpertise: true });
   const file = join(w.dir, "plan.json");
   const runBlock = (argv) => {
@@ -748,20 +819,26 @@ test("cli.mjs block prints one agent's pasteable blocks from a plan file, depend
   try {
     const envelope = runPlan(w, ["--json", "add a thing"]);
     writeFileSync(file, JSON.stringify(envelope));
-    const b = envelope.plan.profile.prompt_blocks.developer;
+    const blocks = envelope.plan.profile.prompt_blocks;
+    const b = blocks.developer;
+    const marked = (e, k) => `${BLOCK_MARKERS.expertise}\n${e ?? ""}\n${BLOCK_MARKERS.skills}\n${k ?? ""}\n`;
 
     const dev = runBlock(["--from", file, "--agent", "developer"]);
     assert.equal(dev.code, 0);
-    assert.equal(dev.out, `${[b.expertise, b.skills].filter(Boolean).join("\n\n")}\n`);
-    assert.match(dev.out, /^Stack expertise for developer \(demo\):/);
+    assert.equal(dev.out, marked(b.expertise, b.skills));
+    assert.equal(runBlock(["--from", file, "--agent", "developer", "--planning"]).out, marked(b.expertise, b.skills_planning));
+    assert.equal(runBlock(["--from", file, "--agent", "developer", "--part", "skills"]).out, `${b.skills}\n`);
+    assert.equal(runBlock(["--from", file, "--agent", "developer", "--part", "bogus"]).code, 2);
 
-    const planning = runBlock(["--from", file, "--agent", "developer", "--planning"]);
-    assert.equal(planning.out, `${[b.expertise, b.skills_planning].filter(Boolean).join("\n\n")}\n`);
+    const bare = Object.keys(blocks).find((a) => !blocks[a]?.expertise);
+    assert.ok(bare, "the fixture must bind an agent with no expertise, or the empty-section case goes untested");
+    const empty = runBlock(["--from", file, "--agent", bare]);
+    assert.equal(empty.code, 0);
+    assert.equal(empty.out, marked(null, blocks[bare]?.skills));
 
     const unknown = runBlock(["--from", file, "--agent", "bogus"]);
     assert.equal(unknown.code, 2);
     assert.match(unknown.err, /unknown agent 'bogus'/);
-
     assert.equal(runBlock(["--from", join(w.dir, "missing.json"), "--agent", "developer"]).code, 1);
     assert.equal(blocksFrom(file, "developer").text, dev.out.replace(/\n$/, ""));
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
@@ -772,6 +849,8 @@ test("the orchestrator's Step 0 asks for the digest and reads blocks with the bl
     "..", "..", "..", "plugins", "sdlc", "skills", "pipeline-orchestrator", "SKILL.md"), "utf8");
   assert.match(skill, /resolve\/cli\.mjs" plan --json --digest "\$ARGUMENTS"/);
   assert.match(skill, /resolve\/cli\.mjs" block --from "<plan_file>" --agent "\{agent\}"/);
+  assert.match(skill, /resolve\/cli\.mjs" digest --from "<the tool-results path>"/);
+  for (const marker of Object.values(BLOCK_MARKERS)) assert.ok(skill.includes(marker), `0-blocks must show the ${marker} marker`);
   assert.ok(!/realpath docs\/plans/.test(skill), "Step 2a no longer runs its own detection commands");
   assert.ok(!/prompt_blocks\["\{agent\}"\]/.test(skill), "no jq read of the blocks remains");
 });
