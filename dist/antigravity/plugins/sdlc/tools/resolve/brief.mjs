@@ -5,13 +5,29 @@ import { briefOf, SLUG_RE } from "./slug.mjs";
 
 const blankQuoted = (text) => text.replace(/"[^"]*"|'[^']*'/g, (q) => " ".repeat(q.length));
 
+// A quoted mention of the flag is description text; only a bare --brief takes a value.
 function briefToken(args) {
   const text = String(args);
-  const m = /(^|\s)--brief(=\S*)?(?=\s|$)/.exec(blankQuoted(text));
+  const m = /(^|\s)--brief(?==|\s|$)/.exec(blankQuoted(text));
   if (!m) return null;
   const start = m.index + m[1].length;
-  const end = m.index + m[0].length;
-  return { start, end, value: m[2] ? text.slice(start + "--brief=".length, end) : "" };
+  let i = start + "--brief".length;
+  if (text[i] === "=") i += 1;
+  else {
+    let j = i;
+    while (j < text.length && /\s/.test(text[j])) j += 1;
+    if (j >= text.length || text.startsWith("--", j)) return { start, end: i, value: "" };
+    i = j;
+  }
+  const q = text[i];
+  if (q === "'" || q === '"') {
+    const close = text.indexOf(q, i + 1);
+    if (close < 0) return { start, end: text.length, value: "" };
+    return { start, end: close + 1, value: text.slice(i + 1, close).trim() };
+  }
+  let end = i;
+  while (end < text.length && !/\s/.test(text[end])) end += 1;
+  return { start, end, value: text.slice(i, end) };
 }
 
 const LANGS = ["uk", "en"];
@@ -22,7 +38,7 @@ export function readBrief({ cwd, args }) {
   const token = briefToken(args);
   if (!token) return { requested: false };
   const given = token.value;
-  if (!given) return { requested: true, error: "--brief: give the path as --brief=<path>" };
+  if (!given) return { requested: true, error: "--brief: give a path — --brief=<path> or --brief <path>" };
   const fail = (msg) => ({ requested: true, error: `--brief=${given}: ${msg}` });
 
   const root = realpathSync(cwd);
@@ -52,7 +68,8 @@ export function readBrief({ cwd, args }) {
   const lang = String(fmatter.narrative_language);
   if (!LANGS.includes(lang)) return fail(`frontmatter \`narrative_language\` must be one of ${LANGS.join(", ")}`);
 
-  if (briefOf(args)) return { requested: true, error: "--brief: use either --brief=<path> or a description, not both" };
+  const rest = `${String(args).slice(0, token.start)} ${String(args).slice(token.end)}`;
+  if (briefOf(rest)) return { requested: true, error: "--brief: use either --brief=<path> or a description, not both" };
   if (/(^|\s)--resume(=|\s|$)/.test(String(args))) return { requested: true, error: "--brief cannot be combined with --resume (a resumed run already has its _brief.md; use --resume=<slug>)" };
 
   return { requested: true, path: relative(root, real).split(sep).join("/"), title, slug, narrative_language: lang };
@@ -63,5 +80,6 @@ export function briefArgs(args, title) {
   const token = briefToken(text);
   if (!token) return text;
   const quoted = JSON.stringify(String(title).replace(/(^|\s)-+/g, "$1").replace(/-{2,}/g, " "));
-  return text.slice(0, token.start) + quoted + text.slice(token.end);
+  const tail = text.slice(token.end);
+  return text.slice(0, token.start) + quoted + (tail && !/^\s/.test(tail) ? " " : "") + tail;
 }

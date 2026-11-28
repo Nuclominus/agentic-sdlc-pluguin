@@ -4,6 +4,13 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`/sdlc:start --brief <path>` and a quoted path now work** (sdlc). The resolver read only
+  `--brief=<path>` and halted on the space form, which a composing agent wrote on a real run and
+  then retried. `--brief <path>`, `--brief='<path>'` and `--brief "<path>"` resolve the same brief;
+  the path never reaches the description. An empty value still halts, now naming both forms.
+
 ## [4.4.1] — 2026-11-28
 
 `sdlc` `3.4.0` → `3.4.1` (patch: the run-start changes from #266 shipped without a plugin version
