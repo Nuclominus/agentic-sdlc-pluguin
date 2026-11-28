@@ -4,6 +4,22 @@ All notable changes to the Agentic SDLC Plugin (Android) marketplace.
 
 ## [Unreleased]
 
+`sdlc` `3.4.0` → `3.4.1` (patch: the run-start changes from #266 shipped without a plugin version
+bump, so installed copies could miss them.)
+
+### Changed
+
+- **The run start is one resolve call again** (sdlc, ADR-0019). Step 0 runs
+  `resolve/cli.mjs plan --json --digest`: a plan that fits prints whole, and a larger one goes to a
+  per-run, user-private `plan_file` while the inline digest drops `prompt_blocks`. The orchestrator
+  reads each agent's expertise and skills blocks at dispatch with the new dependency-free
+  `resolve/cli.mjs block`, replacing a `jq` read. `resolve/cli.mjs digest --from <file>` recovers
+  `CONTEXT` if the harness spills the output anyway.
+- **The worktree guard is computed by the resolver** (`plan.worktree_guard`) instead of three
+  `Bash` calls before the run clock, and the write-once `_started_at` clock is now Step 2's first
+  tool call. Expected start window: 3 API calls, against 4 on the last measured run; unmeasured
+  until the next real run.
+
 ## [4.4.0] — 2026-11-23
 
 `sdlc` `3.3.1` → `3.4.0`, `android-foundation` `3.3.1` → `3.4.0` (minor: `/sdlc:brief`, `/sdlc:start
