@@ -5,7 +5,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, appendFileSync, cpSync, symlinkSync, statSync, chmodSync, utimesSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, appendFileSync, cpSync, symlinkSync, statSync, chmodSync, utimesSync, realpathSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -712,15 +712,38 @@ test("plan files older than a week are pruned on the next write", () => {
   }
 });
 
+test("a failed prune after a successful write is not reported as a failed write", { skip: process.platform === "win32" || process.getuid?.() === 0 }, () => {
+  const w = world({ roleExpertise: true });
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-planfile-"));
+  try {
+    const envelope = runPlan(w, ["--json", "add a thing"]);
+    const first = digestEnvelope(envelope, { cwd: w.proj, limit: 0, dir });
+    chmodSync(planFileDir(dir), 0o300);
+    const second = digestEnvelope(envelope, { cwd: w.proj, limit: 0, dir });
+    chmodSync(planFileDir(dir), 0o700);
+    assert.ok(second.plan_file && existsSync(second.plan_file), "the write succeeded, so the run gets its file");
+    assert.ok(!second.prints.some((p) => /could not write the plan file/.test(p)));
+    assert.ok(existsSync(first.plan_file));
+  } finally {
+    rmSync(w.dir, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("end to end: a plan over the inline budget prints a digest and a plan_file the block command reads", () => {
   const w = world({ roleExpertise: true, expertisePad: 300 });
+  const tmp = join(w.dir, "tmp");
+  mkdirSync(tmp);
+  // An isolated tmpdir: this run must neither touch nor prune the developer's real plan files.
+  const isolated = { ...w, env: { ...w.env, TMPDIR: tmp, TEMP: tmp, TMP: tmp } };
   let file = null;
   try {
     const full = runPlan(w, ["--json", "add a thing"]);
     assert.ok(JSON.stringify(full).length > INLINE_LIMIT, "the padded fixture must exceed the budget, or this test measures the other branch");
-    const digest = runPlan(w, ["--json", "--digest", "add a thing"]);
+    const digest = runPlan(isolated, ["--json", "--digest", "add a thing"]);
     file = digest.plan_file;
     assert.ok(file && existsSync(file));
+    assert.ok(realpathSync(file).startsWith(realpathSync(tmp)), "the plan file lands in the tmpdir the run was given");
     assert.ok(JSON.stringify(digest).length <= INLINE_LIMIT, "the digest itself fits");
     assert.ok(!("prompt_blocks" in digest.plan.profile));
     const out = execFileSync("node", [RESOLVE_CLI, "block", "--from", file, "--agent", "developer", "--part", "expertise"], { encoding: "utf8" });
@@ -761,6 +784,22 @@ test("digest --from recovers CONTEXT from a spilled output file and points block
     assert.ok(!("prompt_blocks" in r.plan.profile));
     assert.equal(r.plan_file, spilled, "the spilled file still holds the blocks");
     assert.deepEqual(digestFrom(join(w.dir, "missing.txt")).code, 1);
+
+    const digestOnly = join(w.dir, "digest-spill.txt");
+    writeFileSync(digestOnly, JSON.stringify({ ...r, plan_file: "/run/plan.json" }));
+    assert.equal(digestFrom(digestOnly).envelope.plan_file, "/run/plan.json", "a spilled digest keeps pointing at its run's plan_file");
+
+    const run = (...a) => JSON.parse(execFileSync("node", [RESOLVE_CLI, "digest", "--from", digestOnly, ...a], { encoding: "utf8" }));
+    const printsHalf = run("--section", "prints");
+    const contextHalf = run("--section=context");
+    assert.deepEqual(printsHalf.prints, envelope.prints);
+    assert.ok(!("plan" in printsHalf));
+    for (const owed of OWED) assert.ok(owed in contextHalf.plan, `--section context drops CONTEXT.${owed}`);
+    assert.equal(contextHalf.plan_file, "/run/plan.json");
+    assert.ok(!("prints" in contextHalf));
+    assert.ok(JSON.stringify(printsHalf).length + JSON.stringify(contextHalf).length <= JSON.stringify(r).length + 200,
+      "the halves recover an oversized digest only if each is smaller than the whole");
+    assert.equal(digestFrom(digestOnly, { section: "bogus" }).code, 2);
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
 
@@ -829,6 +868,9 @@ test("cli.mjs block prints each block in its own marked section, or one raw with
     assert.equal(runBlock(["--from", file, "--agent", "developer", "--planning"]).out, marked(b.expertise, b.skills_planning));
     assert.equal(runBlock(["--from", file, "--agent", "developer", "--part", "skills"]).out, `${b.skills}\n`);
     assert.equal(runBlock(["--from", file, "--agent", "developer", "--part", "bogus"]).code, 2);
+    assert.equal(runBlock(["--from", file, "--agent", "developer", "--part=skills"]).out, `${b.skills}\n`, "--part=VALUE is the CLI's other flag form");
+    assert.equal(runBlock(["--from", file, "--agent", "developer", "--part"]).code, 2, "a bare --part is an error, never the full marked output");
+    assert.equal(runBlock(["--from", file, "--agent", "developer", "--part="]).code, 2);
 
     const bare = Object.keys(blocks).find((a) => !blocks[a]?.expertise);
     assert.ok(bare, "the fixture must bind an agent with no expertise, or the empty-section case goes untested");

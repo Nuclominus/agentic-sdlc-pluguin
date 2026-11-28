@@ -13,7 +13,7 @@
 //     command, once per invocation, in place of "self-read rules/skills.md and sdlc.local.yaml".
 //   node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs block --from <plan_file> --agent <name> [--planning] [--part expertise|skills]
 //     invoked by pipeline-orchestrator 3b-1a: one agent's pre-rendered blocks from Step 0's plan_file.
-//   node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs digest --from <saved output>
+//   node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs digest --from <saved output> [--section prints|context]
 //     invoked by pipeline-orchestrator 0-blocks when the harness spilled Step 0's output to a file.
 //   node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs deps [--json] [--probe]
 //     invoked by /sdlc:doctor. The run's own dependency preflight, read-only (no stamp, no
@@ -42,7 +42,7 @@ function usage() {
   console.error("                    [--base-ref <ref>] [--mode tree|installed]");
   console.error("       cli.mjs expertise --role <name> [--json] [--stack=NAME] [--mode tree|installed]");
   console.error("       cli.mjs block --from <plan_file> --agent <name> [--planning] [--part expertise|skills]");
-  console.error("       cli.mjs digest --from <saved plan output>");
+  console.error("       cli.mjs digest --from <saved plan output> [--section prints|context]");
   console.error("       cli.mjs deps [--json] [--probe] [--mode tree|installed]");
   return 2;
 }
@@ -53,12 +53,20 @@ function tokenOpt(name) {
   return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : null;
 }
 
+/** `--name value` or `--name=value`; `undefined` when the flag is absent, `null` when it has no value. */
+function valueOpt(name) {
+  const eq = argv.find((a) => a.startsWith(`${name}=`));
+  if (eq !== undefined) return eq.slice(name.length + 1) || null;
+  return argv.includes(name) ? tokenOpt(name) : undefined;
+}
+
 if (!["plan", "expertise", "deps", "block", "digest"].includes(cmd)) process.exit(usage());
 
 if (cmd === "digest") {
   const from = tokenOpt("--from");
-  if (!from) process.exit(usage());
-  const r = digestFrom(from);
+  const section = valueOpt("--section");
+  if (!from || section === null) process.exit(usage());
+  const r = digestFrom(from, { section: section ?? null });
   if (!r.ok) {
     console.log(JSON.stringify({ ok: false, error: r.error }));
     process.exit(r.code);
@@ -70,8 +78,9 @@ if (cmd === "digest") {
 if (cmd === "block") {
   const from = tokenOpt("--from");
   const agent = tokenOpt("--agent");
-  if (!from || !agent) process.exit(usage());
-  const r = blocksFrom(from, agent, { planning: argv.includes("--planning"), part: tokenOpt("--part") });
+  const part = valueOpt("--part");
+  if (!from || !agent || part === null) process.exit(usage());
+  const r = blocksFrom(from, agent, { planning: argv.includes("--planning"), part: part ?? null });
   if (!r.ok) {
     console.error(`❌ block: ${r.error}`);
     process.exit(r.code);

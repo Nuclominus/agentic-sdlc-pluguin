@@ -49,7 +49,7 @@ function writeAtomic(path, text) {
   const tmp = `${path}.${randomBytes(8).toString("hex")}.tmp`;
   writeFileSync(tmp, text, { flag: "wx", mode: 0o600 });
   renameSync(tmp, path);
-  pruneOld(d);
+  try { pruneOld(d); } catch { /* the file is written; a failed cleanup must not read as a failed write */ }
 }
 
 const errText = (e) => (e && e.message ? e.message : String(e));
@@ -82,13 +82,17 @@ function readEnvelope(file) {
   }
 }
 
-/** The digest of a saved envelope — the recovery read when the harness spilled Step 0's output to a file. */
-export function digestFrom(file) {
+/** The digest of a saved envelope; `section` halves it when the digest alone overflowed the inline limit. */
+export function digestFrom(file, { section = null } = {}) {
   const { envelope, error } = readEnvelope(file);
   if (error) return error;
   if (!envelope || !Array.isArray(envelope.prints)) return { ok: false, code: 1, error: `${file} is not a resolve plan envelope` };
   const hasBlocks = Boolean(envelope.plan?.profile?.prompt_blocks);
-  return { ok: true, code: 0, envelope: { ...envelope, plan: digestOf(envelope.plan), plan_file: hasBlocks ? file : (envelope.plan_file ?? null) } };
+  const out = { ...envelope, plan: digestOf(envelope.plan), plan_file: hasBlocks ? file : (envelope.plan_file ?? null) };
+  if (section === null) return { ok: true, code: 0, envelope: out };
+  if (section === "prints") return { ok: true, code: 0, envelope: { ok: out.ok, halt: out.halt ?? null, prints: out.prints, warnings: out.warnings } };
+  if (section === "context") return { ok: true, code: 0, envelope: { ok: out.ok, halt: out.halt ?? null, plan: out.plan, plan_file: out.plan_file } };
+  return { ok: false, code: 2, error: `unknown --section '${section}' — prints or context` };
 }
 
 export const BLOCK_MARKERS = { expertise: "=== role_expertise_block ===", skills: "=== skills_block ===" };

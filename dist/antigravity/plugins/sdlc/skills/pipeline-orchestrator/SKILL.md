@@ -188,15 +188,17 @@ the key map below; what differs is where `profile.prompt_blocks` lives:
 - On `--dry-run` and on a halt `plan_file` is `null` and the plan carries no blocks — nothing is
   dispatched.
 
-**If the harness saves Step 0's output to a `tool-results/` file anyway** (only after one of the
-`WARN:` lines above), do not explore that file. Run, once:
+**If the harness saves Step 0's output to a `tool-results/` file anyway**, do not explore that file.
+Run, once:
 
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs" digest --from "<the tool-results path>"
 ```
 
 It prints the same envelope as a digest — `prints[]` to echo, every `CONTEXT` value — and a
-`plan_file` you then use with `block` exactly as above.
+`plan_file` you then use with `block` exactly as above. If **that** output is saved to a file too,
+the digest itself is over the limit: run the same command twice instead, with `--section prints`
+(echo it) and then `--section context` (carry it), each about half the size.
 
 **Why the command does this rather than you.** Without `--digest` a plan carrying a full stack
 profile (54,746 characters on the run measured) overflows the inline tool-output limit; the harness

@@ -5,8 +5,9 @@ import { realpathSync } from "node:fs";
 import { join, sep } from "node:path";
 
 const real = (p) => { try { return realpathSync(p); } catch { return null; } };
+const posix = (p) => (p == null ? null : p.split(sep).join("/"));
 // Windows paths are case-insensitive: git and realpath can disagree on the drive letter's case.
-const posix = (p) => (p == null ? null : process.platform === "win32" ? p.split(sep).join("/").toLowerCase() : p.split(sep).join("/"));
+const cmp = (p) => (p == null ? null : process.platform === "win32" ? p.toLowerCase() : p);
 
 export function detectWorktreeGuard(cwd) {
   const cwdReal = posix(real(cwd));
@@ -17,8 +18,9 @@ export function detectWorktreeGuard(cwd) {
   } catch { /* not a git checkout */ }
   // A missing docs/plans is inactive: Step 2 creates it as a plain directory inside the worktree.
   const plansReal = posix(real(join(cwd, "docs", "plans")));
-  const inHarnessWorktree = Boolean(cwdReal && cwdReal.includes("/.claude/worktrees/"));
-  const plansInside = Boolean(toplevel && plansReal && (plansReal === toplevel || plansReal.startsWith(`${toplevel}/`)));
+  const [c, t, pl] = [cmp(cwdReal), cmp(toplevel), cmp(plansReal)];
+  const inHarnessWorktree = Boolean(c && c.includes("/.claude/worktrees/"));
+  const plansInside = Boolean(t && pl && (pl === t || pl.startsWith(`${t}/`)));
   return {
     active: Boolean(inHarnessWorktree && toplevel && plansReal && !plansInside),
     cwd_real: cwdReal,
