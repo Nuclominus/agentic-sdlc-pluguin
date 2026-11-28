@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Dependency-free entry for resolving a run, shipped inside the sdlc plugin.
 //
-// Three commands:
-//   node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs plan [--json] [--dry-run] [--workflow=NAME] …
+// Five commands:
+//   node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs plan [--json [--digest]] [--dry-run] [--workflow=NAME] …
 //     invoked by pipeline-orchestrator Steps 0 → 1d. It replaces ~926 lines of prose that the
 //     model executed as ~24 turns and 14 tool calls, for a measured median of $1.31 per run
 //     (ADR-0019).
@@ -11,6 +11,10 @@
 //     orchestrator. It prints the same `Stack expertise for <role>` and `Skills for this role`
 //     blocks a pipeline dispatch would have carried in its stable prefix (ADR-0021) — one
 //     command, once per invocation, in place of "self-read rules/skills.md and sdlc.local.yaml".
+//   node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs block --from <plan_file> --agent <name> [--planning] [--part expertise|skills]
+//     invoked by pipeline-orchestrator 3b-1a: one agent's pre-rendered blocks from Step 0's plan_file.
+//   node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs digest --from <saved output> [--section prints|context]
+//     invoked by pipeline-orchestrator 0-blocks when the harness spilled Step 0's output to a file.
 //   node ${CLAUDE_PLUGIN_ROOT}/tools/resolve/cli.mjs deps [--json] [--probe]
 //     invoked by /sdlc:doctor. The run's own dependency preflight, read-only (no stamp, no
 //     enforcement), plus the per-catalog report for `kind: skill-catalog` dependencies (ADR-0036).
@@ -23,6 +27,7 @@
 // ADR-0015's machine-value invariant applied to prose instead of arithmetic.
 
 import { resolvePlan, resolveExpertise, resolveDeps } from "./plan.mjs";
+import { digestEnvelope, digestFrom, blocksFrom } from "./digest.mjs";
 import { renderCatalogReport } from "./catalogs.mjs";
 import { renderPreflightPrint } from "./deps.mjs";
 
@@ -32,10 +37,12 @@ const rest = argv.slice(1).join(" ");
 const jsonOut = argv.includes("--json");
 
 function usage() {
-  console.error("usage: cli.mjs plan [--json] [--dry-run] [--workflow=NAME] [--no-auto-workflow]");
+  console.error("usage: cli.mjs plan [--json [--digest]] [--dry-run] [--workflow=NAME] [--no-auto-workflow]");
   console.error("                    [--brief=<path>] [--force-preflight] [--skills <csv>] [--no-skip-rules] [--force-ba]");
   console.error("                    [--base-ref <ref>] [--mode tree|installed]");
   console.error("       cli.mjs expertise --role <name> [--json] [--stack=NAME] [--mode tree|installed]");
+  console.error("       cli.mjs block --from <plan_file> --agent <name> [--planning] [--part expertise|skills]");
+  console.error("       cli.mjs digest --from <saved plan output> [--section prints|context]");
   console.error("       cli.mjs deps [--json] [--probe] [--mode tree|installed]");
   return 2;
 }
@@ -46,7 +53,41 @@ function tokenOpt(name) {
   return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : null;
 }
 
-if (cmd !== "plan" && cmd !== "expertise" && cmd !== "deps") process.exit(usage());
+/** `--name value` or `--name=value`; `undefined` when the flag is absent, `null` when it has no value. */
+function valueOpt(name) {
+  const eq = argv.find((a) => a.startsWith(`${name}=`));
+  if (eq !== undefined) return eq.slice(name.length + 1) || null;
+  return argv.includes(name) ? tokenOpt(name) : undefined;
+}
+
+if (!["plan", "expertise", "deps", "block", "digest"].includes(cmd)) process.exit(usage());
+
+if (cmd === "digest") {
+  const from = tokenOpt("--from");
+  const section = valueOpt("--section");
+  if (!from || section === null) process.exit(usage());
+  const r = digestFrom(from, { section: section ?? null });
+  if (!r.ok) {
+    console.log(JSON.stringify({ ok: false, error: r.error }));
+    process.exit(r.code);
+  }
+  console.log(JSON.stringify(r.envelope));
+  process.exit(0);
+}
+
+if (cmd === "block") {
+  const from = tokenOpt("--from");
+  const agent = tokenOpt("--agent");
+  const part = valueOpt("--part");
+  if (!from || !agent || part === null) process.exit(usage());
+  const r = blocksFrom(from, agent, { planning: argv.includes("--planning"), part: part ?? null });
+  if (!r.ok) {
+    console.error(`❌ block: ${r.error}`);
+    process.exit(r.code);
+  }
+  if (r.text) console.log(r.text);
+  process.exit(0);
+}
 
 const mode = tokenOpt("--mode") ?? "installed";
 
@@ -114,8 +155,11 @@ try {
 
 const { plan, prints, warnings, halt, deps_abort: depsAbort } = result;
 
-if (jsonOut) {
-  console.log(JSON.stringify({ ok: !halt, plan, prints, warnings, halt: halt ?? null }));
+const envelope = { ok: !halt, plan, prints, warnings, halt: halt ?? null };
+if (jsonOut && argv.includes("--digest")) {
+  console.log(JSON.stringify(digestEnvelope(envelope, { cwd: process.cwd(), dryRun: /(^|\s)--dry-run(\s|=|$)/.test(rest) })));
+} else if (jsonOut) {
+  console.log(JSON.stringify(envelope));
 } else {
   // `warnings` is a subset of `prints` (see resolvePlan) — echoing it here too would print
   // every diagnostic twice. It stays in the JSON envelope for machine consumers only.

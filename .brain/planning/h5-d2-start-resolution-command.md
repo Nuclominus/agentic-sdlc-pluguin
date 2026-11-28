@@ -287,6 +287,39 @@ shim exists to prevent.
 6. `sdlc-lint compliance` shows the new `0-resolve` contract with a real denominator, and no
    pre-existing rate falls.
 
+## Closing the last call (2026-11-28)
+
+Run 5 (2026-09-08) measured the start window at **4 API calls** — Skill, resolve, a digest read,
+the anchor — one outside the 2–3 DoD (see [[planning/roadmap]], Track H). Two leaks remained, both
+deterministic:
+
+- **The digest read.** A plan carrying a full stack profile (54,746 characters on run 5, mostly
+  `profile.prompt_blocks`) overflows the inline tool-output limit; the harness spills it to
+  `tool-results/` and Step 0-large spent a `jq` call to read `CONTEXT` back. Now
+  `resolve/cli.mjs plan --json --digest` (`tools/resolve/digest.mjs`) prints the plan whole when it
+  fits under 20,000 characters — blocks inline, no extra call per dispatch — and otherwise writes
+  the full envelope to a per-run `plan_file` (never shared between two runs in one checkout;
+  files older than a week are pruned) inside a per-user 0700 directory under tmpdir, written 0600
+  with an exclusive create, and prints a digest without `prompt_blocks` or
+  `skip_rules.signals.changed_files`, the one unbounded list. Blocks are then read per agent at
+  3b-1 with `cli.mjs block --from <plan_file> --agent <name>`, which prints the expertise and skills
+  blocks as two marked sections because the template places them apart. It is dependency-free,
+  where the old path needed `jq`. A failed write keeps the plan whole and inline with a `WARN:`,
+  and `cli.mjs digest --from <file>` recovers `CONTEXT` if the harness spills the output anyway.
+  No file on `--dry-run` or a halt; `--json` alone is unchanged. Android fixture: 44,446 → 11,251
+  characters.
+- **Step 2a's three commands.** The worktree-guard check (#254, 2026-11-23 — after run 5) ran
+  `pwd -P`, `git rev-parse --show-toplevel` and `realpath docs/plans` *before* the anchor, so the
+  window had silently grown to ~7. The resolver now computes `plan.worktree_guard`
+  (`tools/resolve/guard.mjs`) and prints the notice once; Step 2a runs nothing. The write-once clock
+  also moved to Step 2's first tool call, so nothing sits between resolve and the anchor.
+
+Expected: **3 API calls** (Skill, resolve, anchor). In worktree-guard mode the harness refuses the
+compound clock command, so it runs as `mkdir -p`, `test -f`, then `date >` and a guarded run
+measures up to 5 — known, and not a regression. **DoD
+item 5 stays open until run 6 is measured** with `sdlc-lint start-window` on a clean session (one
+`/sdlc:start`, no dry run).
+
 ## Open questions
 
 - ~~**The manifest root must be a parameter.**~~ **Resolved** — `manifests.mjs` has two modes,

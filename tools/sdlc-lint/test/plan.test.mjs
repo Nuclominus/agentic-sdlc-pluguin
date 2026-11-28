@@ -5,12 +5,14 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, appendFileSync, cpSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, appendFileSync, cpSync, symlinkSync, statSync, chmodSync, utimesSync, realpathSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolvePlan, resolveExpertise, resolveResume, resolveDeps, resolveSkillScope } from "../../../plugins/sdlc/tools/resolve/plan.mjs";
+import { detectWorktreeGuard, renderWorktreeGuardPrint } from "../../../plugins/sdlc/tools/resolve/guard.mjs";
+import { digestEnvelope, digestFrom, planFileDir, blocksFrom, BLOCK_MARKERS, INLINE_LIMIT } from "../../../plugins/sdlc/tools/resolve/digest.mjs";
 
 function write(file, content) {
   mkdirSync(join(file, ".."), { recursive: true });
@@ -18,7 +20,7 @@ function write(file, content) {
 }
 
 /** A consumer machine: config dir + one installed plugin + a git project. */
-function world({ localYaml = null, modelJson = null, recipe = null, roleExpertise = false, frameworks = false } = {}) {
+function world({ localYaml = null, modelJson = null, recipe = null, roleExpertise = false, frameworks = false, expertisePad = 0 } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "sdlc-plan-"));
   const cfg = join(dir, "cfg");
   const plug = join(dir, "cache", "demo", "1.0.0");
@@ -54,6 +56,7 @@ function world({ localYaml = null, modelJson = null, recipe = null, roleExpertis
       "  developer:",
       "    invariants: |",
       "      Demo house rule: never block main.",
+      ...Array.from({ length: expertisePad }, (_, i) => `      Padding rule ${i}: ${"x".repeat(80)}`),
       "    rules:",
       "      - { path: rules/house.md, note: \"house rules\" }",
       "    skills:",
@@ -643,44 +646,294 @@ test("cli.mjs expertise --role prints the block, exits 2 on an unknown role, and
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
 
-// ---- 0-large: the prescribed digest must keep naming keys the plan actually has ---------------
+// ---- 0-blocks: `plan --json --digest` keeps the start window at one resolve call ---------------
 
-test("the orchestrator's 0-large jq projection names only real plan keys", () => {
-  // Run 4 spent five of its nine start-window tool calls probing the plan file for its shape
-  // (`keys[]`, then `.prints[]`, then two subset projections) before it could read it. Step 0-large
-  // now states the projection once so no run has to rediscover it — which makes that literal a
-  // contract with `resolvePlan`'s output. A renamed plan key would otherwise drop a CONTEXT value
-  // silently, with every test still green. This is the guard for that.
-  const skillPath = resolve(dirname(fileURLToPath(import.meta.url)),
-    "..", "..", "..", "plugins", "sdlc", "skills", "pipeline-orchestrator", "SKILL.md");
-  const skill = readFileSync(skillPath, "utf8");
-  const m = skill.match(/=== CONTEXT ===", \(\.plan \| \{([^}]*?), profile: \(\.profile \| del\(\.prompt_blocks\)\)\}/);
-  assert.ok(m, "Step 0-large must carry the `.plan | {…}` digest projection verbatim");
+const RESOLVE_CLI = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "plugins", "sdlc", "tools", "resolve", "cli.mjs");
+const runPlan = (w, argv) => JSON.parse(execFileSync("node", [RESOLVE_CLI, "plan", ...argv], {
+  cwd: w.proj, env: { ...process.env, ...w.env }, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+}));
 
-  // `a, b, skip_rules: .skip_rules.applied` -> the names on the LEFT of any colon.
-  const projected = m[1].split(",").map((s) => s.trim().split(":")[0].trim()).filter(Boolean);
+const OWED = ["roots", "deps_preflight", "availability_flags", "stack", "skip_rules", "workflow", "models",
+              "cost_cap", "cost_cap_source", "headless", "plugin_version", "brief", "worktree_guard"];
 
+test("--digest prints a small plan whole, so blocks need no extra call per dispatch", () => {
   const w = world({ roleExpertise: true });
   try {
-    const { plan, halt } = resolvePlan({ cwd: w.proj, args: "--dry-run", env: w.env });
-    assert.equal(halt, null);
-    for (const key of projected) {
-      assert.ok(key in plan, `0-large projects '${key}', which resolvePlan does not emit`);
-    }
-    // The one nested path in the projection, checked as a path rather than as a name.
-    assert.ok(plan.skip_rules && "applied" in plan.skip_rules, "0-large reads .skip_rules.applied");
-
-    // Every CONTEXT key the map owes must survive the projection. `profile` is carried whole
-    // (minus the blocks), so its rows are covered by the parent name.
-    for (const owed of ["roots", "deps_preflight", "availability_flags", "stack", "workflow",
-                        "models", "cost_cap", "cost_cap_source", "headless", "plugin_version", "brief"]) {
-      assert.ok(projected.includes(owed), `the key map owes CONTEXT.${owed}; 0-large does not project it`);
-    }
-    // The exclusion is the point of the projection: the blocks are read one agent at a time.
-    assert.ok(!projected.includes("prompt_blocks"));
+    const full = runPlan(w, ["--json", "add a thing"]);
+    const digest = runPlan(w, ["--json", "--digest", "add a thing"]);
+    assert.equal(full.plan_file, undefined, "--json alone keeps its envelope unchanged");
+    assert.ok(JSON.stringify(full).length <= INLINE_LIMIT, "the fixture plan must be small, or this test measures the other branch");
+    assert.equal(digest.plan_file, null);
+    assert.deepEqual(digest.plan, full.plan);
+    assert.ok(digest.plan.profile.prompt_blocks.developer?.expertise, "the fixture must render a block, or this test proves nothing");
   } finally { rmSync(w.dir, { recursive: true, force: true }); }
 });
 
+test("a large plan goes to plan_file; the digest carries every CONTEXT key and no blocks or file lists", () => {
+  const w = world({ roleExpertise: true });
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-planfile-"));
+  try {
+    const envelope = runPlan(w, ["--json", "add a thing"]);
+    envelope.plan.skip_rules.signals.changed_files = Array.from({ length: 500 }, (_, i) => `src/file-${i}.kt`);
+    const out = digestEnvelope(envelope, { cwd: w.proj, limit: 0, dir });
+
+    for (const owed of OWED) assert.ok(owed in out.plan, `the key map owes CONTEXT.${owed}; the digest does not carry it`);
+    assert.ok(!("prompt_blocks" in out.plan.profile), "the blocks are read one agent at a time, never inline");
+    assert.ok(!("changed_files" in out.plan.skip_rules.signals), "an unbounded file list would overflow the inline limit again");
+    assert.deepEqual(out.plan.skip_rules.applied, envelope.plan.skip_rules.applied);
+    assert.match(out.prints.at(-1), /^WARN: the plan digest is \d+ characters, over the 0-character inline budget/);
+
+    assert.equal(dirname(out.plan_file), planFileDir(dir));
+    assert.deepEqual(JSON.parse(readFileSync(out.plan_file, "utf8")), envelope);
+
+    const second = digestEnvelope(envelope, { cwd: w.proj, limit: 0, dir });
+    assert.notEqual(second.plan_file, out.plan_file, "a second run in the same checkout never overwrites the first run's blocks");
+    assert.ok(existsSync(out.plan_file) && existsSync(second.plan_file));
+  } finally {
+    rmSync(w.dir, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("plan files older than a week are pruned on the next write", () => {
+  const w = world({ roleExpertise: true });
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-planfile-"));
+  try {
+    const envelope = runPlan(w, ["--json", "add a thing"]);
+    const first = digestEnvelope(envelope, { cwd: w.proj, limit: 0, dir });
+    const old = new Date(Date.now() - 8 * 24 * 3600 * 1000);
+    utimesSync(first.plan_file, old, old);
+    const second = digestEnvelope(envelope, { cwd: w.proj, limit: 0, dir });
+    assert.ok(!existsSync(first.plan_file), "an abandoned run's file does not accumulate");
+    assert.ok(existsSync(second.plan_file));
+  } finally {
+    rmSync(w.dir, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a failed prune after a successful write is not reported as a failed write", { skip: process.platform === "win32" || process.getuid?.() === 0 }, () => {
+  const w = world({ roleExpertise: true });
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-planfile-"));
+  try {
+    const envelope = runPlan(w, ["--json", "add a thing"]);
+    const first = digestEnvelope(envelope, { cwd: w.proj, limit: 0, dir });
+    chmodSync(planFileDir(dir), 0o300);
+    const second = digestEnvelope(envelope, { cwd: w.proj, limit: 0, dir });
+    chmodSync(planFileDir(dir), 0o700);
+    assert.ok(second.plan_file && existsSync(second.plan_file), "the write succeeded, so the run gets its file");
+    assert.ok(!second.prints.some((p) => /could not write the plan file/.test(p)));
+    assert.ok(existsSync(first.plan_file));
+  } finally {
+    try { chmodSync(planFileDir(dir), 0o700); } catch { /* never created */ }
+    rmSync(w.dir, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("end to end: a plan over the inline budget prints a digest and a plan_file the block command reads", () => {
+  const w = world({ roleExpertise: true, expertisePad: 300 });
+  const tmp = join(w.dir, "tmp");
+  mkdirSync(tmp);
+  // An isolated tmpdir: this run must neither touch nor prune the developer's real plan files.
+  const isolated = { ...w, env: { ...w.env, TMPDIR: tmp, TEMP: tmp, TMP: tmp } };
+  let file = null;
+  try {
+    const full = runPlan(w, ["--json", "add a thing"]);
+    assert.ok(JSON.stringify(full).length > INLINE_LIMIT, "the padded fixture must exceed the budget, or this test measures the other branch");
+    const digest = runPlan(isolated, ["--json", "--digest", "add a thing"]);
+    file = digest.plan_file;
+    assert.ok(file && existsSync(file));
+    assert.ok(realpathSync(file).startsWith(realpathSync(tmp)), "the plan file lands in the tmpdir the run was given");
+    assert.ok(JSON.stringify(digest).length <= INLINE_LIMIT, "the digest itself fits");
+    assert.ok(!("prompt_blocks" in digest.plan.profile));
+    const out = execFileSync("node", [RESOLVE_CLI, "block", "--from", file, "--agent", "developer", "--part", "expertise"], { encoding: "utf8" });
+    assert.equal(out, `${full.plan.profile.prompt_blocks.developer.expertise}\n`);
+  } finally {
+    if (file) rmSync(file, { force: true });
+    rmSync(w.dir, { recursive: true, force: true });
+  }
+});
+
+test("a halt or a deps abort never writes a plan file and never prints blocks", () => {
+  const w = world({ roleExpertise: true });
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-planfile-"));
+  try {
+    const envelope = runPlan(w, ["--json", "add a thing"]);
+    const halted = digestEnvelope({ ...envelope, ok: false, halt: "❌ blocked" }, { cwd: w.proj, limit: 0, dir });
+    assert.equal(halted.plan_file, null);
+    assert.ok(!("prompt_blocks" in halted.plan.profile));
+    assert.equal(halted.halt, "❌ blocked");
+    const nothing = digestEnvelope({ ...envelope, plan: null, ok: false, halt: "❌ no recipe" }, { cwd: w.proj, limit: 0, dir });
+    assert.equal(nothing.plan, null);
+    assert.equal(nothing.plan_file, null);
+  } finally {
+    rmSync(w.dir, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("digest --from recovers CONTEXT from a spilled output file and points block at it", () => {
+  const w = world({ roleExpertise: true });
+  const spilled = join(w.dir, "tool-results.txt");
+  try {
+    const envelope = runPlan(w, ["--json", "add a thing"]);
+    writeFileSync(spilled, JSON.stringify(envelope));
+    const r = JSON.parse(execFileSync("node", [RESOLVE_CLI, "digest", "--from", spilled], { encoding: "utf8" }));
+    assert.deepEqual(r.prints, envelope.prints);
+    for (const owed of OWED) assert.ok(owed in r.plan, `digest --from drops CONTEXT.${owed}`);
+    assert.ok(!("prompt_blocks" in r.plan.profile));
+    assert.equal(r.plan_file, spilled, "the spilled file still holds the blocks");
+    assert.deepEqual(digestFrom(join(w.dir, "missing.txt")).code, 1);
+
+    const digestOnly = join(w.dir, "digest-spill.txt");
+    writeFileSync(digestOnly, JSON.stringify({ ...r, plan_file: "/run/plan.json" }));
+    assert.equal(digestFrom(digestOnly).envelope.plan_file, "/run/plan.json", "a spilled digest keeps pointing at its run's plan_file");
+
+    const run = (...a) => JSON.parse(execFileSync("node", [RESOLVE_CLI, "digest", "--from", digestOnly, ...a], { encoding: "utf8" }));
+    const printsHalf = run("--section", "prints");
+    const contextHalf = run("--section=context");
+    assert.deepEqual(printsHalf.prints, envelope.prints);
+    assert.ok(!("plan" in printsHalf));
+    assert.ok(!("warnings" in printsHalf), "warnings is a subset of prints[]; repeating it only grows the half");
+    for (const owed of OWED) assert.ok(owed in contextHalf.plan, `--section context drops CONTEXT.${owed}`);
+    assert.equal(contextHalf.plan_file, "/run/plan.json");
+    assert.ok(!("prints" in contextHalf));
+    assert.ok(JSON.stringify(printsHalf).length + JSON.stringify(contextHalf).length <= JSON.stringify(r).length + 200,
+      "the halves recover an oversized digest only if each is smaller than the whole");
+    assert.equal(digestFrom(digestOnly, { section: "bogus" }).code, 2);
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("plan_file lives in a private 0700 directory, is 0600, and refuses a directory someone else can write", { skip: process.platform === "win32" }, () => {
+  const w = world({ roleExpertise: true });
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-planfile-"));
+  try {
+    const envelope = runPlan(w, ["--json", "add a thing"]);
+    const out = digestEnvelope(envelope, { cwd: w.proj, limit: 0, dir });
+    assert.equal(statSync(dirname(out.plan_file)).mode & 0o777, 0o700);
+    assert.equal(statSync(out.plan_file).mode & 0o777, 0o600);
+
+    rmSync(dirname(out.plan_file), { recursive: true, force: true });
+    mkdirSync(dirname(out.plan_file), { mode: 0o777 });
+    chmodSync(dirname(out.plan_file), 0o777);
+    const unsafe = digestEnvelope(envelope, { cwd: w.proj, limit: 0, dir });
+    assert.equal(unsafe.plan_file, null, "a shared-writable directory is never trusted with the plan");
+    assert.match(unsafe.prints.at(-1), /not private to this user/);
+  } finally {
+    rmSync(w.dir, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a plan_file write failure keeps the plan whole and inline, and says so in prints[]", () => {
+  const w = world({ roleExpertise: true });
+  try {
+    const envelope = runPlan(w, ["--json", "add a thing"]);
+    const out = digestEnvelope(envelope, { cwd: w.proj, limit: 0, dir: join(w.dir, "does", "not", "exist") });
+    assert.equal(out.plan_file, null);
+    assert.deepEqual(out.plan, envelope.plan, "the blocks must still reach the orchestrator");
+    assert.match(out.prints.at(-1), /^WARN: could not write the plan file/);
+    assert.ok(out.warnings.includes(out.prints.at(-1)));
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("--digest on --dry-run writes nothing and prints no blocks", () => {
+  const w = world({ roleExpertise: true });
+  try {
+    const r = runPlan(w, ["--json", "--digest", "--dry-run", "add a thing"]);
+    assert.equal(r.ok, true);
+    assert.equal(r.plan_file, null);
+    assert.ok(!("prompt_blocks" in r.plan.profile));
+    assert.ok(r.plan.dry_run, "the preview still renders");
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("cli.mjs block prints each block in its own marked section, or one raw with --part", () => {
+  const w = world({ roleExpertise: true });
+  const file = join(w.dir, "plan.json");
+  const runBlock = (argv) => {
+    try {
+      return { code: 0, out: execFileSync("node", [RESOLVE_CLI, "block", ...argv], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }) };
+    } catch (e) { return { code: e.status, out: String(e.stdout ?? ""), err: String(e.stderr ?? "") }; }
+  };
+  try {
+    const envelope = runPlan(w, ["--json", "add a thing"]);
+    writeFileSync(file, JSON.stringify(envelope));
+    const blocks = envelope.plan.profile.prompt_blocks;
+    const b = blocks.developer;
+    const marked = (e, k) => `${BLOCK_MARKERS.expertise}\n${e ?? ""}\n${BLOCK_MARKERS.skills}\n${k ?? ""}\n`;
+
+    const dev = runBlock(["--from", file, "--agent", "developer"]);
+    assert.equal(dev.code, 0);
+    assert.equal(dev.out, marked(b.expertise, b.skills));
+    assert.equal(runBlock(["--from", file, "--agent", "developer", "--planning"]).out, marked(b.expertise, b.skills_planning));
+    assert.equal(runBlock(["--from", file, "--agent", "developer", "--part", "skills"]).out, `${b.skills}\n`);
+    assert.equal(runBlock(["--from", file, "--agent", "developer", "--part", "bogus"]).code, 2);
+    assert.equal(runBlock(["--from", file, "--agent", "developer", "--part=skills"]).out, `${b.skills}\n`, "--part=VALUE is the CLI's other flag form");
+    assert.equal(runBlock(["--from", file, "--agent", "developer", "--part"]).code, 2, "a bare --part is an error, never the full marked output");
+    assert.equal(runBlock(["--from", file, "--agent", "developer", "--part="]).code, 2);
+
+    const bare = Object.keys(blocks).find((a) => !blocks[a]?.expertise);
+    assert.ok(bare, "the fixture must bind an agent with no expertise, or the empty-section case goes untested");
+    const empty = runBlock(["--from", file, "--agent", bare]);
+    assert.equal(empty.code, 0);
+    assert.equal(empty.out, marked(null, blocks[bare]?.skills));
+
+    const unknown = runBlock(["--from", file, "--agent", "bogus"]);
+    assert.equal(unknown.code, 2);
+    assert.match(unknown.err, /unknown agent 'bogus'/);
+    assert.equal(runBlock(["--from", join(w.dir, "missing.json"), "--agent", "developer"]).code, 1);
+    assert.equal(blocksFrom(file, "developer").text, dev.out.replace(/\n$/, ""));
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
+
+test("the orchestrator's Step 0 asks for the digest and reads blocks with the block command", () => {
+  const skill = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)),
+    "..", "..", "..", "plugins", "sdlc", "skills", "pipeline-orchestrator", "SKILL.md"), "utf8");
+  assert.match(skill, /resolve\/cli\.mjs" plan --json --digest "\$ARGUMENTS"/);
+  assert.match(skill, /resolve\/cli\.mjs" block --from "<plan_file>" --agent "\{agent\}"/);
+  assert.match(skill, /resolve\/cli\.mjs" digest --from "<the tool-results path>"/);
+  for (const marker of Object.values(BLOCK_MARKERS)) assert.ok(skill.includes(marker), `0-blocks must show the ${marker} marker`);
+  assert.ok(!/realpath docs\/plans/.test(skill), "Step 2a no longer runs its own detection commands");
+  assert.ok(!/prompt_blocks\["\{agent\}"\]/.test(skill), "no jq read of the blocks remains");
+});
+
+// ---- worktree guard: Step 2a's rule, computed by the resolver ------------------------------------
+
+test("worktree_guard is active only in a harness worktree whose docs/plans points outside it", () => {
+  const dir = mkdtempSync(join(tmpdir(), "sdlc-guard-"));
+  try {
+    const main = join(dir, "main");
+    mkdirSync(join(main, "docs", "plans"), { recursive: true });
+    const wt = join(dir, "main-wt", ".claude", "worktrees", "feat");
+    mkdirSync(join(wt, "docs"), { recursive: true });
+    execFileSync("git", ["init", "-q"], { cwd: wt });
+    symlinkSync(join(main, "docs", "plans"), join(wt, "docs", "plans"));
+
+    const guarded = detectWorktreeGuard(wt);
+    assert.equal(guarded.active, true, JSON.stringify(guarded));
+    assert.match(renderWorktreeGuardPrint(guarded), /^⚠️ Worktree guard: docs\/plans resolves outside this worktree/);
+
+    rmSync(join(wt, "docs", "plans"));
+    assert.equal(detectWorktreeGuard(wt).active, false, "no docs/plans yet: Step 2 creates a plain one");
+    mkdirSync(join(wt, "docs", "plans"));
+    assert.equal(detectWorktreeGuard(wt).active, false, "docs/plans inside the worktree is not guarded");
+    assert.equal(renderWorktreeGuardPrint(detectWorktreeGuard(wt)), null);
+
+    execFileSync("git", ["init", "-q"], { cwd: main });
+    assert.equal(detectWorktreeGuard(main).active, false, "outside .claude/worktrees/ nothing is guarded");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("the plan carries worktree_guard for the key map", () => {
+  const w = world();
+  try {
+    const { plan, halt } = resolvePlan({ cwd: w.proj, args: "", env: w.env });
+    assert.equal(halt, null);
+    assert.equal(plan.worktree_guard.active, false);
+  } finally { rmSync(w.dir, { recursive: true, force: true }); }
+});
 
 test("config left in the pre-rename location is reported, not read", () => {
   // The rename to <project>/.sdlc/ ships with no fallback read, on purpose —

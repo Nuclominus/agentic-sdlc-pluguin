@@ -53,8 +53,9 @@ const DISPATCH = new Set(["Agent", "Task"]);
  * The redirect is required. A bare `/_started_at/` also matches a READ, and `locateWindow` takes
  * the FIRST match — so any future step that merely inspects the anchor before Step 2 would
  * silently become the split, fabricating the exact number this measurement exists to establish.
- * Step 2's own command (`SKILL.md:199`) is `[ -f …/_started_at ] || date -u +%s > …/_started_at`,
- * one Bash call carrying both forms, so the stricter pattern still matches it.
+ * Step 2's clock (its first tool call, item 1) is `[ -f …/_started_at ] || date -u +%s > …/_started_at`,
+ * one Bash call carrying both forms, so the stricter pattern still matches it. Under the worktree
+ * guard it is split into `test -f …` (a read, rejected here) and `date -u +%s > …` (the write, matched).
  */
 const ANCHOR = /(>>?|\|\s*tee(\s+-a)?)\s*\S*_started_at/;
 
